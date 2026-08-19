@@ -20,3 +20,10 @@ def config_dir(tmp_path) -> Path:
 @pytest.fixture
 def today() -> date:
     return date(2026, 8, 19)
+
+
+@pytest.fixture
+def repo(config_dir):
+    from movie_brain.infrastructure.database import Repository
+
+    return Repository(config_dir / "movie-brain.db")
