@@ -58,7 +58,7 @@ def dashboard(
     host: Annotated[str, typer.Option(help="Interface to bind.")] = "127.0.0.1",
 ) -> None:
     """Run the local web dashboard."""
-    from movie_brain.web.app import create_app  # type: ignore[import-untyped]
+    from movie_brain.web.app import create_app
 
     console.print(f"movie-brain dashboard → http://{host}:{port}")
     create_app(_repo()).run(host=host, port=port, debug=False)

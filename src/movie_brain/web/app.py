@@ -1,0 +1,64 @@
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from datetime import date
+
+from flask import Flask, Response, jsonify, render_template, request
+
+from movie_brain.application.ratings import rate_film
+from movie_brain.application.sync import SOURCE
+from movie_brain.domain.filters import CHIPS, thresholds
+from movie_brain.infrastructure.database import Repository
+
+
+def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flask:
+    app = Flask(__name__)
+
+    @app.get("/")
+    def index() -> str:
+        return render_template("index.html")
+
+    @app.get("/api/films")
+    def list_films() -> Response:
+        return jsonify([v.to_dict() for v in repo.list_views(SOURCE)])
+
+    @app.get("/api/films/<int:film_id>")
+    def film_detail(film_id: int) -> tuple[Response, int]:
+        view = repo.get_view(film_id)
+        if view is None:
+            return jsonify({"error": "not found"}), 404
+        raw = repo.get_payload(film_id)
+        payload: object = None
+        if raw is not None:
+            try:
+                payload = json.loads(raw)
+            except json.JSONDecodeError:
+                payload = {"_raw": raw}
+        return jsonify({**view.to_dict(), "payload": payload}), 200
+
+    @app.put("/api/films/<int:film_id>/rating")
+    def put_rating(film_id: int) -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or "score" not in body:
+            return jsonify({"error": 'body must be JSON {"score": 0-10 | null}'}), 400
+        score = body["score"]
+        if score is not None and not isinstance(score, int):
+            return jsonify({"error": "score must be an integer 0–10"}), 400
+        try:
+            view = rate_film(repo, film_id, score, today())
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except LookupError:
+            return jsonify({"error": "not found"}), 404
+        return jsonify(view.to_dict()), 200
+
+    @app.get("/api/summary")
+    def summary() -> Response:
+        return jsonify(repo.summary(SOURCE))
+
+    @app.get("/api/config")
+    def config() -> Response:
+        return jsonify({"canned_thresholds": thresholds(), "chips": list(CHIPS), "today": today().isoformat()})
+
+    return app
