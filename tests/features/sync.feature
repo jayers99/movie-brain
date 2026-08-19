@@ -81,3 +81,11 @@ Feature: Daily sync
     And OMDb rejects the API key
     When I sync
     Then the exit code is 2
+
+  Scenario: Repeated OMDb failures stop lookups but keep what was fetched
+    Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)" and "Third (1960)" and "Fourth (1970)" and "Fifth (1980)" and "Sixth (1990)" and "Seventh (2000)"
+    And OMDb answers once then errors repeatedly
+    When I sync
+    Then the exit code is 0
+    And the failing flag is set
+    And 1 films have OMDb ratings
