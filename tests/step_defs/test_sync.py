@@ -144,6 +144,19 @@ def omdb_auth(ctx):
     ctx["rs"].get(OMDB_URL, json={"Response": "False", "Error": "Invalid API key!"}, status=401)
 
 
+@given("OMDb answers once then errors repeatedly")
+def omdb_repeated_failures(ctx):
+    calls = {"n": 0}
+
+    def cb(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return (200, {}, json.dumps(FOUND))
+        return (500, {}, "boom")
+
+    ctx["rs"].add_callback(responses.GET, OMDB_URL, callback=cb)
+
+
 def _run(ctx, **kw):
     ctx["result"] = sync(ctx["repo"], "key", TODAY, session=requests.Session(), delay_s=0, log=lambda m: None, **kw)
 
@@ -222,3 +235,8 @@ def is_leaving(ctx, title, label):
 @then("the quota flag is set")
 def quota_flag(ctx):
     assert ctx["result"].quota_hit is True
+
+
+@then("the failing flag is set")
+def failing_flag(ctx):
+    assert ctx["result"].failing is True
