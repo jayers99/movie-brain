@@ -174,8 +174,88 @@
     $('#f-lang').innerHTML = [...langs].sort().map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
   }
 
-  // ---- rating + drawer hooks (implemented in Task 12) ----
-  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml };
+  // ---- toast ----
+  let toastTimer;
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3000);
+  }
+
+  // ---- rating entry ----
+  function parseScore(text) {
+    const s = text.trim();
+    if (s === '') return { ok: true, score: null };
+    if (!/^\d{1,2}$/.test(s)) return { ok: false };
+    const n = Number(s);
+    return n >= 0 && n <= 10 ? { ok: true, score: n } : { ok: false };
+  }
+  function updateFilmLocal(updated) {
+    const i = state.films.findIndex((f) => f.id === updated.id);
+    if (i >= 0) state.films[i] = updated;
+    renderCounts(); applyFilters();
+    document.querySelectorAll(`input.rating[data-id="${updated.id}"]`).forEach((el) => { el.value = updated.my_rating ?? ''; });
+  }
+  async function commitRating(input) {
+    const id = +input.dataset.id;
+    const film = state.films.find((f) => f.id === id);
+    const current = film && film.my_rating != null ? String(film.my_rating) : '';
+    const parsed = parseScore(input.value);
+    if (!parsed.ok) {
+      input.classList.add('invalid'); input.value = current;
+      setTimeout(() => input.classList.remove('invalid'), 800);
+      return;
+    }
+    if (input.value.trim() === current) return;
+    try {
+      const r = await fetch(`/api/films/${id}/rating`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: parsed.score }) });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      updateFilmLocal(await r.json());
+    } catch (err) {
+      input.value = current; toast(`Could not save rating: ${err.message}`);
+    }
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input.rating')) e.target.blur(); });
+  document.addEventListener('focusout', (e) => { if (e.target.matches('input.rating')) commitRating(e.target); });
+
+  // ---- drawer ----
+  const drawer = $('#drawer'), backdrop = $('#drawer-backdrop'), body = $('#drawer-body');
+  function detailHtml(d) {
+    const p = d.payload || {};
+    const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '';
+    const fields = [['Genre', p.Genre], ['Runtime', p.Runtime], ['Rated', p.Rated], ['Country', p.Country], ['Language', d.language], ['Awards', p.Awards], ['Cast', p.Actors], ['Writer', p.Writer]]
+      .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
+    const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
+    return `${poster}<h2>${esc(d.title)}</h2>
+      <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.leaving_date ? ` · <b>Leaving ${esc(d.leaving_date)}</b>` : ''}</div>
+      ${p.Plot && p.Plot !== 'N/A' ? `<p>${esc(p.Plot)}</p>` : ''}
+      <dl>${fields}</dl>
+      ${sources ? `<ul class="sources">${sources}</ul>` : d.pending ? '<p class="meta">OMDb lookup pending.</p>' : d.found === false ? '<p class="meta">No OMDb match.</p>' : ''}
+      <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
+        &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
+      <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>`;
+  }
+  async function openDrawer(id) {
+    const r = await fetch(`/api/films/${id}`);
+    if (!r.ok) { toast('Film not found'); return; }
+    body.innerHTML = detailHtml(await r.json());
+    drawer.hidden = false; backdrop.hidden = false;
+    state.openFilm = id; syncUrl(true);
+  }
+  function closeDrawer() {
+    if (drawer.hidden) return;
+    drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
+    state.openFilm = null; syncUrl(true);
+  }
+  tbody.addEventListener('click', (e) => {
+    if (e.target.closest('a, input')) return;
+    const tr = e.target.closest('tr[data-id]'); if (tr) openDrawer(+tr.dataset.id);
+  });
+  $('#drawer-close').addEventListener('click', closeDrawer);
+  backdrop.addEventListener('click', closeDrawer);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+  window.addEventListener('popstate', () => { readUrl(); writeControlsFromState(); applyFilters(); if (state.openFilm != null) openDrawer(state.openFilm); else closeDrawer(); });
+
+  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm); } };
 
   // ---- boot ----
   async function boot() {

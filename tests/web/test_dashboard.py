@@ -87,3 +87,68 @@ def test_url_state_round_trips(dash: Page, server: str):
     expect(dash.locator("#f-title")).to_have_value("a")
     expect(dash.locator("th.sortable[data-col=year]")).to_have_attribute("data-dir", "asc")
     assert count(dash) == 3  # Bravo, Charlie, Delta contain "a"
+
+
+def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
+    dash.click("#films tbody tr[data-id] .info >> nth=0")
+    drawer = dash.locator("#drawer")
+    expect(drawer).to_be_visible()
+    expect(drawer.locator("h2")).to_have_text("Alpha")
+    expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
+    expect(drawer.locator("a.criterion")).to_have_attribute("href", "https://c/alpha")
+    assert "film=" in dash.url
+    dash.keyboard.press("Escape")
+    expect(drawer).to_be_hidden()
+    assert "film=" not in dash.url
+
+
+def test_drawer_opens_on_load_from_url(dash: Page, server: str):
+    fid = dash.locator("#films tbody tr[data-id]").first.get_attribute("data-id")
+    dash.goto(f"{server}/?film={fid}")
+    expect(dash.locator("#drawer h2")).to_have_text("Alpha")
+    dash.click("#drawer-backdrop", position={"x": 10, "y": 10})
+    expect(dash.locator("#drawer")).to_be_hidden()
+
+
+def test_row_click_opens_drawer_but_title_link_does_not(dash: Page):
+    dash.click("#films tbody tr[data-id] .c-year >> nth=1")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo")
+    dash.click("#drawer-close")
+    expect(dash.locator("#drawer")).to_be_hidden()
+
+
+def test_rating_round_trip_updates_counts_and_persists(dash: Page, server: str):
+    row = dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo")
+    expect(dash.locator("#count-mine")).to_have_text("2")
+    row.locator("input.rating").fill("7")
+    row.locator("input.rating").press("Enter")
+    expect(dash.locator("#count-mine")).to_have_text("3")
+    dash.reload()
+    dash.wait_for_selector("#films tbody[data-count]")
+    expect(dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo").locator("input.rating")).to_have_value("7")
+    # blank un-rates
+    row = dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo")
+    row.locator("input.rating").fill("")
+    row.locator("input.rating").press("Enter")
+    expect(dash.locator("#count-mine")).to_have_text("2")
+
+
+def test_invalid_rating_reverts(dash: Page):
+    row = dash.locator("#films tbody tr[data-id]").filter(has_text="Alpha")
+    inp = row.locator("input.rating")
+    inp.fill("12")
+    inp.press("Enter")
+    expect(inp).to_have_value("9")
+    expect(dash.locator("#count-mine")).to_have_text("2")
+
+
+def test_drawer_rating_input_also_works(dash: Page):
+    dash.click("#films tbody tr[data-id] .info >> nth=0")  # Alpha
+    inp = dash.locator("#drawer input.rating")
+    inp.fill("10")
+    inp.press("Enter")
+    expect(dash.locator("#films tbody tr[data-id]").filter(has_text="Alpha").locator("input.rating")).to_have_value(
+        "10"
+    )
+    inp.fill("9")
+    inp.press("Enter")  # restore seed value for other tests
