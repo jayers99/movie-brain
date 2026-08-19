@@ -97,6 +97,23 @@ class Repository:
                 (film_id, source, url, seen.isoformat(), seen.isoformat()),
             )
 
+    def record_catalog(self, source: str, films: list[Film], seen: date) -> None:
+        day = seen.isoformat()
+        with self._conn() as c:
+            for film in films:
+                c.execute(
+                    "INSERT INTO films (title, year, director, key) VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET title=excluded.title, year=excluded.year, "
+                    "director=excluded.director",
+                    (film.title, film.year, film.director, film.key),
+                )
+                c.execute(
+                    "INSERT INTO listings (film_id, source, url, first_seen, last_seen) "
+                    "VALUES ((SELECT id FROM films WHERE key = ?), ?, ?, ?, ?) "
+                    "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
+                    (film.key, source, film.url, day, day),
+                )
+
     def set_leaving(self, source: str, leaving: dict[str, str]) -> None:
         with self._conn() as c:
             c.execute("UPDATE listings SET leaving_date = NULL WHERE source = ?", (source,))
