@@ -2470,6 +2470,8 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
         if not isinstance(body, dict) or "score" not in body:
             return jsonify({"error": "body must be JSON {\"score\": 0-10 | null}"}), 400
         score = body["score"]
+        if score is not None and not isinstance(score, int):
+            return jsonify({"error": "score must be an integer 0–10"}), 400
         try:
             view = rate_film(repo, film_id, score, today())
         except ValueError as exc:
@@ -2489,7 +2491,7 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
     return app
 ```
 
-`rate_film` already rejects non-int / bool / float scores via `ValueError`, so `"7"` and `7.5` → 400 without extra checks here.
+The `isinstance` guard keeps mypy happy (JSON values are `object`); `rate_film` still rejects bools and out-of-range ints via `ValueError`.
 
 - [ ] **Step 4: Run → PASS; lint; commit** — `git add -A && git commit -m "Add Flask app with films, rating, summary and config API"`
 
@@ -2536,17 +2538,20 @@ from movie_brain.web.app import create_app
 TODAY = date(2026, 8, 19)
 
 
+FILMS = [
+    Film("Alpha", 1950, "Ann", "https://c/alpha"),       # imdb 8.5 rt 95 English, leaving, rated by me 9
+    Film("Bravo", 1960, "Bob", "https://c/bravo"),       # imdb 6.0 rt None French
+    Film("Charlie", 1970, "Cy", "https://c/charlie"),    # unmatched
+    Film("Delta", 1980, "Dee", "https://c/delta"),       # pending (no omdb row), the only "recently added"
+    Film("Echo", 1990, "Ann", "https://c/echo"),         # imdb 7.0 rt 60 "English, Spanish", my rating 0
+]
+
+
 def seed(repo: Repository) -> None:
-    films = [
-        Film("Alpha", 1950, "Ann", "https://c/alpha"),       # imdb 8.5 rt 95 English, leaving, rated by me 9
-        Film("Bravo", 1960, "Bob", "https://c/bravo"),       # imdb 6.0 rt None French
-        Film("Charlie", 1970, "Cy", "https://c/charlie"),    # unmatched
-        Film("Delta", 1980, "Dee", "https://c/delta"),       # pending (no omdb row), recently added
-        Film("Echo", 1990, "Ann", "https://c/echo"),         # imdb 7.0 rt 60 "English, Spanish", my rating 0
-    ]
-    repo.record_catalog("criterion", films[:4], date(2026, 1, 1))
-    repo.record_catalog("criterion", films, TODAY)  # Delta + Echo first_seen today... see below
-    # Delta should be the only "recent" one: re-record Echo with an old first_seen by recording it in the old walk too.
+    films = FILMS
+    # Old walk without Delta, then today's walk with all five → only Delta has first_seen = today.
+    repo.record_catalog("criterion", [f for f in films if f.title != "Delta"], date(2026, 1, 1))
+    repo.record_catalog("criterion", films, TODAY)
     ids = {f.key: repo.film_id_by_key(f.key) for f in films}
     repo.upsert_omdb(ids["alpha (1950)"], OmdbRating(8.5, 95, True, "English", '{"Title":"Alpha","Plot":"A plot.","Poster":"N/A","Ratings":[{"Source":"Internet Movie Database","Value":"8.5/10"}]}'), TODAY)
     repo.upsert_omdb(ids["bravo (1960)"], OmdbRating(6.0, None, True, "French", '{"Title":"Bravo"}'), TODAY)
@@ -2561,10 +2566,6 @@ def seed(repo: Repository) -> None:
 def seeded_repo(tmp_path_factory: pytest.TempPathFactory) -> Repository:
     db = tmp_path_factory.mktemp("web") / "movie-brain.db"
     repo = Repository(db)
-    # Old walk: Alpha..Charlie + Echo; today's walk: all five → only Delta is "recent".
-    films_old = [Film("Alpha", 1950, "Ann", "https://c/alpha"), Film("Bravo", 1960, "Bob", "https://c/bravo"),
-                 Film("Charlie", 1970, "Cy", "https://c/charlie"), Film("Echo", 1990, "Ann", "https://c/echo")]
-    repo.record_catalog("criterion", films_old, date(2026, 1, 1))
     seed(repo)
     return repo
 
@@ -2587,8 +2588,6 @@ def dash(page: Page, server: str) -> Page:
     page.wait_for_selector("#films tbody[data-count]")
     return page
 ```
-(Simplify `seed` to drop the two `record_catalog` lines and the stray comments — `seeded_repo` does the old walk; `seed` should only do `repo.record_catalog("criterion", films, TODAY)` then the omdb/leaving/ratings calls.)
-
 `tests/web/test_dashboard.py`:
 ```python
 import re
@@ -2663,7 +2662,8 @@ def test_url_state_round_trips(dash: Page, server: str):
     dash.fill("#f-title", "a")
     dash.click("th.sortable[data-col=year]")
     url = dash.url
-    assert "chips=unrated" in url and "title=a" in url and "sort=year%3Aasc" in url or "sort=year:asc" in url
+    assert "chips=unrated" in url and "title=a" in url
+    assert ("sort=year%3Aasc" in url) or ("sort=year:asc" in url)
     dash.goto(url)
     dash.wait_for_selector("#films tbody[data-count]")
     expect(dash.locator(".chip[data-chip=unrated]")).to_have_class(re.compile("active"))
@@ -2900,7 +2900,7 @@ button.info { border:0; background:none; cursor:pointer; font-size:16px; }
   wrap.addEventListener('scroll', () => requestAnimationFrame(renderRows));
 
   // ---- URL state ----
-  function syncUrl() {
+  function syncUrl(push = false) {
     const p = new URLSearchParams();
     if (state.chips.size) p.set('chips', [...state.chips].join(','));
     const k = state.cols;
@@ -2913,7 +2913,7 @@ button.info { border:0; background:none; cursor:pointer; font-size:16px; }
     if (state.sort) p.set('sort', `${state.sort.col}:${state.sort.dir}`);
     if (state.openFilm != null) p.set('film', state.openFilm);
     const qs = p.toString();
-    history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
+    history[push ? 'pushState' : 'replaceState'](null, '', qs ? `?${qs}` : location.pathname);
   }
   function readUrl() {
     const p = new URLSearchParams(location.search);
@@ -3147,12 +3147,12 @@ Ordering note: Playwright tests share one seeded server; each rating test restor
     if (!r.ok) { toast('Film not found'); return; }
     body.innerHTML = detailHtml(await r.json());
     drawer.hidden = false; backdrop.hidden = false;
-    state.openFilm = id; syncUrl();
+    state.openFilm = id; syncUrl(true);
   }
   function closeDrawer() {
     if (drawer.hidden) return;
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
-    state.openFilm = null; syncUrl();
+    state.openFilm = null; syncUrl(true);
   }
   tbody.addEventListener('click', (e) => {
     if (e.target.closest('a, input')) return;
@@ -3166,7 +3166,7 @@ Ordering note: Playwright tests share one seeded server; each rating test restor
   window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm); } };
 ```
 
-`syncUrl` uses `replaceState`; the spec asked for `pushState` on open so Back closes the drawer. Change `syncUrl` to take a flag: `function syncUrl(push = false)` and call `history[push ? 'pushState' : 'replaceState'](…)`; `openDrawer` calls `syncUrl(true)`, `closeDrawer` calls `syncUrl(true)`. The `popstate` handler above then reopens/closes correctly.
+Filter/sort changes use `replaceState` (no history spam); opening/closing the drawer uses `pushState` (`syncUrl(true)`) so the browser Back button closes/reopens it via the `popstate` handler.
 
 - [ ] **Step 4: Run → PASS** `uv run pytest tests/web -q`, then full suite `uv run pytest -q && uv run ruff check . && uv run mypy`.
 
