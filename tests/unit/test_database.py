@@ -112,6 +112,13 @@ def test_views_and_summary(repo):
     assert repo.summary("criterion") == {"films": 3, "rated": 1, "pending": 1, "unmatched": 1, "leaving": 1, "mine": 1}
 
 
+def test_record_catalog_bulk_matches_per_film_calls(repo):
+    repo.record_catalog("criterion", [TRIO, QUARTET], D1)
+    repo.record_catalog("criterion", [TRIO], D2)
+    assert [f.key for _, f in repo.current_films("criterion")] == ["trio (1950)"]
+    assert repo.get_view(repo.film_id_by_key("trio (1950)")).first_seen == "2026-08-01"
+
+
 def test_meta(repo):
     assert repo.get_meta("films_fetched_at") is None
     repo.set_meta("films_fetched_at", "2026-08-19")
