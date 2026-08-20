@@ -138,7 +138,9 @@
     document.querySelectorAll('.chip[data-chip]').forEach((b) => b.classList.toggle('active', state.chips.has(b.dataset.chip)));
     const k = state.cols;
     $('#f-title').value = k.title; $('#f-director').value = k.director;
-    document.querySelectorAll('#f-lang-panel input[type=checkbox]').forEach((cb) => { cb.checked = k.languages.has(cb.value); });
+    document.querySelectorAll('#f-lang-panel input[type=checkbox]:not(#f-lang-any)').forEach((cb) => { cb.checked = k.languages.has(cb.value); });
+    const anyBox = $('#f-lang-any');
+    if (anyBox) anyBox.checked = k.languages.size === 0;
     $('#f-lang-btn').textContent = langLabel();
     const set = (id, v) => { $(id).value = v == null ? '' : v; };
     set('#f-year-min', k.yearMin); set('#f-year-max', k.yearMax); set('#f-imdb-min', k.imdbMin); set('#f-imdb-max', k.imdbMax); set('#f-rt-min', k.rtMin); set('#f-rt-max', k.rtMax);
@@ -166,7 +168,7 @@
     const k = state.cols;
     k.title = $('#f-title').value.trim().toLowerCase();
     k.director = $('#f-director').value.trim().toLowerCase();
-    k.languages = new Set([...document.querySelectorAll('#f-lang-panel input:checked')].map((cb) => cb.value));
+    k.languages = new Set([...document.querySelectorAll('#f-lang-panel input[type=checkbox]:not(#f-lang-any):checked')].map((cb) => cb.value));
     $('#f-lang-btn').textContent = langLabel();
     k.yearMin = num('#f-year-min'); k.yearMax = num('#f-year-max');
     k.imdbMin = num('#f-imdb-min'); k.imdbMax = num('#f-imdb-max');
@@ -184,12 +186,18 @@
   function populateLanguages() {
     const langs = new Set();
     state.films.forEach((f) => (f.language || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((l) => langs.add(l)));
-    $('#f-lang-panel').innerHTML = [...langs].sort().map((l) => `<label><input type="checkbox" value="${esc(l)}"> ${esc(l)}</label>`).join('');
+    $('#f-lang-panel').innerHTML = '<label><input type="checkbox" id="f-lang-any"> Any language</label>'
+      + [...langs].sort().map((l) => `<label><input type="checkbox" value="${esc(l)}"> ${esc(l)}</label>`).join('');
   }
   const langPanel = $('#f-lang-panel');
   $('#f-lang-btn').addEventListener('click', (e) => { e.stopPropagation(); langPanel.hidden = !langPanel.hidden; });
   langPanel.addEventListener('click', (e) => e.stopPropagation());
-  langPanel.addEventListener('change', readControls);
+  langPanel.addEventListener('change', (e) => {
+    const anyBox = $('#f-lang-any');
+    if (e.target === anyBox) langPanel.querySelectorAll('input[type=checkbox]:not(#f-lang-any)').forEach((cb) => { cb.checked = false; });
+    anyBox.checked = !langPanel.querySelector('input[type=checkbox]:not(#f-lang-any):checked');
+    readControls();
+  });
   document.addEventListener('click', () => { langPanel.hidden = true; });
 
   // ---- toast ----

@@ -24,9 +24,12 @@ def first_titles(page: Page, n: int) -> list[str]:
 def set_langs(page: Page, langs: list[str]) -> None:
     """Open the language dropdown, check exactly `langs`, close the panel."""
     page.click("#f-lang-btn")
-    for cb in page.locator("#f-lang-panel input[type=checkbox]").all():
-        if (cb.get_attribute("value") in langs) != cb.is_checked():
-            cb.click()
+    if not langs:
+        page.locator("#f-lang-any").check()
+    else:
+        for cb in page.locator("#f-lang-panel input[type=checkbox]:not(#f-lang-any)").all():
+            if (cb.get_attribute("value") in langs) != cb.is_checked():
+                cb.click()
     page.click("header h1")
 
 
@@ -50,6 +53,20 @@ def test_language_filter_defaults_to_english(dash: Page):
     expect(dash.locator("#f-lang-btn")).to_have_text("Any")
     assert count(dash) == 5
     assert "lang=any" in dash.url
+
+
+def test_any_language_option_heads_the_list(dash: Page):
+    dash.click("#f-lang-btn")
+    labels = dash.locator("#f-lang-panel label").all_inner_texts()
+    assert labels[0].strip() == "Any language"
+    expect(dash.locator("#f-lang-any")).not_to_be_checked()  # English is the default selection
+    dash.locator("#f-lang-any").check()  # picking Any clears every language
+    assert count(dash) == 5
+    expect(dash.locator("#f-lang-btn")).to_have_text("Any")
+    expect(dash.locator("#f-lang-panel input[type=checkbox]:not(#f-lang-any):checked")).to_have_count(0)
+    dash.locator('#f-lang-panel input[value="French"]').check()  # picking a language unchecks Any
+    expect(dash.locator("#f-lang-any")).not_to_be_checked()
+    assert count(dash) == 1  # Bravo
 
 
 def test_loads_all_films_default_sort_imdb_desc_nulls_last(dash: Page):
