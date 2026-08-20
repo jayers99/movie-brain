@@ -22,6 +22,11 @@ th.num, td.num { text-align:right; }
 thead input, thead select { width:100%; font:inherit; padding:2px 4px; border:1px solid var(--line); border-radius:4px; }
 thead input.half { width:48%; }
 thead input.half + input.half { margin-left:4%; }
+th.lang-cell { position:relative; overflow:visible; }
+#f-lang-btn { width:100%; font:inherit; padding:2px 4px; border:1px solid var(--line); border-radius:4px; background:var(--bg); color:var(--fg); cursor:pointer; text-align:left; }
+#f-lang-panel { position:absolute; top:100%; left:8px; min-width:180px; max-height:260px; overflow:auto; background:var(--bg); border:1px solid var(--line); border-radius:4px; box-shadow:0 4px 12px rgba(0,0,0,.15); padding:6px 10px; z-index:3; }
+#f-lang-panel label { display:block; padding:2px 0; cursor:pointer; white-space:nowrap; font-weight:normal; }
+#f-lang-panel input { width:auto; margin-right:6px; }
 tbody tr { height:36px; cursor:pointer; }
 tbody tr:hover { background:#fafafa; }
 tbody td { padding:0 8px; border-bottom:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }

@@ -26,6 +26,7 @@ The dashboard lists all films with client-side filtering and sorting:
 
 - Filter chips stack together with AND logic.
 - Column filters narrow further by title, year, director, etc.
+- The Language filter is a multi-select dropdown, **defaulting to English** — films whose language is still unknown (pending lookups) are hidden until you clear it to "Any".
 - Click a column header to sort by it.
 - Type a 0–10 score into the **My Rating** column (in the table or the drawer) to rate a film; blank it to un-rate. 0 means not interested.
 - Click a row to open the detail drawer (poster, plot, fields, sources, Criterion link, raw JSON).
