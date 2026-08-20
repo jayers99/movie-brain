@@ -1,6 +1,16 @@
 import re
+import socket
+import tempfile
+import threading
+import time
+from collections.abc import Generator
+from pathlib import Path
 
+import pytest
 from playwright.sync_api import Page, expect
+
+from movie_brain.infrastructure.database import Repository
+from movie_brain.web.app import create_app
 
 
 def count(page: Page) -> int:
@@ -179,3 +189,35 @@ def test_drawer_race_shows_latest_requested_film(dash: Page):
     expect(dash.locator("#drawer h2")).to_have_text("Echo")
     dash.wait_for_timeout(400)  # let the superseded, slow Alpha response land and confirm it's a no-op
     expect(dash.locator("#drawer h2")).to_have_text("Echo")
+
+
+# ---- empty database: separate server/page fixtures so the seeded `dash`/`server`
+# fixtures (and every test above) stay untouched. ----
+
+
+@pytest.fixture
+def empty_server() -> Generator[str, None, None]:
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Repository(Path(tmp) / "empty-movie-brain.db")
+        app = create_app(repo)
+        threading.Thread(target=lambda: app.run(host="127.0.0.1", port=port, use_reloader=False), daemon=True).start()
+        time.sleep(0.5)
+        yield f"http://127.0.0.1:{port}"
+
+
+@pytest.fixture
+def empty_dash(page: Page, empty_server: str) -> Page:
+    page.goto(empty_server)
+    page.wait_for_selector("#films tbody[data-count]")
+    return page
+
+
+def test_empty_db_shows_import_hint(empty_dash: Page):
+    assert count(empty_dash) == 0
+    expect(empty_dash.locator("#films tbody")).to_contain_text("movie-brain import-legacy")
+    expect(empty_dash.locator("#films tbody")).to_contain_text("movie-brain sync")
+    expect(empty_dash.locator("tr.empty-state")).to_be_visible()

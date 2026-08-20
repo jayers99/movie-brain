@@ -26,6 +26,10 @@ tbody tr { height:36px; cursor:pointer; }
 tbody tr:hover { background:#fafafa; }
 tbody td { padding:0 8px; border-bottom:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
 tbody tr.spacer td { padding:0; border:0; }
+tbody tr.empty-state { height:auto; cursor:default; }
+tbody tr.empty-state:hover { background:none; }
+tbody tr.empty-state td { white-space:normal; overflow:visible; max-width:none; text-align:center; color:var(--muted); padding:32px 16px; }
+tbody tr.empty-state code { background:var(--chip); padding:1px 5px; border-radius:4px; }
 td a { color:inherit; }
 input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1px solid var(--line); border-radius:4px; }
 input.rating.invalid { border-color:var(--accent); background:#fdecea; }
