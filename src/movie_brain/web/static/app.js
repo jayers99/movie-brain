@@ -86,6 +86,10 @@
       <td class="c-info"><button class="info" data-id="${f.id}" aria-label="Details">ⓘ</button></td></tr>`;
   }
   function renderRows() {
+    if (state.films.length === 0) {
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="9">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
+      return;
+    }
     const total = state.filtered.length;
     const start = Math.max(0, Math.floor(wrap.scrollTop / ROW_H) - OVERSCAN);
     const end = Math.min(total, Math.ceil((wrap.scrollTop + wrap.clientHeight) / ROW_H) + OVERSCAN);
@@ -239,7 +243,12 @@
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>`;
   }
   let drawerSeq = 0;
-  async function openDrawer(id) {
+  let drawerOpenPushed = false; // true once the currently-open drawer got its own pushState entry
+  function hideDrawer() {
+    drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
+    state.openFilm = null;
+  }
+  async function openDrawer(id, push = true) {
     const seq = ++drawerSeq;
     const r = await fetch(`/api/films/${id}`);
     if (seq !== drawerSeq) return; // a newer open (or a close) superseded this one
@@ -248,24 +257,44 @@
     if (seq !== drawerSeq) return;
     body.innerHTML = detailHtml(d);
     drawer.hidden = false; backdrop.hidden = false;
-    state.openFilm = id; syncUrl(true);
+    state.openFilm = id;
+    if (push) { syncUrl(true); drawerOpenPushed = true; } else { drawerOpenPushed = false; }
   }
-  function closeDrawer() {
+  // fromPopstate=true: the URL already changed (browser back/forward already happened) — just
+  // reflect it in the DOM, never touch history again (that's what caused the re-push bug).
+  // fromPopstate=false (user closed it directly): if the open pushed its own history entry, walk
+  // it back with history.back() so the entry is consumed instead of piling up a duplicate one;
+  // popstate then finishes the close via the fromPopstate=true branch above.
+  function closeDrawer(fromPopstate = false) {
+    if (fromPopstate) {
+      drawerSeq++;
+      hideDrawer();
+      drawerOpenPushed = false;
+      return;
+    }
+    if (drawer.hidden) return; // nothing open — don't navigate back for no reason
     drawerSeq++; // supersede any in-flight open so it can't reopen after this close
-    if (drawer.hidden) return;
-    drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
-    state.openFilm = null; syncUrl(true);
+    if (drawerOpenPushed) {
+      drawerOpenPushed = false;
+      history.back();
+    } else {
+      hideDrawer();
+      syncUrl(true);
+    }
   }
   tbody.addEventListener('click', (e) => {
     if (e.target.closest('a, input')) return;
     const tr = e.target.closest('tr[data-id]'); if (tr) openDrawer(+tr.dataset.id);
   });
-  $('#drawer-close').addEventListener('click', closeDrawer);
-  backdrop.addEventListener('click', closeDrawer);
+  $('#drawer-close').addEventListener('click', () => closeDrawer());
+  backdrop.addEventListener('click', () => closeDrawer());
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
-  window.addEventListener('popstate', () => { readUrl(); writeControlsFromState(); applyFilters(); if (state.openFilm != null) openDrawer(state.openFilm); else closeDrawer(); });
+  window.addEventListener('popstate', () => {
+    readUrl(); writeControlsFromState(); applyFilters();
+    if (state.openFilm != null) openDrawer(state.openFilm, false); else closeDrawer(true);
+  });
 
-  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm); } };
+  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm, false); } };
 
   // ---- boot ----
   async function boot() {
@@ -278,5 +307,5 @@
     applyFilters();
     if (window.MB.onBoot) window.MB.onBoot();
   }
-  boot();
+  boot().catch((e) => toast(`Failed to load: ${e.message}`));
 })();
