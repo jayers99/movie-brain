@@ -11,7 +11,15 @@ body { margin:0; font: 14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif
 .chip.active { background:var(--chip-on); color:#fff; border-color:var(--chip-on); }
 .chip.clear { background:transparent; }
 .table-wrap { height: calc(100vh - 120px); overflow:auto; }
-table { border-collapse:collapse; width:100%; }
+table { border-collapse:collapse; width:100%; table-layout:fixed; }  /* fixed layout: virtual scrolling must not re-measure columns per rendered window */
+col.col-year { width:60px; }
+col.col-director { width:16%; }
+col.col-language { width:13%; }
+col.col-imdb { width:64px; }
+col.col-rt { width:64px; }
+col.col-leaving { width:110px; }
+col.col-rating { width:92px; }
+col.col-info { width:40px; }
 thead th { position:sticky; background:var(--bg); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; white-space:nowrap; }
 thead tr.labels th { top:0; }
 thead tr.filters th { top:31px; padding:4px 8px; font-weight:normal; }
