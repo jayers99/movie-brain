@@ -196,6 +196,7 @@
     document.querySelectorAll(`input.rating[data-id="${updated.id}"]`).forEach((el) => { el.value = updated.my_rating ?? ''; });
   }
   async function commitRating(input) {
+    if (input.dataset.busy) return;
     const id = +input.dataset.id;
     const film = state.films.find((f) => f.id === id);
     const current = film && film.my_rating != null ? String(film.my_rating) : '';
@@ -206,12 +207,15 @@
       return;
     }
     if (input.value.trim() === current) return;
+    input.dataset.busy = '1';
     try {
       const r = await fetch(`/api/films/${id}/rating`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: parsed.score }) });
       if (!r.ok) throw new Error((await r.json()).error || r.statusText);
       updateFilmLocal(await r.json());
     } catch (err) {
       input.value = current; toast(`Could not save rating: ${err.message}`);
+    } finally {
+      delete input.dataset.busy;
     }
   }
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input.rating')) e.target.blur(); });
@@ -234,14 +238,20 @@
         &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>`;
   }
+  let drawerSeq = 0;
   async function openDrawer(id) {
+    const seq = ++drawerSeq;
     const r = await fetch(`/api/films/${id}`);
+    if (seq !== drawerSeq) return; // a newer open (or a close) superseded this one
     if (!r.ok) { toast('Film not found'); return; }
-    body.innerHTML = detailHtml(await r.json());
+    const d = await r.json();
+    if (seq !== drawerSeq) return;
+    body.innerHTML = detailHtml(d);
     drawer.hidden = false; backdrop.hidden = false;
     state.openFilm = id; syncUrl(true);
   }
   function closeDrawer() {
+    drawerSeq++; // supersede any in-flight open so it can't reopen after this close
     if (drawer.hidden) return;
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
     state.openFilm = null; syncUrl(true);

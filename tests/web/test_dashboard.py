@@ -152,3 +152,30 @@ def test_drawer_rating_input_also_works(dash: Page):
     )
     inp.fill("9")
     inp.press("Enter")  # restore seed value for other tests
+
+
+def test_drawer_race_shows_latest_requested_film(dash: Page):
+    # Patch window.fetch (in-browser, via setTimeout) so the Alpha detail request is
+    # slow to resolve while the Echo detail request right after it is not. This
+    # reproduces the out-of-order-response race without touching Playwright's own
+    # driver thread (a Python-side route delay would starve the second click below).
+    rows = dash.locator("#films tbody tr[data-id]")
+    alpha_id = rows.filter(has_text="Alpha").get_attribute("data-id")
+    echo_id = rows.filter(has_text="Echo").get_attribute("data-id")
+    dash.evaluate(
+        """(alphaId) => {
+            const origFetch = window.fetch;
+            window.fetch = (url, opts) => {
+                if (String(url).endsWith(`/api/films/${alphaId}`)) {
+                    return new Promise((resolve) => setTimeout(() => resolve(origFetch(url, opts)), 300));
+                }
+                return origFetch(url, opts);
+            };
+        }""",
+        alpha_id,
+    )
+    dash.click(f'#films tbody tr[data-id="{alpha_id}"] .info')
+    dash.click(f'#films tbody tr[data-id="{echo_id}"] .info')
+    expect(dash.locator("#drawer h2")).to_have_text("Echo")
+    dash.wait_for_timeout(400)  # let the superseded, slow Alpha response land and confirm it's a no-op
+    expect(dash.locator("#drawer h2")).to_have_text("Echo")
