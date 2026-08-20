@@ -2,6 +2,7 @@
   'use strict';
   const ROW_H = 36, OVERSCAN = 10;
   const COLS = ['title', 'year', 'director', 'language', 'imdb', 'rt', 'leaving_date', 'my_rating'];
+  const DEFAULT_LANG = 'English';
   const state = {
     films: [], cfg: null, chips: new Set(),
     cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, imdbMin: null, imdbMax: null, rtMin: null, rtMax: null },
@@ -108,7 +109,8 @@
     const k = state.cols;
     if (k.title) p.set('title', k.title);
     if (k.director) p.set('director', k.director);
-    if (k.languages.size) p.set('lang', [...k.languages].join('|'));
+    if (k.languages.size === 0) p.set('lang', 'any');
+    else if (!(k.languages.size === 1 && k.languages.has(DEFAULT_LANG))) p.set('lang', [...k.languages].join('|'));
     for (const [name, lo, hi] of [['year', k.yearMin, k.yearMax], ['imdb', k.imdbMin, k.imdbMax], ['rt', k.rtMin, k.rtMax]]) {
       if (lo != null || hi != null) p.set(name, `${lo ?? ''}-${hi ?? ''}`);
     }
@@ -123,7 +125,8 @@
     const k = state.cols;
     k.title = (p.get('title') || '').toLowerCase();
     k.director = (p.get('director') || '').toLowerCase();
-    k.languages = new Set((p.get('lang') || '').split('|').filter(Boolean));
+    const lang = p.get('lang');
+    k.languages = lang === null ? new Set([DEFAULT_LANG]) : lang === 'any' ? new Set() : new Set(lang.split('|').filter(Boolean));
     const range = (name) => { const v = p.get(name); if (!v) return [null, null]; const [lo, hi] = v.split('-'); return [lo === '' ? null : +lo, hi === '' || hi == null ? null : +hi]; };
     [k.yearMin, k.yearMax] = range('year'); [k.imdbMin, k.imdbMax] = range('imdb'); [k.rtMin, k.rtMax] = range('rt');
     const s = p.get('sort');
@@ -135,7 +138,8 @@
     document.querySelectorAll('.chip[data-chip]').forEach((b) => b.classList.toggle('active', state.chips.has(b.dataset.chip)));
     const k = state.cols;
     $('#f-title').value = k.title; $('#f-director').value = k.director;
-    for (const o of $('#f-lang').options) o.selected = k.languages.has(o.value);
+    document.querySelectorAll('#f-lang-panel input[type=checkbox]').forEach((cb) => { cb.checked = k.languages.has(cb.value); });
+    $('#f-lang-btn').textContent = langLabel();
     const set = (id, v) => { $(id).value = v == null ? '' : v; };
     set('#f-year-min', k.yearMin); set('#f-year-max', k.yearMax); set('#f-imdb-min', k.imdbMin); set('#f-imdb-max', k.imdbMax); set('#f-rt-min', k.rtMin); set('#f-rt-max', k.rtMax);
     document.querySelectorAll('th.sortable').forEach((th) => {
@@ -162,7 +166,8 @@
     const k = state.cols;
     k.title = $('#f-title').value.trim().toLowerCase();
     k.director = $('#f-director').value.trim().toLowerCase();
-    k.languages = new Set([...$('#f-lang').selectedOptions].map((o) => o.value));
+    k.languages = new Set([...document.querySelectorAll('#f-lang-panel input:checked')].map((cb) => cb.value));
+    $('#f-lang-btn').textContent = langLabel();
     k.yearMin = num('#f-year-min'); k.yearMax = num('#f-year-max');
     k.imdbMin = num('#f-imdb-min'); k.imdbMax = num('#f-imdb-max');
     k.rtMin = num('#f-rt-min'); k.rtMax = num('#f-rt-max');
@@ -172,11 +177,20 @@
     el.addEventListener('input', readControls);
     el.addEventListener('change', readControls);
   });
+  function langLabel() {
+    const sel = state.cols.languages;
+    return sel.size === 0 ? 'Any' : sel.size === 1 ? [...sel][0] : `${sel.size} selected`;
+  }
   function populateLanguages() {
     const langs = new Set();
     state.films.forEach((f) => (f.language || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((l) => langs.add(l)));
-    $('#f-lang').innerHTML = [...langs].sort().map((l) => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+    $('#f-lang-panel').innerHTML = [...langs].sort().map((l) => `<label><input type="checkbox" value="${esc(l)}"> ${esc(l)}</label>`).join('');
   }
+  const langPanel = $('#f-lang-panel');
+  $('#f-lang-btn').addEventListener('click', (e) => { e.stopPropagation(); langPanel.hidden = !langPanel.hidden; });
+  langPanel.addEventListener('click', (e) => e.stopPropagation());
+  langPanel.addEventListener('change', readControls);
+  document.addEventListener('click', () => { langPanel.hidden = true; });
 
   // ---- toast ----
   let toastTimer;

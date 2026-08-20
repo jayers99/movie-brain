@@ -21,7 +21,39 @@ def first_titles(page: Page, n: int) -> list[str]:
     return page.locator("#films tbody tr .c-title a").all_inner_texts()[:n]
 
 
+def set_langs(page: Page, langs: list[str]) -> None:
+    """Open the language dropdown, check exactly `langs`, close the panel."""
+    page.click("#f-lang-btn")
+    for cb in page.locator("#f-lang-panel input[type=checkbox]").all():
+        if (cb.get_attribute("value") in langs) != cb.is_checked():
+            cb.click()
+    page.click("header h1")
+
+
+def clear_lang(page: Page) -> None:
+    set_langs(page, [])
+
+
+def test_language_filter_defaults_to_english(dash: Page):
+    expect(dash.locator("#f-lang-btn")).to_have_text("English")
+    assert count(dash) == 2  # Alpha (English), Echo (English, Spanish)
+    assert first_titles(dash, 2) == ["Alpha", "Echo"]
+    assert "lang=" not in dash.url  # the default is implicit, not encoded
+    set_langs(dash, ["Spanish"])
+    assert count(dash) == 1
+    assert "lang=Spanish" in dash.url
+    dash.goto(dash.url)
+    dash.wait_for_selector("#films tbody[data-count]")
+    expect(dash.locator("#f-lang-btn")).to_have_text("Spanish")
+    assert count(dash) == 1
+    clear_lang(dash)
+    expect(dash.locator("#f-lang-btn")).to_have_text("Any")
+    assert count(dash) == 5
+    assert "lang=any" in dash.url
+
+
 def test_loads_all_films_default_sort_imdb_desc_nulls_last(dash: Page):
+    clear_lang(dash)
     assert count(dash) == 5
     assert first_titles(dash, 5) == ["Alpha", "Echo", "Bravo", "Charlie", "Delta"]
     expect(dash.locator("#count-films")).to_have_text("5")
@@ -30,6 +62,7 @@ def test_loads_all_films_default_sort_imdb_desc_nulls_last(dash: Page):
 
 
 def test_chips_stack_with_and(dash: Page):
+    clear_lang(dash)
     dash.click(".chip[data-chip=unrated]")
     assert count(dash) == 3  # Bravo, Charlie, Delta
     dash.click(".chip[data-chip=pending]")
@@ -40,6 +73,7 @@ def test_chips_stack_with_and(dash: Page):
 
 
 def test_each_chip_alone(dash: Page):
+    clear_lang(dash)
     expected = {
         "leaving": 1,
         "unrated": 3,
@@ -57,6 +91,7 @@ def test_each_chip_alone(dash: Page):
 
 
 def test_sort_cycles_and_keeps_nulls_last(dash: Page):
+    clear_lang(dash)
     dash.click("th.sortable[data-col=rt]")
     assert first_titles(dash, 5) == ["Echo", "Alpha", "Bravo", "Charlie", "Delta"]  # asc: 60, 95, then nulls
     expect(dash.locator("th.sortable[data-col=rt]")).to_have_attribute("data-dir", "asc")
@@ -68,6 +103,7 @@ def test_sort_cycles_and_keeps_nulls_last(dash: Page):
 
 
 def test_column_filters_combine_with_chips(dash: Page):
+    clear_lang(dash)
     dash.fill("#f-director", "ann")
     assert count(dash) == 2  # Alpha, Echo
     dash.click(".chip[data-chip=not_interested]")
@@ -75,9 +111,9 @@ def test_column_filters_combine_with_chips(dash: Page):
     assert first_titles(dash, 1) == ["Echo"]
     dash.click(".chip[data-chip=not_interested]")
     dash.fill("#f-director", "")
-    dash.select_option("#f-lang", ["Spanish"])
+    set_langs(dash, ["Spanish"])
     assert count(dash) == 1
-    dash.select_option("#f-lang", [])
+    clear_lang(dash)
     dash.fill("#f-imdb-min", "7")
     assert count(dash) == 2  # Alpha 8.5, Echo 7.0; nulls excluded
     dash.fill("#f-year-max", "1955")
@@ -85,16 +121,18 @@ def test_column_filters_combine_with_chips(dash: Page):
 
 
 def test_url_state_round_trips(dash: Page, server: str):
+    clear_lang(dash)
     dash.click(".chip[data-chip=unrated]")
     dash.fill("#f-title", "a")
     dash.click("th.sortable[data-col=year]")
     url = dash.url
-    assert "chips=unrated" in url and "title=a" in url
+    assert "chips=unrated" in url and "title=a" in url and "lang=any" in url
     assert ("sort=year%3Aasc" in url) or ("sort=year:asc" in url)
     dash.goto(url)
     dash.wait_for_selector("#films tbody[data-count]")
     expect(dash.locator(".chip[data-chip=unrated]")).to_have_class(re.compile("active"))
     expect(dash.locator("#f-title")).to_have_value("a")
+    expect(dash.locator("#f-lang-btn")).to_have_text("Any")
     expect(dash.locator("th.sortable[data-col=year]")).to_have_attribute("data-dir", "asc")
     assert count(dash) == 3  # Bravo, Charlie, Delta contain "a"
 
@@ -128,6 +166,7 @@ def test_row_click_opens_drawer_but_title_link_does_not(dash: Page):
 
 
 def test_rating_round_trip_updates_counts_and_persists(dash: Page, server: str):
+    clear_lang(dash)
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo")
     expect(dash.locator("#count-mine")).to_have_text("2")
     row.locator("input.rating").fill("7")
@@ -135,6 +174,7 @@ def test_rating_round_trip_updates_counts_and_persists(dash: Page, server: str):
     expect(dash.locator("#count-mine")).to_have_text("3")
     dash.reload()
     dash.wait_for_selector("#films tbody[data-count]")
+    clear_lang(dash)  # reload restores the English default, which hides Bravo
     expect(dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo").locator("input.rating")).to_have_value("7")
     # blank un-rates
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo")
