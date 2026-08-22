@@ -71,6 +71,7 @@ class FilmView:
     leaving_date: str | None
     first_seen: str | None
     my_rating: int | None
+    departed: bool = False  # no longer in the source's current catalog
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

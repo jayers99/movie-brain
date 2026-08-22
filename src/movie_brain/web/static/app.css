@@ -57,3 +57,5 @@ button.info { border:0; background:none; cursor:pointer; font-size:16px; }
 #drawer dt { color:var(--muted); }
 #drawer details pre { font-size:12px; background:#f6f6f6; padding:8px; overflow:auto; }
 #toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--accent); color:#fff; padding:8px 14px; border-radius:6px; z-index:5; }
+tbody tr.departed td { color:var(--muted); }
+.badge-gone { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }

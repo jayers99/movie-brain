@@ -25,6 +25,7 @@ _PREDICATES: dict[str, Predicate] = {
     "top_rt": lambda v, _: v.rt is not None and v.rt >= TOP_RT,
     "top_imdb": lambda v, _: v.imdb is not None and v.imdb >= TOP_IMDB,
     "recent": _recent,
+    "departed": lambda v, _: v.departed,
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)

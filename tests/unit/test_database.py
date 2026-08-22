@@ -13,7 +13,15 @@ def test_init_db_is_idempotent(tmp_path):
     init_db(p)
     init_db(p)
     repo = Repository(p)
-    assert repo.summary("criterion") == {"films": 0, "rated": 0, "pending": 0, "unmatched": 0, "leaving": 0, "mine": 0}
+    assert repo.summary("criterion") == {
+        "films": 0,
+        "rated": 0,
+        "pending": 0,
+        "unmatched": 0,
+        "leaving": 0,
+        "mine": 0,
+        "departed": 0,
+    }
 
 
 def test_upsert_film_returns_stable_id_and_updates_fields(repo):
@@ -109,7 +117,60 @@ def test_views_and_summary(repo):
     vc = repo.get_view(c)
     assert (vc.found, vc.pending) == (None, True)
     assert repo.get_payload(a) == '{"Title":"Trio"}' and repo.get_payload(c) is None
-    assert repo.summary("criterion") == {"films": 3, "rated": 1, "pending": 1, "unmatched": 1, "leaving": 1, "mine": 1}
+    assert repo.summary("criterion") == {
+        "films": 3,
+        "rated": 1,
+        "pending": 1,
+        "unmatched": 1,
+        "leaving": 1,
+        "mine": 1,
+        "departed": 0,
+    }
+
+
+def test_rated_departed_film_stays_visible_and_flagged(repo):
+    a = repo.upsert_film(TRIO)
+    b = repo.upsert_film(QUARTET)
+    repo.record_listing(a, "criterion", TRIO.url, D1)
+    repo.record_listing(b, "criterion", QUARTET.url, D1)
+    repo.set_rating(a, 8, D1)
+    repo.record_listing(b, "criterion", QUARTET.url, D2)  # Trio dropped off the channel
+    views = {v.title: v.departed for v in repo.list_views("criterion")}
+    assert views == {"Trio": True, "Quartet": False}
+    assert repo.get_view(a).departed is True
+    assert repo.summary("criterion")["departed"] == 1
+
+
+def test_unrated_departed_film_is_hidden_but_kept_inside_grace(repo):
+    a = repo.upsert_film(TRIO)
+    b = repo.upsert_film(QUARTET)
+    repo.record_listing(a, "criterion", TRIO.url, date(2026, 8, 16))
+    repo.record_listing(b, "criterion", QUARTET.url, D2)
+    assert repo.purge_departed("criterion", D2) == 0
+    assert [v.title for v in repo.list_views("criterion")] == ["Quartet"]
+    assert repo.film_id_by_key("trio (1950)") == a
+
+
+def test_purge_departed_removes_unrated_films_past_grace(repo):
+    a = repo.upsert_film(TRIO)
+    b = repo.upsert_film(QUARTET)
+    repo.record_listing(a, "criterion", TRIO.url, D1)  # 18 days stale
+    repo.record_listing(b, "criterion", QUARTET.url, D2)
+    repo.upsert_omdb(a, OmdbRating(7.0, 80, True, "English", "{}"), D1)
+    assert repo.purge_departed("criterion", D2) == 1
+    assert repo.film_id_by_key("trio (1950)") is None
+    assert repo.get_payload(a) is None
+    assert [v.title for v in repo.list_views("criterion")] == ["Quartet"]
+
+
+def test_purge_departed_never_touches_rated_films(repo):
+    a = repo.upsert_film(TRIO)
+    b = repo.upsert_film(QUARTET)
+    repo.record_listing(a, "criterion", TRIO.url, D1)  # 18 days stale but rated
+    repo.record_listing(b, "criterion", QUARTET.url, D2)
+    repo.set_rating(a, 0, D1)
+    assert repo.purge_departed("criterion", D2) == 0
+    assert repo.film_id_by_key("trio (1950)") == a
 
 
 def test_record_catalog_bulk_matches_per_film_calls(repo):

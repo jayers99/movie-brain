@@ -14,7 +14,7 @@ uv run movie-brain sync [--full|--ratings-only] · dashboard [--port 5556] · im
 ## Rules
 - Canned-filter thresholds live ONLY in `domain/filters.py`; JS reads them from `/api/config`. Keep `CHIP_PREDICATES` in app.js in lockstep with `_PREDICATES`.
 - Film identity = `film_key(title, year)`; never derive ids any other way.
-- Never delete from `listings`; "current" = latest `last_seen` per source.
+- "current" = latest `last_seen` per source. Retention: rated films are kept forever (shown as departed once off the channel); unrated films absent 7+ days are purged completely by `purge_departed` during sync.
 - New schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row.
 - Tests: `uv run pytest` (unit + pytest-bdd + Flask client + Playwright; `uv run playwright install chromium` once). Lint: `uv run ruff check . && uv run mypy`.
 
