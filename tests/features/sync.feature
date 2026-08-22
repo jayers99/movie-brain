@@ -32,6 +32,24 @@ Feature: Daily sync
     Then the catalog walk was full
     And 2 films are current
 
+  Scenario: A year-less duplicate page merges into the titled film
+    Given the Criterion catalog has films "Trio (1950)"
+    And the catalog also lists a year-less duplicate of "Trio"
+    And OMDb knows every film
+    When I sync
+    Then the exit code is 0
+    And 1 films are current
+
+  Scenario: Year-less duplicates keep the cheap page-1 check working
+    Given the repository already holds "Trio (1950)" walked 2 days ago
+    And the raw catalog total is 2
+    And the Criterion catalog has films "Trio (1950)"
+    And the catalog also lists a year-less duplicate of "Trio"
+    And OMDb knows every film
+    When I sync
+    Then the catalog walk was cheap
+    And 1 films are current
+
   Scenario: --full always walks
     Given the repository already holds "Trio (1950)" walked 2 days ago
     And the Criterion catalog has films "Trio (1950)"

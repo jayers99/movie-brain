@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from movie_brain.domain.models import Film, film_key
+from movie_brain.domain.models import Film, film_key, merge_yearless
 
 BROWSE_URL = "https://www.criterionchannel.com/browse"
 API_URL = "https://api.vhx.tv/collections"
@@ -110,19 +110,23 @@ def fetch_leaving(session: requests.Session, token: str, delay_s: float = 0.25) 
     return leaving
 
 
-def page_one_matches(session: requests.Session, token: str, known: list[Film]) -> bool:
+def page_one_matches(
+    session: requests.Session, token: str, known: list[Film], expected_total: int | None = None
+) -> bool:
     params: dict[str, str | int] = {"product": PRODUCT, "type[]": "movie", "per_page": 100, "page": 1}
     resp = session.get(API_URL, params=params, headers=_headers(token), timeout=30)
     resp.raise_for_status()
     payload = resp.json()
-    if payload.get("total") != len(known):
+    # expected_total is the raw API count from the last full walk; known is the
+    # merged catalog, so its length undercounts whenever duplicates were folded.
+    if payload.get("total") != (expected_total if expected_total is not None else len(known)):
         return False
     collections = payload.get("_embedded", {}).get("collections", [])
     if not collections:
         return False
     keys = {f.key for f in known}
-    for item in collections:
-        meta = item.get("metadata") or {}
-        if film_key(item.get("name") or "", meta.get("year_released")) not in keys:
-            return False
-    return True
+    page_films = [
+        Film(item.get("name") or "", (item.get("metadata") or {}).get("year_released"), None, "")
+        for item in collections
+    ]
+    return all(f.key in keys for f in merge_yearless(page_films, known))

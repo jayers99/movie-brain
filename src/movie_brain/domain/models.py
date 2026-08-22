@@ -1,10 +1,38 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 
 
 def film_key(title: str, year: int | None) -> str:
     return f"{title.strip().lower()} ({year})"
+
+
+def merge_yearless(films: list[Film], known: list[Film]) -> list[Film]:
+    """Fold year-less catalog entries into their titled twin.
+
+    Criterion sometimes publishes a second, year-less page for a film it
+    already lists (e.g. ``…/alice-in-the-cities-1``). A year-less film whose
+    title matches exactly one year across ``films`` + ``known`` is dropped when
+    that twin is already in ``films``, otherwise rewritten to the twin's year.
+    Titles matching zero or several years pass through unchanged.
+    """
+    years_by_title: dict[str, set[int]] = {}
+    for f in [*films, *known]:
+        if f.year is not None:
+            years_by_title.setdefault(f.title.strip().lower(), set()).add(f.year)
+    fetched_keys = {f.key for f in films}
+
+    merged: list[Film] = []
+    for f in films:
+        if f.year is None:
+            years = years_by_title.get(f.title.strip().lower(), set())
+            if len(years) == 1:
+                (year,) = years
+                if film_key(f.title, year) in fetched_keys:
+                    continue
+                f = replace(f, year=year)
+        merged.append(f)
+    return merged
 
 
 @dataclass(frozen=True)
