@@ -99,6 +99,16 @@ def catalog(ctx, films):
     )
 
 
+@given(parsers.parse('the catalog also lists a year-less duplicate of "{title}"'))
+def yearless_duplicate(ctx, title):
+    ctx["catalog_films"].append(Film(title, None, "Someone", f"https://c/{title.lower()}-1"))
+
+
+@given(parsers.parse("the raw catalog total is {n:d}"))
+def raw_total(ctx, n):
+    ctx["repo"].set_meta("films_raw_total", str(n))
+
+
 @given("the Criterion API returns 500")
 def api_down(ctx):
     ctx["rs"].get(API_URL, status=500)

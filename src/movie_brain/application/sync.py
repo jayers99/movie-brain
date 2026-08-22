@@ -7,6 +7,7 @@ from datetime import date
 
 import requests
 
+from movie_brain.domain.models import merge_yearless
 from movie_brain.infrastructure.criterion import CatalogError, fetch_films, fetch_leaving, fetch_token, page_one_matches
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.omdb import AuthError, OmdbClient, QuotaExceeded
@@ -53,22 +54,28 @@ def sync(
         try:
             token = fetch_token(session)
             fetched_at = repo.get_meta("films_fetched_at")
+            raw_total_meta = repo.get_meta("films_raw_total")
             reuse = False
             if not force_full and known and fetched_at:
                 age = (today - date.fromisoformat(fetched_at)).days
-                reuse = 0 <= age <= max_age_days and page_one_matches(session, token, known)
+                expected_total = int(raw_total_meta) if raw_total_meta else None
+                reuse = 0 <= age <= max_age_days and page_one_matches(session, token, known, expected_total)
             if reuse:
                 films = known
+                raw_total = None
             else:
-                films = fetch_films(session, token, delay_s=delay_s)
+                fetched = fetch_films(session, token, delay_s=delay_s)
+                films = merge_yearless(fetched, known)
+                raw_total = len(fetched)
                 full_walk = True
         except (CatalogError, requests.RequestException) as exc:
             log(f"catalog fetch failed, database unchanged: {exc}")
             return SyncResult(1, False, 0, 0, False, False)
 
         repo.record_catalog(SOURCE, films, today)
-        if full_walk:
+        if full_walk and raw_total is not None:
             repo.set_meta("films_fetched_at", today.isoformat())
+            repo.set_meta("films_raw_total", str(raw_total))
         try:
             repo.set_leaving(SOURCE, fetch_leaving(session, token, delay_s=delay_s))
         except Exception as exc:  # noqa: BLE001 — any failure here must not abort the run
