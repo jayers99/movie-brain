@@ -24,13 +24,19 @@ FILMS = [
     Film("Echo", 1990, "Ann", "https://c/echo"),  # imdb 7.0 rt 60 "English, Spanish", my rating 0
 ]
 
+# Rated in the old walk, missing from today's → the one departed film. German keeps
+# the English-default tests untouched; null imdb/rt keeps sort-order tests untouched.
+FOXTROT = Film("Foxtrot", 1955, "Fay", "https://c/foxtrot")
+
 
 def seed(repo: Repository) -> None:
     films = FILMS
     # Old walk without Delta, then today's walk with all five → only Delta has first_seen = today.
-    repo.record_catalog("criterion", [f for f in films if f.title != "Delta"], date(2026, 1, 1))
+    repo.record_catalog("criterion", [f for f in films if f.title != "Delta"] + [FOXTROT], date(2026, 1, 1))
     repo.record_catalog("criterion", films, TODAY)
-    ids = {f.key: repo.film_id_by_key(f.key) for f in films}
+    ids = {f.key: repo.film_id_by_key(f.key) for f in films + [FOXTROT]}
+    repo.upsert_omdb(ids["foxtrot (1955)"], OmdbRating(None, None, True, "German", '{"Title":"Foxtrot"}'), TODAY)
+    repo.set_rating(ids["foxtrot (1955)"], 7, TODAY)
     repo.upsert_omdb(
         ids["alpha (1950)"],
         OmdbRating(

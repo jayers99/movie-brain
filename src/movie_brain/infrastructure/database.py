@@ -31,7 +31,8 @@ def init_db(db_path: Path) -> None:
 
 _VIEW_SQL = """
 SELECT f.id, f.title, f.year, f.director, l.url, o.language, o.imdb, o.rt, o.found,
-       (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score
+       (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
+       (l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source)) AS departed
 FROM films f
 JOIN listings l ON l.film_id = f.id AND l.source = ?
 LEFT JOIN omdb o ON o.film_id = f.id
@@ -54,6 +55,7 @@ def _row_to_view(row: sqlite3.Row) -> FilmView:
         leaving_date=row["leaving_date"],
         first_seen=row["first_seen"],
         my_rating=row["score"],
+        departed=bool(row["departed"]),
     )
 
 
@@ -96,6 +98,29 @@ class Repository:
                 "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
                 (film_id, source, url, seen.isoformat(), seen.isoformat()),
             )
+
+    def purge_departed(self, source: str, today: date, grace_days: int = 7) -> int:
+        """Delete unrated films (with their listings and omdb rows) not seen for grace_days.
+
+        Rated films are never purged — they are the point of the film brain.
+        """
+        cutoff = (today - timedelta(days=grace_days)).isoformat()
+        with self._conn() as c:
+            ids = [
+                r["id"]
+                for r in c.execute(
+                    "SELECT f.id FROM films f "
+                    "WHERE NOT EXISTS (SELECT 1 FROM my_ratings r WHERE r.film_id = f.id) "
+                    "AND EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = ?) "
+                    "AND (SELECT MAX(last_seen) FROM listings l WHERE l.film_id = f.id) < ?",
+                    (source, cutoff),
+                )
+            ]
+            for fid in ids:
+                c.execute("DELETE FROM omdb WHERE film_id = ?", (fid,))
+                c.execute("DELETE FROM listings WHERE film_id = ?", (fid,))
+                c.execute("DELETE FROM films WHERE id = ?", (fid,))
+        return len(ids)
 
     def record_catalog(self, source: str, films: list[Film], seen: date) -> None:
         day = seen.isoformat()
@@ -227,7 +252,9 @@ class Repository:
     def list_views(self, source: str) -> list[FilmView]:
         with self._conn() as c:
             rows = c.execute(
-                _VIEW_SQL + "WHERE l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) ORDER BY f.id",
+                _VIEW_SQL
+                + "WHERE l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
+                + "OR r.score IS NOT NULL ORDER BY f.id",
                 (source, source),
             ).fetchall()
             return [_row_to_view(r) for r in rows]
@@ -251,4 +278,5 @@ class Repository:
             "unmatched": sum(1 for v in views if v.found is False),
             "leaving": sum(1 for v in views if v.leaving_date is not None),
             "mine": sum(1 for v in views if v.my_rating is not None),
+            "departed": sum(1 for v in views if v.departed),
         }

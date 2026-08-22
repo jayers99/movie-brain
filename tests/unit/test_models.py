@@ -47,7 +47,21 @@ def test_merge_yearless_matches_titles_case_insensitively():
 
 def test_film_view_to_dict_round_trips_fields():
     v = FilmView(
-        1, "Trio", 1950, "Ken Annakin", "https://c/trio", "English", 7.1, 90, True, False, None, "2026-08-01", 8
+        1,
+        "Trio",
+        1950,
+        "Ken Annakin",
+        "https://c/trio",
+        "English",
+        7.1,
+        90,
+        True,
+        False,
+        None,
+        "2026-08-01",
+        8,
+        departed=True,
     )
     d = v.to_dict()
     assert d["id"] == 1 and d["imdb"] == 7.1 and d["my_rating"] == 8 and d["pending"] is False
+    assert d["departed"] is True

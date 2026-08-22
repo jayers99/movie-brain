@@ -29,7 +29,17 @@ def view(**kw) -> FilmView:
 
 
 def test_chip_names_are_stable():
-    assert CHIPS == ("leaving", "unrated", "mine", "not_interested", "pending", "top_rt", "top_imdb", "recent")
+    assert CHIPS == (
+        "leaving",
+        "unrated",
+        "mine",
+        "not_interested",
+        "pending",
+        "top_rt",
+        "top_imdb",
+        "recent",
+        "departed",
+    )
 
 
 @pytest.mark.parametrize(
@@ -44,6 +54,7 @@ def test_chip_names_are_stable():
         ("top_rt", view(rt=TOP_RT), view(rt=TOP_RT - 1)),
         ("top_imdb", view(imdb=TOP_IMDB), view(imdb=7.9)),
         ("recent", view(first_seen="2026-08-01"), view(first_seen="2026-01-01")),
+        ("departed", view(departed=True), view()),
     ],
 )
 def test_single_chip(chip, yes, no):

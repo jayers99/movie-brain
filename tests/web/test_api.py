@@ -80,6 +80,7 @@ def test_summary_and_config(client):
         "unmatched": 0,
         "leaving": 0,
         "mine": 0,
+        "departed": 0,
     }
     cfg = client.get("/api/config").get_json()
     assert cfg["canned_thresholds"] == {"top_rt": 90, "top_imdb": 8.0, "recent_days": 30}

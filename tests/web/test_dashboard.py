@@ -51,7 +51,7 @@ def test_language_filter_defaults_to_english(dash: Page):
     assert count(dash) == 1
     clear_lang(dash)
     expect(dash.locator("#f-lang-btn")).to_have_text("Any")
-    assert count(dash) == 5
+    assert count(dash) == 6
     assert "lang=any" in dash.url
 
 
@@ -61,7 +61,7 @@ def test_any_language_option_heads_the_list(dash: Page):
     assert labels[0].strip() == "Any language"
     expect(dash.locator("#f-lang-any")).not_to_be_checked()  # English is the default selection
     dash.locator("#f-lang-any").check()  # picking Any clears every language
-    assert count(dash) == 5
+    assert count(dash) == 6
     expect(dash.locator("#f-lang-btn")).to_have_text("Any")
     expect(dash.locator("#f-lang-panel input[type=checkbox]:not(#f-lang-any):checked")).to_have_count(0)
     dash.locator('#f-lang-panel input[value="French"]').check()  # picking a language unchecks Any
@@ -71,10 +71,10 @@ def test_any_language_option_heads_the_list(dash: Page):
 
 def test_loads_all_films_default_sort_imdb_desc_nulls_last(dash: Page):
     clear_lang(dash)
-    assert count(dash) == 5
+    assert count(dash) == 6
     assert first_titles(dash, 5) == ["Alpha", "Echo", "Bravo", "Charlie", "Delta"]
-    expect(dash.locator("#count-films")).to_have_text("5")
-    expect(dash.locator("#count-showing")).to_have_text("Showing 5 of 5")
+    expect(dash.locator("#count-films")).to_have_text("6")
+    expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 6")
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
 
 
@@ -86,7 +86,7 @@ def test_chips_stack_with_and(dash: Page):
     assert count(dash) == 2  # Charlie (unmatched), Delta (pending)
     expect(dash.locator(".chip[data-chip=unrated]")).to_have_class(re.compile("active"))
     dash.click("#chips-clear")
-    assert count(dash) == 5
+    assert count(dash) == 6
 
 
 def test_each_chip_alone(dash: Page):
@@ -94,17 +94,34 @@ def test_each_chip_alone(dash: Page):
     expected = {
         "leaving": 1,
         "unrated": 3,
-        "mine": 1,
+        "mine": 2,
         "not_interested": 1,
         "pending": 2,
         "top_rt": 1,
         "top_imdb": 1,
         "recent": 1,
+        "departed": 1,
     }
     for chip, n in expected.items():
         dash.click(f".chip[data-chip={chip}]")
         assert count(dash) == n, chip
         dash.click(f".chip[data-chip={chip}]")
+
+
+def test_departed_film_is_marked_in_table_and_counts(dash: Page):
+    clear_lang(dash)
+    row = dash.locator("#films tbody tr[data-id]").filter(has_text="Foxtrot")
+    expect(row).to_have_class(re.compile("departed"))
+    expect(row.locator(".c-title")).to_contain_text("gone")
+    expect(dash.locator("#count-departed")).to_have_text("1")
+
+
+def test_departed_chip_filters_to_departed_films(dash: Page):
+    clear_lang(dash)
+    dash.click(".chip[data-chip=departed]")
+    assert count(dash) == 1
+    assert first_titles(dash, 1) == ["Foxtrot"]
+    dash.click("#chips-clear")
 
 
 def test_sort_cycles_and_keeps_nulls_last(dash: Page):
@@ -185,10 +202,10 @@ def test_row_click_opens_drawer_but_title_link_does_not(dash: Page):
 def test_rating_round_trip_updates_counts_and_persists(dash: Page, server: str):
     clear_lang(dash)
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo")
-    expect(dash.locator("#count-mine")).to_have_text("2")
+    expect(dash.locator("#count-mine")).to_have_text("3")
     row.locator("input.rating").fill("7")
     row.locator("input.rating").press("Enter")
-    expect(dash.locator("#count-mine")).to_have_text("3")
+    expect(dash.locator("#count-mine")).to_have_text("4")
     dash.reload()
     dash.wait_for_selector("#films tbody[data-count]")
     clear_lang(dash)  # reload restores the English default, which hides Bravo
@@ -197,7 +214,7 @@ def test_rating_round_trip_updates_counts_and_persists(dash: Page, server: str):
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo")
     row.locator("input.rating").fill("")
     row.locator("input.rating").press("Enter")
-    expect(dash.locator("#count-mine")).to_have_text("2")
+    expect(dash.locator("#count-mine")).to_have_text("3")
 
 
 def test_invalid_rating_reverts(dash: Page):
@@ -206,7 +223,7 @@ def test_invalid_rating_reverts(dash: Page):
     inp.fill("12")
     inp.press("Enter")
     expect(inp).to_have_value("9")
-    expect(dash.locator("#count-mine")).to_have_text("2")
+    expect(dash.locator("#count-mine")).to_have_text("3")
 
 
 def test_drawer_rating_input_also_works(dash: Page):

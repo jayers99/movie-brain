@@ -23,6 +23,7 @@
     top_rt: (f) => f.rt != null && f.rt >= state.cfg.canned_thresholds.top_rt,
     top_imdb: (f) => f.imdb != null && f.imdb >= state.cfg.canned_thresholds.top_imdb,
     recent: (f) => f.first_seen != null && daysBetween(f.first_seen, state.cfg.today) <= state.cfg.canned_thresholds.recent_days,
+    departed: (f) => f.departed,
   };
 
   // ---- filtering / sorting ----
@@ -72,14 +73,16 @@
     $('#count-unmatched').textContent = n((x) => x.found === false);
     $('#count-leaving').textContent = n((x) => x.leaving_date != null);
     $('#count-mine').textContent = n((x) => x.my_rating != null);
+    $('#count-departed').textContent = n((x) => x.departed);
   }
 
   // ---- virtual-scrolled rows ----
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = (v, suffix = '') => (v == null ? '—' : `${v}${suffix}`);
   function rowHtml(f) {
-    const title = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
-    return `<tr data-id="${f.id}">
+    const link = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
+    const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '');
+    return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-imdb num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
       <td class="c-rt num">${fmt(f.rt, '%')}</td><td class="c-leaving">${esc(f.leaving_date) || ''}</td>
@@ -256,7 +259,7 @@
       .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
     const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
     return `${poster}<h2>${esc(d.title)}</h2>
-      <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.leaving_date ? ` · <b>Leaving ${esc(d.leaving_date)}</b>` : ''}</div>
+      <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.leaving_date ? ` · <b>Leaving ${esc(d.leaving_date)}</b>` : ''}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${p.Plot && p.Plot !== 'N/A' ? `<p>${esc(p.Plot)}</p>` : ''}
       <dl>${fields}</dl>
       ${sources ? `<ul class="sources">${sources}</ul>` : d.pending ? '<p class="meta">OMDb lookup pending.</p>' : d.found === false ? '<p class="meta">No OMDb match.</p>' : ''}

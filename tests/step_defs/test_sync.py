@@ -99,6 +99,12 @@ def catalog(ctx, films):
     )
 
 
+@given(parsers.parse('I have rated "{title}"'))
+def rated(ctx, title):
+    f = parse_titles(f'"{title}"')[0]
+    assert ctx["repo"].set_rating(ctx["repo"].film_id_by_key(f.key), 7, TODAY) is True
+
+
 @given(parsers.parse('the catalog also lists a year-less duplicate of "{title}"'))
 def yearless_duplicate(ctx, title):
     ctx["catalog_films"].append(Film(title, None, "Someone", f"https://c/{title.lower()}-1"))
@@ -240,6 +246,25 @@ def is_leaving(ctx, title, label):
     f = parse_titles(f'"{title}"')[0]
     view = ctx["repo"].get_view(ctx["repo"].film_id_by_key(f.key))
     assert view.leaving_date == label
+
+
+@then(parsers.parse('"{title}" is gone from the database'))
+def film_gone(ctx, title):
+    f = parse_titles(f'"{title}"')[0]
+    assert ctx["repo"].film_id_by_key(f.key) is None
+
+
+@then(parsers.parse('"{title}" is still in the database'))
+def film_kept(ctx, title):
+    f = parse_titles(f'"{title}"')[0]
+    assert ctx["repo"].film_id_by_key(f.key) is not None
+
+
+@then(parsers.parse('"{title}" is in the dashboard marked departed'))
+def film_departed(ctx, title):
+    f = parse_titles(f'"{title}"')[0]
+    views = {v.title: v.departed for v in ctx["repo"].list_views(SOURCE)}
+    assert views.get(f.title) is True
 
 
 @then("the quota flag is set")
