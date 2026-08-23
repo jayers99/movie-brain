@@ -110,6 +110,9 @@ match-rate question already tracked in the spikes below.
   metascore. No JSON API endpoints visible in the markup. Needs re-verification from a real
   scraper's perspective (headers, rate limits, consistency).
 - I have a Metacritic account, and Metacritic already has per-title user ratings ("My Ratings").
+- **TMDB credentials live at** `~/.config/movie-brain/tmdb-read-token.txt` (v4 bearer, use this)
+  and `tmdb-api-key.txt` (v3) — both verified working 2026-08-24. TMDB accounts can also store
+  **my own movie ratings**, a second ratings-sync target alongside Metacritic My Ratings.
 - Current schema is closer to this than it looks: `listings` already keys on
   `(film_id, source)` with per-source `url`, `first_seen`/`last_seen`, `leaving_date` — the
   availability join in embryo. `criterion` is just the only `source` value so far, and
@@ -160,8 +163,25 @@ adapter detail the application layer never sees.
       any endpoint?
 - [ ] **Spike: ratings sync design.** One-way (push my 0–10 scores to Metacritic), one-way
       (pull), or two-way with conflict rules? Do their user scores use the same 0–10 scale?
-- [ ] Title matching: can Metacritic entries be matched to our `film_key(title, year)`
-      reliably? What's the collision/miss rate on ~9,700 titles (year drift, alternate titles)?
+- [x] ~~Title matching: can Metacritic entries be matched reliably?~~ **Measured 2026-08-24**
+      (96-title sample across score bands 100→77, naive TMDB search + year ±1):
+      **73% top-1, 8% top-3, 19% miss.** The misses are almost all one fixable class —
+      **Metacritic uses the US release/re-release year, TMDB the original year** (Tokyo Story
+      1972-vs-1953, Playtime 1973-vs-1967, Army of Shadows 2006-vs-1969) — plus title
+      annotations to strip ("Dekalog (1988)", "The Leopard (re-release)"), 1–2-year US-lag
+      drift (Arrietty 2012-vs-2010), and punctuation (Forbidden Lie$). With parenthetical
+      stripping + wider year tolerance + exact-title preference, expect **~95%+**; the
+      residue is a small human-review queue. Spike script:
+      scratchpad `match_spike.py` (promote into the repo when the adapter is built).
+- [x] ~~Re-run the matching spike with normalization fixes.~~ **Confirmed 2026-08-24: 98%**
+      (94/96; 93 exact-title, 1 near-year fallback). Winning rules: strip
+      `(re-release)`/`(NNNN)` annotations · punctuation/case-insensitive title compare
+      (`Lie$`→`lies`) · accept exact-title results whose **original year ≤ MC year + 2**
+      (MC stamps US re-release years). The two residuals both have known fixes: *Dekalog* is
+      a TV series on TMDB (needs a TV/multi-search fallback) and *Intolerance* carries a
+      subtitle on TMDB (needs prefix-tolerant compare). Verdict: **matching is solved** —
+      normalization function + tiny review queue; scripts `match_spike.py`/`match_spike2.py`
+      in the session scratchpad, promote when building the adapter.
 - [ ] Do Metacritic pages link out to the streaming services (deep links we could store as the
       per-service `url`), or do we need each service's own catalog/API for links?
 
