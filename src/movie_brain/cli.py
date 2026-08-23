@@ -10,6 +10,7 @@ from rich.table import Table
 
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
+from movie_brain.application.metacritic import crawl_archive, match_archive
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.infrastructure.config import load_api_key, load_config
 from movie_brain.infrastructure.database import Repository
@@ -19,6 +20,8 @@ app = typer.Typer(
 )
 export_app = typer.Typer(help="Export data.")
 app.add_typer(export_app, name="export")
+metacritic_app = typer.Typer(help="Metacritic browse archive: crawl pages, match films.")
+app.add_typer(metacritic_app, name="metacritic")
 console = Console()
 err = Console(stderr=True)
 
@@ -98,3 +101,32 @@ def status() -> None:
     for k, v in s.items():
         table.add_row(k, str(v))
     console.print(table)
+
+
+@metacritic_app.command("crawl")
+def metacritic_crawl(
+    pages: Annotated[
+        int, typer.Option("--pages", help="Target page count for the archive; already-archived pages are skipped.")
+    ] = 10,
+) -> None:
+    """Politely walk Metacritic's score-sorted browse pages into the local raw archive."""
+    cfg = load_config()
+    cfg.config_dir.mkdir(parents=True, exist_ok=True)
+    report = crawl_archive(cfg.config_dir, pages)
+    console.print(f"fetched: {report.fetched} · skipped: {report.skipped} · archived: {report.archived} pages")
+    raise typer.Exit(report.exit_code)
+
+
+@metacritic_app.command("match")
+def metacritic_match() -> None:
+    """Match archived Metacritic titles to films (offline, re-runnable) and report coverage."""
+    report = match_archive(_repo(), load_config().config_dir, date.today())
+    if report.exit_code != 0:
+        raise typer.Exit(report.exit_code)
+    pct = 100 * report.matched / report.films if report.films else 0.0
+    console.print(f"archive: {report.pages} pages · {report.titles} titles · score floor {report.floor}")
+    console.print(f"matched: {report.matched}/{report.films} films ({pct:.1f}%)")
+    console.print(f"expected-but-missed: {report.expected_missed} → review queue")
+    console.print(f"review queue: {report.review_open} open")
+    console.print(f"below floor / unscored: {report.unmatched - report.expected_missed}")
+    raise typer.Exit(0)
