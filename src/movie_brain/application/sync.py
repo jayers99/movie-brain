@@ -47,6 +47,7 @@ def sync(
     ratings_only: bool = False,
     max_age_days: int = 7,
     tmdb_token: str | None = None,
+    notifier: Callable[[str, str], None] | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> SyncResult:
     session = session or requests.Session()
@@ -127,6 +128,18 @@ def sync(
             tmdb = tmdb_step(repo, TmdbClient(tmdb_token, session=session), today, log=log)
         except Exception as exc:  # noqa: BLE001 — one source failing must never break the others
             log(f"TMDB availability step failed: {exc}")
+
+    if notifier is not None:
+        arrivals = repo.watchlist_transitions_on(today)
+        if arrivals:
+            listed = " · ".join(f"{title} on {service}" for title, service in arrivals[:4])
+            if len(arrivals) > 4:
+                listed += f" · … and {len(arrivals) - 4} more"
+            noun = "arrival" if len(arrivals) == 1 else "arrivals"
+            try:
+                notifier("movie-brain", f"{len(arrivals)} watchlist {noun}: {listed}")
+            except Exception as exc:  # noqa: BLE001 — alerts must never affect the sync outcome
+                log(f"notification failed: {exc}")
 
     return SyncResult(
         0,

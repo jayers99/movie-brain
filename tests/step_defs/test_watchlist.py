@@ -214,3 +214,34 @@ def transition_count(ctx, title, year, n):
             (fid,),
         ).fetchone()[0]
     assert got == n
+
+
+@when("I sync with a TMDB token and a notifier")
+def do_sync_notify(ctx, tmdb):
+    sent: list[tuple[str, str]] = []
+    ctx["sent"] = sent
+    ctx["result"] = sync(
+        ctx["repo"], "omdb-key", TODAY, tmdb_token="tok", notifier=lambda t, b: sent.append((t, b))
+    )
+
+
+@then("one notification was sent")
+def one_sent(ctx):
+    assert len(ctx["sent"]) == 1
+
+
+@then("no notification was sent")
+def none_sent(ctx):
+    assert ctx["sent"] == []
+
+
+@then(parsers.parse('the notification mentions "{a}" and "{b}"'))
+def mentions(ctx, a, b):
+    (_, notification_body) = ctx["sent"][0]
+    assert a in notification_body and b in notification_body
+
+
+@then(parsers.parse('the notification does not mention "{a}"'))
+def not_mentions(ctx, a):
+    (_, notification_body) = ctx["sent"][0]
+    assert a not in notification_body

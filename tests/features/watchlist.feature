@@ -33,3 +33,21 @@ Feature: Watchlist films are refreshed nightly and arrivals are detected
     When I sync with a TMDB token
     And I sync with a TMDB token again the next day
     Then "Alpha (1950)" has 2 availability transitions
+
+  Scenario: A watchlist arrival produces one summary notification
+    Given TMDB knows "Alpha (1950)" as id 11
+    And TMDB knows "Bravo (1960)" as id 22
+    And TMDB streams id 11 on providers 1899 and 11
+    And TMDB streams id 22 on providers 1899 and 386
+    And "Alpha (1950)" is on the watchlist
+    When I sync with a TMDB token and a notifier
+    Then one notification was sent
+    And the notification mentions "Alpha" and "HBO Max"
+    And the notification does not mention "Bravo"
+
+  Scenario: No watchlist arrivals means no notification
+    Given TMDB knows "Alpha (1950)" as id 11
+    And TMDB knows "Bravo (1960)" as id 22
+    And TMDB streams id 11 on providers 1899 and 11
+    When I sync with a TMDB token and a notifier
+    Then no notification was sent
