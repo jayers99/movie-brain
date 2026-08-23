@@ -169,6 +169,10 @@ semantics preserved exactly: per-source `url`, `first_seen`/`last_seen`, `leavin
 
 ### `infrastructure/database.py`
 
+- **Pre-migration backups (decision 2026-08-23):** `init_db` snapshots the DB (SQLite
+  backup API) to `<config_dir>/backups/<name>-v{applied}-{date}.db` before applying any
+  pending migration to an existing schema. No backup on fresh DBs or ordinary runs — only
+  at schema boundaries, kept indefinitely. Every later phase inherits this insurance.
 - `upsert_film` and `record_catalog` supply `guid` (Python `uuid.uuid4()`) on insert; the
   `ON CONFLICT(key)` clause never updates `guid` — **guids are immutable once assigned**.
 - `record_catalog` additionally upserts the film's `criterion` external id (`INSERT … ON

@@ -36,7 +36,106 @@ git checkout -b feature/PHASE-1-schema-redesign main
 
 ---
 
-### Task 1: Migration 003 + guid generation on insert
+### Task 1: Automatic pre-migration backups
+
+Before any schema work lands, teach `init_db` to snapshot the DB whenever it is about to apply a migration to an existing schema — so migration 003 (Task 2) and every later phase get a rollback point for free. Fresh DBs and ordinary no-migration runs make no backup.
+
+**Files:**
+- Modify: `src/movie_brain/infrastructure/database.py` (`init_db`, lines 15–29)
+- Test: `tests/unit/test_database.py`
+
+**Interfaces:**
+- Consumes: existing `init_db(db_path)` / `MIGRATIONS_DIR`.
+- Produces: backups at `<db dir>/backups/<db stem>-v{max applied version}-{ISO date}.db`, written via the SQLite backup API (consistent snapshot even mid-connection). No public API change.
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `tests/unit/test_database.py`:
+
+```python
+def test_init_db_backs_up_before_applying_pending_migrations(tmp_path):
+    p = tmp_path / "x.db"
+    conn = sqlite3.connect(p)
+    conn.executescript((MIGRATIONS_DIR / "001_init.sql").read_text())
+    conn.execute("INSERT INTO films (id, title, year, key) VALUES (1, 'Trio', 1950, 'trio (1950)')")
+    conn.commit()
+    conn.close()
+    init_db(p)  # later migrations are pending → snapshot the v1 state first
+    backups = list((tmp_path / "backups").glob("x-v1-*.db"))
+    assert len(backups) == 1
+    b = sqlite3.connect(backups[0])
+    assert b.execute("SELECT title FROM films").fetchone()[0] == "Trio"
+    assert b.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 1  # pre-migration state
+    b.close()
+
+
+def test_init_db_makes_no_backup_for_fresh_or_up_to_date_dbs(tmp_path):
+    p = tmp_path / "x.db"
+    init_db(p)  # fresh DB: nothing to protect
+    init_db(p)  # up to date: nothing pending
+    assert not (tmp_path / "backups").exists()
+```
+
+- [ ] **Step 2: Run them to verify they fail**
+
+Run: `uv run pytest tests/unit/test_database.py -k "backs_up or no_backup" -v`
+Expected: the first FAILS (no `backups/` dir is created); the second PASSES already — that's fine, it pins the no-churn behavior.
+
+- [ ] **Step 3: Implement**
+
+In `src/movie_brain/infrastructure/database.py`, replace the whole `init_db` function with:
+
+```python
+def init_db(db_path: Path) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        has_versions = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
+        ).fetchone()
+        applied = {r[0] for r in conn.execute("SELECT version FROM schema_version")} if has_versions else set()
+        pending = [m for m in sorted(MIGRATIONS_DIR.glob("*.sql")) if int(m.name.split("_")[0]) not in applied]
+        if pending and applied:
+            _backup_pre_migration(conn, db_path, max(applied))
+        for mig in pending:
+            conn.executescript(mig.read_text())
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _backup_pre_migration(conn: sqlite3.Connection, db_path: Path, current_version: int) -> None:
+    """Snapshot the DB before new migrations touch it — the rollback point for a bad migration."""
+    backups_dir = db_path.parent / "backups"
+    backups_dir.mkdir(exist_ok=True)
+    dest_path = backups_dir / f"{db_path.stem}-v{current_version}-{date.today().isoformat()}.db"
+    dest = sqlite3.connect(dest_path)
+    try:
+        conn.backup(dest)
+        dest.commit()
+    finally:
+        dest.close()
+```
+
+(`date` is already imported at the top of the file. A same-day re-run overwrites the same backup file — correct: same pre-migration state.)
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `uv run pytest tests/unit/test_database.py -v`
+Expected: all PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/movie_brain/infrastructure/database.py tests/unit/test_database.py
+git commit -m "Snapshot the DB before applying migrations: rollback insurance for every phase
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 2: Migration 003 + guid generation on insert
 
 The migration and the `Repository` insert changes land together: once `films.guid` is `NOT NULL`, the existing `INSERT INTO films` calls would violate it, so the suite only stays green if both change in one task.
 
@@ -47,7 +146,7 @@ The migration and the `Repository` insert changes land together: once `films.gui
 
 **Interfaces:**
 - Consumes: existing `init_db(db_path)`, `Repository`, `MIGRATIONS_DIR` (glob-ordered `NNN_*.sql` runner — no code change needed to pick up 003).
-- Produces: tables `movie_service(slug PK, name, kind, subscribed, region)`, `service_provider(tmdb_provider_id PK, service_slug FK, label)`, `external_ids(film_id FK, authority, value, first_seen, PK(film_id, authority), UNIQUE(authority, value))`; `films.guid TEXT NOT NULL UNIQUE`; `listings.source` FK → `movie_service(slug)`. Task 2 relies on `external_ids` existing; Task 2's `services()` reads `movie_service`.
+- Produces: tables `movie_service(slug PK, name, kind, subscribed, region)`, `service_provider(tmdb_provider_id PK, service_slug FK, label)`, `external_ids(film_id FK, authority, value, first_seen, PK(film_id, authority), UNIQUE(authority, value))`; `films.guid TEXT NOT NULL UNIQUE`; `listings.source` FK → `movie_service(slug)`. Task 3 relies on `external_ids` existing; Task 3's `services()` reads `movie_service`.
 
 - [ ] **Step 1: Write the failing migration tests**
 
@@ -296,14 +395,14 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 2: External-id and registry access on Repository
+### Task 3: External-id and registry access on Repository
 
 **Files:**
 - Modify: `src/movie_brain/infrastructure/database.py` (`record_catalog`; new methods after the `# meta` section)
 - Test: `tests/unit/test_database.py`
 
 **Interfaces:**
-- Consumes: Task 1's `external_ids` and `movie_service` tables.
+- Consumes: Task 2's `external_ids` and `movie_service` tables.
 - Produces (used by Phase 2/3 adapters and tests):
   - `Repository.set_external_id(film_id: int, authority: str, value: str, seen: date) -> None`
   - `Repository.external_ids_for(film_id: int) -> dict[str, str]`
@@ -400,7 +499,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: Remove purge_departed — films are immutable
+### Task 4: Remove purge_departed — films are immutable
 
 **Files:**
 - Modify: `tests/features/sync.feature` (scenarios at lines 53–59 and 69–75)
@@ -483,7 +582,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ---
 
-### Task 4: Documentation + full gate + live-DB rehearsal
+### Task 5: Documentation + full gate + live-DB rehearsal
 
 **Files:**
 - Modify: `CLAUDE.md` (Sync flow step 3; Rules bullets 1–2; add registry rule)
@@ -514,6 +613,13 @@ In Rules, replace the first two bullets (`Film identity = film_key…` and `"Cur
 - `movie_service` is the service registry (slug PK; kind `svod`|`store`; `subscribed`/`region`
   are data). `service_provider` groups TMDB provider ids per service; `external_ids` maps
   films to per-authority native ids with `UNIQUE(authority, value)` as the dedup guard.
+```
+
+In the Data section, after the sync-log sentence add:
+
+```markdown
+Pre-migration backups land in `<config_dir>/backups/` automatically whenever `init_db` is
+about to apply a new migration — each file is the rollback point for one schema change.
 ```
 
 - [ ] **Step 2: Mark Phase 1 done in the roadmap**
