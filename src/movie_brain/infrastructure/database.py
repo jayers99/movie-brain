@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
@@ -94,9 +95,9 @@ class Repository:
     def upsert_film(self, film: Film) -> int:
         with self._conn() as c:
             c.execute(
-                "INSERT INTO films (title, year, director, key) VALUES (?, ?, ?, ?) "
+                "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
                 "ON CONFLICT(key) DO UPDATE SET title=excluded.title, year=excluded.year, director=excluded.director",
-                (film.title, film.year, film.director, film.key),
+                (str(uuid.uuid4()), film.title, film.year, film.director, film.key),
             )
             row = c.execute("SELECT id FROM films WHERE key = ?", (film.key,)).fetchone()
             return int(row["id"])
@@ -142,10 +143,10 @@ class Repository:
         with self._conn() as c:
             for film in films:
                 c.execute(
-                    "INSERT INTO films (title, year, director, key) VALUES (?, ?, ?, ?) "
+                    "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
                     "ON CONFLICT(key) DO UPDATE SET title=excluded.title, year=excluded.year, "
                     "director=excluded.director",
-                    (film.title, film.year, film.director, film.key),
+                    (str(uuid.uuid4()), film.title, film.year, film.director, film.key),
                 )
                 c.execute(
                     "INSERT INTO listings (film_id, source, url, first_seen, last_seen) "
