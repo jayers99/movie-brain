@@ -8,7 +8,8 @@ import requests
 import responses
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from movie_brain.application.metacritic import crawl_archive
+from movie_brain.application.metacritic import crawl_archive, match_archive
+from movie_brain.domain.models import Film, OmdbRating
 from movie_brain.infrastructure.metacritic import BROWSE_URL, archive_dir, archived_pages, page_path
 
 scenarios("../features/metacritic.feature")
@@ -103,3 +104,87 @@ def fetch_log(ctx, n):
 def only_page_three(ctx):
     calls = [c for c in ctx["rs"].calls if c.request.url.startswith(BROWSE_URL)]
     assert len(calls) == 1 and "page=3" in calls[0].request.url
+
+
+def _film(title_year: str) -> Film:
+    # "Seven Samurai (1954)" → Film
+    import re as _re
+
+    m = _re.match(r"(.+) \((\d{4})\)$", title_year)
+    assert m
+    return Film(m.group(1), int(m.group(2)), "Someone", f"https://c/{m.group(1).lower()}")
+
+
+@given(parsers.parse('the repository holds the film "{title_year}"'))
+def holds_film(ctx, title_year):
+    ctx["repo"].upsert_film(_film(title_year))
+
+
+@given(parsers.parse('the repository holds the film "{title_year}" with OMDb metascore {score:d}'))
+def holds_film_with_mc(ctx, title_year, score):
+    f = _film(title_year)
+    fid = ctx["repo"].upsert_film(f)
+    ctx["repo"].upsert_omdb(fid, OmdbRating(None, None, True, metacritic=score), TODAY)
+
+
+@given(parsers.parse('the film "{title_year}" already claims metacritic slug "{slug}"'))
+def film_claims_slug(ctx, title_year, slug):
+    fid = ctx["repo"].upsert_film(_film(title_year))
+    ctx["repo"].set_external_id(fid, "metacritic", slug, TODAY)
+
+
+@given(parsers.re(r'the archive holds "(?P<title>[^"]+)" \((?P<year>\d+)\) scored (?P<score>\d+) as "(?P<slug>[^"]+)"'))
+def archive_holds(ctx, title, year, score, slug):
+    ctx["cards"].append((title, slug, int(year), int(score)))
+
+
+@when("I match")
+def run_match(ctx):
+    if ctx["cards"]:
+        archive = archive_dir(ctx["config_dir"])
+        p = page_path(archive, 1)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(ctx["nuxt_page"](ctx["cards"]))
+    ctx["report"] = match_archive(ctx["repo"], ctx["config_dir"], TODAY, log=lambda m: None)
+
+
+@then(parsers.parse('"{title_year}" has metacritic slug "{slug}"'))
+def has_slug(ctx, title_year, slug):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    assert ctx["repo"].external_ids_for(fid).get("metacritic") == slug
+
+
+@then(parsers.parse('"{title_year}" has no metacritic slug'))
+def has_no_slug(ctx, title_year):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    assert "metacritic" not in ctx["repo"].external_ids_for(fid)
+
+
+@then(parsers.parse("the coverage report says {matched:d} of {films:d} films matched"))
+def report_coverage(ctx, matched, films):
+    assert ctx["report"].matched == matched and ctx["report"].films == films
+
+
+@then(parsers.re(r'the review queue has an? "(?P<reason>[^"]+)" entry(?: for "(?P<title_year>[^"]+)")?'))
+def review_entry(ctx, reason, title_year):
+    rows = ctx["repo"].open_reviews("metacritic")
+    hits = [r for r in rows if r["reason"] == reason]
+    assert hits, f"no {reason!r} in {rows}"
+    if title_year:
+        fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+        assert any(r["film_id"] == fid for r in hits)
+
+
+@then(parsers.parse("the review queue has {n:d} open entries"))
+def review_count(ctx, n):
+    assert len(ctx["repo"].open_reviews("metacritic")) == n
+
+
+@then("no film was deleted")
+def nothing_deleted(ctx):
+    assert len(ctx["repo"].films_for_matching()) == 2
+
+
+@then(parsers.parse("the match exit code is {code:d}"))
+def match_exit(ctx, code):
+    assert ctx["report"].exit_code == code
