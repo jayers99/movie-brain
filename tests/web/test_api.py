@@ -91,6 +91,7 @@ def test_summary_and_config(client):
         "top_rt": 90,
         "top_imdb": 7.5,
         "recent_days": 30,
+        "new_arrival_days": 14,
     }
     assert cfg["today"] == "2026-08-19" and "leaving" in cfg["chips"]
 

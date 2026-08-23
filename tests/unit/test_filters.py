@@ -2,7 +2,16 @@ from datetime import date
 
 import pytest
 
-from movie_brain.domain.filters import CHIPS, RECENT_DAYS, TOP_IMDB, TOP_MC, TOP_RT, matches, thresholds
+from movie_brain.domain.filters import (
+    CHIPS,
+    NEW_ARRIVAL_DAYS,
+    RECENT_DAYS,
+    TOP_IMDB,
+    TOP_MC,
+    TOP_RT,
+    matches,
+    thresholds,
+)
 from movie_brain.domain.models import FilmView
 
 TODAY = date(2026, 8, 19)
@@ -37,6 +46,8 @@ def test_chip_names_are_stable():
         "top_ratings",
         "recent",
         "departed",
+        "new_arrivals",
+        "watchlist",
     )
 
 
@@ -87,4 +98,23 @@ def test_thresholds_exposes_constants():
         "top_rt": TOP_RT,
         "top_imdb": TOP_IMDB,
         "recent_days": RECENT_DAYS,
+        "new_arrival_days": NEW_ARRIVAL_DAYS,
     }
+
+
+def test_new_arrivals_chip_windows_on_appeared_date(today):
+    fresh = view(new_on=[{"source": "max", "name": "HBO Max", "appeared_on": today.isoformat()}])
+    stale = view(new_on=[{"source": "max", "name": "HBO Max", "appeared_on": "2026-08-01"}])
+    empty = view()
+    assert matches(fresh, ["new_arrivals"], today)
+    assert not matches(stale, ["new_arrivals"], today)  # 18 days > 14-day window
+    assert not matches(empty, ["new_arrivals"], today)
+
+
+def test_watchlist_chip(today):
+    assert matches(view(watchlisted=True), ["watchlist"], today)
+    assert not matches(view(), ["watchlist"], today)
+
+
+def test_thresholds_expose_new_arrival_days():
+    assert thresholds()["new_arrival_days"] == 14

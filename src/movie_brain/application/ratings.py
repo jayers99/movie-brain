@@ -11,6 +11,6 @@ def rate_film(repo: Repository, film_id: int, score: int | None, today: date) ->
         raise ValueError("score must be an integer 0–10")
     if not repo.set_rating(film_id, score, today):
         raise LookupError(film_id)
-    view = repo.get_view(film_id)
+    view = repo.get_view(film_id, today)
     assert view is not None
     return view

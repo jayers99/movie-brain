@@ -581,3 +581,23 @@ def test_services_currency_falls_back_to_max_without_stamp(repo, today):
     repo.record_listing_with_transition(fid, "peacock", "https://tmdb/w/1", today)
     view = repo.get_view(fid)  # no stamp set (fresh DB) — MAX rule keeps the row current
     assert [s["name"] for s in view.services] == ["Peacock"]
+
+
+# ---- Phase 4: FilmView new_on + watchlisted ------------------------------
+
+
+def test_views_carry_new_on_and_watchlisted(repo, today):
+    from datetime import timedelta
+
+    films = [Film("Alpha", 1950, "Ann", "https://c/alpha")]
+    repo.record_catalog("criterion", films, today - timedelta(days=30))  # insert event, outside window
+    fid = repo.film_id_by_key("alpha (1950)")
+    repo.toggle_watchlist(fid, today)
+    repo.record_listing_with_transition(fid, "max", "https://tmdb/w/1", today - timedelta(days=3))
+    view = repo.get_view(fid, today)
+    assert view.watchlisted is True
+    assert view.new_on == [
+        {"source": "max", "name": "HBO Max", "appeared_on": (today - timedelta(days=3)).isoformat()}
+    ]
+    (listed,) = [v for v in repo.list_views("criterion", today) if v.id == fid]
+    assert listed.new_on == view.new_on and listed.watchlisted is True

@@ -120,6 +120,8 @@ class FilmView:
     metacritic: int | None = None
     metacritic_url: str | None = None
     services: list[dict[str, object]] = field(default_factory=list)
+    watchlisted: bool = False
+    new_on: list[dict[str, object]] = field(default_factory=list)  # [{source, name, appeared_on}], arrivals window only
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
