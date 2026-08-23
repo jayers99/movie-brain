@@ -12,6 +12,8 @@ Personal film brain: Criterion Channel listings + OMDb ratings + my 0–10 ratin
 
 ```bash
 uv run movie-brain sync [--full|--ratings-only]      # refresh catalog + OMDb ratings
+uv run movie-brain metacritic crawl [--pages 10]     # extend the raw browse-page archive (polite, checkpointed)
+uv run movie-brain metacritic match                  # offline: match archive → films, report coverage
 uv run movie-brain dashboard [--port 5556]
 uv run movie-brain import-legacy [--from DIR]        # one-shot criterion-ratings import
 uv run movie-brain export csv PATH
@@ -51,6 +53,11 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
 - `movie_service` is the service registry (slug PK; kind `svod`|`store`; `subscribed`/`region`
   are data). `service_provider` groups TMDB provider ids per service; `external_ids` maps
   films to per-authority native ids with `UNIQUE(authority, value)` as the dedup guard.
+- Metascores are scraped-first: the FilmView `metacritic` value COALESCEs the scraped
+  `metacritic` table (joined via `external_ids` authority `metacritic` = slug) over
+  `omdb.metacritic`. The raw page archive under `<config_dir>/metacritic/` is the crawl
+  checkpoint — archived pages are never re-fetched; parsing reads only the archive. Match
+  anomalies land in `match_review` (never deleted, never blocking); no scraping in sync.
 - Canned-filter thresholds and chip names live ONLY in `domain/filters.py`; JS reads thresholds from `/api/config`. Keep `CHIP_PREDICATES` in `app.js` and the chip buttons in `index.html` in lockstep with `_PREDICATES`.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
@@ -61,3 +68,5 @@ DB: `~/.config/movie-brain/movie-brain.db` (`MOVIE_BRAIN_CONFIG_DIR` overrides t
 
 Pre-migration backups land in `<config_dir>/backups/` automatically whenever `init_db` is
 about to apply a new migration — each file is the rollback point for one schema change.
+
+Metacritic archive: `<config_dir>/metacritic/pages/page-NNNN.html` + `fetch-log.jsonl`.

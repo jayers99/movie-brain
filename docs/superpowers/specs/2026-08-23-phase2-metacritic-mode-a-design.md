@@ -1,6 +1,6 @@
 # Phase 2: Metacritic adapter — Mode A (enrich what we have)
 
-**Date:** 2026-08-23 · **Status:** approved design
+**Date:** 2026-08-23 · **Status:** implemented
 **Parent plan:** [multiple-movie-services.md](../../multiple-movie-services.md) — Phase 2.
 **Handoff:** [2026-08-23-phase2-handoff.md](../handoffs/2026-08-23-phase2-handoff.md).
 **Success bar:** first 10 browse pages crawled and archived; match run reports coverage %;

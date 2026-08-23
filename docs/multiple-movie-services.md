@@ -157,7 +157,7 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 | # | Phase | Depends on | Disruption risk |
 |---|-------|-----------|-----------------|
 | 1 | Schema redesign: GUID identity + services model — **done** | — | live schema — the careful one |
-| 2 | Metacritic adapter, Mode A (enrich Criterion) | 1 | low (additive columns/joins) |
+| 2 | Metacritic adapter, Mode A (enrich Criterion) — **done** | 1 | low (additive columns/joins) |
 | 3 | TMDB availability adapter | 1 | medium (sync flow) |
 | 4 | Watchlist + availability alerts | 3 | low |
 | 5 | Metacritic Mode B: top-N dial (start N=100) | 2 | low at N=100 — grows with the dial |
@@ -170,10 +170,9 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
    (name, slug, kind, `subscribed`, region) + provider-id grouping; availability join;
    **remove `purge_departed`** (immutability decision); migrate the existing Criterion data
    into the new shape. Done when: migration applied, all tests green, dashboard identical.
-2. **Metacritic adapter — Mode A.** Enrich every film currently in the DB (=Criterion) with
+2. **Done (2026-08-23).** **Metacritic adapter — Mode A.** Enrich every film currently in the DB (=Criterion) with
    its Metacritic record; the movie↔Metacritic join goes live; metascores become
-   first-class instead of OMDb-payload backfill. Done when: coverage % reported, unmatched
-   films logged (not deleted, not blocking).
+   first-class instead of OMDb-payload backfill. Landed as an incremental dial: `metacritic crawl --pages N` (10 first, extend by re-running with a bigger cap), offline `match`, scraped-first score with OMDb fallback, anomalies in `match_review`.
 3. **TMDB availability adapter.** Promote the spike matcher (98% rules) into
    `infrastructure/tmdb.py`; `tmdb` cache table on the `omdb` pattern; watch-providers for
    my services; sync step with its own tripwires; drawer shows "Also streaming on: …".
