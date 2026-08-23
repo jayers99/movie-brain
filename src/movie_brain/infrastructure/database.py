@@ -66,12 +66,12 @@ LEFT JOIN metacritic mc ON mc.slug = x.value
 """
 
 
-_SERVICES_SQL = """
+_SERVICES_SQL = f"""
 SELECT l.film_id, s.name, s.subscribed FROM listings l
 JOIN movie_service s ON s.slug = l.source
 WHERE s.kind = 'svod' AND l.source != 'criterion'
   AND l.last_seen >= COALESCE(
-      (SELECT value FROM meta WHERE key = 'tmdb_providers_refreshed_at'),
+      (SELECT value FROM meta WHERE key = '{TMDB_REFRESH_STAMP}'),
       (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = l.source))
 ORDER BY l.film_id, s.subscribed DESC, s.name
 """
@@ -205,6 +205,11 @@ class Repository:
         return is_transition
 
     def record_listing_with_transition(self, film_id: int, source: str, url: str, seen: date) -> bool:
+        """Write one listing row, applying the TMDB refresh-stamp frontier for reappearance detection.
+
+        For TMDB-fed sources only: criterion listings go through record_catalog, which uses
+        the per-source MAX(last_seen) frontier instead.
+        """
         with self._conn() as c:
             row = c.execute("SELECT value FROM meta WHERE key = ?", (TMDB_REFRESH_STAMP,)).fetchone()
             frontier = None if row is None else str(row["value"])
