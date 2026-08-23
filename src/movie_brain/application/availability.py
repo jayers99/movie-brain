@@ -91,7 +91,12 @@ def tmdb_step(
             log("TMDB provider lookups failing repeatedly — stopping; next run resumes.")
             return TmdbStepResult(matched, missed, refreshed)
         try:
-            providers = client.watch_providers(int(tmdb_id))
+            numeric_tmdb_id = int(tmdb_id)
+        except ValueError:
+            log(f"invalid tmdb id {tmdb_id!r} for film {film_id}")
+            continue
+        try:
+            providers = client.watch_providers(numeric_tmdb_id)
         except AuthError as exc:
             log(f"TMDB rejected the token: {exc}")
             return TmdbStepResult(matched, missed, refreshed)
@@ -103,7 +108,7 @@ def tmdb_step(
         slugs = {pmap[p] for p in providers.flatrate if p in pmap and pmap[p] != "criterion"}
         if STORE_PROVIDER_ID in pmap and STORE_PROVIDER_ID in (*providers.rent, *providers.buy):
             slugs.add(pmap[STORE_PROVIDER_ID])
-        url = providers.link or watch_link(int(tmdb_id))
+        url = providers.link or watch_link(numeric_tmdb_id)
         for slug in sorted(slugs):
             repo.record_listing(film_id, slug, url, today)
         repo.record_tmdb_providers(film_id, today, providers.payload)
