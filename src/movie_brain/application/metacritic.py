@@ -11,7 +11,7 @@ from pathlib import Path
 import requests
 
 from movie_brain.domain.matching import clean_title, match_film, norm_title
-from movie_brain.domain.models import McTitle, ReviewEntry
+from movie_brain.domain.models import Film, McTitle, ReviewEntry
 from movie_brain.infrastructure import metacritic as mc
 from movie_brain.infrastructure.database import Repository
 
@@ -45,6 +45,23 @@ class MatchReport:
     @property
     def unmatched(self) -> int:
         return self.films - self.matched
+
+
+MC_TOP_N_KEY = "mc_top_n"
+DEFAULT_TOP_N = 100
+MC_MOVIE_URL = "https://www.metacritic.com/movie/{slug}/"
+
+
+@dataclass(frozen=True)
+class PromoteReport:
+    exit_code: int
+    n: int
+    available: int  # staged titles within rank <= n (short archive → available < n)
+    promoted: int
+    already_linked: int
+    skipped_anomalous: int
+    key_conflicts: int
+    match: MatchReport | None = None
 
 
 def crawl_archive(
@@ -161,3 +178,59 @@ def match_archive(
         review_open=len(repo.open_reviews(AUTHORITY)),
         warnings=tuple(warnings),
     )
+
+
+def promote_top_n(
+    repo: Repository,
+    config_dir: Path,
+    today: date,
+    n: int,
+    *,
+    log: Callable[[str], None] = _stderr,
+) -> PromoteReport:
+    """Mode B: turn the top-N staged titles into real films (offline, idempotent).
+
+    match_archive runs first so every slug an existing film can claim is claimed —
+    the dedup guard. Promotion then only ever creates films for slugs nobody owns;
+    a film_key collision is the tripwire and queues for review, never overwrites.
+    """
+    match_report = match_archive(repo, config_dir, today, log=log)
+    if match_report.exit_code != 0:
+        return PromoteReport(1, n, 0, 0, 0, 0, 0, match_report)
+    claimed = repo.claimed_values(AUTHORITY)
+    anomalous = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
+    candidates = repo.top_staged_titles(n)
+    reviews: list[ReviewEntry] = []
+    promoted = already_linked = skipped = conflicts = 0
+    for t in candidates:
+        if t.slug in claimed:
+            already_linked += 1
+            continue
+        if t.slug in anomalous:
+            skipped += 1
+            continue
+        film = Film(clean_title(t.title), t.year, None, MC_MOVIE_URL.format(slug=t.slug))
+        film_id = repo.create_film(film)
+        if film_id is None:
+            conflicts += 1
+            detail = f"promotion of {t.title!r} ({t.year}) collides with existing key {film.key!r}"
+            reviews.append(
+                ReviewEntry(
+                    "key-conflict", film_id=repo.film_id_by_key(film.key), value=t.slug, detail=detail
+                )
+            )
+            continue
+        try:
+            repo.set_external_id(film_id, AUTHORITY, t.slug, today)
+        except sqlite3.IntegrityError:
+            reviews.append(
+                ReviewEntry(
+                    "slug-conflict", film_id=film_id, value=t.slug, detail="slug already claimed by another film"
+                )
+            )
+            continue
+        claimed.add(t.slug)
+        promoted += 1
+    if reviews:
+        repo.append_reviews(AUTHORITY, reviews, today)
+    return PromoteReport(0, n, len(candidates), promoted, already_linked, skipped, conflicts, match_report)
