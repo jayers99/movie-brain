@@ -51,13 +51,16 @@ def _backup_pre_migration(conn: sqlite3.Connection, db_path: Path, current_versi
 
 
 _VIEW_SQL = """
-SELECT f.id, f.title, f.year, f.director, l.url, o.language, o.imdb, o.rt, o.metacritic, o.found,
+SELECT f.id, f.title, f.year, f.director, l.url, o.language, o.imdb, o.rt,
+       COALESCE(mc.score, o.metacritic) AS metacritic, x.value AS mc_slug, o.found,
        (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
        (l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source)) AS departed
 FROM films f
 JOIN listings l ON l.film_id = f.id AND l.source = ?
 LEFT JOIN omdb o ON o.film_id = f.id
 LEFT JOIN my_ratings r ON r.film_id = f.id
+LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic'
+LEFT JOIN metacritic mc ON mc.slug = x.value
 """
 
 
@@ -78,6 +81,7 @@ def _row_to_view(row: sqlite3.Row) -> FilmView:
         first_seen=row["first_seen"],
         my_rating=row["score"],
         departed=bool(row["departed"]),
+        metacritic_url=f"https://www.metacritic.com/movie/{row['mc_slug']}/" if row["mc_slug"] else None,
     )
 
 

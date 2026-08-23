@@ -96,6 +96,7 @@ class FilmView:
     my_rating: int | None
     departed: bool = False  # no longer in the source's current catalog
     metacritic: int | None = None
+    metacritic_url: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
