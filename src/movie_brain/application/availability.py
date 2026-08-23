@@ -91,7 +91,7 @@ def tmdb_step(
             continue
         consecutive = 0
         slugs = {pmap[p] for p in providers.flatrate if p in pmap and pmap[p] != "criterion"}
-        if STORE_PROVIDER_ID in (*providers.rent, *providers.buy):
+        if STORE_PROVIDER_ID in pmap and STORE_PROVIDER_ID in (*providers.rent, *providers.buy):
             slugs.add(pmap[STORE_PROVIDER_ID])
         url = providers.link or watch_link(int(tmdb_id))
         for slug in sorted(slugs):
