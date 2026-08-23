@@ -1,6 +1,6 @@
 # movie-brain
 
-Personal film brain: it syncs the Criterion Channel catalog and OMDb ratings into a local SQLite database, tracks your own 0–10 ratings, and serves everything through a local Flask dashboard for browsing, filtering, and rating. Everything runs on your machine — the only external account is a free OMDb API key. Successor to [criterion-ratings](https://github.com/jayers99/criterion-ratings); other listing sources (Apple Movies, etc.) may be added later.
+Personal film brain: it syncs the Criterion Channel catalog and OMDb ratings into a local SQLite database, tracks your own 0–10 ratings, and serves everything through a local Flask dashboard for browsing, filtering, and rating. Everything runs on your machine — the only external account is a free OMDb API key. Other listing sources (Apple Movies, etc.) may be added later.
 
 ## Getting started
 
