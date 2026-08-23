@@ -70,6 +70,17 @@ class McTitle:
 
 
 @dataclass(frozen=True)
+class TmdbCandidate:
+    """One TMDB search result, reduced to what matching needs."""
+
+    tmdb_id: int
+    title: str
+    original_title: str
+    year: int | None
+    popularity: float
+
+
+@dataclass(frozen=True)
 class ReviewEntry:
     """A match anomaly queued for human review — never a deletion."""
 
