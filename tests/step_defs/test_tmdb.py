@@ -1,0 +1,269 @@
+from __future__ import annotations
+
+import json
+import re
+import sqlite3
+from datetime import date, timedelta
+from urllib.parse import parse_qs, urlparse
+
+import pytest
+import responses
+from pytest_bdd import given, parsers, scenarios, then, when
+
+from movie_brain.application.availability import META_REFRESHED_AT
+from movie_brain.application.sync import sync
+from movie_brain.domain.models import Film
+from movie_brain.infrastructure.criterion import API_URL, BROWSE_URL
+from movie_brain.infrastructure.omdb import OMDB_URL
+from movie_brain.infrastructure.tmdb import TMDB_API
+
+scenarios("../features/tmdb.feature")
+
+TODAY = date(2026, 8, 19)
+FOUND = {"Response": "True", "imdbRating": "7.0", "Language": "English", "Ratings": []}
+
+
+def parse_titles(text: str) -> list[Film]:
+    films = []
+    for m in re.finditer(r'"([^"(]+) \((\d{4})\)"', text):
+        title, year = m.group(1), int(m.group(2))
+        films.append(Film(title, year, "Someone", f"https://c/{title.lower()}"))
+    return films
+
+
+def movie_item(f: Film) -> dict:
+    return {
+        "name": f.title,
+        "metadata": {"year_released": f.year, "director": f.director},
+        "_links": {"collection_page": {"href": f.url}},
+    }
+
+
+@pytest.fixture
+def ctx(repo):
+    rs = responses.RequestsMock(assert_all_requests_are_fired=False)
+    rs.start()
+    yield {"repo": repo, "rs": rs, "result": None, "flags": {}}
+    rs.stop()
+    rs.reset()
+
+
+@given("a fresh repository")
+def fresh(ctx):
+    pass
+
+
+@given("the Criterion browse page exposes a token")
+def token(ctx):
+    ctx["rs"].get(BROWSE_URL, body='<script>window.TOKEN = "tok";</script>')
+
+
+@given(parsers.parse("the Criterion catalog has films {films}"))
+def catalog(ctx, films):
+    flist = parse_titles(films)
+    ctx["catalog_films"] = flist
+    if ctx["flags"].get("catalog_registered"):
+        # A scenario-level line replaces the Background's films; the callback below
+        # reads ctx["catalog_films"] at request time, so it must be registered once.
+        return
+    ctx["flags"]["catalog_registered"] = True
+
+    def movies(request):
+        current = ctx["catalog_films"]
+        return (
+            200,
+            {},
+            json.dumps(
+                {
+                    "total": len(current),
+                    "_links": {"next": {"href": None}},
+                    "_embedded": {"collections": [movie_item(f) for f in current]},
+                }
+            ),
+        )
+
+    def categories(request):
+        return (200, {}, '{"_links": {"next": {"href": null}}, "_embedded": {"collections": []}}')
+
+    ctx["rs"].add_callback(
+        responses.GET,
+        API_URL,
+        callback=lambda r: movies(r) if "type%5B%5D=movie" in r.url else categories(r),
+    )
+
+
+@given("OMDb knows every film")
+def omdb_ok(ctx):
+    ctx["rs"].get(OMDB_URL, json=FOUND)
+
+
+@pytest.fixture
+def tmdb(ctx):
+    """One mutable TMDB world: search index, per-id providers, call counters."""
+    world = {
+        "search": {},
+        "providers": {},
+        "search_calls": 0,
+        "provider_calls": 0,
+        "search_mode": "index",
+        "reject": False,
+    }
+
+    def do_search(request):
+        world["search_calls"] += 1
+        if world["reject"]:
+            return (401, {}, json.dumps({"status_message": "bad token"}))
+        if world["search_mode"] == "error":
+            return (500, {}, "boom")
+        title = parse_qs(urlparse(request.url).query)["query"][0]
+        hit = world["search"].get(title)
+        results = [hit] if hit else []
+        return (200, {}, json.dumps({"results": results}))
+
+    ctx["rs"].add_callback(responses.GET, f"{TMDB_API}/search/movie", callback=do_search)
+
+    def provider_callback(tmdb_id):
+        def cb(request):
+            world["provider_calls"] += 1
+            return (200, {}, json.dumps({"results": {"US": world["providers"].get(tmdb_id, {})}}))
+
+        return cb
+
+    world["register_providers"] = lambda tid: ctx["rs"].add_callback(
+        responses.GET, f"{TMDB_API}/movie/{tid}/watch/providers", callback=provider_callback(tid)
+    )
+    return world
+
+
+@given(parsers.parse('TMDB knows "{title} ({year:d})" as id {tid:d}'))
+def tmdb_knows(tmdb, title, year, tid):
+    tmdb["search"][title] = {
+        "id": tid,
+        "title": title,
+        "original_title": title,
+        "release_date": f"{year}-01-01",
+        "popularity": 5.0,
+    }
+    tmdb["register_providers"](tid)
+
+
+@given(parsers.parse("TMDB streams id {tid:d} on providers {a:d} and {b:d}"))
+def tmdb_streams(tmdb, tid, a, b):
+    tmdb["providers"][tid] = {"link": f"https://tmdb/w/{tid}", "flatrate": [{"provider_id": a}, {"provider_id": b}]}
+
+
+@given(parsers.parse("TMDB offers id {tid:d} to buy on providers {a:d} and {b:d}"))
+def tmdb_buys(tmdb, tid, a, b):
+    tmdb["providers"][tid] = {"link": f"https://tmdb/w/{tid}", "buy": [{"provider_id": a}, {"provider_id": b}]}
+
+
+@given("TMDB has no results for any search")
+def tmdb_empty(tmdb):
+    pass  # empty search index → every search returns no results
+
+
+@given("TMDB rejects the token")
+def tmdb_reject(tmdb):
+    tmdb["reject"] = True
+
+
+@given("TMDB errors on every search")
+def tmdb_errors(tmdb):
+    tmdb["search_mode"] = "error"
+
+
+@given(parsers.parse("the provider refresh ran {days:d} days ago"))
+def stamp(ctx, days):
+    ctx["repo"].set_meta(META_REFRESHED_AT, (TODAY - timedelta(days=days)).isoformat())
+
+
+@when("TMDB stops streaming id 11 anywhere")
+def tmdb_stops(tmdb):
+    tmdb["providers"][11] = {}
+
+
+@when("I sync")
+def do_sync(ctx, tmdb):
+    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY)
+
+
+@when("I sync with a TMDB token")
+def do_sync_tok(ctx, tmdb):
+    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok")
+
+
+@when("I sync with a TMDB token again the next day")
+def do_sync_next(ctx, tmdb):
+    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY + timedelta(days=1), tmdb_token="tok")
+
+
+@when("I sync with a TMDB token 8 days later")
+def do_sync_later(ctx, tmdb):
+    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY + timedelta(days=8), tmdb_token="tok")
+
+
+@then(parsers.parse("the exit code is {code:d}"))
+def exit_code(ctx, code):
+    assert ctx["result"].exit_code == code
+
+
+@then(parsers.parse("{n:d} films have OMDb ratings"))
+def omdb_count(ctx, n):
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        assert c.execute("SELECT COUNT(*) FROM omdb WHERE found = 1").fetchone()[0] == n
+
+
+@then(parsers.parse('"{title} ({year:d})" has external id "{value}" for authority "{authority}"'))
+def has_external(ctx, title, year, value, authority):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    assert ctx["repo"].external_ids_for(fid).get(authority) == value
+
+
+@then(parsers.parse("the sync matched {n:d} TMDB films"))
+def matched_n(ctx, n):
+    assert ctx["result"].tmdb_matched == n
+
+
+@then(parsers.parse("TMDB search was called exactly {n:d} times"))
+def search_calls(tmdb, n):
+    assert tmdb["search_calls"] == n
+
+
+@then(parsers.parse("TMDB providers were called exactly {n:d} times"))
+def provider_calls(tmdb, n):
+    assert tmdb["provider_calls"] == n
+
+
+@then(parsers.parse("the tmdb review queue holds {n:d} entries"))
+def review_n(ctx, n):
+    assert len(ctx["repo"].open_reviews("tmdb")) == n
+
+
+@then(parsers.parse('"{title} ({year:d})" is currently listed on "{slug}"'))
+def currently_listed(ctx, title, year, slug):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    assert fid in {i for i, _ in ctx["repo"].current_films(slug)}
+
+
+@then(parsers.parse('"{title} ({year:d})" has {n:d} non-criterion listings'))
+def listing_count(ctx, title, year, n):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        got = c.execute(
+            "SELECT COUNT(*) FROM listings WHERE film_id = ? AND source != 'criterion'", (fid,)
+        ).fetchone()[0]
+    assert got == n
+
+
+@then(parsers.parse('"{title} ({year:d})" still has a listing row for "{slug}"'))
+def listing_survives(ctx, title, year, slug):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        assert (
+            c.execute("SELECT 1 FROM listings WHERE film_id = ? AND source = ?", (fid, slug)).fetchone() is not None
+        )
+
+
+@then("the provider refresh stamp is unset")
+def stamp_unset(ctx):
+    assert ctx["repo"].get_meta(META_REFRESHED_AT) is None

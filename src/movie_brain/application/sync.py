@@ -7,10 +7,12 @@ from datetime import date
 
 import requests
 
+from movie_brain.application.availability import TmdbStepResult, tmdb_step
 from movie_brain.domain.models import merge_yearless
 from movie_brain.infrastructure.criterion import CatalogError, fetch_films, fetch_leaving, fetch_token, page_one_matches
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.omdb import AuthError, OmdbClient, QuotaExceeded
+from movie_brain.infrastructure.tmdb import TmdbClient
 
 SOURCE = "criterion"
 MAX_CONSECUTIVE_FAILURES = 5
@@ -28,6 +30,9 @@ class SyncResult:
     looked_up: int
     quota_hit: bool
     failing: bool
+    tmdb_matched: int = 0
+    tmdb_missed: int = 0
+    tmdb_refreshed: int = 0
 
 
 def sync(
@@ -40,6 +45,7 @@ def sync(
     force_full: bool = False,
     ratings_only: bool = False,
     max_age_days: int = 7,
+    tmdb_token: str | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> SyncResult:
     session = session or requests.Session()
@@ -109,4 +115,24 @@ def sync(
         log("OMDb daily quota reached — partial ratings saved; next run resumes.")
     if failing:
         log("OMDb lookups failing repeatedly — partial ratings saved; next run resumes.")
-    return SyncResult(0, full_walk, len(repo.current_films(SOURCE)), looked_up, quota_hit, failing)
+
+    tmdb = TmdbStepResult()
+    if tmdb_token is None:
+        log("no TMDB token — skipping availability step")
+    else:
+        try:
+            tmdb = tmdb_step(repo, TmdbClient(tmdb_token, session=session), today, log=log)
+        except Exception as exc:  # noqa: BLE001 — one source failing must never break the others
+            log(f"TMDB availability step failed: {exc}")
+
+    return SyncResult(
+        0,
+        full_walk,
+        len(repo.current_films(SOURCE)),
+        looked_up,
+        quota_hit,
+        failing,
+        tmdb.matched,
+        tmdb.missed,
+        tmdb.refreshed,
+    )
