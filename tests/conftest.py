@@ -27,3 +27,37 @@ def repo(config_dir):
     from movie_brain.infrastructure.database import Repository
 
     return Repository(config_dir / "movie-brain.db")
+
+
+@pytest.fixture
+def nuxt_page():
+    """Build a browse-page HTML body in the __NUXT_DATA__ shape the parser reads.
+
+    Nuxt serializes a flat array where dict values are indices into the same array;
+    a title card is a dict holding indices for title, slug, premiereYear, and
+    criticScoreSummary (itself a dict whose "score" key indexes the int score).
+    Cards are (title, slug, year, score) tuples.
+    """
+    import json
+
+    def build(cards):
+        data = ["root"]
+
+        def add(value):
+            data.append(value)
+            return len(data) - 1
+
+        for title, slug, year, score in cards:
+            summary_idx = add({"score": add(score)})
+            data.append(
+                {
+                    "title": add(title),
+                    "slug": add(slug),
+                    "premiereYear": add(year),
+                    "criticScoreSummary": summary_idx,
+                }
+            )
+        payload = json.dumps(data)
+        return f'<html><body><script type="application/json" id="__NUXT_DATA__">{payload}</script></body></html>'
+
+    return build
