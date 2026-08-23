@@ -24,6 +24,8 @@
       || (f.imdb != null && f.imdb >= state.cfg.canned_thresholds.top_imdb),
     recent: (f) => f.first_seen != null && daysBetween(f.first_seen, state.cfg.today) <= state.cfg.canned_thresholds.recent_days,
     departed: (f) => f.departed,
+    new_arrivals: (f) => (f.new_on || []).some((t) => daysBetween(t.appeared_on, state.cfg.today) <= state.cfg.canned_thresholds.new_arrival_days),
+    watchlist: (f) => f.watchlisted,
   };
 
   // ---- filtering / sorting ----
@@ -294,7 +296,8 @@
     const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
     const streaming = (d.services || [])
       .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`).join(', ');
-    return `<h2>${esc(d.title)}</h2>
+    const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
+    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button></h2>
       <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${p.Plot && p.Plot !== 'N/A' ? `<p>${poster}${esc(p.Plot)}</p>` : poster}
       <dl>${fields}</dl>
@@ -302,6 +305,7 @@
       <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
         ${d.metacritic_url ? ` <a class="criterion" href="${esc(d.metacritic_url)}" target="_blank" rel="noopener">Open on Metacritic ↗</a>` : ''}
         &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
+      ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
       ${streaming ? `<p class="meta">Also streaming on: ${streaming}</p>` : ''}
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
@@ -352,6 +356,15 @@
   });
   $('#drawer-close').addEventListener('click', () => closeDrawer());
   backdrop.addEventListener('click', () => closeDrawer());
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.watch-toggle'); if (!b) return;
+    const r = await fetch(`/api/films/${b.dataset.id}/watchlist`, { method: 'POST' });
+    if (!r.ok) { toast('Could not update watchlist'); return; }
+    const { watchlisted } = await r.json();
+    b.textContent = watchlisted ? '★' : '☆';
+    const film = state.films.find((f) => f.id === +b.dataset.id);
+    if (film) { film.watchlisted = watchlisted; applyFilters(); }
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!langPanel.hidden) { closeLangPanel(); return; }

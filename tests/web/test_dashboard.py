@@ -127,6 +127,8 @@ def test_chip_labels_and_order(dash: Page):
         "Recently added",
         "Pending",
         "Departed",
+        "New arrivals",
+        "Watchlist",
         "Clear",
     ]
 
@@ -231,7 +233,7 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     dash.click("#films tbody tr[data-id] .info >> nth=0")
     drawer = dash.locator("#drawer")
     expect(drawer).to_be_visible()
-    expect(drawer.locator("h2")).to_have_text("Alpha")
+    expect(drawer.locator("h2")).to_have_text("Alpha ☆")  # star button: Alpha isn't watchlisted
     expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
     expect(drawer.locator("a.criterion")).to_have_attribute("href", "https://c/alpha")
     expect(drawer.locator("div.meta")).not_to_contain_text("Leaving")  # moved to the bottom
@@ -260,14 +262,14 @@ def test_drawer_poster_sits_below_meta_top_aligned_with_plot(dash: Page):
 def test_drawer_opens_on_load_from_url(dash: Page, server: str):
     fid = dash.locator("#films tbody tr[data-id]").first.get_attribute("data-id")
     dash.goto(f"{server}/?film={fid}")
-    expect(dash.locator("#drawer h2")).to_have_text("Alpha")
+    expect(dash.locator("#drawer h2")).to_have_text("Alpha ☆")
     dash.click("#drawer-backdrop", position={"x": 10, "y": 10})
     expect(dash.locator("#drawer")).to_be_hidden()
 
 
 def test_row_click_opens_drawer_but_title_link_does_not(dash: Page):
     dash.click("#films tbody tr[data-id] .c-year >> nth=1")
-    expect(dash.locator("#drawer h2")).to_have_text("Echo")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆")
     dash.click("#drawer-close")
     expect(dash.locator("#drawer")).to_be_hidden()
 
@@ -333,9 +335,9 @@ def test_drawer_race_shows_latest_requested_film(dash: Page):
     )
     dash.click(f'#films tbody tr[data-id="{alpha_id}"] .info')
     dash.click(f'#films tbody tr[data-id="{echo_id}"] .info')
-    expect(dash.locator("#drawer h2")).to_have_text("Echo")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆")
     dash.wait_for_timeout(400)  # let the superseded, slow Alpha response land and confirm it's a no-op
-    expect(dash.locator("#drawer h2")).to_have_text("Echo")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆")
 
 
 # ---- empty database: separate server/page fixtures so the seeded `dash`/`server`
@@ -379,3 +381,34 @@ def test_empty_db_shows_import_hint(empty_dash: Page):
     expect(empty_dash.locator("#films tbody")).to_contain_text("movie-brain import-legacy")
     expect(empty_dash.locator("#films tbody")).to_contain_text("movie-brain sync")
     expect(empty_dash.locator("tr.empty-state")).to_be_visible()
+
+
+def test_new_arrivals_chip_filters_to_alpha(dash):
+    dash.click('button[data-chip="new_arrivals"]')
+    dash.wait_for_selector('#films tbody[data-count="1"]')
+    assert dash.locator("#films tbody tr").first.inner_text().startswith("Alpha")
+
+
+def test_watchlist_chip_filters_to_bravo(dash):
+    clear_lang(dash)  # Bravo is French; the default English filter would hide its row
+    dash.click('button[data-chip="watchlist"]')
+    dash.wait_for_selector('#films tbody[data-count="1"]')
+    assert dash.locator("#films tbody tr").first.inner_text().startswith("Bravo")
+
+
+def test_drawer_shows_new_on_line(dash):
+    dash.locator("#films tbody tr", has_text="Alpha").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    assert "New on" in dash.locator("#drawer-body").inner_text()
+
+
+def test_drawer_star_toggles_watchlist(dash):
+    clear_lang(dash)  # Charlie has no language on file; the default English filter would hide its row
+    dash.locator("#films tbody tr", has_text="Charlie").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    star = dash.locator(".watch-toggle")
+    assert star.inner_text() == "☆"
+    star.click()
+    dash.wait_for_selector('.watch-toggle:has-text("★")')
+    star.click()  # leave the session-scoped seed as we found it
+    dash.wait_for_selector('.watch-toggle:has-text("☆")')
