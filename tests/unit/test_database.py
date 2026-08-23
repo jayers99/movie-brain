@@ -1,7 +1,8 @@
-import pytest
 import re
 import sqlite3
 from datetime import date
+
+import pytest
 
 from movie_brain.domain.models import Film, OmdbRating
 from movie_brain.infrastructure.database import MIGRATIONS_DIR, Repository, init_db

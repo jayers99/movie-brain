@@ -35,13 +35,22 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
 
 1. Fetch browse-page token, then the cheap check: reuse the stored catalog if the last full walk is ≤7 days old, the API `total` equals the `films_raw_total` meta, and every page-1 key matches; otherwise full walk.
 2. A full walk runs `merge_yearless()` first — Criterion publishes duplicate year-less pages (`…/film-title-1`) that must fold into their titled twin, or dupes resurrect every walk.
-3. `record_catalog` upserts films and bumps listings `last_seen`; `set_leaving` maps "Leaving <date>" categories; `purge_departed` then applies retention (below).
+3. `record_catalog` upserts films (generating a `guid` for new ones), records each film's
+   `criterion` external id, and bumps listings `last_seen`; `set_leaving` maps
+   "Leaving <date>" categories.
 4. OMDb loop over `films_needing_lookup`. Tripwires: a catalog failure leaves the DB untouched; OMDb quota exhaustion or 5 consecutive failures stops lookups but keeps progress (free tier is 1,000/day — the backlog drains across daily runs).
 
 ## Rules
 
-- Film identity = `film_key(title, year)`; never derive ids any other way.
-- "Current" = latest `last_seen` per source. Retention: rated films are kept forever and shown as departed once off the channel; unrated films absent 7+ days are purged completely by `purge_departed`.
+- Film identity = `films.guid` (generated UUIDv4, immutable once assigned); the integer `id`
+  is an internal join key that must never leak as identity. `film_key(title, year)` is a
+  matching aid and the Criterion upsert conflict target — not the identity.
+- Films are immutable: collectors never delete. "Current" = latest `last_seen` per source;
+  "departed" is a pure display state. Unrated departed films stay in the DB, hidden by the
+  current-or-rated view filter; rated departed films are shown as departed.
+- `movie_service` is the service registry (slug PK; kind `svod`|`store`; `subscribed`/`region`
+  are data). `service_provider` groups TMDB provider ids per service; `external_ids` maps
+  films to per-authority native ids with `UNIQUE(authority, value)` as the dedup guard.
 - Canned-filter thresholds and chip names live ONLY in `domain/filters.py`; JS reads thresholds from `/api/config`. Keep `CHIP_PREDICATES` in `app.js` and the chip buttons in `index.html` in lockstep with `_PREDICATES`.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
@@ -49,3 +58,6 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
 ## Data
 
 DB: `~/.config/movie-brain/movie-brain.db` (`MOVIE_BRAIN_CONFIG_DIR` overrides the directory). OMDb key: `OMDB_API_KEY` or `<config_dir>/omdb-api-key.txt`. Sync log: `<config_dir>/sync.log`. Daily 3 AM launchd job: `scripts/install-launch-agent.sh`.
+
+Pre-migration backups land in `<config_dir>/backups/` automatically whenever `init_db` is
+about to apply a new migration — each file is the rollback point for one schema change.

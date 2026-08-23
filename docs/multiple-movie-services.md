@@ -156,7 +156,7 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 
 | # | Phase | Depends on | Disruption risk |
 |---|-------|-----------|-----------------|
-| 1 | Schema redesign: GUID identity + services model | — | live schema — the careful one |
+| 1 | Schema redesign: GUID identity + services model — **done** | — | live schema — the careful one |
 | 2 | Metacritic adapter, Mode A (enrich Criterion) | 1 | low (additive columns/joins) |
 | 3 | TMDB availability adapter | 1 | medium (sync flow) |
 | 4 | Watchlist + availability alerts | 3 | low |
@@ -165,7 +165,7 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 | 7 | Subscription advisor | 5 | low (read-only view) |
 | 8 | DB maintenance suite | late by design | none until used |
 
-1. **Schema redesign — the strangle root** (zero visible change). GUID movie id;
+1. **Done (2026-08-23).** **Schema redesign — the strangle root** (zero visible change). GUID movie id;
    external-ids table (movie ↔ per-service ids, one-to-many); `movie_service` registry
    (name, slug, kind, `subscribed`, region) + provider-id grouping; availability join;
    **remove `purge_departed`** (immutability decision); migrate the existing Criterion data

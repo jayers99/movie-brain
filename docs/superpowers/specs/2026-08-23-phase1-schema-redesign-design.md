@@ -1,6 +1,6 @@
 # Phase 1: Schema redesign — GUID identity + services model
 
-**Date:** 2026-08-23 · **Status:** approved design, pre-implementation
+**Date:** 2026-08-23 · **Status:** implemented
 **Parent plan:** [multiple-movie-services.md](../../multiple-movie-services.md) — Phase 1, the strangle root.
 **Success bar:** migration applied, full suite + ruff + mypy green, dashboard and 3 AM sync
 behaviorally identical (zero visible change).
