@@ -12,6 +12,7 @@ from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, Revie
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
+TMDB_REFRESH_STAMP = "tmdb_providers_refreshed_at"
 
 
 def init_db(db_path: Path) -> None:
@@ -142,9 +143,62 @@ class Repository:
                 (film_id, source, url, seen.isoformat(), seen.isoformat()),
             )
 
+    @staticmethod
+    def _write_listing(
+        c: sqlite3.Connection, film_id: int, source: str, url: str, day: str, frontier: str | None
+    ) -> bool:
+        """Upsert one listing row; append an availability transition on insert or reappearance.
+
+        frontier = the source's currency cutoff captured BEFORE this write batch began
+        (per-source MAX(last_seen) for criterion, the tmdb refresh stamp for TMDB-fed
+        sources). A row strictly older than it was displayed as departed, so going
+        current again is a transition; None (fresh DB) means only true inserts fire.
+        """
+        row = c.execute(
+            "SELECT last_seen FROM listings WHERE film_id = ? AND source = ?", (film_id, source)
+        ).fetchone()
+        is_transition = row is None or (frontier is not None and row["last_seen"] < frontier)
+        c.execute(
+            "INSERT INTO listings (film_id, source, url, first_seen, last_seen) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
+            (film_id, source, url, day, day),
+        )
+        if is_transition:
+            c.execute(
+                "INSERT INTO availability_transitions (film_id, source, appeared_on) VALUES (?, ?, ?)",
+                (film_id, source, day),
+            )
+        return is_transition
+
+    def record_listing_with_transition(self, film_id: int, source: str, url: str, seen: date) -> bool:
+        with self._conn() as c:
+            row = c.execute("SELECT value FROM meta WHERE key = ?", (TMDB_REFRESH_STAMP,)).fetchone()
+            frontier = None if row is None else str(row["value"])
+            return self._write_listing(c, film_id, source, url, seen.isoformat(), frontier)
+
+    def watchlist_transitions_on(self, day: date) -> list[tuple[str, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                # svod only: a film becoming *purchasable* (apple-tv-store) is recorded
+                # as a transition but is never an arrival worth alerting on.
+                "SELECT f.title, s.name AS service "
+                "FROM availability_transitions t "
+                "JOIN watchlist w ON w.film_id = t.film_id "
+                "JOIN films f ON f.id = t.film_id "
+                "JOIN movie_service s ON s.slug = t.source AND s.kind = 'svod' "
+                "WHERE t.appeared_on = ? ORDER BY t.id",
+                (day.isoformat(),),
+            ).fetchall()
+            return [(str(r["title"]), str(r["service"])) for r in rows]
+
     def record_catalog(self, source: str, films: list[Film], seen: date) -> None:
         day = seen.isoformat()
         with self._conn() as c:
+            # Currency frontier BEFORE any write: record_catalog runs on every sync and
+            # re-stamps current rows, so comparing against a mid-batch MAX would misread
+            # every untouched-yet row as a reappearance.
+            row = c.execute("SELECT MAX(last_seen) AS m FROM listings WHERE source = ?", (source,)).fetchone()
+            frontier = None if row["m"] is None else str(row["m"])
             for film in films:
                 c.execute(
                     "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
@@ -152,18 +206,14 @@ class Repository:
                     "director=excluded.director",
                     (str(uuid.uuid4()), film.title, film.year, film.director, film.key),
                 )
-                c.execute(
-                    "INSERT INTO listings (film_id, source, url, first_seen, last_seen) "
-                    "VALUES ((SELECT id FROM films WHERE key = ?), ?, ?, ?, ?) "
-                    "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
-                    (film.key, source, film.url, day, day),
-                )
+                film_id = int(c.execute("SELECT id FROM films WHERE key = ?", (film.key,)).fetchone()["id"])
+                self._write_listing(c, film_id, source, film.url, day, frontier)
                 try:
                     c.execute(
                         "INSERT INTO external_ids (film_id, authority, value, first_seen) "
-                        "VALUES ((SELECT id FROM films WHERE key = ?), ?, ?, ?) "
+                        "VALUES (?, ?, ?, ?) "
                         "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
-                        (film.key, source, film.url, day),
+                        (film_id, source, film.url, day),
                     )
                 except sqlite3.IntegrityError:
                     # UNIQUE(authority, value): a second film (e.g. Criterion corrected its
