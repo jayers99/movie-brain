@@ -10,13 +10,13 @@ import requests
 
 from movie_brain.domain.matching import pick_tmdb_match
 from movie_brain.domain.models import ReviewEntry
-from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient, watch_link
 
 TMDB_AUTHORITY = "tmdb"
 STORE_PROVIDER_ID = 2  # Apple TV Store (iTunes) — the only rent/buy id we record
 REFRESH_DAYS = 7
-META_REFRESHED_AT = "tmdb_providers_refreshed_at"
+META_REFRESHED_AT = TMDB_REFRESH_STAMP
 MAX_CONSECUTIVE_FAILURES = 5
 
 

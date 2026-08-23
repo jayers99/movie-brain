@@ -485,3 +485,74 @@ def test_toggle_watchlist_round_trip(repo, today):
 def test_toggle_watchlist_unknown_film_returns_none(repo, today):
     assert repo.toggle_watchlist(9999, today) is None
     assert repo.watchlist_film_ids() == set()
+
+
+# ---- Phase 4: transition detection --------------------------------------
+
+
+def _transitions(repo):
+    import sqlite3
+
+    with sqlite3.connect(repo.db_path) as c:
+        return c.execute(
+            "SELECT film_id, source, appeared_on FROM availability_transitions ORDER BY id"
+        ).fetchall()
+
+
+def test_record_listing_with_transition_insert_fires(repo, today):
+    fid = repo.upsert_film(Film("Playtime", 1967, "Tati", "https://c/playtime"))
+    assert repo.record_listing_with_transition(fid, "max", "https://tmdb/w/1", today) is True
+    assert _transitions(repo) == [(fid, "max", today.isoformat())]
+
+
+def test_record_listing_with_transition_current_row_is_quiet(repo, today):
+    fid = repo.upsert_film(Film("Playtime", 1967, "Tati", "https://c/playtime"))
+    repo.record_listing_with_transition(fid, "max", "https://tmdb/w/1", today)
+    repo.set_meta("tmdb_providers_refreshed_at", today.isoformat())
+    # Next nightly write: row (today) is not older than the stamp (today) → no new event.
+    assert repo.record_listing_with_transition(fid, "max", "https://tmdb/w/1", today) is False
+    assert len(_transitions(repo)) == 1
+
+
+def test_record_listing_with_transition_reappearance_past_stamp_fires(repo, today):
+    from datetime import timedelta
+
+    fid = repo.upsert_film(Film("Playtime", 1967, "Tati", "https://c/playtime"))
+    repo.record_listing_with_transition(fid, "max", "https://tmdb/w/1", today - timedelta(days=10))
+    # A completed full refresh moved the stamp past the row → it displayed as departed.
+    repo.set_meta("tmdb_providers_refreshed_at", (today - timedelta(days=3)).isoformat())
+    assert repo.record_listing_with_transition(fid, "max", "https://tmdb/w/1", today) is True
+    assert len(_transitions(repo)) == 2
+
+
+def test_record_catalog_reupsert_of_current_rows_is_quiet(repo, today):
+    films = [Film("Alpha", 1950, "Ann", "https://c/alpha")]
+    repo.record_catalog("criterion", films, today)  # fresh DB: insert → 1 event
+    repo.record_catalog("criterion", films, today)  # cheap-check path re-upsert → quiet
+    assert len(_transitions(repo)) == 1
+
+
+def test_record_catalog_reappearance_fires(repo, today):
+    from datetime import timedelta
+
+    alpha = Film("Alpha", 1950, "Ann", "https://c/alpha")
+    bravo = Film("Bravo", 1960, "Bob", "https://c/bravo")
+    repo.record_catalog("criterion", [alpha, bravo], today - timedelta(days=30))
+    repo.record_catalog("criterion", [bravo], today - timedelta(days=7))  # alpha departs
+    repo.record_catalog("criterion", [alpha, bravo], today)  # alpha returns
+    events = _transitions(repo)
+    alpha_id = repo.film_id_by_key(alpha.key)
+    assert (alpha_id, "criterion", today.isoformat()) in events
+    assert len(events) == 3  # 2 initial inserts + 1 reappearance; bravo re-upserts stay quiet
+
+
+def test_watchlist_transitions_on_filters_day_and_membership(repo, today):
+    from datetime import timedelta
+
+    wanted = repo.upsert_film(Film("Playtime", 1967, "Tati", "https://c/playtime"))
+    other = repo.upsert_film(Film("Alpha", 1950, "Ann", "https://c/alpha"))
+    repo.toggle_watchlist(wanted, today)
+    repo.record_listing_with_transition(wanted, "max", "https://tmdb/w/1", today)
+    repo.record_listing_with_transition(other, "max", "https://tmdb/w/2", today)  # not watchlisted
+    repo.record_listing_with_transition(wanted, "mubi", "https://tmdb/w/1", today - timedelta(days=1))
+    assert repo.watchlist_transitions_on(today) == [("Playtime", "HBO Max")]
