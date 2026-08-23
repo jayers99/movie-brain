@@ -92,10 +92,14 @@ def match_archive(
     anomaly. Only genuine anomalies queue for review. Nothing is ever deleted.
     """
     archive = mc.archive_dir(config_dir)
+    archived_page_count = len(mc.archived_pages(archive))
     titles = mc.parse_archive(archive)
     if not titles:
-        log("no archive — run `movie-brain metacritic crawl` first")
-        return MatchReport(1, 0, 0, None, 0, 0, 0, 0)
+        if archived_page_count:
+            log(f"archive has {archived_page_count} pages but no titles parsed — check the parser")
+        else:
+            log("no archive — run `movie-brain metacritic crawl` first")
+        return MatchReport(1, archived_page_count, 0, None, 0, 0, 0, 0)
     warnings = _verify(titles)
     for w in warnings:
         log(f"warning: {w}")
@@ -106,9 +110,15 @@ def match_archive(
     for film_id, title, year, _ in films:
         by_norm[norm_title(title)].append((film_id, title, year))
 
+    # Dedupe by slug before matching: the sorted walk can shift between crawl sessions and
+    # re-place the same title on a second page. _verify (above) already saw the raw list and
+    # warned on genuine duplicates; from here on, a slug is one card. Last occurrence wins,
+    # consistent with the staging upsert's last-wins semantics.
+    deduped_titles = list({t.slug: t for t in titles}.values())
+
     reviews: list[ReviewEntry] = []
     slugs_by_film: dict[int, list[str]] = defaultdict(list)
-    for t in titles:
+    for t in deduped_titles:
         cleaned = clean_title(t.title)
         result = match_film(cleaned, t.year, by_norm.get(norm_title(cleaned), []))
         if result.tied:
@@ -142,7 +152,7 @@ def match_archive(
     repo.replace_unresolved_reviews(AUTHORITY, reviews, today)
     return MatchReport(
         exit_code=0,
-        pages=len(mc.archived_pages(archive)),
+        pages=archived_page_count,
         titles=len(titles),
         floor=floor,
         films=len(films),

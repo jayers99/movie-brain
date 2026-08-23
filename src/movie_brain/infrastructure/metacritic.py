@@ -7,6 +7,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import requests
@@ -14,11 +15,20 @@ import requests
 from movie_brain.domain.models import McTitle
 
 BROWSE_URL = "https://www.metacritic.com/browse/movie/"
-USER_AGENT = "movie-brain/0.1 (personal project)"
+
+
+def _package_version() -> str:
+    try:
+        return version("movie-brain")
+    except PackageNotFoundError:
+        return "0.1.0"
+
+
+USER_AGENT = f"movie-brain/{_package_version()} (personal project)"
 CARDS_PER_PAGE = 24
 MAX_CONSECUTIVE_FAILURES = 3
 
-_NUXT = re.compile(r'<script type="application/json"[^>]*id="__NUXT_DATA__"[^>]*>(.*?)</script>', re.S)
+_NUXT = re.compile(r'<script[^>]*id="__NUXT_DATA__"[^>]*>(.*?)</script>', re.S)
 _CARD_KEYS = {"title", "slug", "premiereYear", "criticScoreSummary"}
 
 
@@ -56,15 +66,20 @@ def parse_page(html: str, page: int) -> list[McTitle]:
     for node in data:
         if not (isinstance(node, dict) and node.keys() >= _CARD_KEYS):
             continue
-        title, slug, year = data[node["title"]], data[node["slug"]], data[node["premiereYear"]]
-        if not (isinstance(title, str) and isinstance(slug, str)):
+        # Index resolution can fail on a malformed island (non-int/out-of-range indices);
+        # skip just this card rather than crashing the whole page.
+        try:
+            title, slug, year = data[node["title"]], data[node["slug"]], data[node["premiereYear"]]
+            if not (isinstance(title, str) and isinstance(slug, str)):
+                continue
+            summary = data[node["criticScoreSummary"]]
+            score = None
+            if isinstance(summary, dict) and "score" in summary:
+                raw = data[summary["score"]]
+                if isinstance(raw, int):
+                    score = raw
+        except (TypeError, IndexError, KeyError):
             continue
-        summary = data[node["criticScoreSummary"]]
-        score = None
-        if isinstance(summary, dict) and "score" in summary:
-            raw = data[summary["score"]]
-            if isinstance(raw, int):
-                score = raw
         rank = (page - 1) * CARDS_PER_PAGE + len(titles) + 1
         mc_year = year if isinstance(year, int) else None
         titles.append(McTitle(slug=slug, title=title, year=mc_year, score=score, rank=rank, page=page))
