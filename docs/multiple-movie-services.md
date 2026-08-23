@@ -17,6 +17,13 @@ app to n streaming services. Absorbs backlog items 1 and 2 from [backlog.md](bac
   streaming lists down to films I *don't* already own.
 - Possible bonus: keep **My Ratings in sync with my Metacritic account** (they have a
   My Ratings section), so ratings live in both places.
+- **Watchlist availability alerts (added 2026-08-24 — important):** I keep a watchlist of
+  ~50 films (a subset of the full database). When a watchlist film **becomes available** on
+  a streaming service, alert me — rare films surface for two weeks or a month and vanish;
+  the whole point is catching those brief windows. Requires: a watchlist entity, availability
+  *transition* detection in the sync (newly-appeared, not just currently-on), and an alert
+  channel (macOS notification from the nightly sync + a "newly available" surface in the
+  dashboard; spec decides the mix).
 
 ## Pivot (2026-08-23): score-first, all services
 
@@ -113,6 +120,83 @@ non-increasing through the walk; no duplicate slugs; spot-check a few known titl
 **The real work is after the crawl:** map each title to `film_key(title, year)` and to
 TMDB/IMDb ids (via TMDB search / OMDb) so availability and ratings join cleanly — the
 match-rate question already tracked in the spikes below.
+
+## Implementation phases (replanned 2026-08-24 — strangle pattern)
+
+Each phase is sized for **one superpowers spec→implement run** (brainstorm → spec → execute).
+Strategy: **strangle, don't big-bang** — redesign the database first, prove the model on the
+data we already have (Criterion's ~3,000), then grow the Metacritic side through a
+**configurable top-N dial** instead of a one-shot 10K ingestion. Rationale: if the model is
+wrong we find out at N=100, not after querying 10,000 records we'd have to re-query.
+
+**Identity decision (2026-08-24):** movies get **our own generated GUID** as the primary
+identity — guaranteed unique, guaranteed ours. Each service's native id (Metacritic slug,
+TMDB id, IMDb id, Criterion URL, …) hangs off it one-to-many in an external-ids table.
+`film_key(title, year)` is demoted from *the* identity to a matching aid.
+
+**Two Metacritic query modes** (same adapter, different drivers):
+
+- **Mode A — enrich what we have:** find the Metacritic record for each film already in the
+  database (score, slug, their id). The strangle-pattern first step, run against Criterion's
+  3,000.
+- **Mode B — top-N discovery:** "give me the top N Metacritic-scored movies", with N a
+  **config parameter — initially 100**, then dialed to 1,000, eventually ~10,000, each bump
+  just a bigger walk on the next sync.
+
+A third acquisition pattern, distinct from both: **full-service import** — a paid,
+small-catalog service gets its *entire* catalog imported ("we're paying for it, import all
+of it"), the way Criterion works today. Films arrive individually, not by rating rank.
+
+| # | Phase | Depends on | Disruption risk |
+|---|-------|-----------|-----------------|
+| 1 | Schema redesign: GUID identity + services model | — | live schema — the careful one |
+| 2 | Metacritic adapter, Mode A (enrich Criterion) | 1 | low (additive columns/joins) |
+| 3 | TMDB availability adapter | 1 | medium (sync flow) |
+| 4 | Watchlist + availability alerts | 3 | low |
+| 5 | Metacritic Mode B: top-N dial (start N=100) | 2 | low at N=100 — grows with the dial |
+| 6 | Full-service import pattern | 5 | low (Criterion is the precedent) |
+| 7 | Subscription advisor | 5 | low (read-only view) |
+| 8 | DB maintenance suite | late by design | none until used |
+
+1. **Schema redesign — the strangle root** (zero visible change). GUID movie id;
+   external-ids table (movie ↔ per-service ids, one-to-many); `movie_service` registry
+   (name, slug, kind, `subscribed`, region) + provider-id grouping; availability join;
+   **remove `purge_departed`** (immutability decision); migrate the existing Criterion data
+   into the new shape. Done when: migration applied, all tests green, dashboard identical.
+2. **Metacritic adapter — Mode A.** Enrich every film currently in the DB (=Criterion) with
+   its Metacritic record; the movie↔Metacritic join goes live; metascores become
+   first-class instead of OMDb-payload backfill. Done when: coverage % reported, unmatched
+   films logged (not deleted, not blocking).
+3. **TMDB availability adapter.** Promote the spike matcher (98% rules) into
+   `infrastructure/tmdb.py`; `tmdb` cache table on the `omdb` pattern; watch-providers for
+   my services; sync step with its own tripwires; drawer shows "Also streaming on: …".
+   Done when: cross-service availability visible for Criterion films.
+4. **Watchlist + availability alerts** (the brief-window catcher). Watchlist entity + drawer
+   toggle; sync-time **transition detection** (availability *appearing*, not just existing);
+   alert channel (macOS notification from the nightly sync + a "newly available" dashboard
+   surface — spec decides the mix). Done when: a watchlist film newly appearing on my
+   services produces an alert I actually see.
+5. **Metacritic Mode B — the top-N dial.** Crawler per the scrape contract (checkpoint/
+   resume, raw archive, staging) with **N as config, set to 100**; staging → films via the
+   matcher (unmatched → log for the later review queue); dashboard gains the minimum
+   source-awareness to stay usable as N grows (default view = my services / Criterion
+   parity). Then exercise the system and simply raise N next sync. Done when: top-100 lives
+   in the app, model validated, N=1,000 is a config change not a project.
+6. **Full-service import pattern.** Generalize "import a service's whole catalog" beyond
+   Criterion (future: MUBI, BFI Player Classics — small paid catalogs worth having whole).
+   Done when: adding such a service is configuration + an adapter, not a redesign.
+7. **Subscription advisor.** Define "movies I want to see" (watchlist as the sharpest core),
+   rank unsubscribed services by wanted-films carried. Done when: the app answers "what
+   should I subscribe to next?"
+8. **DB maintenance suite — late by design (his call).** The identity-disposition table
+   (tombstones + merge aliases), dedup/merge verbs, and the match-review queue UI. Until
+   this phase, the standing rules still hold: collectors never delete, unmatched ids are
+   logged, and any manual removal waits for tombstone support so nothing resurrects.
+
+**Parallel tracks, not on this critical path** (each its own future spec run): practice-loop
+notes + rubric (independent of services; any time), MCP server (independent driving adapter),
+power search (wants Phase 3's structured metadata; port from yt-brain), iTunes ownership
+(blocked on the export spike), ratings sync (TMDB/Metacritic; latest of all).
 
 ## Facts collected so far
 
@@ -220,9 +304,34 @@ and keeps "which services stream this?" queries from having to exclude owned-row
       separate `owned` table). Decide with the iTunes-export spike in hand.
 - [ ] Formalize `movie_service`: what does a service row carry (name, slug, kind, base URL)?
       Does `listings.source` become a foreign key to it?
-- [ ] Retention rules per service: "rated films kept forever, unrated purged after 7 days
-      absent" is Criterion-shaped. Does it generalize when a film can leave one service but
-      remain on another?
+- [x] ~~Retention rules per service?~~ **Decision (2026-08-24): the film database is
+      immutable.** A movie is a movie, forever — `purge_departed` is removed entirely; films
+      are append-only (dedup aside). What churns is **availability**: per-service
+      `first_seen`/`last_seen` keeps moving, and "departed"/"gone" becomes a pure display
+      state, never a deletion. This also dissolves the old ingestion landmine (one-shot
+      Metacritic films can never be purge-eaten).
+
+**Data-hygiene principles (2026-08-24)** — how immutability coexists with cleanup:
+
+- **Collectors never delete.** Sync/crawl/ingest processes are append-and-update only, full
+  stop. Deletion authority lives nowhere in the automated pipeline.
+- **Dedup, cleaning, and repair are a separate maintenance surface** — deliberate,
+  human-driven verbs (CLI commands and/or a review UI), never a side effect of syncing.
+  (merge_yearless already foreshadows this: dedup pressure is real and grows at 10K films.)
+- **Removals leave tombstones.** A deliberately-removed identity (film_key and/or source ids)
+  is recorded in an identity-disposition table that **every ingester checks** — so a removed
+  entry can't magically resurrect on the next walk.
+- **Merges leave aliases.** When dedup folds two rows, the losing identity records an alias
+  pointing at the survivor; incoming data for the old identity re-routes instead of
+  recreating a duplicate. Tombstones and aliases are the same table family: "what happened
+  to this identity."
+- **Unmatched IDs go to a review queue, not the trash.** The ~2% matcher residue (and future
+  match conflicts) queue for human resolution — outcome is always a match, an alias, or a
+  tombstone; never silent deletion.
+- **Timing (his call, 2026-08-24): the maintenance tooling comes late** (Phase 8 in the plan
+  below). The principles bind from day one anyway — collectors never delete and unmatched ids
+  are logged from the first adapter — but tombstone/alias/dedup *tooling* waits until the
+  data is at scale; manual removals wait for tombstone support so nothing resurrects.
 - [ ] `leaving_date` semantics per service — does anything besides Criterion expose leaving
       dates?
 - [ ] Film identity across sources: Criterion titles vs. Metacritic titles vs. iTunes titles —
