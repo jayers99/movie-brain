@@ -306,6 +306,30 @@ def test_record_catalog_records_criterion_external_ids(repo):
     assert repo.external_ids_for(fid) == {"criterion": "https://c/trio"}
 
 
+def test_record_catalog_contains_external_id_uniqueness_conflicts(repo):
+    repo.record_catalog("criterion", [TRIO], D1)
+    trio_fid = repo.film_id_by_key("trio (1950)")
+    assert trio_fid is not None
+
+    # Criterion corrects the year: new key, same URL. The external_ids UNIQUE(authority,
+    # value) conflict must not escape record_catalog or roll back the films/listings writes.
+    corrected = Film("Trio", 1951, None, TRIO.url)
+    repo.record_catalog("criterion", [corrected], D2)
+
+    corrected_fid = repo.film_id_by_key("trio (1951)")
+    assert corrected_fid is not None
+    assert corrected_fid != trio_fid
+
+    # Both films exist and both got their listing recorded.
+    assert repo.get_view(trio_fid) is not None
+    assert repo.get_view(corrected_fid) is not None
+    assert repo.get_view(corrected_fid).url == TRIO.url
+
+    # The external id for the URL still maps to the original film — first writer wins.
+    assert repo.external_ids_for(trio_fid) == {"criterion": TRIO.url}
+    assert repo.external_ids_for(corrected_fid) == {}
+
+
 def test_services_registry_accessor(repo):
     services = {s["slug"]: s for s in repo.services()}
     assert len(services) == 8
@@ -336,3 +360,22 @@ def test_init_db_makes_no_backup_for_fresh_or_up_to_date_dbs(tmp_path):
     init_db(p)  # fresh DB: nothing to protect
     init_db(p)  # up to date: nothing pending
     assert not (tmp_path / "backups").exists()
+
+
+def test_init_db_never_overwrites_an_existing_backup_snapshot(tmp_path):
+    p = tmp_path / "x.db"
+    conn = sqlite3.connect(p)
+    conn.executescript((MIGRATIONS_DIR / "001_init.sql").read_text())
+    conn.execute("INSERT INTO films (id, title, year, key) VALUES (1, 'Trio', 1950, 'trio (1950)')")
+    conn.commit()
+    conn.close()
+
+    backups_dir = tmp_path / "backups"
+    backups_dir.mkdir()
+    dest_path = backups_dir / f"x-v1-{date.today().isoformat()}.db"
+    sentinel = b"not a real sqlite file - pre-existing snapshot must survive byte-identical"
+    dest_path.write_bytes(sentinel)
+
+    init_db(p)  # a same-day re-run must never clobber the existing snapshot
+
+    assert dest_path.read_bytes() == sentinel

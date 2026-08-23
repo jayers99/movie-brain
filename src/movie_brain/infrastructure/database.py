@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import sys
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -36,6 +37,11 @@ def _backup_pre_migration(conn: sqlite3.Connection, db_path: Path, current_versi
     backups_dir = db_path.parent / "backups"
     backups_dir.mkdir(exist_ok=True)
     dest_path = backups_dir / f"{db_path.stem}-v{current_version}-{date.today().isoformat()}.db"
+    if dest_path.exists():
+        # Never clobber an existing snapshot: if a prior migration attempt failed midway
+        # (executescript is non-atomic), schema_version still reads the old version, and a
+        # same-day re-run must not overwrite the good pre-migration backup with corrupted state.
+        return
     dest = sqlite3.connect(dest_path)
     try:
         conn.backup(dest)
@@ -131,12 +137,22 @@ class Repository:
                     "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
                     (film.key, source, film.url, day, day),
                 )
-                c.execute(
-                    "INSERT INTO external_ids (film_id, authority, value, first_seen) "
-                    "VALUES ((SELECT id FROM films WHERE key = ?), ?, ?, ?) "
-                    "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
-                    (film.key, source, film.url, day),
-                )
+                try:
+                    c.execute(
+                        "INSERT INTO external_ids (film_id, authority, value, first_seen) "
+                        "VALUES ((SELECT id FROM films WHERE key = ?), ?, ?, ?) "
+                        "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                        (film.key, source, film.url, day),
+                    )
+                except sqlite3.IntegrityError:
+                    # UNIQUE(authority, value): a second film (e.g. Criterion corrected its
+                    # year, minting a new key) claims a URL another film already holds.
+                    # Contain it here — the films + listings writes for this film must still
+                    # land, and one bad conflict must never roll back the whole catalog walk.
+                    print(
+                        f"external id conflict for {film.key!r}: authority={source!r} value={film.url!r}",
+                        file=sys.stderr,
+                    )
 
     def set_leaving(self, source: str, leaving: dict[str, str]) -> None:
         with self._conn() as c:

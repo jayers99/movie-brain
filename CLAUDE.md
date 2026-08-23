@@ -18,7 +18,7 @@ uv run movie-brain export csv PATH
 uv run movie-brain status
 
 uv run pytest                                        # whole suite (~5s)
-uv run pytest tests/step_defs/test_sync.py -k grace  # single test / scenario by keyword
+uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by keyword
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py
 uv run ruff check . && uv run mypy                   # lint + types (mypy also runs as a pre-commit hook)
 ```
@@ -52,7 +52,7 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
   are data). `service_provider` groups TMDB provider ids per service; `external_ids` maps
   films to per-authority native ids with `UNIQUE(authority, value)` as the dedup guard.
 - Canned-filter thresholds and chip names live ONLY in `domain/filters.py`; JS reads thresholds from `/api/config`. Keep `CHIP_PREDICATES` in `app.js` and the chip buttons in `index.html` in lockstep with `_PREDICATES`.
-- Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration.
+- Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
 
 ## Data
