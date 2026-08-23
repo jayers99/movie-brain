@@ -358,7 +358,10 @@ git commit -m "Detect availability transitions at listing-write time via a pre-b
 def test_services_currency_follows_refresh_stamp_not_frozen_max(repo, today):
     from datetime import timedelta
 
-    fid = repo.upsert_film(Film("Oppenheimer", 2023, "Nolan", "https://c/opp"))
+    # get_view reads through the criterion-joined _VIEW_SQL, so the film needs a
+    # criterion listing to be viewable at all.
+    repo.record_catalog("criterion", [Film("Oppenheimer", 2023, "Nolan", "https://c/opp")], today)
+    fid = repo.film_id_by_key("oppenheimer (2023)")
     repo.record_listing_with_transition(fid, "peacock", "https://tmdb/w/1", today - timedelta(days=10))
     # Peacock dropped to zero films; a completed full refresh moved the stamp past the row.
     repo.set_meta("tmdb_providers_refreshed_at", today.isoformat())
@@ -367,7 +370,8 @@ def test_services_currency_follows_refresh_stamp_not_frozen_max(repo, today):
 
 
 def test_services_currency_falls_back_to_max_without_stamp(repo, today):
-    fid = repo.upsert_film(Film("Oppenheimer", 2023, "Nolan", "https://c/opp"))
+    repo.record_catalog("criterion", [Film("Oppenheimer", 2023, "Nolan", "https://c/opp")], today)
+    fid = repo.film_id_by_key("oppenheimer (2023)")
     repo.record_listing_with_transition(fid, "peacock", "https://tmdb/w/1", today)
     view = repo.get_view(fid)  # no stamp set (fresh DB) — MAX rule keeps the row current
     assert [s["name"] for s in view.services] == ["Peacock"]
