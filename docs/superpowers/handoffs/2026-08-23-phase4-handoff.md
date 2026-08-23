@@ -1,3 +1,5 @@
+**Superseded: Phase 4 landed (2026-08-23).**
+
 # Handoff: Phase 3 done → Phase 4 (Watchlist + availability alerts)
 
 **Written:** 2026-08-23, end of the Phase 3 session. Read this alongside

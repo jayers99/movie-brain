@@ -159,7 +159,7 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 | 1 | Schema redesign: GUID identity + services model — **done** | — | live schema — the careful one |
 | 2 | Metacritic adapter, Mode A (enrich Criterion) — **done** | 1 | low (additive columns/joins) |
 | 3 | TMDB availability adapter — **done** | 1 | medium (sync flow) |
-| 4 | Watchlist + availability alerts | 3 | low |
+| 4 | Watchlist + availability alerts — **done** | 3 | low |
 | 5 | Metacritic Mode B: top-N dial (start N=100) | 2 | low at N=100 — grows with the dial |
 | 6 | Full-service import pattern | 5 | low (Criterion is the precedent) |
 | 7 | Subscription advisor | 5 | low (read-only view) |
@@ -178,11 +178,14 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
    my services; sync step with its own tripwires (one-shot match, weekly refresh gated by
    meta `tmdb_providers_refreshed_at`); drawer shows "Also streaming on: …".
    Done when: cross-service availability visible for Criterion films.
-4. **Watchlist + availability alerts** (the brief-window catcher). Watchlist entity + drawer
+4. **Done (2026-08-23).** **Watchlist + availability alerts** (the brief-window catcher). Watchlist entity + drawer
    toggle; sync-time **transition detection** (availability *appearing*, not just existing);
    alert channel (macOS notification from the nightly sync + a "newly available" dashboard
-   surface — spec decides the mix). Done when: a watchlist film newly appearing on my
-   services produces an alert I actually see.
+   surface — spec decides the mix). Landed as: append-only `availability_transitions`
+   recorded at listing-write time against the pre-batch currency frontier, a nightly ~50-film
+   watchlist provider pass ahead of the weekly full refresh, one summary macOS notification
+   per sync, and dashboard "New arrivals"/"Watchlist" chips + drawer star toggle and "New on"
+   line.
 5. **Metacritic Mode B — the top-N dial.** Crawler per the scrape contract (checkpoint/
    resume, raw archive, staging) with **N as config, set to 100**; staging → films via the
    matcher (unmatched → log for the later review queue); dashboard gains the minimum

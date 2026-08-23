@@ -41,7 +41,7 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
    `criterion` external id, and bumps listings `last_seen`; `set_leaving` maps
    "Leaving <date>" categories.
 4. OMDb loop over `films_needing_lookup`. Tripwires: a catalog failure leaves the DB untouched; OMDb quota exhaustion or 5 consecutive failures stops lookups but keeps progress (free tier is 1,000/day — the backlog drains across daily runs).
-5. TMDB step (token at `<config_dir>/tmdb-read-token.txt`, else skipped): one-shot match of new films (misses → `match_review`, never retried by sync), then a weekly full US watch-providers refresh writing `listings` rows per service (never `criterion`); own tripwires — TMDB failures never affect exit code or other steps.
+5. TMDB step (token at `<config_dir>/tmdb-read-token.txt`, else skipped): one-shot match of new films (misses → `match_review`, never retried by sync), then a nightly watchlist provider pass (~50 films, every sync, never touches the weekly stamp), then a weekly full US watch-providers refresh writing `listings` rows per service (never `criterion`), skipping films already checked that day, stamp written only on completion; own tripwires — TMDB failures never affect exit code or other steps. Listing writes (both the Criterion walk and TMDB provider passes) record `availability_transitions` against the pre-batch currency frontier — an insert or a stale-row reappearance fires an event, a current-row re-upsert stays quiet; store-kind sources are recorded but never surfaced. If ≥1 watchlist film transitioned today, one summary macOS notification fires at the end of sync (`infrastructure/notify.py`, injected as `notifier`; failures never affect exit code).
 
 ## Rules
 
@@ -62,6 +62,10 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
 - Availability lives in `listings`: TMDB writes svod sources from `flatrate` only (plus
   `apple-tv-store` from rent/buy provider 2); Amazon-channel ids are excluded; the weekly
   refresh is gated by meta `tmdb_providers_refreshed_at`.
+- Availability transitions are append-only events recorded at listing-write time against the
+  pre-batch currency frontier; `watchlist` is user-response data (drawer toggle is the only
+  writer). "Current" for TMDB-fed sources = `last_seen >= tmdb_providers_refreshed_at`
+  (MAX fallback when no stamp; criterion keeps MAX(last_seen)).
 - Canned-filter thresholds and chip names live ONLY in `domain/filters.py`; JS reads thresholds from `/api/config`. Keep `CHIP_PREDICATES` in `app.js` and the chip buttons in `index.html` in lockstep with `_PREDICATES`.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
