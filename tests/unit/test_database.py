@@ -386,7 +386,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 5
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 6
     finally:
         conn.close()
 
@@ -468,3 +468,20 @@ class TestTmdbPrimitives:
         assert repo.films_tmdb_missed() == [(trio, "Trio", 1950)]
         pmap = repo.provider_map()
         assert pmap[258] == "criterion" and pmap[1899] == "max" and pmap[2] == "apple-tv-store"
+
+
+# ---- Phase 4: watchlist -------------------------------------------------
+
+
+def test_toggle_watchlist_round_trip(repo, today):
+    fid = repo.upsert_film(Film("Tokyo Story", 1953, "Ozu", "https://c/tokyo-story"))
+    assert repo.watchlist_film_ids() == set()
+    assert repo.toggle_watchlist(fid, today) is True
+    assert repo.watchlist_film_ids() == {fid}
+    assert repo.toggle_watchlist(fid, today) is False
+    assert repo.watchlist_film_ids() == set()
+
+
+def test_toggle_watchlist_unknown_film_returns_none(repo, today):
+    assert repo.toggle_watchlist(9999, today) is None
+    assert repo.watchlist_film_ids() == set()
