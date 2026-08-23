@@ -81,10 +81,6 @@ def sync(
         except Exception as exc:  # noqa: BLE001 — any failure here must not abort the run
             log(f"leaving-soon fetch failed, keeping last-known departures: {exc}")
 
-        purged = repo.purge_departed(SOURCE, today)
-        if purged:
-            log(f"purged {purged} unrated films no longer on the channel")
-
     client = OmdbClient(api_key, session=session)
     looked_up = 0
     quota_hit = False

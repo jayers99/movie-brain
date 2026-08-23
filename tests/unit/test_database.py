@@ -263,35 +263,12 @@ def test_rated_departed_film_stays_visible_and_flagged(repo):
     assert repo.summary("criterion")["departed"] == 1
 
 
-def test_unrated_departed_film_is_hidden_but_kept_inside_grace(repo):
+def test_unrated_departed_film_is_kept_but_hidden(repo):
     a = repo.upsert_film(TRIO)
     b = repo.upsert_film(QUARTET)
-    repo.record_listing(a, "criterion", TRIO.url, date(2026, 8, 16))
+    repo.record_listing(a, "criterion", TRIO.url, D1)  # 18 days stale — past the old grace window
     repo.record_listing(b, "criterion", QUARTET.url, D2)
-    assert repo.purge_departed("criterion", D2) == 0
     assert [v.title for v in repo.list_views("criterion")] == ["Quartet"]
-    assert repo.film_id_by_key("trio (1950)") == a
-
-
-def test_purge_departed_removes_unrated_films_past_grace(repo):
-    a = repo.upsert_film(TRIO)
-    b = repo.upsert_film(QUARTET)
-    repo.record_listing(a, "criterion", TRIO.url, D1)  # 18 days stale
-    repo.record_listing(b, "criterion", QUARTET.url, D2)
-    repo.upsert_omdb(a, OmdbRating(7.0, 80, True, "English", "{}"), D1)
-    assert repo.purge_departed("criterion", D2) == 1
-    assert repo.film_id_by_key("trio (1950)") is None
-    assert repo.get_payload(a) is None
-    assert [v.title for v in repo.list_views("criterion")] == ["Quartet"]
-
-
-def test_purge_departed_never_touches_rated_films(repo):
-    a = repo.upsert_film(TRIO)
-    b = repo.upsert_film(QUARTET)
-    repo.record_listing(a, "criterion", TRIO.url, D1)  # 18 days stale but rated
-    repo.record_listing(b, "criterion", QUARTET.url, D2)
-    repo.set_rating(a, 0, D1)
-    assert repo.purge_departed("criterion", D2) == 0
     assert repo.film_id_by_key("trio (1950)") == a
 
 

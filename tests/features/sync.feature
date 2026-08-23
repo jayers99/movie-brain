@@ -50,12 +50,12 @@ Feature: Daily sync
     Then the catalog walk was cheap
     And 1 films are current
 
-  Scenario: A departed unrated film is purged after the grace period
+  Scenario: A departed unrated film is kept in the database but hidden
     Given the repository already holds "Trio (1950)" and "Quartet (1948)" walked 9 days ago
     And the Criterion catalog has films "Trio (1950)"
     And OMDb knows every film
     When I sync
-    Then "Quartet (1948)" is gone from the database
+    Then "Quartet (1948)" is still in the database
     And 1 films are current
 
   Scenario: A departed rated film is kept and shown as departed
@@ -65,14 +65,6 @@ Feature: Daily sync
     And OMDb knows every film
     When I sync
     Then "Quartet (1948)" is in the dashboard marked departed
-
-  Scenario: A recently departed unrated film survives the grace period
-    Given the repository already holds "Trio (1950)" and "Quartet (1948)" walked 2 days ago
-    And the Criterion catalog has films "Trio (1950)"
-    And OMDb knows every film
-    When I sync
-    Then "Quartet (1948)" is still in the database
-    And 1 films are current
 
   Scenario: --full always walks
     Given the repository already holds "Trio (1950)" walked 2 days ago
