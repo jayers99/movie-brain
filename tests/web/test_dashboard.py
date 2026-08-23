@@ -363,6 +363,17 @@ def empty_dash(page: Page, empty_server: str) -> Page:
     return page
 
 
+def test_drawer_shows_also_streaming(dash):
+    dash.locator("tbody tr", has_text="Alpha").first.click()
+    expect(dash.locator("#drawer-body")).to_contain_text("Also streaming on: HBO Max, MUBI (not subscribed)")
+
+
+def test_drawer_without_services_hides_the_line(dash):
+    clear_lang(dash)  # Bravo is French; the default English filter hides its row
+    dash.locator("tbody tr", has_text="Bravo").first.click()
+    expect(dash.locator("#drawer-body")).not_to_contain_text("Also streaming on")
+
+
 def test_empty_db_shows_import_hint(empty_dash: Page):
     assert count(empty_dash) == 0
     expect(empty_dash.locator("#films tbody")).to_contain_text("movie-brain import-legacy")
