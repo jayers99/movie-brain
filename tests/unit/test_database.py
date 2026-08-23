@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from movie_brain.domain.models import Film, OmdbRating
+from movie_brain.domain.models import Film, McTitle, OmdbRating, ReviewEntry
 from movie_brain.infrastructure.database import MIGRATIONS_DIR, Repository, init_db
 
 TRIO = Film("Trio", 1950, "Ken Annakin", "https://c/trio")
@@ -379,3 +379,63 @@ def test_init_db_never_overwrites_an_existing_backup_snapshot(tmp_path):
     init_db(p)  # a same-day re-run must never clobber the existing snapshot
 
     assert dest_path.read_bytes() == sentinel
+
+
+def test_migration_004_creates_metacritic_tables(repo):
+    conn = sqlite3.connect(repo.db_path)
+    try:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        assert {"metacritic", "match_review"} <= tables
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 4
+    finally:
+        conn.close()
+
+
+def test_upsert_mc_titles_is_an_upsert(repo, today):
+    t1 = McTitle("seven-samurai-1954", "Seven Samurai", 1956, 98, 1, 1)
+    repo.upsert_mc_titles([t1], today)
+    # a re-crawl updates the same slug in place
+    t2 = McTitle("seven-samurai-1954", "Seven Samurai", 1956, 99, 2, 1)
+    repo.upsert_mc_titles([t2], today)
+    conn = sqlite3.connect(repo.db_path)
+    try:
+        rows = conn.execute("SELECT slug, score, rank FROM metacritic").fetchall()
+        assert rows == [("seven-samurai-1954", 99, 2)]
+    finally:
+        conn.close()
+
+
+def test_films_for_matching_includes_omdb_metascore(repo, today):
+    fid = repo.upsert_film(Film("Alpha", 1950, "Ann", "https://c/alpha"))
+    repo.upsert_omdb(fid, OmdbRating(None, None, True, metacritic=85), today)
+    fid2 = repo.upsert_film(Film("Beta", 1960, "Bob", "https://c/beta"))
+    rows = repo.films_for_matching()
+    assert (fid, "Alpha", 1950, 85) in rows
+    assert (fid2, "Beta", 1960, None) in rows
+
+
+def test_film_ids_with_external(repo, today):
+    fid = repo.upsert_film(Film("Alpha", 1950, "Ann", "https://c/alpha"))
+    assert repo.film_ids_with_external("metacritic") == set()
+    repo.set_external_id(fid, "metacritic", "alpha-1950", today)
+    assert repo.film_ids_with_external("metacritic") == {fid}
+
+
+def test_review_queue_replaces_unresolved_and_keeps_resolved(repo, today):
+    repo.replace_unresolved_reviews("metacritic", [ReviewEntry("ambiguous-title", value="twin-1979")], today)
+    (row,) = repo.open_reviews("metacritic")
+    # a human resolves it (Phase 8 tooling will do this; raw SQL stands in for it here)
+    conn = sqlite3.connect(repo.db_path)
+    try:
+        conn.execute("UPDATE match_review SET resolved = 1 WHERE id = ?", (row["id"],))
+        conn.commit()
+    finally:
+        conn.close()
+    # the next match run replaces unresolved rows but never touches resolved ones
+    repo.replace_unresolved_reviews("metacritic", [ReviewEntry("expected-miss", film_id=None, detail="x")], today)
+    assert [r["reason"] for r in repo.open_reviews("metacritic")] == ["expected-miss"]
+    conn = sqlite3.connect(repo.db_path)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM match_review WHERE resolved = 1").fetchone()[0] == 1
+    finally:
+        conn.close()

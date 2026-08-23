@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
-from movie_brain.domain.models import Film, FilmView, OmdbRating
+from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -202,6 +202,52 @@ class Repository:
     def services(self) -> list[dict[str, object]]:
         with self._conn() as c:
             rows = c.execute("SELECT slug, name, kind, subscribed, region FROM movie_service ORDER BY slug").fetchall()
+            return [dict(r) for r in rows]
+
+    # metacritic -------------------------------------------------------
+    def upsert_mc_titles(self, titles: list[McTitle], fetched_at: date) -> None:
+        day = fetched_at.isoformat()
+        with self._conn() as c:
+            for t in titles:
+                c.execute(
+                    "INSERT INTO metacritic (slug, title, year, score, rank, page, fetched_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                    "ON CONFLICT(slug) DO UPDATE SET title=excluded.title, year=excluded.year, "
+                    "score=excluded.score, rank=excluded.rank, page=excluded.page, fetched_at=excluded.fetched_at",
+                    (t.slug, t.title, t.year, t.score, t.rank, t.page, day),
+                )
+
+    def films_for_matching(self) -> list[tuple[int, str, int | None, int | None]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, o.metacritic FROM films f "
+                "LEFT JOIN omdb o ON o.film_id = f.id ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["title"]), r["year"], r["metacritic"]) for r in rows]
+
+    def film_ids_with_external(self, authority: str) -> set[int]:
+        with self._conn() as c:
+            rows = c.execute("SELECT film_id FROM external_ids WHERE authority = ?", (authority,)).fetchall()
+            return {int(r["film_id"]) for r in rows}
+
+    def replace_unresolved_reviews(self, authority: str, entries: list[ReviewEntry], created: date) -> None:
+        # Derived state, recomputed per match run — the immutability rule binds films, not this queue.
+        with self._conn() as c:
+            c.execute("DELETE FROM match_review WHERE authority = ? AND resolved = 0", (authority,))
+            for e in entries:
+                c.execute(
+                    "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (authority, e.film_id, e.value, e.reason, e.detail, created.isoformat()),
+                )
+
+    def open_reviews(self, authority: str) -> list[dict[str, object]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT id, film_id, value, reason, detail, created_at FROM match_review "
+                "WHERE authority = ? AND resolved = 0 ORDER BY id",
+                (authority,),
+            ).fetchall()
             return [dict(r) for r in rows]
 
     # meta -------------------------------------------------------------
