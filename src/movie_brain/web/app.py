@@ -21,11 +21,11 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
 
     @app.get("/api/films")
     def list_films() -> Response:
-        return jsonify([v.to_dict() for v in repo.list_views(SOURCE)])
+        return jsonify([v.to_dict() for v in repo.list_views(SOURCE, today())])
 
     @app.get("/api/films/<int:film_id>")
     def film_detail(film_id: int) -> tuple[Response, int]:
-        view = repo.get_view(film_id)
+        view = repo.get_view(film_id, today())
         if view is None:
             return jsonify({"error": "not found"}), 404
         raw = repo.get_payload(film_id)
@@ -36,6 +36,13 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
             except json.JSONDecodeError:
                 payload = {"_raw": raw}
         return jsonify({**view.to_dict(), "payload": payload}), 200
+
+    @app.post("/api/films/<int:film_id>/watchlist")
+    def toggle_watchlist(film_id: int) -> tuple[Response, int]:
+        watchlisted = repo.toggle_watchlist(film_id, today())
+        if watchlisted is None:
+            return jsonify({"error": "not found"}), 404
+        return jsonify({"watchlisted": watchlisted}), 200
 
     @app.put("/api/films/<int:film_id>/rating")
     def put_rating(film_id: int) -> tuple[Response, int]:
