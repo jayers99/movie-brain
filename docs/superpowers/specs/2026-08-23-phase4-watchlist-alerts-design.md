@@ -49,7 +49,10 @@ CREATE INDEX idx_transitions_appeared ON availability_transitions(appeared_on);
 
 - `watchlist` is my-response data (like `ratings`), separate from immutable films.
 - `availability_transitions` is append-only; collectors never delete. Multiple
-  events per (film, source) over time are expected — that's the history.
+  events per (film, source) over time are expected — that's the history. Store-kind
+  sources (`apple-tv-store`) are recorded like any other but **excluded from both
+  alert surfaces** (notification and `new_on`) — becoming purchasable is not an
+  arrival; only svod sources surface.
 - No backfill: existing listings rows produce no events (upserts on existing
   current rows are not transitions), so the migration causes no event flood.
 - Migration includes its own `schema_version` row (v6), per the standing rule.
@@ -87,9 +90,12 @@ Known edge (accepted): a watchlist film that flickers off/on a TMDB service with
 one weekly-stamp period produces no event — its row never went stale relative to
 the stamp. If it never looked departed, it effectively never left.
 
-Sync-loop guard (accepted risk, made explicit): the Criterion **cheap check** path
-reuses the stored catalog without writing listings — no false transitions. Only the
-full walk writes.
+Sync-loop guard (made explicit): `record_catalog` runs on **every** sync, including
+the cheap-check reuse path. The frontier must therefore be captured **before the
+write batch begins** (pre-walk `MAX(last_seen)` for criterion; the stamp is already
+pre-batch for TMDB, since it's written only after a completed full pass). A current
+row re-upserted with today's date compares equal-or-newer to the pre-walk frontier
+→ no event; only rows strictly older than it fire.
 
 ## Refresh dial (application/availability.py)
 
