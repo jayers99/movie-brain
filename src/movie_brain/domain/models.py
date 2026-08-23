@@ -81,6 +81,17 @@ class TmdbCandidate:
 
 
 @dataclass(frozen=True)
+class TmdbProviders:
+    """US watch-provider snapshot for one film; payload is the raw response text."""
+
+    flatrate: tuple[int, ...]
+    rent: tuple[int, ...]
+    buy: tuple[int, ...]
+    link: str | None
+    payload: str
+
+
+@dataclass(frozen=True)
 class ReviewEntry:
     """A match anomaly queued for human review — never a deletion."""
 

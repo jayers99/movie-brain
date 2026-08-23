@@ -30,3 +30,19 @@ def test_api_key_falls_back_to_file(monkeypatch, tmp_path):
 def test_api_key_missing_is_none(monkeypatch, tmp_path):
     monkeypatch.delenv("OMDB_API_KEY", raising=False)
     assert load_api_key(Config(tmp_path)) is None
+
+
+def test_tmdb_token_env_wins(monkeypatch):
+    from movie_brain.infrastructure.config import load_config, load_tmdb_token
+
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", " tok ")
+    assert load_tmdb_token(load_config()) == "tok"
+
+
+def test_tmdb_token_from_file(config_dir):
+    from movie_brain.infrastructure.config import load_config, load_tmdb_token
+
+    cfg = load_config()
+    assert load_tmdb_token(cfg) is None
+    cfg.tmdb_token_file.write_text("filetok\n")
+    assert load_tmdb_token(cfg) == "filetok"
