@@ -379,13 +379,26 @@ class Repository:
                 (checked.isoformat(), payload, film_id),
             )
 
-    def films_for_provider_refresh(self) -> list[tuple[int, str]]:
+    def films_for_watchlist_refresh(self) -> list[tuple[int, str]]:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT t.film_id, x.value FROM tmdb t "
                 "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
-                "WHERE t.found = 1 "
-                "ORDER BY (t.providers_checked_at IS NOT NULL), t.providers_checked_at, t.film_id"
+                "JOIN watchlist w ON w.film_id = t.film_id "
+                "WHERE t.found = 1 ORDER BY t.film_id"
+            ).fetchall()
+            return [(int(r["film_id"]), str(r["value"])) for r in rows]
+
+    def films_for_provider_refresh(self, skip_checked_on: date | None = None) -> list[tuple[int, str]]:
+        where = "" if skip_checked_on is None else "AND COALESCE(t.providers_checked_at, '') != ? "
+        params: tuple[object, ...] = () if skip_checked_on is None else (skip_checked_on.isoformat(),)
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT t.film_id, x.value FROM tmdb t "
+                "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
+                "WHERE t.found = 1 " + where + "ORDER BY (t.providers_checked_at IS NOT NULL), "
+                "t.providers_checked_at, t.film_id",
+                params,
             ).fetchall()
             return [(int(r["film_id"]), str(r["value"])) for r in rows]
 

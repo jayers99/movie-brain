@@ -33,6 +33,7 @@ class SyncResult:
     tmdb_matched: int = 0
     tmdb_missed: int = 0
     tmdb_refreshed: int = 0
+    tmdb_watchlist_refreshed: int = 0
 
 
 def sync(
@@ -137,4 +138,5 @@ def sync(
         tmdb.matched,
         tmdb.missed,
         tmdb.refreshed,
+        tmdb.watchlist_refreshed,
     )

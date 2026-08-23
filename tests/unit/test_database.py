@@ -601,3 +601,25 @@ def test_views_carry_new_on_and_watchlisted(repo, today):
     ]
     (listed,) = [v for v in repo.list_views("criterion", today) if v.id == fid]
     assert listed.new_on == view.new_on and listed.watchlisted is True
+
+
+# ---- Phase 4: nightly watchlist provider pass -----------------------------
+
+
+def test_films_for_watchlist_refresh_is_watchlist_and_matched_only(repo, today):
+    a = repo.upsert_film(Film("Alpha", 1950, "Ann", "https://c/alpha"))
+    b = repo.upsert_film(Film("Bravo", 1960, "Bob", "https://c/bravo"))
+    for fid, tid in ((a, 11), (b, 22)):
+        repo.set_external_id(fid, "tmdb", str(tid), today)
+        repo.upsert_tmdb(fid, found=True, looked_up=today)
+    repo.toggle_watchlist(a, today)
+    assert repo.films_for_watchlist_refresh() == [(a, "11")]
+
+
+def test_films_for_provider_refresh_can_skip_films_checked_today(repo, today):
+    a = repo.upsert_film(Film("Alpha", 1950, "Ann", "https://c/alpha"))
+    repo.set_external_id(a, "tmdb", "11", today)
+    repo.upsert_tmdb(a, found=True, looked_up=today)
+    repo.record_tmdb_providers(a, today, "{}")
+    assert repo.films_for_provider_refresh() == [(a, "11")]
+    assert repo.films_for_provider_refresh(skip_checked_on=today) == []

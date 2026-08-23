@@ -29,6 +29,7 @@ class TmdbStepResult:
     matched: int = 0
     missed: int = 0
     refreshed: int = 0
+    watchlist_refreshed: int = 0
 
 
 def tmdb_step(
@@ -81,15 +82,39 @@ def tmdb_step(
     # refresh pass that would then gate for a week having refreshed nothing.
     if aborted:
         return TmdbStepResult(matched, missed, refreshed)
+    pmap = repo.provider_map()
+    # Watchlist pass — every run, gate or no gate: the whole point is ≤1-day lag
+    # for the ~50 films worth alerting on. Never touches the weekly stamp.
+    wl_refreshed, wl_aborted = _refresh_pass(repo, client, repo.films_for_watchlist_refresh(), pmap, today, log)
+    if wl_aborted:
+        return TmdbStepResult(matched, missed, refreshed, wl_refreshed)
     stamp = repo.get_meta(META_REFRESHED_AT)
     if stamp is not None and 0 <= (today - date.fromisoformat(stamp)).days <= REFRESH_DAYS:
-        return TmdbStepResult(matched, missed, refreshed)
-    pmap = repo.provider_map()
+        return TmdbStepResult(matched, missed, refreshed, wl_refreshed)
+    refreshed, full_aborted = _refresh_pass(
+        repo, client, repo.films_for_provider_refresh(skip_checked_on=today), pmap, today, log
+    )
+    if full_aborted:
+        return TmdbStepResult(matched, missed, refreshed, wl_refreshed)
+    repo.set_meta(META_REFRESHED_AT, today.isoformat())
+    return TmdbStepResult(matched, missed, refreshed, wl_refreshed)
+
+
+def _refresh_pass(
+    repo: Repository,
+    client: TmdbClient,
+    films: list[tuple[int, str]],
+    pmap: dict[int, str],
+    today: date,
+    log: Callable[[str], None],
+) -> tuple[int, bool]:
+    """Fetch + write providers for films; returns (refreshed, aborted)."""
+    refreshed = 0
     consecutive = 0
-    for film_id, tmdb_id in repo.films_for_provider_refresh():
+    for film_id, tmdb_id in films:
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
             log("TMDB provider lookups failing repeatedly — stopping; next run resumes.")
-            return TmdbStepResult(matched, missed, refreshed)
+            return refreshed, True
         try:
             numeric_tmdb_id = int(tmdb_id)
         except ValueError:
@@ -99,7 +124,7 @@ def tmdb_step(
             providers = client.watch_providers(numeric_tmdb_id)
         except AuthError as exc:
             log(f"TMDB rejected the token: {exc}")
-            return TmdbStepResult(matched, missed, refreshed)
+            return refreshed, True
         except requests.RequestException as exc:
             log(f"TMDB providers failed for film {film_id}: {exc}")
             consecutive += 1
@@ -110,8 +135,7 @@ def tmdb_step(
             slugs.add(pmap[STORE_PROVIDER_ID])
         url = providers.link or watch_link(numeric_tmdb_id)
         for slug in sorted(slugs):
-            repo.record_listing(film_id, slug, url, today)
+            repo.record_listing_with_transition(film_id, slug, url, today)
         repo.record_tmdb_providers(film_id, today, providers.payload)
         refreshed += 1
-    repo.set_meta(META_REFRESHED_AT, today.isoformat())
-    return TmdbStepResult(matched, missed, refreshed)
+    return refreshed, False
