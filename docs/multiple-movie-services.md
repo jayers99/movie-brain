@@ -49,8 +49,24 @@ New questions this raises (also folded into the spike lists below):
       (ranks ~1,780–1,800), page 92 → 79 (ranks 2,185–2,208), page 125 → 76. The 80/79
       boundary falls around page ~83, so **≈2,000 titles score ≥ 80** (and ≥ 76 ≈ 3,000 — the
       threshold knob is well-behaved).
-- [ ] Verify TMDB watch-provider coverage ≥ Metacritic's on a sample of titles (especially
-      the "All Watch Options" tail, MUBI/BFI, and rent/buy vs. subscription splits).
+- [x] ~~Verify TMDB watch-provider coverage.~~ **Verified 2026-08-24** on the provider
+      registry + 10 sample films. All my services are distinct US providers with stable ids:
+      Criterion Channel 258 · Apple TV (=Apple TV+) 350 · Apple TV Store (=iTunes rent/buy) 2
+      · HBO Max 1899 · Peacock Premium 386 / Plus 387 · Prime Video 9 · MUBI 11. Per-film data
+      is current and splits cleanly into `flatrate` (streaming) vs `rent`/`buy` — iTunes
+      purchasability comes free via Apple TV Store in the buy arrays. Sample sanity: Tokyo
+      Story/Seven Samurai → Criterion + HBO Max; Oppenheimer → Peacock; CODA → Apple TV+;
+      Decision to Leave → MUBI; Manchester by the Sea → Prime. **Two design consequences:**
+      (1) one logical service = **several TMDB provider ids** (HBO Max also appears as
+      "HBO Max Amazon Channel" 1825, MUBI as "MUBI Amazon Channel" 201, …) → the services
+      table needs a provider-id grouping; (2) **BFI in the US is "BFI Player Classics"** — a real
+      US-only SVOD ($5.99/mo, Roku 2019, Apple TV channel + app 2020, bfiplayerclassics.com;
+      the service I've subscribed to via Apple TV) — but TMDB indexes it only through its
+      Amazon storefront, "BFI Player Amazon Channel" (287); the GB "BFI Player" (224) is a
+      separate service. So: provider labels ≠ service names, one storefront id proxies the
+      whole catalog, and region handling is a real column, not a constant. Minor caveat: sources can drift
+      (The Conformist shows Criterion on Metacritic's page but only Kino on TMDB today) —
+      availability is a snapshot, refreshed by sync, not a fact.
 - [ ] Data model: `movie_service` needs a **`subscribed` flag** (and the ownership question
       from the working sketch still stands).
 - [ ] Define "**movies I want to see**" for the ranking — above-threshold and unrated-by-me?
