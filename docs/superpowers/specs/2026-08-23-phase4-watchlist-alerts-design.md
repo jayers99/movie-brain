@@ -21,7 +21,8 @@ arrivals for 14 days.
    rule.
 3. **Alert scope: notify watchlist, dashboard shows all.** The macOS notification
    fires only for watchlist films; the dashboard "New arrivals" surface shows every
-   film that newly appeared on a subscribed service.
+   film that newly appeared on a svod service (subscribed or not; store-kind rows
+   are recorded but never surfaced).
 4. **Dashboard form: filter chip + 14-day window.** A "New arrivals" canned-filter
    chip in the existing chip system; a film counts as new for 14 days after its
    transition. No dismissal state.

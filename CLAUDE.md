@@ -78,3 +78,6 @@ Pre-migration backups land in `<config_dir>/backups/` automatically whenever `in
 about to apply a new migration — each file is the rollback point for one schema change.
 
 Metacritic archive: `<config_dir>/metacritic/pages/page-NNNN.html` + `fetch-log.jsonl`.
+
+On first use, macOS asks once to allow notifications from osascript; until approved, the
+nightly sync's watchlist notification won't display.

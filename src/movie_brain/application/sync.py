@@ -130,16 +130,16 @@ def sync(
             log(f"TMDB availability step failed: {exc}")
 
     if notifier is not None:
-        arrivals = repo.watchlist_transitions_on(today)
-        if arrivals:
-            listed = " · ".join(f"{title} on {service}" for title, service in arrivals[:4])
-            if len(arrivals) > 4:
-                listed += f" · … and {len(arrivals) - 4} more"
-            noun = "arrival" if len(arrivals) == 1 else "arrivals"
-            try:
+        try:
+            arrivals = repo.watchlist_transitions_on(today)
+            if arrivals:
+                listed = " · ".join(f"{title} on {service}" for title, service in arrivals[:4])
+                if len(arrivals) > 4:
+                    listed += f" · … and {len(arrivals) - 4} more"
+                noun = "arrival" if len(arrivals) == 1 else "arrivals"
                 notifier("movie-brain", f"{len(arrivals)} watchlist {noun}: {listed}")
-            except Exception as exc:  # noqa: BLE001 — alerts must never affect the sync outcome
-                log(f"notification failed: {exc}")
+        except Exception as exc:  # noqa: BLE001 — alerts must never affect the sync outcome
+            log(f"notification failed: {exc}")
 
     return SyncResult(
         0,
