@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const ROW_H = 36, OVERSCAN = 10;
-  const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'leaving_date', 'my_rating'];
+  const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
   const DEFAULT_LANG = 'English';
   const state = {
     films: [], cfg: null, chips: new Set(),
@@ -18,7 +18,6 @@
     leaving: (f) => f.leaving_date != null,
     unrated: (f) => f.my_rating == null,
     mine: (f) => f.my_rating != null && f.my_rating >= 1,
-    not_interested: (f) => f.my_rating === 0,
     pending: (f) => f.pending || f.found === false,
     top_ratings: (f) => (f.metacritic != null && f.metacritic >= state.cfg.canned_thresholds.top_mc)
       || (f.rt != null && f.rt >= state.cfg.canned_thresholds.top_rt)
@@ -90,13 +89,12 @@
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
       <td class="c-rt num">${fmt(f.rt, '%')}</td><td class="c-imdb num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
-      <td class="c-leaving">${esc(f.leaving_date) || ''}</td>
       <td class="c-rating num"><input class="rating" maxlength="2" data-id="${f.id}" value="${f.my_rating ?? ''}" aria-label="My rating"></td>
       <td class="c-info"><button class="info" data-id="${f.id}" aria-label="Details">ⓘ</button></td></tr>`;
   }
   function renderRows() {
     if (state.films.length === 0) {
-      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="9">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
       return;
     }
     const total = state.filtered.length;
@@ -104,9 +102,9 @@
     const end = Math.min(total, Math.ceil((wrap.scrollTop + wrap.clientHeight) / ROW_H) + OVERSCAN);
     const top = start * ROW_H, bottom = (total - end) * ROW_H;
     tbody.innerHTML =
-      (top ? `<tr class="spacer"><td colspan="10" style="height:${top}px"></td></tr>` : '') +
+      (top ? `<tr class="spacer"><td colspan="9" style="height:${top}px"></td></tr>` : '') +
       state.filtered.slice(start, end).map(rowHtml).join('') +
-      (bottom ? `<tr class="spacer"><td colspan="10" style="height:${bottom}px"></td></tr>` : '');
+      (bottom ? `<tr class="spacer"><td colspan="9" style="height:${bottom}px"></td></tr>` : '');
   }
   wrap.addEventListener('scroll', () => requestAnimationFrame(renderRows));
 
@@ -295,13 +293,14 @@
       .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
     const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
     return `<h2>${esc(d.title)}</h2>
-      <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.leaving_date ? ` · <b>Leaving ${esc(d.leaving_date)}</b>` : ''}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
+      <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${p.Plot && p.Plot !== 'N/A' ? `<p>${poster}${esc(p.Plot)}</p>` : poster}
       <dl>${fields}</dl>
       ${sources ? `<ul class="sources">${sources}</ul>` : d.pending ? '<p class="meta">OMDb lookup pending.</p>' : d.found === false ? '<p class="meta">No OMDb match.</p>' : ''}
       <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
         &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
-      <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>`;
+      <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
+      ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
   }
   let drawerSeq = 0;
   let drawerOpenPushed = false; // true once the currently-open drawer got its own pushState entry

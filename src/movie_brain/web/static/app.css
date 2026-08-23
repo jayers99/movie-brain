@@ -18,7 +18,6 @@ col.col-language { width:13%; }
 col.col-mc { width:64px; }
 col.col-rt { width:64px; }
 col.col-imdb { width:64px; }
-col.col-leaving { width:110px; }
 col.col-rating { width:92px; }
 col.col-info { width:40px; }
 thead th { position:sticky; background:var(--bg); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; white-space:nowrap; }
