@@ -49,6 +49,14 @@ Feature: Metacritic archive
     Then the review queue has an "ambiguous-title" entry
     And the coverage report says 0 of 2 films matched
 
+  Scenario: The same title archived on two pages does not un-link its film
+    Given the repository holds the film "Seven Samurai (1954)"
+    And the archive holds "Seven Samurai" (1954) scored 98 as "seven-samurai-1954" on page 1
+    And the archive holds "Seven Samurai" (1954) scored 98 as "seven-samurai-1954" on page 2
+    When I match
+    Then "Seven Samurai (1954)" has metacritic slug "seven-samurai-1954"
+    And the review queue has 0 open entries
+
   Scenario: A slug already claimed by another film is contained and queued
     Given the repository holds the film "Twin (1950)"
     And the film "Other (1960)" already claims metacritic slug "twin-1950"

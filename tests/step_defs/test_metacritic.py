@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from datetime import date
 
 import pytest
@@ -29,6 +30,7 @@ def ctx(repo, config_dir, nuxt_page):
         "crawl": None,
         "report": None,
         "cards": [],
+        "pages": defaultdict(list),
     }
     rs.stop()
     rs.reset()
@@ -133,18 +135,32 @@ def film_claims_slug(ctx, title_year, slug):
     ctx["repo"].set_external_id(fid, "metacritic", slug, TODAY)
 
 
-@given(parsers.re(r'the archive holds "(?P<title>[^"]+)" \((?P<year>\d+)\) scored (?P<score>\d+) as "(?P<slug>[^"]+)"'))
+@given(parsers.re(r'the archive holds "(?P<title>[^"]+)" \((?P<year>\d+)\) scored (?P<score>\d+) as "(?P<slug>[^"]+)"$'))
 def archive_holds(ctx, title, year, score, slug):
     ctx["cards"].append((title, slug, int(year), int(score)))
 
 
+@given(
+    parsers.re(
+        r'the archive holds "(?P<title>[^"]+)" \((?P<year>\d+)\) scored (?P<score>\d+) '
+        r'as "(?P<slug>[^"]+)" on page (?P<page>\d+)'
+    )
+)
+def archive_holds_on_page(ctx, title, year, score, slug, page):
+    ctx["pages"][int(page)].append((title, slug, int(year), int(score)))
+
+
 @when("I match")
 def run_match(ctx):
+    archive = archive_dir(ctx["config_dir"])
     if ctx["cards"]:
-        archive = archive_dir(ctx["config_dir"])
         p = page_path(archive, 1)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(ctx["nuxt_page"](ctx["cards"]))
+    for page, cards in ctx["pages"].items():
+        p = page_path(archive, page)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(ctx["nuxt_page"](cards))
     ctx["report"] = match_archive(ctx["repo"], ctx["config_dir"], TODAY, log=lambda m: None)
 
 

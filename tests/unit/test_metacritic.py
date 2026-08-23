@@ -1,3 +1,5 @@
+import json
+
 from movie_brain.domain.models import McTitle
 from movie_brain.infrastructure.metacritic import (
     archive_dir,
@@ -46,3 +48,25 @@ def test_archive_roundtrip(tmp_path, nuxt_page):
 
 def test_archived_pages_empty_when_no_archive(tmp_path):
     assert archived_pages(archive_dir(tmp_path)) == []
+
+
+def test_parse_page_matches_nuxt_script_regardless_of_attribute_order(nuxt_page):
+    html = nuxt_page([("Movie", "movie", 2001, 77)])
+    swapped = html.replace(
+        'type="application/json" id="__NUXT_DATA__"',
+        'id="__NUXT_DATA__" type="application/json"',
+    )
+    titles = parse_page(swapped, page=1)
+    assert [t.slug for t in titles] == ["movie"]
+
+
+def test_parse_page_skips_corrupt_card_and_keeps_valid_ones(nuxt_page):
+    good_html = nuxt_page([("Good Movie", "good-movie", 2001, 88)])
+    start = good_html.index(">", good_html.index("__NUXT_DATA__")) + 1
+    end = good_html.index("</script>", start)
+    data = json.loads(good_html[start:end])
+    # A card whose index values are wildly out of range for the flat array.
+    data.append({"title": 9999, "slug": 9999, "premiereYear": 9999, "criticScoreSummary": 9999})
+    html = good_html[:start] + json.dumps(data) + good_html[end:]
+    titles = parse_page(html, page=1)
+    assert [t.slug for t in titles] == ["good-movie"]
