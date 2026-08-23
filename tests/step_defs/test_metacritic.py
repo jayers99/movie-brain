@@ -9,7 +9,7 @@ import requests
 import responses
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from movie_brain.application.metacritic import crawl_archive, match_archive
+from movie_brain.application.metacritic import crawl_archive, match_archive, promote_top_n
 from movie_brain.domain.models import Film, OmdbRating
 from movie_brain.infrastructure.metacritic import BROWSE_URL, archive_dir, archived_pages, page_path
 
@@ -150,8 +150,7 @@ def archive_holds_on_page(ctx, title, year, score, slug, page):
     ctx["pages"][int(page)].append((title, slug, int(year), int(score)))
 
 
-@when("I match")
-def run_match(ctx):
+def _write_archive(ctx):
     archive = archive_dir(ctx["config_dir"])
     if ctx["cards"]:
         p = page_path(archive, 1)
@@ -161,7 +160,18 @@ def run_match(ctx):
         p = page_path(archive, page)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(ctx["nuxt_page"](cards))
+
+
+@when("I match")
+def run_match(ctx):
+    _write_archive(ctx)
     ctx["report"] = match_archive(ctx["repo"], ctx["config_dir"], TODAY, log=lambda m: None)
+
+
+@when(parsers.parse("I promote the top {n:d}"))
+def run_promote(ctx, n):
+    _write_archive(ctx)
+    ctx["report"] = promote_top_n(ctx["repo"], ctx["config_dir"], TODAY, n, log=lambda m: None)
 
 
 @then(parsers.parse('"{title_year}" has metacritic slug "{slug}"'))
@@ -204,3 +214,25 @@ def nothing_deleted(ctx):
 @then(parsers.parse("the match exit code is {code:d}"))
 def match_exit(ctx, code):
     assert ctx["report"].exit_code == code
+
+
+@then(parsers.parse('the film "{title_year}" exists with a guid'))
+def film_exists_with_guid(ctx, title_year):
+    import sqlite3 as _sqlite3
+
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    assert fid is not None
+    conn = _sqlite3.connect(ctx["repo"].db_path)
+    guid = conn.execute("SELECT guid FROM films WHERE id = ?", (fid,)).fetchone()[0]
+    conn.close()
+    assert guid
+
+
+@then(parsers.parse("the repository holds {n:d} films"))
+def repository_film_count(ctx, n):
+    assert len(ctx["repo"].films_for_matching()) == n
+
+
+@then(parsers.parse("the promote report says {n:d} promoted"))
+def promote_count(ctx, n):
+    assert ctx["report"].promoted == n

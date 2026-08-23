@@ -83,3 +83,46 @@ Feature: Metacritic archive
   Scenario: Match without an archive fails cleanly
     When I match
     Then the match exit code is 1
+
+  Scenario: Promotion creates real films for unmatched top-N titles
+    Given the archive holds "Fresh Find" (2020) scored 95 as "fresh-find"
+    When I promote the top 10
+    Then the film "Fresh Find (2020)" exists with a guid
+    And "Fresh Find (2020)" has metacritic slug "fresh-find"
+    And the promote report says 1 promoted
+
+  Scenario: Promotion never twins a film the matcher already linked
+    Given the repository holds the film "Seven Samurai (1954)"
+    And the archive holds "Seven Samurai" (1956) scored 98 as "seven-samurai-1954"
+    When I promote the top 10
+    Then "Seven Samurai (1954)" has metacritic slug "seven-samurai-1954"
+    And the repository holds 1 films
+    And the promote report says 0 promoted
+
+  Scenario: The dial bounds promotion by rank
+    Given the archive holds "First" (2020) scored 99 as "first"
+    And the archive holds "Second" (2021) scored 98 as "second"
+    When I promote the top 1
+    Then the repository holds 1 films
+
+  Scenario: Two staged titles colliding on one key promote once and queue a review
+    Given the archive holds "Solaris" (2002) scored 90 as "solaris"
+    And the archive holds "Solaris" (2002) scored 90 as "solaris-2002"
+    When I promote the top 10
+    Then the repository holds 1 films
+    And the review queue has a "key-conflict" entry
+
+  Scenario: An ambiguous staged title is skipped, not promoted
+    Given the repository holds the film "Twin (1978)"
+    And the repository holds the film "Twin (1980)"
+    And the archive holds "Twin" (1979) scored 90 as "twin-1979"
+    When I promote the top 10
+    Then the repository holds 2 films
+    And the review queue has an "ambiguous-title" entry
+
+  Scenario: Re-running promotion is idempotent
+    Given the archive holds "Fresh Find" (2020) scored 95 as "fresh-find"
+    When I promote the top 10
+    And I promote the top 10
+    Then the repository holds 1 films
+    And the promote report says 0 promoted
