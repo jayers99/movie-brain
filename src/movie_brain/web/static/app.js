@@ -1,11 +1,11 @@
 (() => {
   'use strict';
   const ROW_H = 36, OVERSCAN = 10;
-  const COLS = ['title', 'year', 'director', 'language', 'imdb', 'rt', 'leaving_date', 'my_rating'];
+  const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'leaving_date', 'my_rating'];
   const DEFAULT_LANG = 'English';
   const state = {
     films: [], cfg: null, chips: new Set(),
-    cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, imdbMin: null, imdbMax: null, rtMin: null, rtMax: null },
+    cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null },
     sort: null,            // {col, dir} or null = default
     filtered: [], openFilm: null,
   };
@@ -20,8 +20,9 @@
     mine: (f) => f.my_rating != null && f.my_rating >= 1,
     not_interested: (f) => f.my_rating === 0,
     pending: (f) => f.pending || f.found === false,
-    top_rt: (f) => f.rt != null && f.rt >= state.cfg.canned_thresholds.top_rt,
-    top_imdb: (f) => f.imdb != null && f.imdb >= state.cfg.canned_thresholds.top_imdb,
+    top_ratings: (f) => (f.metacritic != null && f.metacritic >= state.cfg.canned_thresholds.top_mc)
+      || (f.rt != null && f.rt >= state.cfg.canned_thresholds.top_rt)
+      || (f.imdb != null && f.imdb >= state.cfg.canned_thresholds.top_imdb),
     recent: (f) => f.first_seen != null && daysBetween(f.first_seen, state.cfg.today) <= state.cfg.canned_thresholds.recent_days,
     departed: (f) => f.departed,
   };
@@ -38,15 +39,18 @@
       if (![...k.languages].some((l) => langs.includes(l))) return false;
     }
     if ((k.yearMin != null || k.yearMax != null) && !inRange(f.year, k.yearMin, k.yearMax)) return false;
-    if ((k.imdbMin != null || k.imdbMax != null) && !inRange(f.imdb, k.imdbMin, k.imdbMax)) return false;
+    if ((k.mcMin != null || k.mcMax != null) && !inRange(f.metacritic, k.mcMin, k.mcMax)) return false;
     if ((k.rtMin != null || k.rtMax != null) && !inRange(f.rt, k.rtMin, k.rtMax)) return false;
+    if ((k.imdbMin != null || k.imdbMax != null) && !inRange(f.imdb, k.imdbMin, k.imdbMax)) return false;
     return true;
   }
   const byTitle = (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
   function compare(a, b) {
-    if (!state.sort) {  // default: imdb desc, nulls last, then title
-      if (a.imdb == null !== (b.imdb == null)) return a.imdb == null ? 1 : -1;
-      if (a.imdb != null && a.imdb !== b.imdb) return b.imdb - a.imdb;
+    if (!state.sort) {  // default hierarchy: metacritic, ties → rt, ties → imdb (each desc, missing after present), then title
+      for (const key of ['metacritic', 'rt', 'imdb']) {
+        if ((a[key] == null) !== (b[key] == null)) return a[key] == null ? 1 : -1;
+        if (a[key] != null && a[key] !== b[key]) return b[key] - a[key];
+      }
       return byTitle(a, b);
     }
     const { col, dir } = state.sort, va = a[col], vb = b[col];
@@ -84,14 +88,15 @@
     const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '');
     return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
-      <td class="c-language">${esc(f.language) || '—'}</td><td class="c-imdb num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
-      <td class="c-rt num">${fmt(f.rt, '%')}</td><td class="c-leaving">${esc(f.leaving_date) || ''}</td>
+      <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
+      <td class="c-rt num">${fmt(f.rt, '%')}</td><td class="c-imdb num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
+      <td class="c-leaving">${esc(f.leaving_date) || ''}</td>
       <td class="c-rating num"><input class="rating" maxlength="2" data-id="${f.id}" value="${f.my_rating ?? ''}" aria-label="My rating"></td>
       <td class="c-info"><button class="info" data-id="${f.id}" aria-label="Details">ⓘ</button></td></tr>`;
   }
   function renderRows() {
     if (state.films.length === 0) {
-      tbody.innerHTML = `<tr class="empty-state"><td colspan="9">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
       return;
     }
     const total = state.filtered.length;
@@ -99,9 +104,9 @@
     const end = Math.min(total, Math.ceil((wrap.scrollTop + wrap.clientHeight) / ROW_H) + OVERSCAN);
     const top = start * ROW_H, bottom = (total - end) * ROW_H;
     tbody.innerHTML =
-      (top ? `<tr class="spacer"><td colspan="9" style="height:${top}px"></td></tr>` : '') +
+      (top ? `<tr class="spacer"><td colspan="10" style="height:${top}px"></td></tr>` : '') +
       state.filtered.slice(start, end).map(rowHtml).join('') +
-      (bottom ? `<tr class="spacer"><td colspan="9" style="height:${bottom}px"></td></tr>` : '');
+      (bottom ? `<tr class="spacer"><td colspan="10" style="height:${bottom}px"></td></tr>` : '');
   }
   wrap.addEventListener('scroll', () => requestAnimationFrame(renderRows));
 
@@ -114,7 +119,7 @@
     if (k.director) p.set('director', k.director);
     if (k.languages.size === 0) p.set('lang', 'any');
     else if (!(k.languages.size === 1 && k.languages.has(DEFAULT_LANG))) p.set('lang', [...k.languages].join('|'));
-    for (const [name, lo, hi] of [['year', k.yearMin, k.yearMax], ['imdb', k.imdbMin, k.imdbMax], ['rt', k.rtMin, k.rtMax]]) {
+    for (const [name, lo, hi] of [['year', k.yearMin, k.yearMax], ['mc', k.mcMin, k.mcMax], ['rt', k.rtMin, k.rtMax], ['imdb', k.imdbMin, k.imdbMax]]) {
       if (lo != null || hi != null) p.set(name, `${lo ?? ''}-${hi ?? ''}`);
     }
     if (state.sort) p.set('sort', `${state.sort.col}:${state.sort.dir}`);
@@ -131,7 +136,7 @@
     const lang = p.get('lang');
     k.languages = lang === null ? new Set([DEFAULT_LANG]) : lang === 'any' ? new Set() : new Set(lang.split('|').filter(Boolean));
     const range = (name) => { const v = p.get(name); if (!v) return [null, null]; const [lo, hi] = v.split('-'); return [lo === '' ? null : +lo, hi === '' || hi == null ? null : +hi]; };
-    [k.yearMin, k.yearMax] = range('year'); [k.imdbMin, k.imdbMax] = range('imdb'); [k.rtMin, k.rtMax] = range('rt');
+    [k.yearMin, k.yearMax] = range('year'); [k.mcMin, k.mcMax] = range('mc'); [k.rtMin, k.rtMax] = range('rt'); [k.imdbMin, k.imdbMax] = range('imdb');
     const s = p.get('sort');
     state.sort = s && COLS.includes(s.split(':')[0]) && ['asc', 'desc'].includes(s.split(':')[1]) ? { col: s.split(':')[0], dir: s.split(':')[1] } : null;
     const film = p.get('film');
@@ -144,9 +149,9 @@
     document.querySelectorAll('#f-lang-panel input[type=checkbox]:not(#f-lang-any)').forEach((cb) => { cb.checked = k.languages.has(cb.value); });
     const anyBox = $('#f-lang-any');
     if (anyBox) anyBox.checked = k.languages.size === 0;
-    $('#f-lang-btn').textContent = langLabel();
+    if (langPanel.hidden) langInput.value = langLabel();
     const set = (id, v) => { $(id).value = v == null ? '' : v; };
-    set('#f-year-min', k.yearMin); set('#f-year-max', k.yearMax); set('#f-imdb-min', k.imdbMin); set('#f-imdb-max', k.imdbMax); set('#f-rt-min', k.rtMin); set('#f-rt-max', k.rtMax);
+    set('#f-year-min', k.yearMin); set('#f-year-max', k.yearMax); set('#f-mc-min', k.mcMin); set('#f-mc-max', k.mcMax); set('#f-rt-min', k.rtMin); set('#f-rt-max', k.rtMax); set('#f-imdb-min', k.imdbMin); set('#f-imdb-max', k.imdbMax);
     document.querySelectorAll('th.sortable').forEach((th) => {
       if (state.sort && th.dataset.col === state.sort.col) th.dataset.dir = state.sort.dir; else delete th.dataset.dir;
     });
@@ -171,37 +176,68 @@
     const k = state.cols;
     k.title = $('#f-title').value.trim().toLowerCase();
     k.director = $('#f-director').value.trim().toLowerCase();
-    k.languages = new Set([...document.querySelectorAll('#f-lang-panel input[type=checkbox]:not(#f-lang-any):checked')].map((cb) => cb.value));
-    $('#f-lang-btn').textContent = langLabel();
+    // k.languages is not rebuilt here: the panel's change handler maintains it in selection order.
+    if (langPanel.hidden) langInput.value = langLabel();
     k.yearMin = num('#f-year-min'); k.yearMax = num('#f-year-max');
-    k.imdbMin = num('#f-imdb-min'); k.imdbMax = num('#f-imdb-max');
+    k.mcMin = num('#f-mc-min'); k.mcMax = num('#f-mc-max');
     k.rtMin = num('#f-rt-min'); k.rtMax = num('#f-rt-max');
+    k.imdbMin = num('#f-imdb-min'); k.imdbMax = num('#f-imdb-max');
     applyFilters();
   }
-  document.querySelectorAll('thead tr.filters input, thead tr.filters select').forEach((el) => {
+  document.querySelectorAll('thead tr.filters input:not(#f-lang-input), thead tr.filters select').forEach((el) => {
     el.addEventListener('input', readControls);
     el.addEventListener('change', readControls);
   });
   function langLabel() {
     const sel = state.cols.languages;
-    return sel.size === 0 ? 'Any' : sel.size === 1 ? [...sel][0] : `${sel.size} selected`;
+    return sel.size === 0 ? 'Any' : [...sel].join(', ');
   }
   function populateLanguages() {
     const langs = new Set();
     state.films.forEach((f) => (f.language || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((l) => langs.add(l)));
-    $('#f-lang-panel').innerHTML = '<label><input type="checkbox" id="f-lang-any"> Any language</label>'
+    langs.delete(DEFAULT_LANG);  // pinned first, ahead of "Any" — it's the default selection
+    $('#f-lang-panel').innerHTML = `<label><input type="checkbox" value="${DEFAULT_LANG}"> ${DEFAULT_LANG}</label>`
+      + '<label><input type="checkbox" id="f-lang-any"> Any language</label>'
       + [...langs].sort().map((l) => `<label><input type="checkbox" value="${esc(l)}"> ${esc(l)}</label>`).join('');
   }
-  const langPanel = $('#f-lang-panel');
-  $('#f-lang-btn').addEventListener('click', (e) => { e.stopPropagation(); langPanel.hidden = !langPanel.hidden; });
+  const langPanel = $('#f-lang-panel'), langInput = $('#f-lang-input');
+  // The language cell is a combobox: the input shows the selection while closed, and turns
+  // into a typeahead search over the options while the panel is open.
+  function applyLangSearch() {
+    const q = langInput.value.trim().toLowerCase();
+    langPanel.querySelectorAll('label').forEach((lab) => {
+      const isAny = lab.querySelector('input').id === 'f-lang-any';
+      lab.hidden = isAny ? q !== '' : !lab.textContent.trim().toLowerCase().includes(q);
+    });
+  }
+  function openLangPanel() {
+    if (!langPanel.hidden) return;
+    langPanel.hidden = false;
+    langInput.value = '';
+    applyLangSearch();
+  }
+  function closeLangPanel() {
+    langPanel.hidden = true;
+    langInput.value = langLabel();
+  }
+  langInput.addEventListener('focus', openLangPanel);
+  langInput.addEventListener('click', (e) => { e.stopPropagation(); openLangPanel(); });
+  langInput.addEventListener('input', applyLangSearch);
   langPanel.addEventListener('click', (e) => e.stopPropagation());
   langPanel.addEventListener('change', (e) => {
-    const anyBox = $('#f-lang-any');
-    if (e.target === anyBox) langPanel.querySelectorAll('input[type=checkbox]:not(#f-lang-any)').forEach((cb) => { cb.checked = false; });
-    anyBox.checked = !langPanel.querySelector('input[type=checkbox]:not(#f-lang-any):checked');
-    readControls();
+    const k = state.cols, anyBox = $('#f-lang-any');
+    if (e.target === anyBox) {
+      langPanel.querySelectorAll('input[type=checkbox]:not(#f-lang-any)').forEach((cb) => { cb.checked = false; });
+      k.languages.clear();
+    } else if (e.target.checked) k.languages.add(e.target.value);  // Set keeps selection order for the label
+    else k.languages.delete(e.target.value);
+    anyBox.checked = k.languages.size === 0;
+    applyFilters();
+    langInput.value = '';  // search consumed — ready to type the next language
+    applyLangSearch();
+    langInput.focus();
   });
-  document.addEventListener('click', () => { langPanel.hidden = true; });
+  document.addEventListener('click', closeLangPanel);
 
   // ---- toast ----
   let toastTimer;
@@ -258,9 +294,9 @@
     const fields = [['Genre', p.Genre], ['Runtime', p.Runtime], ['Rated', p.Rated], ['Country', p.Country], ['Language', d.language], ['Awards', p.Awards], ['Cast', p.Actors], ['Writer', p.Writer]]
       .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
     const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
-    return `${poster}<h2>${esc(d.title)}</h2>
+    return `<h2>${esc(d.title)}</h2>
       <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.leaving_date ? ` · <b>Leaving ${esc(d.leaving_date)}</b>` : ''}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
-      ${p.Plot && p.Plot !== 'N/A' ? `<p>${esc(p.Plot)}</p>` : ''}
+      ${p.Plot && p.Plot !== 'N/A' ? `<p>${poster}${esc(p.Plot)}</p>` : poster}
       <dl>${fields}</dl>
       ${sources ? `<ul class="sources">${sources}</ul>` : d.pending ? '<p class="meta">OMDb lookup pending.</p>' : d.found === false ? '<p class="meta">No OMDb match.</p>' : ''}
       <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
@@ -313,7 +349,11 @@
   });
   $('#drawer-close').addEventListener('click', () => closeDrawer());
   backdrop.addEventListener('click', () => closeDrawer());
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!langPanel.hidden) { closeLangPanel(); return; }
+    closeDrawer();
+  });
   window.addEventListener('popstate', () => {
     readUrl(); writeControlsFromState(); applyFilters();
     if (state.openFilm != null) openDrawer(state.openFilm, false); else closeDrawer(true);

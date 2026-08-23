@@ -13,7 +13,9 @@ def client(repo):
     films = [Film("Trio", 1950, "Ken", "https://c/trio"), Film("Quartet", 1948, None, "https://c/quartet")]
     repo.record_catalog("criterion", films, D)
     a = repo.film_id_by_key("trio (1950)")
-    repo.upsert_omdb(a, OmdbRating(7.5, 91, True, "English", '{"Title": "Trio", "Plot": "Three tales."}'), D)
+    repo.upsert_omdb(
+        a, OmdbRating(7.5, 91, True, "English", '{"Title": "Trio", "Plot": "Three tales."}', metacritic=88), D
+    )
     app = create_app(repo, today=lambda: D)
     app.testing = True
     return app.test_client()
@@ -30,7 +32,8 @@ def test_list_films(client):
     rows = r.get_json()
     assert {x["title"] for x in rows} == {"Trio", "Quartet"}
     trio = next(x for x in rows if x["title"] == "Trio")
-    assert trio["imdb"] == 7.5 and trio["pending"] is False and trio["my_rating"] is None
+    assert trio["imdb"] == 7.5 and trio["metacritic"] == 88 and trio["pending"] is False
+    assert trio["my_rating"] is None
     assert "payload" not in trio
 
 
@@ -83,5 +86,10 @@ def test_summary_and_config(client):
         "departed": 0,
     }
     cfg = client.get("/api/config").get_json()
-    assert cfg["canned_thresholds"] == {"top_rt": 90, "top_imdb": 8.0, "recent_days": 30}
+    assert cfg["canned_thresholds"] == {
+        "top_mc": 90,
+        "top_rt": 90,
+        "top_imdb": 7.5,
+        "recent_days": 30,
+    }
     assert cfg["today"] == "2026-08-19" and "leaving" in cfg["chips"]

@@ -23,7 +23,7 @@ def first_titles(page: Page, n: int) -> list[str]:
 
 def set_langs(page: Page, langs: list[str]) -> None:
     """Open the language dropdown, check exactly `langs`, close the panel."""
-    page.click("#f-lang-btn")
+    page.click("#f-lang-input")
     if not langs:
         page.locator("#f-lang-any").check()
     else:
@@ -38,7 +38,7 @@ def clear_lang(page: Page) -> None:
 
 
 def test_language_filter_defaults_to_english(dash: Page):
-    expect(dash.locator("#f-lang-btn")).to_have_text("English")
+    expect(dash.locator("#f-lang-input")).to_have_value("English")
     assert count(dash) == 2  # Alpha (English), Echo (English, Spanish)
     assert first_titles(dash, 2) == ["Alpha", "Echo"]
     assert "lang=" not in dash.url  # the default is implicit, not encoded
@@ -47,32 +47,71 @@ def test_language_filter_defaults_to_english(dash: Page):
     assert "lang=Spanish" in dash.url
     dash.goto(dash.url)
     dash.wait_for_selector("#films tbody[data-count]")
-    expect(dash.locator("#f-lang-btn")).to_have_text("Spanish")
+    expect(dash.locator("#f-lang-input")).to_have_value("Spanish")
     assert count(dash) == 1
     clear_lang(dash)
-    expect(dash.locator("#f-lang-btn")).to_have_text("Any")
+    expect(dash.locator("#f-lang-input")).to_have_value("Any")
     assert count(dash) == 6
     assert "lang=any" in dash.url
 
 
-def test_any_language_option_heads_the_list(dash: Page):
-    dash.click("#f-lang-btn")
-    labels = dash.locator("#f-lang-panel label").all_inner_texts()
-    assert labels[0].strip() == "Any language"
+def test_english_heads_the_list_then_any_language(dash: Page):
+    dash.click("#f-lang-input")
+    labels = [t.strip() for t in dash.locator("#f-lang-panel label").all_inner_texts()]
+    assert labels[0] == "English"
+    assert labels[1] == "Any language"
+    assert labels[2:] == sorted(labels[2:]) and "English" not in labels[2:]
     expect(dash.locator("#f-lang-any")).not_to_be_checked()  # English is the default selection
     dash.locator("#f-lang-any").check()  # picking Any clears every language
     assert count(dash) == 6
-    expect(dash.locator("#f-lang-btn")).to_have_text("Any")
+    dash.click("header h1")  # close the panel so the input shows the selection again
+    expect(dash.locator("#f-lang-input")).to_have_value("Any")
+    dash.click("#f-lang-input")  # reopen
     expect(dash.locator("#f-lang-panel input[type=checkbox]:not(#f-lang-any):checked")).to_have_count(0)
     dash.locator('#f-lang-panel input[value="French"]').check()  # picking a language unchecks Any
     expect(dash.locator("#f-lang-any")).not_to_be_checked()
     assert count(dash) == 1  # Bravo
 
 
-def test_loads_all_films_default_sort_imdb_desc_nulls_last(dash: Page):
+def test_language_typeahead_filters_options_and_builds_up_selection(dash: Page):
+    inp = dash.locator("#f-lang-input")
+    expect(inp).to_have_value("English")  # default selection shown while closed
+    inp.click()  # focusing opens the panel and clears the box for typing
+    expect(dash.locator("#f-lang-panel")).to_be_visible()
+    expect(inp).to_have_value("")
+    inp.fill("spa")  # case-insensitive fragment → only Spanish remains
+    visible = [t.strip() for t in dash.locator("#f-lang-panel label:visible").all_inner_texts()]
+    assert visible == ["Spanish"]
+    dash.locator('#f-lang-panel input[value="Spanish"]').check()
+    expect(dash.locator("#f-lang-panel")).to_be_visible()  # stays open for the next language
+    expect(inp).to_have_value("")  # search cleared, ready to type again
+    inp.fill("FRE")
+    dash.locator('#f-lang-panel input[value="French"]').check()
+    dash.click("header h1")  # close
+    expect(inp).to_have_value("English, Spanish, French")  # builds up in selection order
+    assert count(dash) == 3  # Alpha + Echo (English/Spanish) + Bravo (French)
+    dash.goto(dash.url)  # selection round-trips through the URL
+    dash.wait_for_selector("#films tbody[data-count]")
+    expect(dash.locator("#f-lang-input")).to_have_value("English, Spanish, French")
+    assert count(dash) == 3
+
+
+def test_rating_columns_show_metacritic_then_rt_then_imdb(dash: Page):
+    cols = [th.get_attribute("data-col") for th in dash.locator("thead tr.labels th.sortable").all()]
+    assert cols == ["title", "year", "director", "language", "metacritic", "rt", "imdb", "leaving_date", "my_rating"]
+    row = dash.locator("#films tbody tr[data-id]").filter(has_text="Alpha")
+    expect(row.locator(".c-metacritic")).to_have_text("92")
+    expect(row.locator(".c-rt")).to_have_text("95%")
+    expect(row.locator(".c-imdb")).to_have_text("8.5")
+
+
+def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Page):
     clear_lang(dash)
     assert count(dash) == 6
-    assert first_titles(dash, 5) == ["Alpha", "Echo", "Bravo", "Charlie", "Delta"]
+    # mc desc: Alpha 92, then the Echo/Bravo mc-70 tie breaks on rt (60 vs 50, against title
+    # order); missing values sort after present ones at each level, so imdb-only Foxtrot
+    # follows, then the unrated Charlie/Delta by title.
+    assert first_titles(dash, 6) == ["Alpha", "Echo", "Bravo", "Foxtrot", "Charlie", "Delta"]
     expect(dash.locator("#count-films")).to_have_text("6")
     expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 6")
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
@@ -97,8 +136,7 @@ def test_each_chip_alone(dash: Page):
         "mine": 2,
         "not_interested": 1,
         "pending": 2,
-        "top_rt": 1,
-        "top_imdb": 1,
+        "top_ratings": 1,  # only Alpha (92 / 95% / 8.5) clears any threshold
         "recent": 1,
         "departed": 1,
     }
@@ -127,12 +165,12 @@ def test_departed_chip_filters_to_departed_films(dash: Page):
 def test_sort_cycles_and_keeps_nulls_last(dash: Page):
     clear_lang(dash)
     dash.click("th.sortable[data-col=rt]")
-    assert first_titles(dash, 5) == ["Echo", "Alpha", "Bravo", "Charlie", "Delta"]  # asc: 60, 95, then nulls
+    assert first_titles(dash, 5) == ["Bravo", "Echo", "Alpha", "Charlie", "Delta"]  # asc: 50, 60, 95, then nulls
     expect(dash.locator("th.sortable[data-col=rt]")).to_have_attribute("data-dir", "asc")
     dash.click("th.sortable[data-col=rt]")
     assert first_titles(dash, 2) == ["Alpha", "Echo"]
     dash.click("th.sortable[data-col=rt]")
-    assert first_titles(dash, 2) == ["Alpha", "Echo"]  # back to default imdb desc
+    assert first_titles(dash, 2) == ["Alpha", "Echo"]  # back to default metacritic desc
     expect(dash.locator("th.sortable[data-col=rt]")).not_to_have_attribute("data-dir", re.compile(".+"))
 
 
@@ -152,6 +190,11 @@ def test_column_filters_combine_with_chips(dash: Page):
     assert count(dash) == 2  # Alpha 8.5, Echo 7.0; nulls excluded
     dash.fill("#f-year-max", "1955")
     assert count(dash) == 1
+    dash.fill("#f-imdb-min", "")
+    dash.fill("#f-year-max", "")
+    dash.fill("#f-mc-min", "72")
+    assert count(dash) == 1  # Alpha 88; Echo 70 misses, nulls excluded
+    dash.fill("#f-mc-min", "")
 
 
 def test_url_state_round_trips(dash: Page, server: str):
@@ -166,7 +209,7 @@ def test_url_state_round_trips(dash: Page, server: str):
     dash.wait_for_selector("#films tbody[data-count]")
     expect(dash.locator(".chip[data-chip=unrated]")).to_have_class(re.compile("active"))
     expect(dash.locator("#f-title")).to_have_value("a")
-    expect(dash.locator("#f-lang-btn")).to_have_text("Any")
+    expect(dash.locator("#f-lang-input")).to_have_value("Any")
     expect(dash.locator("th.sortable[data-col=year]")).to_have_attribute("data-dir", "asc")
     assert count(dash) == 3  # Bravo, Charlie, Delta contain "a"
 
@@ -182,6 +225,21 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     dash.keyboard.press("Escape")
     expect(drawer).to_be_hidden()
     assert "film=" not in dash.url
+
+
+def test_drawer_poster_sits_below_meta_top_aligned_with_plot(dash: Page):
+    dash.click("#films tbody tr[data-id] .info >> nth=0")  # Alpha, the seeded film with a poster
+    drawer = dash.locator("#drawer")
+    expect(drawer).to_be_visible()
+    poster = drawer.locator("img.poster")
+    expect(poster).to_be_visible()
+    meta = drawer.locator(".meta").bounding_box()
+    plot = drawer.locator("#drawer-body p").first.bounding_box()
+    box = poster.bounding_box()
+    assert box["y"] >= meta["y"] + meta["height"]  # below the "year · director" line
+    assert abs(box["y"] - plot["y"]) <= 1  # top edge aligned with the description text
+    assert box["x"] > plot["x"] + plot["width"] - 220  # on the right side (max-width 200 + margin)
+    dash.keyboard.press("Escape")
 
 
 def test_drawer_opens_on_load_from_url(dash: Page, server: str):

@@ -15,8 +15,9 @@ table { border-collapse:collapse; width:100%; table-layout:fixed; }  /* fixed la
 col.col-year { width:60px; }
 col.col-director { width:16%; }
 col.col-language { width:13%; }
-col.col-imdb { width:64px; }
+col.col-mc { width:64px; }
 col.col-rt { width:64px; }
+col.col-imdb { width:64px; }
 col.col-leaving { width:110px; }
 col.col-rating { width:92px; }
 col.col-info { width:40px; }
@@ -31,9 +32,10 @@ thead input, thead select { width:100%; font:inherit; padding:2px 4px; border:1p
 thead input.half { width:48%; }
 thead input.half + input.half { margin-left:4%; }
 th.lang-cell { overflow:visible; }  /* stays position:sticky from `thead th`; sticky also anchors the absolute panel */
-#f-lang-btn { width:100%; font:inherit; padding:2px 4px; border:1px solid var(--line); border-radius:4px; background:var(--bg); color:var(--fg); cursor:pointer; text-align:left; }
+#f-lang-input { text-overflow:ellipsis; }  /* the built-up selection list can outgrow the cell */
 #f-lang-panel { position:absolute; top:100%; left:8px; min-width:180px; max-height:260px; overflow:auto; background:var(--bg); border:1px solid var(--line); border-radius:4px; box-shadow:0 4px 12px rgba(0,0,0,.15); padding:6px 10px; z-index:3; }
 #f-lang-panel label { display:block; padding:2px 0; cursor:pointer; white-space:nowrap; font-weight:normal; }
+#f-lang-panel label[hidden] { display:none; }  /* display:block above would otherwise defeat the search filter */
 #f-lang-panel input { width:auto; margin-right:6px; }
 tbody tr { height:36px; cursor:pointer; }
 tbody tr:hover { background:#fafafa; }

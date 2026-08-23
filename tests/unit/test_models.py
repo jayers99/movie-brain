@@ -61,7 +61,8 @@ def test_film_view_to_dict_round_trips_fields():
         "2026-08-01",
         8,
         departed=True,
+        metacritic=88,
     )
     d = v.to_dict()
     assert d["id"] == 1 and d["imdb"] == 7.1 and d["my_rating"] == 8 and d["pending"] is False
-    assert d["departed"] is True
+    assert d["departed"] is True and d["metacritic"] == 88

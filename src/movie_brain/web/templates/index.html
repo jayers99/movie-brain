@@ -25,8 +25,7 @@
       <button class="chip" data-chip="mine">My ratings</button>
       <button class="chip" data-chip="not_interested">Not interested</button>
       <button class="chip" data-chip="pending">Pending / unmatched</button>
-      <button class="chip" data-chip="top_rt">Top RT</button>
-      <button class="chip" data-chip="top_imdb">Top IMDb</button>
+      <button class="chip" data-chip="top_ratings">Top Ratings</button>
       <button class="chip" data-chip="recent">Recently added</button>
       <button class="chip" data-chip="departed">Departed</button>
       <button id="chips-clear" class="chip clear">Clear</button>
@@ -37,7 +36,7 @@
     <table id="films">
       <colgroup>
         <col class="col-title"><col class="col-year"><col class="col-director"><col class="col-language">
-        <col class="col-imdb"><col class="col-rt"><col class="col-leaving"><col class="col-rating"><col class="col-info">
+        <col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-leaving"><col class="col-rating"><col class="col-info">
       </colgroup>
       <thead>
         <tr class="labels">
@@ -45,8 +44,9 @@
           <th class="sortable" data-col="year">Year</th>
           <th class="sortable" data-col="director">Director</th>
           <th class="sortable" data-col="language">Language</th>
-          <th class="sortable num" data-col="imdb">IMDb</th>
+          <th class="sortable num" data-col="metacritic">MC</th>
           <th class="sortable num" data-col="rt">RT</th>
+          <th class="sortable num" data-col="imdb">IMDb</th>
           <th class="sortable" data-col="leaving_date">Leaving</th>
           <th class="sortable num" data-col="my_rating">My Rating</th>
           <th></th>
@@ -56,11 +56,12 @@
           <th><input id="f-year-min" type="number" placeholder="min" class="half"><input id="f-year-max" type="number" placeholder="max" class="half"></th>
           <th><input id="f-director" type="search" placeholder="filter…"></th>
           <th class="lang-cell">
-            <button id="f-lang-btn" type="button" aria-haspopup="true">English</button>
+            <input id="f-lang-input" type="search" placeholder="filter…" autocomplete="off" aria-haspopup="true">
             <div id="f-lang-panel" hidden></div>
           </th>
-          <th><input id="f-imdb-min" type="number" step="0.1" placeholder="min" class="half"><input id="f-imdb-max" type="number" step="0.1" placeholder="max" class="half"></th>
+          <th><input id="f-mc-min" type="number" placeholder="min" class="half"><input id="f-mc-max" type="number" placeholder="max" class="half"></th>
           <th><input id="f-rt-min" type="number" placeholder="min" class="half"><input id="f-rt-max" type="number" placeholder="max" class="half"></th>
+          <th><input id="f-imdb-min" type="number" step="0.1" placeholder="min" class="half"><input id="f-imdb-max" type="number" step="0.1" placeholder="max" class="half"></th>
           <th></th><th></th><th></th>
         </tr>
       </thead>

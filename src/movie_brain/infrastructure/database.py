@@ -30,7 +30,7 @@ def init_db(db_path: Path) -> None:
 
 
 _VIEW_SQL = """
-SELECT f.id, f.title, f.year, f.director, l.url, o.language, o.imdb, o.rt, o.found,
+SELECT f.id, f.title, f.year, f.director, l.url, o.language, o.imdb, o.rt, o.metacritic, o.found,
        (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
        (l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source)) AS departed
 FROM films f
@@ -50,6 +50,7 @@ def _row_to_view(row: sqlite3.Row) -> FilmView:
         language=row["language"],
         imdb=row["imdb"],
         rt=row["rt"],
+        metacritic=row["metacritic"],
         found=None if row["found"] is None else bool(row["found"]),
         pending=bool(row["pending"]),
         leaving_date=row["leaving_date"],
@@ -209,10 +210,11 @@ class Repository:
         with self._conn() as c:
             c.execute(
                 "INSERT INTO omdb "
-                "(film_id, found, imdb, rt, language, looked_up, year_fallback, needs_refresh, payload) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "(film_id, found, imdb, rt, metacritic, language, looked_up, year_fallback, needs_refresh, payload) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(film_id) DO UPDATE SET "
-                "found=excluded.found, imdb=excluded.imdb, rt=excluded.rt, language=excluded.language, "
+                "found=excluded.found, imdb=excluded.imdb, rt=excluded.rt, metacritic=excluded.metacritic, "
+                "language=excluded.language, "
                 "looked_up=excluded.looked_up, year_fallback=excluded.year_fallback, "
                 "needs_refresh=excluded.needs_refresh, payload=COALESCE(excluded.payload, omdb.payload)",
                 (
@@ -220,6 +222,7 @@ class Repository:
                     int(rating.found),
                     rating.imdb,
                     rating.rt,
+                    rating.metacritic,
                     rating.language,
                     looked_up.isoformat(),
                     int(year_fallback),

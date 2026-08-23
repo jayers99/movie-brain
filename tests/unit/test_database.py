@@ -1,7 +1,8 @@
+import sqlite3
 from datetime import date
 
 from movie_brain.domain.models import Film, OmdbRating
-from movie_brain.infrastructure.database import Repository, init_db
+from movie_brain.infrastructure.database import MIGRATIONS_DIR, Repository, init_db
 
 TRIO = Film("Trio", 1950, "Ken Annakin", "https://c/trio")
 QUARTET = Film("Quartet", 1948, "Ken Annakin", "https://c/quartet")
@@ -22,6 +23,27 @@ def test_init_db_is_idempotent(tmp_path):
         "mine": 0,
         "departed": 0,
     }
+
+
+def test_migration_backfills_metacritic_from_stored_payloads(tmp_path):
+    p = tmp_path / "old.db"
+    conn = sqlite3.connect(p)
+    conn.executescript((MIGRATIONS_DIR / "001_init.sql").read_text())
+    for fid, title, payload in (
+        (1, "A", '{"Metascore": "74"}'),
+        (2, "B", '{"Metascore": "N/A"}'),
+        (3, "C", None),
+    ):
+        conn.execute("INSERT INTO films (id, title, year, key) VALUES (?, ?, 2000, ?)", (fid, title, f"{title} (2000)"))
+        conn.execute(
+            "INSERT INTO omdb (film_id, found, looked_up, payload) VALUES (?, 1, '2026-08-01', ?)", (fid, payload)
+        )
+    conn.commit()
+    conn.close()
+    init_db(p)
+    conn = sqlite3.connect(p)
+    assert dict(conn.execute("SELECT film_id, metacritic FROM omdb")) == {1: 74, 2: None, 3: None}
+    conn.close()
 
 
 def test_upsert_film_returns_stable_id_and_updates_fields(repo):
@@ -101,14 +123,15 @@ def test_views_and_summary(repo):
     c = repo.upsert_film(Film("Third", 1960, None, "u3"))
     for fid, f in ((a, TRIO), (b, QUARTET), (c, Film("Third", 1960, None, "u3"))):
         repo.record_listing(fid, "criterion", f.url, D2)
-    repo.upsert_omdb(a, OmdbRating(7.5, 91, True, "English", '{"Title":"Trio"}'), D2)
+    repo.upsert_omdb(a, OmdbRating(7.5, 91, True, "English", '{"Title":"Trio"}', metacritic=88), D2)
     repo.upsert_omdb(b, OmdbRating(None, None, False), D2)
     repo.set_leaving("criterion", {"trio (1950)": "August 31"})
     repo.set_rating(a, 0, D2)
     va = repo.get_view(a)
-    assert (va.imdb, va.rt, va.found, va.pending, va.leaving_date, va.my_rating) == (
+    assert (va.imdb, va.rt, va.metacritic, va.found, va.pending, va.leaving_date, va.my_rating) == (
         7.5,
         91,
+        88,
         True,
         False,
         "August 31",

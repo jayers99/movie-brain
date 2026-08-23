@@ -9,6 +9,7 @@ from movie_brain.infrastructure.omdb import OMDB_URL, AuthError, OmdbClient, Quo
 FOUND = {
     "Response": "True",
     "imdbRating": "8.6",
+    "Metascore": "98",
     "Language": "Japanese",
     "Ratings": [
         {"Source": "Internet Movie Database", "Value": "8.6/10"},
@@ -19,10 +20,10 @@ NOT_FOUND = {"Response": "False", "Error": "Movie not found!"}
 
 
 @responses.activate
-def test_lookup_parses_imdb_rt_language_and_keeps_payload():
+def test_lookup_parses_imdb_rt_metacritic_language_and_keeps_payload():
     responses.get(OMDB_URL, json=FOUND)
     r = OmdbClient("k").lookup("Seven Samurai", 1954)
-    assert (r.imdb, r.rt, r.found, r.language) == (8.6, 100, True, "Japanese")
+    assert (r.imdb, r.rt, r.metacritic, r.found, r.language) == (8.6, 100, 98, True, "Japanese")
     assert json.loads(r.payload)["imdbRating"] == "8.6"
     assert responses.calls[0].request.params["t"] == "Seven Samurai"
     assert responses.calls[0].request.params["y"] == "1954"
@@ -30,9 +31,11 @@ def test_lookup_parses_imdb_rt_language_and_keeps_payload():
 
 @responses.activate
 def test_lookup_handles_na_values():
-    responses.get(OMDB_URL, json={"Response": "True", "imdbRating": "N/A", "Language": "N/A", "Ratings": []})
+    responses.get(
+        OMDB_URL, json={"Response": "True", "imdbRating": "N/A", "Metascore": "N/A", "Language": "N/A", "Ratings": []}
+    )
     r = OmdbClient("k").lookup("Obscurity", None)
-    assert (r.imdb, r.rt, r.found, r.language) == (None, None, True, None)
+    assert (r.imdb, r.rt, r.metacritic, r.found, r.language) == (None, None, None, True, None)
     assert len(responses.calls) == 1  # no year → no fallback attempts
 
 
