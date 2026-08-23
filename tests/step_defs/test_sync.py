@@ -248,12 +248,6 @@ def is_leaving(ctx, title, label):
     assert view.leaving_date == label
 
 
-@then(parsers.parse('"{title}" is gone from the database'))
-def film_gone(ctx, title):
-    f = parse_titles(f'"{title}"')[0]
-    assert ctx["repo"].film_id_by_key(f.key) is None
-
-
 @then(parsers.parse('"{title}" is still in the database'))
 def film_kept(ctx, title):
     f = parse_titles(f'"{title}"')[0]

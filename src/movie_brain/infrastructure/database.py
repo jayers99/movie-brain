@@ -115,30 +115,6 @@ class Repository:
                 (film_id, source, url, seen.isoformat(), seen.isoformat()),
             )
 
-    def purge_departed(self, source: str, today: date, grace_days: int = 7) -> int:
-        """Delete unrated films (with their listings and omdb rows) not seen for grace_days.
-
-        Rated films are never purged — they are the point of the film brain.
-        """
-        cutoff = (today - timedelta(days=grace_days)).isoformat()
-        with self._conn() as c:
-            ids = [
-                r["id"]
-                for r in c.execute(
-                    "SELECT f.id FROM films f "
-                    "WHERE NOT EXISTS (SELECT 1 FROM my_ratings r WHERE r.film_id = f.id) "
-                    "AND EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = ?) "
-                    "AND (SELECT MAX(last_seen) FROM listings l WHERE l.film_id = f.id) < ?",
-                    (source, cutoff),
-                )
-            ]
-            for fid in ids:
-                c.execute("DELETE FROM omdb WHERE film_id = ?", (fid,))
-                c.execute("DELETE FROM listings WHERE film_id = ?", (fid,))
-                c.execute("DELETE FROM external_ids WHERE film_id = ?", (fid,))
-                c.execute("DELETE FROM films WHERE id = ?", (fid,))
-        return len(ids)
-
     def record_catalog(self, source: str, films: list[Film], seen: date) -> None:
         day = seen.isoformat()
         with self._conn() as c:
