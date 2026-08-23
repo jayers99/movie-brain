@@ -169,6 +169,22 @@ class Repository:
             row = c.execute("SELECT id FROM films WHERE key = ?", (key,)).fetchone()
             return None if row is None else int(row["id"])
 
+    def create_film(self, film: Film) -> int | None:
+        """Insert a brand-new film (fresh guid) — never updates an existing row.
+
+        Returns None on a key collision: promotion's tripwire, handled by the caller
+        as a match_review entry, never an overwrite.
+        """
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(key) DO NOTHING",
+                (str(uuid.uuid4()), film.title, film.year, film.director, film.key),
+            )
+            if cur.rowcount == 0:
+                return None
+            return int(c.execute("SELECT id FROM films WHERE key = ?", (film.key,)).fetchone()["id"])
+
     def record_listing(self, film_id: int, source: str, url: str, seen: date) -> None:
         with self._conn() as c:
             c.execute(
@@ -309,6 +325,11 @@ class Repository:
             rows = c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (film_id,)).fetchall()
             return {str(r["authority"]): str(r["value"]) for r in rows}
 
+    def claimed_values(self, authority: str) -> set[str]:
+        with self._conn() as c:
+            rows = c.execute("SELECT value FROM external_ids WHERE authority = ?", (authority,)).fetchall()
+            return {str(r["value"]) for r in rows}
+
     def services(self) -> list[dict[str, object]]:
         with self._conn() as c:
             rows = c.execute("SELECT slug, name, kind, subscribed, region FROM movie_service ORDER BY slug").fetchall()
@@ -327,6 +348,21 @@ class Repository:
                     (t.slug, t.title, t.year, t.score, t.rank, t.page, day),
                 )
 
+    def top_staged_titles(self, n: int) -> list[McTitle]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT slug, title, year, score, rank, page FROM metacritic WHERE rank <= ? ORDER BY rank",
+                (n,),
+            ).fetchall()
+            return [
+                McTitle(str(r["slug"]), str(r["title"]), r["year"], r["score"], int(r["rank"]), int(r["page"]))
+                for r in rows
+            ]
+
+    def staged_title_count(self) -> int:
+        with self._conn() as c:
+            return int(c.execute("SELECT COUNT(*) FROM metacritic").fetchone()[0])
+
     def films_for_matching(self) -> list[tuple[int, str, int | None, int | None]]:
         with self._conn() as c:
             rows = c.execute(
@@ -344,6 +380,15 @@ class Repository:
         # Derived state, recomputed per match run — the immutability rule binds films, not this queue.
         with self._conn() as c:
             c.execute("DELETE FROM match_review WHERE authority = ? AND resolved = 0", (authority,))
+            for e in entries:
+                c.execute(
+                    "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (authority, e.film_id, e.value, e.reason, e.detail, created.isoformat()),
+                )
+
+    def append_reviews(self, authority: str, entries: list[ReviewEntry], created: date) -> None:
+        with self._conn() as c:
             for e in entries:
                 c.execute(
                     "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "

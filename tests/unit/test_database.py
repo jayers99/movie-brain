@@ -623,3 +623,48 @@ def test_films_for_provider_refresh_can_skip_films_checked_today(repo, today):
     repo.record_tmdb_providers(a, today, "{}")
     assert repo.films_for_provider_refresh() == [(a, "11")]
     assert repo.films_for_provider_refresh(skip_checked_on=today) == []
+
+
+# ---- Phase 5: metacritic mode-b promotion primitives ----------------------
+
+
+def test_create_film_inserts_with_guid_and_never_updates(repo):
+    fid = repo.create_film(Film("Fresh Find", 2020, None, ""))
+    assert fid is not None
+    # Same key again: no insert, no update, None back.
+    assert repo.create_film(Film("Fresh Find", 2020, "Someone", "")) is None
+    import sqlite3
+
+    conn = sqlite3.connect(repo.db_path)
+    row = conn.execute("SELECT guid, director FROM films WHERE id = ?", (fid,)).fetchone()
+    conn.close()
+    assert row[0] and row[1] is None  # guid assigned; director untouched by the second call
+
+
+def test_claimed_values_lists_an_authoritys_ids(repo):
+    fid = repo.create_film(Film("Fresh Find", 2020, None, ""))
+    repo.set_external_id(fid, "metacritic", "fresh-find", date(2026, 8, 19))
+    assert repo.claimed_values("metacritic") == {"fresh-find"}
+    assert repo.claimed_values("tmdb") == set()
+
+
+def test_append_reviews_adds_without_deleting(repo):
+    day = date(2026, 8, 19)
+    repo.replace_unresolved_reviews("metacritic", [ReviewEntry("ambiguous-title", value="a")], day)
+    repo.append_reviews("metacritic", [ReviewEntry("key-conflict", value="b")], day)
+    reasons = {r["reason"] for r in repo.open_reviews("metacritic")}
+    assert reasons == {"ambiguous-title", "key-conflict"}
+
+
+def test_top_staged_titles_bounds_by_rank(repo):
+    day = date(2026, 8, 19)
+    repo.upsert_mc_titles(
+        [
+            McTitle("first", "First", 2020, 99, 1, 1),
+            McTitle("second", "Second", 2021, 98, 2, 1),
+            McTitle("third", "Third", 2022, 97, 3, 1),
+        ],
+        day,
+    )
+    assert [t.slug for t in repo.top_staged_titles(2)] == ["first", "second"]
+    assert repo.staged_title_count() == 3
