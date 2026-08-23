@@ -148,3 +148,27 @@ def test_stale_service_listing_is_not_current(repo):
     app.testing = True
     body = {v["title"]: v["services"] for v in app.test_client().get("/api/films").get_json()}
     assert body["Trio"] == [] and body["Quartet"] == [{"name": "HBO Max", "subscribed": True}]
+
+
+def test_watchlist_toggle_round_trip(client):
+    films = client.get("/api/films").get_json()
+    fid = films[0]["id"]
+    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": True}
+    assert client.get(f"/api/films/{fid}").get_json()["watchlisted"] is True
+    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": False}
+
+
+def test_watchlist_toggle_unknown_film_404s(client):
+    r = client.post("/api/films/999999/watchlist")
+    assert r.status_code == 404
+
+
+def test_films_payload_carries_new_on_and_watchlisted(client):
+    film = client.get("/api/films").get_json()[0]
+    assert "new_on" in film and "watchlisted" in film
+
+
+def test_config_carries_new_arrival_days_and_chips(client):
+    cfg = client.get("/api/config").get_json()
+    assert cfg["canned_thresholds"]["new_arrival_days"] == 14
+    assert "new_arrivals" in cfg["chips"] and "watchlist" in cfg["chips"]
