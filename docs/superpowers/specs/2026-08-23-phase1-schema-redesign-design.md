@@ -112,11 +112,11 @@ the 2026-08-24 spike, minus the Amazon channels (decision below):
 | 1899 | HBO Max | max |
 | 386 | Peacock Premium | peacock |
 | 387 | Peacock Premium Plus | peacock |
+| 9 | Amazon Prime Video | prime-video |
+| 11 | MUBI | mubi |
 
 (His Peacock tier via the Xfinity bundle is unknown — and irrelevant: both tiers share one
 film catalog, so both ids fold into `peacock` and the distinction never surfaces.)
-| 9 | Amazon Prime Video | prime-video |
-| 11 | MUBI | mubi |
 
 Deliberately NOT seeded:
 
