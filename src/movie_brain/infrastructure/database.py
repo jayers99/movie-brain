@@ -398,6 +398,21 @@ class Repository:
             rows = c.execute("SELECT f.key, r.score FROM my_ratings r JOIN films f ON f.id = r.film_id").fetchall()
             return {str(r["key"]): int(r["score"]) for r in rows}
 
+    # watchlist --------------------------------------------------------
+    def toggle_watchlist(self, film_id: int, today: date) -> bool | None:
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                return None
+            if c.execute("SELECT 1 FROM watchlist WHERE film_id = ?", (film_id,)).fetchone() is None:
+                c.execute("INSERT INTO watchlist (film_id, added_on) VALUES (?, ?)", (film_id, today.isoformat()))
+                return True
+            c.execute("DELETE FROM watchlist WHERE film_id = ?", (film_id,))
+            return False
+
+    def watchlist_film_ids(self) -> set[int]:
+        with self._conn() as c:
+            return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM watchlist")}
+
     # views ------------------------------------------------------------
     def list_views(self, source: str) -> list[FilmView]:
         with self._conn() as c:
