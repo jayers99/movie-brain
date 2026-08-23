@@ -182,7 +182,7 @@ semantics preserved exactly: per-source `url`, `first_seen`/`last_seen`, `leavin
 - New minimal methods (used by tests now, adapters in Phases 2–3):
   - `set_external_id(film_id, authority, value, seen) -> None`
   - `external_ids_for(film_id) -> dict[str, str]`
-  - `services() -> list[sqlite3.Row]` (slug, name, kind, subscribed, region)
+  - `services() -> list[dict[str, object]]` (slug, name, kind, subscribed, region)
 
 ### `application/sync.py`
 
