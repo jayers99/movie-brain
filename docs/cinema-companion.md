@@ -132,6 +132,13 @@ invested effort, works well). **Keep the two architecturally close:**
 - Long-term direction: the projects may **merge into one "video brain"** — YouTube videos and
   movies aren't that different. (Better name TBD.)
 
+## Curriculum source (2026-08-24)
+
+The criticism-skills loop now has real material: a 126-video Moviewise NotebookLM notebook,
+a seven-unit syllabus, a reading list, and an 8-dimension analysis rubric — all in
+[criticism-syllabus.md](criticism-syllabus.md). The rubric answers the "analysis dimensions"
+question below.
+
 ## Open questions
 
 - [ ] Trailer source of truth: TMDB videos vs. a constructed YouTube search link — how
