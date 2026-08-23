@@ -4,13 +4,16 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
 import requests
 
 from movie_brain.application.availability import TmdbStepResult, tmdb_step
+from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, promote_top_n
 from movie_brain.domain.models import merge_yearless
 from movie_brain.infrastructure.criterion import CatalogError, fetch_films, fetch_leaving, fetch_token, page_one_matches
 from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE
 from movie_brain.infrastructure.omdb import AuthError, OmdbClient, QuotaExceeded
 from movie_brain.infrastructure.tmdb import TmdbClient
 
@@ -34,6 +37,7 @@ class SyncResult:
     tmdb_missed: int = 0
     tmdb_refreshed: int = 0
     tmdb_watchlist_refreshed: int = 0
+    mc_promoted: int = 0
 
 
 def sync(
@@ -47,6 +51,7 @@ def sync(
     ratings_only: bool = False,
     max_age_days: int = 7,
     tmdb_token: str | None = None,
+    config_dir: Path | None = None,
     notifier: Callable[[str, str], None] | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> SyncResult:
@@ -88,6 +93,21 @@ def sync(
             repo.set_leaving(SOURCE, fetch_leaving(session, token, delay_s=delay_s))
         except Exception as exc:  # noqa: BLE001 — any failure here must not abort the run
             log(f"leaving-soon fetch failed, keeping last-known departures: {exc}")
+
+    mc_promoted = 0
+    if not ratings_only and config_dir is not None:
+        try:
+            n = int(repo.get_meta(MC_TOP_N_KEY) or DEFAULT_TOP_N)
+            promote = promote_top_n(repo, config_dir, today, n, log=log)
+            mc_promoted = promote.promoted
+            if promote.exit_code == 0 and promote.available < promote.n:
+                pages = -(-promote.n // CARDS_PER_PAGE)
+                log(
+                    f"metacritic archive holds {promote.available} of top-{promote.n} titles — "
+                    f"run: movie-brain metacritic crawl --pages {pages}"
+                )
+        except Exception as exc:  # noqa: BLE001 — the dial must never break the sync
+            log(f"metacritic promotion failed: {exc}")
 
     client = OmdbClient(api_key, session=session)
     looked_up = 0
@@ -152,4 +172,5 @@ def sync(
         tmdb.missed,
         tmdb.refreshed,
         tmdb.watchlist_refreshed,
+        mc_promoted,
     )

@@ -123,3 +123,19 @@ Feature: Daily sync
     Then the exit code is 0
     And the failing flag is set
     And 1 films have OMDb ratings
+
+  Scenario: Sync promotes staged Metacritic titles into films
+    Given the Criterion browse page exposes a token
+    And the Criterion catalog has films "Alpha (1950)"
+    And OMDb knows every film
+    And the metacritic archive holds "Fresh Find" (2020) scored 95 as "fresh-find"
+    When I sync with a metacritic archive
+    Then the exit code is 0
+    And the repository holds a film for key "fresh find (2020)"
+
+  Scenario: A missing metacritic archive never breaks the sync
+    Given the Criterion browse page exposes a token
+    And the Criterion catalog has films "Alpha (1950)"
+    And OMDb knows every film
+    When I sync with a metacritic archive
+    Then the exit code is 0

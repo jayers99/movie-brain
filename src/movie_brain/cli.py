@@ -58,11 +58,13 @@ def sync_cmd(
         force_full=full,
         ratings_only=ratings_only,
         tmdb_token=load_tmdb_token(cfg),
+        config_dir=cfg.config_dir,
         notifier=notify,
     )
     console.print(
         f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk} · "
-        f"tmdb matched: {result.tmdb_matched} · availability refreshed: {result.tmdb_refreshed}"
+        f"tmdb matched: {result.tmdb_matched} · availability refreshed: {result.tmdb_refreshed} · "
+        f"promoted: {result.mc_promoted}"
     )
     raise typer.Exit(result.exit_code)
 
