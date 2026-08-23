@@ -93,3 +93,31 @@ def test_summary_and_config(client):
         "recent_days": 30,
     }
     assert cfg["today"] == "2026-08-19" and "leaving" in cfg["chips"]
+
+
+def test_scraped_metascore_is_authoritative_with_omdb_fallback(tmp_path):
+    from datetime import date
+
+    from movie_brain.domain.models import Film, McTitle, OmdbRating
+    from movie_brain.infrastructure.database import Repository
+    from movie_brain.web.app import create_app
+
+    day = date(2026, 8, 19)
+    repo = Repository(tmp_path / "t.db")
+    repo.record_catalog(
+        "criterion",
+        [Film("Linked", 1950, "Ann", "https://c/linked"), Film("Fallback", 1960, "Bob", "https://c/fallback")],
+        day,
+    )
+    linked_id = repo.film_id_by_key("linked (1950)")
+    fallback_id = repo.film_id_by_key("fallback (1960)")
+    repo.upsert_omdb(linked_id, OmdbRating(None, None, True, metacritic=90), day)
+    repo.upsert_omdb(fallback_id, OmdbRating(None, None, True, metacritic=70), day)
+    repo.upsert_mc_titles([McTitle("linked-1950", "Linked", 1950, 93, 1, 1)], day)
+    repo.set_external_id(linked_id, "metacritic", "linked-1950", day)
+
+    films = {f["title"]: f for f in create_app(repo).test_client().get("/api/films").get_json()}
+    assert films["Linked"]["metacritic"] == 93  # scraped beats the OMDb relay
+    assert films["Linked"]["metacritic_url"] == "https://www.metacritic.com/movie/linked-1950/"
+    assert films["Fallback"]["metacritic"] == 70  # OMDb fallback keeps unlinked films scored
+    assert films["Fallback"]["metacritic_url"] is None
