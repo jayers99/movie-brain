@@ -10,10 +10,11 @@ from rich.table import Table
 
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
-from movie_brain.application.metacritic import crawl_archive, match_archive
+from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, crawl_archive, match_archive
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
 from movie_brain.infrastructure.notify import notify
 
 app = typer.Typer(
@@ -144,3 +145,22 @@ def metacritic_match() -> None:
     console.print(f"review queue: {report.review_open} open")
     console.print(f"below floor / unscored: {report.unmatched - report.expected_missed}")
     raise typer.Exit(0)
+
+
+@metacritic_app.command("dial")
+def metacritic_dial(
+    n: Annotated[int | None, typer.Argument(min=1, help="New top-N; omit to show the current dial.")] = None,
+) -> None:
+    """Show or set N, the Mode-B discovery dial (promotion runs in the nightly sync)."""
+    repo = _repo()
+    if n is None:
+        current = int(repo.get_meta(MC_TOP_N_KEY) or DEFAULT_TOP_N)
+        pages = len(archived_pages(archive_dir(load_config().config_dir)))
+        staged = repo.staged_title_count()
+        console.print(f"top-N: {current} · archive: {pages} pages · staged titles: {staged}")
+        if staged < current:
+            need = -(-current // CARDS_PER_PAGE)
+            console.print(f"archive may be short — run: movie-brain metacritic crawl --pages {need}")
+        return
+    repo.set_meta(MC_TOP_N_KEY, str(n))
+    console.print(f"top-N set to {n} — applied on the next sync")
