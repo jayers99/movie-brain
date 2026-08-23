@@ -33,7 +33,6 @@ def test_chip_names_are_stable():
         "leaving",
         "unrated",
         "mine",
-        "not_interested",
         "pending",
         "top_ratings",
         "recent",
@@ -47,7 +46,6 @@ def test_chip_names_are_stable():
         ("leaving", view(leaving_date="Aug 31"), view()),
         ("unrated", view(my_rating=None), view(my_rating=0)),
         ("mine", view(my_rating=1), view(my_rating=0)),
-        ("not_interested", view(my_rating=0), view(my_rating=5)),
         ("pending", view(pending=True, found=None), view()),
         ("pending", view(found=False), view()),
         # any one qualifying score is enough; the `no` views miss on every axis

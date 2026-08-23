@@ -21,7 +21,6 @@ _PREDICATES: dict[str, Predicate] = {
     "leaving": lambda v, _: v.leaving_date is not None,
     "unrated": lambda v, _: v.my_rating is None,
     "mine": lambda v, _: v.my_rating is not None and v.my_rating >= 1,
-    "not_interested": lambda v, _: v.my_rating == 0,
     "pending": lambda v, _: v.pending or v.found is False,
     "top_ratings": lambda v, _: (
         (v.metacritic is not None and v.metacritic >= TOP_MC)

@@ -98,7 +98,7 @@ def test_language_typeahead_filters_options_and_builds_up_selection(dash: Page):
 
 def test_rating_columns_show_metacritic_then_rt_then_imdb(dash: Page):
     cols = [th.get_attribute("data-col") for th in dash.locator("thead tr.labels th.sortable").all()]
-    assert cols == ["title", "year", "director", "language", "metacritic", "rt", "imdb", "leaving_date", "my_rating"]
+    assert cols == ["title", "year", "director", "language", "metacritic", "rt", "imdb", "my_rating"]
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Alpha")
     expect(row.locator(".c-metacritic")).to_have_text("92")
     expect(row.locator(".c-rt")).to_have_text("95%")
@@ -115,6 +115,20 @@ def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Pa
     expect(dash.locator("#count-films")).to_have_text("6")
     expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 6")
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
+
+
+def test_chip_labels_and_order(dash: Page):
+    labels = [t.strip() for t in dash.locator("#chips .chip").all_inner_texts()]
+    assert labels == [
+        "Top Ratings",
+        "Unrated by me",
+        "My ratings",
+        "Leaving soon",
+        "Recently added",
+        "Pending",
+        "Departed",
+        "Clear",
+    ]
 
 
 def test_chips_stack_with_and(dash: Page):
@@ -134,7 +148,6 @@ def test_each_chip_alone(dash: Page):
         "leaving": 1,
         "unrated": 3,
         "mine": 2,
-        "not_interested": 1,
         "pending": 2,
         "top_ratings": 1,  # only Alpha (92 / 95% / 8.5) clears any threshold
         "recent": 1,
@@ -178,10 +191,10 @@ def test_column_filters_combine_with_chips(dash: Page):
     clear_lang(dash)
     dash.fill("#f-director", "ann")
     assert count(dash) == 2  # Alpha, Echo
-    dash.click(".chip[data-chip=not_interested]")
-    assert count(dash) == 1
-    assert first_titles(dash, 1) == ["Echo"]
-    dash.click(".chip[data-chip=not_interested]")
+    dash.click(".chip[data-chip=mine]")
+    assert count(dash) == 1  # Alpha (rated 9); Echo's 0 doesn't count as mine
+    assert first_titles(dash, 1) == ["Alpha"]
+    dash.click(".chip[data-chip=mine]")
     dash.fill("#f-director", "")
     set_langs(dash, ["Spanish"])
     assert count(dash) == 1
@@ -221,6 +234,8 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     expect(drawer.locator("h2")).to_have_text("Alpha")
     expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
     expect(drawer.locator("a.criterion")).to_have_attribute("href", "https://c/alpha")
+    expect(drawer.locator("div.meta")).not_to_contain_text("Leaving")  # moved to the bottom
+    expect(drawer.locator("#drawer-body > :last-child")).to_have_text("Leaving August 31")
     assert "film=" in dash.url
     dash.keyboard.press("Escape")
     expect(drawer).to_be_hidden()
@@ -233,7 +248,7 @@ def test_drawer_poster_sits_below_meta_top_aligned_with_plot(dash: Page):
     expect(drawer).to_be_visible()
     poster = drawer.locator("img.poster")
     expect(poster).to_be_visible()
-    meta = drawer.locator(".meta").bounding_box()
+    meta = drawer.locator("div.meta").bounding_box()
     plot = drawer.locator("#drawer-body p").first.bounding_box()
     box = poster.bounding_box()
     assert box["y"] >= meta["y"] + meta["height"]  # below the "year · director" line
