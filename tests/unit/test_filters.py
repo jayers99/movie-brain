@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from movie_brain.domain.filters import CHIPS, RECENT_DAYS, TOP_IMDB, TOP_RT, matches, thresholds
+from movie_brain.domain.filters import CHIPS, RECENT_DAYS, TOP_IMDB, TOP_MC, TOP_RT, matches, thresholds
 from movie_brain.domain.models import FilmView
 
 TODAY = date(2026, 8, 19)
@@ -35,8 +35,7 @@ def test_chip_names_are_stable():
         "mine",
         "not_interested",
         "pending",
-        "top_rt",
-        "top_imdb",
+        "top_ratings",
         "recent",
         "departed",
     )
@@ -51,8 +50,11 @@ def test_chip_names_are_stable():
         ("not_interested", view(my_rating=0), view(my_rating=5)),
         ("pending", view(pending=True, found=None), view()),
         ("pending", view(found=False), view()),
-        ("top_rt", view(rt=TOP_RT), view(rt=TOP_RT - 1)),
-        ("top_imdb", view(imdb=TOP_IMDB), view(imdb=7.9)),
+        # any one qualifying score is enough; the `no` views miss on every axis
+        # (the view() base is rt 80, imdb 7.0, metacritic None — below every threshold)
+        ("top_ratings", view(metacritic=TOP_MC), view(metacritic=TOP_MC - 1)),
+        ("top_ratings", view(rt=TOP_RT), view(rt=TOP_RT - 1)),
+        ("top_ratings", view(imdb=TOP_IMDB), view(imdb=TOP_IMDB - 0.1)),
         ("recent", view(first_seen="2026-08-01"), view(first_seen="2026-01-01")),
         ("departed", view(departed=True), view()),
     ],
@@ -62,9 +64,8 @@ def test_single_chip(chip, yes, no):
     assert not matches(no, [chip], TODAY)
 
 
-def test_null_ratings_never_match_top_chips():
-    assert not matches(view(rt=None), ["top_rt"], TODAY)
-    assert not matches(view(imdb=None), ["top_imdb"], TODAY)
+def test_all_null_ratings_never_match_top_ratings():
+    assert not matches(view(metacritic=None, rt=None, imdb=None), ["top_ratings"], TODAY)
 
 
 def test_chips_stack_with_and():
@@ -83,4 +84,9 @@ def test_unknown_chip_raises():
 
 
 def test_thresholds_exposes_constants():
-    assert thresholds() == {"top_rt": TOP_RT, "top_imdb": TOP_IMDB, "recent_days": RECENT_DAYS}
+    assert thresholds() == {
+        "top_mc": TOP_MC,
+        "top_rt": TOP_RT,
+        "top_imdb": TOP_IMDB,
+        "recent_days": RECENT_DAYS,
+    }

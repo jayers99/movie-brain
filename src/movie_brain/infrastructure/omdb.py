@@ -52,7 +52,9 @@ class OmdbClient:
         for entry in data.get("Ratings", []):
             if entry.get("Source") == "Rotten Tomatoes":
                 rt = int(entry["Value"].rstrip("%"))
+        metascore = data.get("Metascore")
+        metacritic = int(metascore) if isinstance(metascore, str) and metascore.isdigit() else None
         language = data.get("Language")
         if not language or language == "N/A":
             language = None
-        return OmdbRating(imdb=imdb, rt=rt, found=True, language=language, payload=resp.text)
+        return OmdbRating(imdb=imdb, rt=rt, metacritic=metacritic, found=True, language=language, payload=resp.text)

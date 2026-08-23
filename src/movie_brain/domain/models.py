@@ -54,6 +54,7 @@ class OmdbRating:
     found: bool
     language: str | None = None
     payload: str | None = None  # raw OMDb JSON text; None when not found
+    metacritic: int | None = None
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,7 @@ class FilmView:
     first_seen: str | None
     my_rating: int | None
     departed: bool = False  # no longer in the source's current catalog
+    metacritic: int | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

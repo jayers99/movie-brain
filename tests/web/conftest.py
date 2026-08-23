@@ -16,16 +16,20 @@ from movie_brain.web.app import create_app
 TODAY = date(2026, 8, 19)
 
 
+# The seed exercises the default sort hierarchy (mc desc → rt desc → imdb desc → title):
+# Echo and Bravo tie on mc 70 and break on rt (60 vs 50) — against title order, proving the
+# rt tie-break; Foxtrot has only imdb; Charlie/Delta have no ratings at all.
 FILMS = [
-    Film("Alpha", 1950, "Ann", "https://c/alpha"),  # imdb 8.5 rt 95 English, leaving, rated by me 9
-    Film("Bravo", 1960, "Bob", "https://c/bravo"),  # imdb 6.0 rt None French
+    Film("Alpha", 1950, "Ann", "https://c/alpha"),  # mc 92 imdb 8.5 rt 95 English, leaving, rated by me 9; the one top_ratings film
+    Film("Bravo", 1960, "Bob", "https://c/bravo"),  # mc 70 imdb 6.0 rt 50 French
     Film("Charlie", 1970, "Cy", "https://c/charlie"),  # unmatched
     Film("Delta", 1980, "Dee", "https://c/delta"),  # pending (no omdb row), the only "recently added"
-    Film("Echo", 1990, "Ann", "https://c/echo"),  # imdb 7.0 rt 60 "English, Spanish", my rating 0
+    Film("Echo", 1990, "Ann", "https://c/echo"),  # mc 70 imdb 7.0 rt 60 "English, Spanish", my rating 0
 ]
 
 # Rated in the old walk, missing from today's → the one departed film. German keeps
-# the English-default tests untouched; null imdb/rt keeps sort-order tests untouched.
+# the English-default tests untouched; imdb 6.5 (below the 8.0 top_imdb threshold and
+# below the imdb-min filter tests' cutoff) keeps the chip/filter counts untouched.
 FOXTROT = Film("Foxtrot", 1955, "Fay", "https://c/foxtrot")
 
 
@@ -35,7 +39,7 @@ def seed(repo: Repository) -> None:
     repo.record_catalog("criterion", [f for f in films if f.title != "Delta"] + [FOXTROT], date(2026, 1, 1))
     repo.record_catalog("criterion", films, TODAY)
     ids = {f.key: repo.film_id_by_key(f.key) for f in films + [FOXTROT]}
-    repo.upsert_omdb(ids["foxtrot (1955)"], OmdbRating(None, None, True, "German", '{"Title":"Foxtrot"}'), TODAY)
+    repo.upsert_omdb(ids["foxtrot (1955)"], OmdbRating(6.5, None, True, "German", '{"Title":"Foxtrot"}'), TODAY)
     repo.set_rating(ids["foxtrot (1955)"], 7, TODAY)
     repo.upsert_omdb(
         ids["alpha (1950)"],
@@ -44,13 +48,21 @@ def seed(repo: Repository) -> None:
             95,
             True,
             "English",
-            '{"Title":"Alpha","Plot":"A plot.","Poster":"N/A","Ratings":[{"Source":"Internet Movie Database","Value":"8.5/10"}]}',
+            '{"Title":"Alpha","Plot":"A plot.",'
+            '"Poster":"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
+            'AAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",'
+            '"Ratings":[{"Source":"Internet Movie Database","Value":"8.5/10"}]}',
+            metacritic=92,
         ),
         TODAY,
     )
-    repo.upsert_omdb(ids["bravo (1960)"], OmdbRating(6.0, None, True, "French", '{"Title":"Bravo"}'), TODAY)
+    repo.upsert_omdb(
+        ids["bravo (1960)"], OmdbRating(6.0, 50, True, "French", '{"Title":"Bravo"}', metacritic=70), TODAY
+    )
     repo.upsert_omdb(ids["charlie (1970)"], OmdbRating(None, None, False), TODAY)
-    repo.upsert_omdb(ids["echo (1990)"], OmdbRating(7.0, 60, True, "English, Spanish", '{"Title":"Echo"}'), TODAY)
+    repo.upsert_omdb(
+        ids["echo (1990)"], OmdbRating(7.0, 60, True, "English, Spanish", '{"Title":"Echo"}', metacritic=70), TODAY
+    )
     repo.set_leaving("criterion", {"alpha (1950)": "August 31"})
     repo.set_rating(ids["alpha (1950)"], 9, TODAY)
     repo.set_rating(ids["echo (1990)"], 0, TODAY)
