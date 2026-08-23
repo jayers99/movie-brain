@@ -1,3 +1,4 @@
+import re
 import sqlite3
 from datetime import date
 
@@ -7,6 +8,103 @@ from movie_brain.infrastructure.database import MIGRATIONS_DIR, Repository, init
 TRIO = Film("Trio", 1950, "Ken Annakin", "https://c/trio")
 QUARTET = Film("Quartet", 1948, "Ken Annakin", "https://c/quartet")
 D1, D2 = date(2026, 8, 1), date(2026, 8, 19)
+
+UUID4_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+
+
+def _v2_db_with_criterion_data(p):
+    conn = sqlite3.connect(p)
+    conn.executescript((MIGRATIONS_DIR / "001_init.sql").read_text())
+    conn.executescript((MIGRATIONS_DIR / "002_metacritic.sql").read_text())
+    conn.execute("INSERT INTO films (id, title, year, key) VALUES (1, 'Trio', 1950, 'trio (1950)')")
+    conn.execute("INSERT INTO films (id, title, year, key) VALUES (2, 'Quartet', 1948, 'quartet (1948)')")
+    conn.execute(
+        "INSERT INTO listings VALUES (1, 'criterion', 'https://c/trio', '2026-08-01', '2026-08-19', NULL)"
+    )
+    conn.execute(
+        "INSERT INTO listings VALUES (2, 'criterion', 'https://c/quartet', '2026-08-01', '2026-08-19', 'August 31')"
+    )
+    conn.execute("INSERT INTO omdb (film_id, found, looked_up, payload) VALUES (1, 1, '2026-08-01', '{}')")
+    conn.execute("INSERT INTO my_ratings VALUES (1, 8, '2026-08-01')")
+    conn.commit()
+    conn.close()
+
+
+def test_migration_003_assigns_guids_and_preserves_data(tmp_path):
+    p = tmp_path / "old.db"
+    _v2_db_with_criterion_data(p)
+    init_db(p)
+    conn = sqlite3.connect(p)
+    conn.row_factory = sqlite3.Row
+    guids = [r["guid"] for r in conn.execute("SELECT guid FROM films ORDER BY id")]
+    assert len(guids) == 2 and len(set(guids)) == 2
+    assert all(UUID4_RE.match(g) for g in guids)
+    listings = {
+        r["film_id"]: (r["url"], r["first_seen"], r["last_seen"], r["leaving_date"])
+        for r in conn.execute("SELECT * FROM listings")
+    }
+    assert listings == {
+        1: ("https://c/trio", "2026-08-01", "2026-08-19", None),
+        2: ("https://c/quartet", "2026-08-01", "2026-08-19", "August 31"),
+    }
+    assert conn.execute("SELECT payload FROM omdb WHERE film_id = 1").fetchone()[0] == "{}"
+    assert conn.execute("SELECT score FROM my_ratings WHERE film_id = 1").fetchone()[0] == 8
+    conn.close()
+
+
+def test_migration_003_backfills_criterion_external_ids(tmp_path):
+    p = tmp_path / "old.db"
+    _v2_db_with_criterion_data(p)
+    init_db(p)
+    conn = sqlite3.connect(p)
+    ext = dict(conn.execute("SELECT film_id, value FROM external_ids WHERE authority = 'criterion'"))
+    assert ext == {1: "https://c/trio", 2: "https://c/quartet"}
+    assert conn.execute("SELECT first_seen FROM external_ids WHERE film_id = 1").fetchone()[0] == "2026-08-01"
+    conn.close()
+
+
+def test_migration_003_seeds_service_registry(repo):
+    conn = sqlite3.connect(repo.db_path)
+    services = dict(conn.execute("SELECT slug, subscribed FROM movie_service"))
+    assert services == {
+        "criterion": 1,
+        "apple-tv-plus": 1,
+        "apple-tv-store": 1,
+        "max": 1,
+        "peacock": 1,
+        "prime-video": 1,
+        "mubi": 0,
+        "bfi-player-classics": 0,
+    }
+    kinds = dict(conn.execute("SELECT slug, kind FROM movie_service"))
+    assert kinds["apple-tv-store"] == "store" and kinds["criterion"] == "svod"
+    providers = dict(conn.execute("SELECT tmdb_provider_id, service_slug FROM service_provider"))
+    assert providers == {
+        258: "criterion",
+        350: "apple-tv-plus",
+        2: "apple-tv-store",
+        1899: "max",
+        386: "peacock",
+        387: "peacock",
+        9: "prime-video",
+        11: "mubi",
+    }
+    conn.close()
+
+
+def test_guid_is_stable_across_repeated_catalog_walks(repo):
+    def guid():
+        conn = sqlite3.connect(repo.db_path)
+        g = conn.execute("SELECT guid FROM films WHERE key = 'trio (1950)'").fetchone()[0]
+        conn.close()
+        return g
+
+    repo.record_catalog("criterion", [TRIO], D1)
+    first = guid()
+    assert UUID4_RE.match(first)
+    repo.record_catalog("criterion", [TRIO], D2)
+    repo.upsert_film(TRIO)
+    assert guid() == first
 
 
 def test_init_db_is_idempotent(tmp_path):
