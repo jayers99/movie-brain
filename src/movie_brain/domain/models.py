@@ -58,6 +58,28 @@ class OmdbRating:
 
 
 @dataclass(frozen=True)
+class McTitle:
+    """One title card from Metacritic's sorted browse walk (staged, not a film)."""
+
+    slug: str
+    title: str
+    year: int | None
+    score: int | None
+    rank: int  # position in the sorted walk
+    page: int
+
+
+@dataclass(frozen=True)
+class ReviewEntry:
+    """A match anomaly queued for human review — never a deletion."""
+
+    reason: str
+    film_id: int | None = None
+    value: str | None = None
+    detail: str | None = None
+
+
+@dataclass(frozen=True)
 class FilmView:
     id: int
     title: str
