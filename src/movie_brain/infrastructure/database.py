@@ -69,7 +69,9 @@ _SERVICES_SQL = """
 SELECT l.film_id, s.name, s.subscribed FROM listings l
 JOIN movie_service s ON s.slug = l.source
 WHERE s.kind = 'svod' AND l.source != 'criterion'
-  AND l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = l.source)
+  AND l.last_seen >= COALESCE(
+      (SELECT value FROM meta WHERE key = 'tmdb_providers_refreshed_at'),
+      (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = l.source))
 ORDER BY l.film_id, s.subscribed DESC, s.name
 """
 
