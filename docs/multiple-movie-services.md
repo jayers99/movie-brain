@@ -158,7 +158,7 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 |---|-------|-----------|-----------------|
 | 1 | Schema redesign: GUID identity + services model — **done** | — | live schema — the careful one |
 | 2 | Metacritic adapter, Mode A (enrich Criterion) — **done** | 1 | low (additive columns/joins) |
-| 3 | TMDB availability adapter | 1 | medium (sync flow) |
+| 3 | TMDB availability adapter — **done** | 1 | medium (sync flow) |
 | 4 | Watchlist + availability alerts | 3 | low |
 | 5 | Metacritic Mode B: top-N dial (start N=100) | 2 | low at N=100 — grows with the dial |
 | 6 | Full-service import pattern | 5 | low (Criterion is the precedent) |
@@ -173,9 +173,10 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 2. **Done (2026-08-23).** **Metacritic adapter — Mode A.** Enrich every film currently in the DB (=Criterion) with
    its Metacritic record; the movie↔Metacritic join goes live; metascores become
    first-class instead of OMDb-payload backfill. Landed as an incremental dial: `metacritic crawl --pages N` (10 first, extend by re-running with a bigger cap), offline `match`, scraped-first score with OMDb fallback, anomalies in `match_review`.
-3. **TMDB availability adapter.** Promote the spike matcher (98% rules) into
+3. **Done (2026-08-23).** **TMDB availability adapter.** Promoted the spike matcher (98% rules) into
    `infrastructure/tmdb.py`; `tmdb` cache table on the `omdb` pattern; watch-providers for
-   my services; sync step with its own tripwires; drawer shows "Also streaming on: …".
+   my services; sync step with its own tripwires (one-shot match, weekly refresh gated by
+   meta `tmdb_providers_refreshed_at`); drawer shows "Also streaming on: …".
    Done when: cross-service availability visible for Criterion films.
 4. **Watchlist + availability alerts** (the brief-window catcher). Watchlist entity + drawer
    toggle; sync-time **transition detection** (availability *appearing*, not just existing);
