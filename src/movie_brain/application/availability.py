@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -56,7 +57,16 @@ def tmdb_step(
             repo.upsert_tmdb(film_id, found=False, looked_up=today)
             missed += 1
         else:
-            repo.set_external_id(film_id, TMDB_AUTHORITY, str(winner), today)
+            try:
+                repo.set_external_id(film_id, TMDB_AUTHORITY, str(winner), today)
+            except sqlite3.IntegrityError:
+                # UNIQUE(authority, value): another film already claimed this tmdb id.
+                # Contain it here — one bad match must never block the whole step; queue
+                # this film for review and move on, same as an ordinary no-match.
+                log(f"tmdb id conflict for {title!r}: id {winner} already claimed")
+                repo.upsert_tmdb(film_id, found=False, looked_up=today)
+                missed += 1
+                continue
             repo.upsert_tmdb(film_id, found=True, looked_up=today)
             matched += 1
 

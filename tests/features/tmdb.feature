@@ -66,6 +66,19 @@ Feature: TMDB availability
     And 1 films have OMDb ratings
     And the sync matched 0 TMDB films
 
+  Scenario: Two films matching the same TMDB id queue the second for review
+    Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)"
+    And TMDB knows "Trio (1950)" as id 11
+    And TMDB knows "Quartet (1948)" as id 11
+    And TMDB streams id 11 on providers 1899 and 258
+    When I sync with a TMDB token
+    Then "Trio (1950)" has external id "11" for authority "tmdb"
+    And the tmdb review queue holds 1 entries
+    And the exit code is 0
+    And TMDB providers were called exactly 1 times
+    When I sync with a TMDB token again the next day
+    Then TMDB search was called exactly 2 times
+
   Scenario: Repeated TMDB search failures stop the step and keep the stamp unwritten
     Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)" and "Third (1960)" and "Fourth (1970)" and "Fifth (1980)" and "Sixth (1990)"
     And TMDB errors on every search
