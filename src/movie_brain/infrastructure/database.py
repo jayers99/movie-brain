@@ -20,13 +20,27 @@ def init_db(db_path: Path) -> None:
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
         ).fetchone()
         applied = {r[0] for r in conn.execute("SELECT version FROM schema_version")} if has_versions else set()
-        for mig in sorted(MIGRATIONS_DIR.glob("*.sql")):
-            version = int(mig.name.split("_")[0])
-            if version not in applied:
-                conn.executescript(mig.read_text())
+        pending = [m for m in sorted(MIGRATIONS_DIR.glob("*.sql")) if int(m.name.split("_")[0]) not in applied]
+        if pending and applied:
+            _backup_pre_migration(conn, db_path, max(applied))
+        for mig in pending:
+            conn.executescript(mig.read_text())
         conn.commit()
     finally:
         conn.close()
+
+
+def _backup_pre_migration(conn: sqlite3.Connection, db_path: Path, current_version: int) -> None:
+    """Snapshot the DB before new migrations touch it — the rollback point for a bad migration."""
+    backups_dir = db_path.parent / "backups"
+    backups_dir.mkdir(exist_ok=True)
+    dest_path = backups_dir / f"{db_path.stem}-v{current_version}-{date.today().isoformat()}.db"
+    dest = sqlite3.connect(dest_path)
+    try:
+        conn.backup(dest)
+        dest.commit()
+    finally:
+        dest.close()
 
 
 _VIEW_SQL = """

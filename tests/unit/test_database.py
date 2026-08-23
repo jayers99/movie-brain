@@ -208,3 +208,26 @@ def test_meta(repo):
     repo.set_meta("films_fetched_at", "2026-08-19")
     repo.set_meta("films_fetched_at", "2026-08-20")
     assert repo.get_meta("films_fetched_at") == "2026-08-20"
+
+
+def test_init_db_backs_up_before_applying_pending_migrations(tmp_path):
+    p = tmp_path / "x.db"
+    conn = sqlite3.connect(p)
+    conn.executescript((MIGRATIONS_DIR / "001_init.sql").read_text())
+    conn.execute("INSERT INTO films (id, title, year, key) VALUES (1, 'Trio', 1950, 'trio (1950)')")
+    conn.commit()
+    conn.close()
+    init_db(p)  # later migrations are pending → snapshot the v1 state first
+    backups = list((tmp_path / "backups").glob("x-v1-*.db"))
+    assert len(backups) == 1
+    b = sqlite3.connect(backups[0])
+    assert b.execute("SELECT title FROM films").fetchone()[0] == "Trio"
+    assert b.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 1  # pre-migration state
+    b.close()
+
+
+def test_init_db_makes_no_backup_for_fresh_or_up_to_date_dbs(tmp_path):
+    p = tmp_path / "x.db"
+    init_db(p)  # fresh DB: nothing to protect
+    init_db(p)  # up to date: nothing pending
+    assert not (tmp_path / "backups").exists()
