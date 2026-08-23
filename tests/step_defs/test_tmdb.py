@@ -129,9 +129,17 @@ def tmdb(ctx):
 
         return cb
 
-    world["register_providers"] = lambda tid: ctx["rs"].add_callback(
-        responses.GET, f"{TMDB_API}/movie/{tid}/watch/providers", callback=provider_callback(tid)
-    )
+    registered_providers: set[int] = set()
+
+    def register_providers(tid):
+        # Two films can resolve to the same id (a match conflict) — register once per id,
+        # not once per "TMDB knows ... as id N" given, or responses stacks two matchers.
+        if tid in registered_providers:
+            return
+        registered_providers.add(tid)
+        ctx["rs"].add_callback(responses.GET, f"{TMDB_API}/movie/{tid}/watch/providers", callback=provider_callback(tid))
+
+    world["register_providers"] = register_providers
     return world
 
 
