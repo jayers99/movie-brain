@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
 
+from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry
 
 MISS_RETRY_DAYS = 30
@@ -83,7 +84,36 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
     return out
 
 
-def _row_to_view(row: sqlite3.Row, services: list[dict[str, object]] | None = None) -> FilmView:
+_NEW_ON_SQL = """
+SELECT t.film_id, t.source, s.name, MAX(t.appeared_on) AS appeared_on
+FROM availability_transitions t
+JOIN movie_service s ON s.slug = t.source AND s.kind = 'svod'
+WHERE t.appeared_on >= ?
+GROUP BY t.film_id, t.source
+ORDER BY t.film_id, t.source
+"""
+
+
+def _new_on_by_film(c: sqlite3.Connection, cutoff_iso: str) -> dict[int, list[dict[str, object]]]:
+    out: dict[int, list[dict[str, object]]] = {}
+    for r in c.execute(_NEW_ON_SQL, (cutoff_iso,)):
+        out.setdefault(int(r["film_id"]), []).append(
+            {"source": str(r["source"]), "name": str(r["name"]), "appeared_on": str(r["appeared_on"])}
+        )
+    return out
+
+
+def _watchlist_ids(c: sqlite3.Connection) -> set[int]:
+    return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM watchlist")}
+
+
+def _row_to_view(
+    row: sqlite3.Row,
+    services: list[dict[str, object]] | None = None,
+    *,
+    watchlisted: bool = False,
+    new_on: list[dict[str, object]] | None = None,
+) -> FilmView:
     return FilmView(
         id=row["id"],
         title=row["title"],
@@ -102,6 +132,8 @@ def _row_to_view(row: sqlite3.Row, services: list[dict[str, object]] | None = No
         departed=bool(row["departed"]),
         metacritic_url=f"https://www.metacritic.com/movie/{row['mc_slug']}/" if row["mc_slug"] else None,
         services=services or [],
+        watchlisted=watchlisted,
+        new_on=new_on or [],
     )
 
 
@@ -466,7 +498,8 @@ class Repository:
             return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM watchlist")}
 
     # views ------------------------------------------------------------
-    def list_views(self, source: str) -> list[FilmView]:
+    def list_views(self, source: str, today: date | None = None) -> list[FilmView]:
+        cutoff = ((today or date.today()) - timedelta(days=NEW_ARRIVAL_DAYS)).isoformat()
         with self._conn() as c:
             rows = c.execute(
                 _VIEW_SQL
@@ -475,14 +508,25 @@ class Repository:
                 (source, source),
             ).fetchall()
             services = _services_by_film(c)
-            return [_row_to_view(r, services.get(r["id"])) for r in rows]
+            new_on = _new_on_by_film(c, cutoff)
+            wl = _watchlist_ids(c)
+            return [
+                _row_to_view(r, services.get(r["id"]), watchlisted=r["id"] in wl, new_on=new_on.get(r["id"]))
+                for r in rows
+            ]
 
-    def get_view(self, film_id: int) -> FilmView | None:
+    def get_view(self, film_id: int, today: date | None = None) -> FilmView | None:
+        cutoff = ((today or date.today()) - timedelta(days=NEW_ARRIVAL_DAYS)).isoformat()
         with self._conn() as c:
             row = c.execute(_VIEW_SQL + "WHERE f.id = ?", ("criterion", film_id)).fetchone()
             if row is None:
                 return None
-            return _row_to_view(row, _services_by_film(c).get(row["id"]))
+            return _row_to_view(
+                row,
+                _services_by_film(c).get(row["id"]),
+                watchlisted=row["id"] in _watchlist_ids(c),
+                new_on=_new_on_by_film(c, cutoff).get(row["id"]),
+            )
 
     def get_payload(self, film_id: int) -> str | None:
         with self._conn() as c:

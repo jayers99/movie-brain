@@ -9,12 +9,18 @@ TOP_MC = 90
 TOP_RT = 90
 TOP_IMDB = 7.5
 RECENT_DAYS = 30
+NEW_ARRIVAL_DAYS = 14
 
 Predicate = Callable[[FilmView, date], bool]
 
 
 def _recent(v: FilmView, today: date) -> bool:
     return v.first_seen is not None and date.fromisoformat(v.first_seen) >= today - timedelta(days=RECENT_DAYS)
+
+
+def _new_arrivals(v: FilmView, today: date) -> bool:
+    cutoff = today - timedelta(days=NEW_ARRIVAL_DAYS)
+    return any(date.fromisoformat(str(t["appeared_on"])) >= cutoff for t in v.new_on)
 
 
 _PREDICATES: dict[str, Predicate] = {
@@ -29,6 +35,8 @@ _PREDICATES: dict[str, Predicate] = {
     ),
     "recent": _recent,
     "departed": lambda v, _: v.departed,
+    "new_arrivals": _new_arrivals,
+    "watchlist": lambda v, _: v.watchlisted,
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)
@@ -44,4 +52,5 @@ def thresholds() -> dict[str, object]:
         "top_rt": TOP_RT,
         "top_imdb": TOP_IMDB,
         "recent_days": RECENT_DAYS,
+        "new_arrival_days": NEW_ARRIVAL_DAYS,
     }
