@@ -102,7 +102,7 @@ CREATE TABLE service_provider (
 ```
 
 One service ↔ many provider ids; a provider id belongs to exactly one service. Seeds from
-the 2026-08-24 spike:
+the 2026-08-24 spike, minus the Amazon channels (decision below):
 
 | provider id | label | service |
 |---|---|---|
@@ -110,15 +110,31 @@ the 2026-08-24 spike:
 | 350 | Apple TV+ | apple-tv-plus |
 | 2 | Apple TV | apple-tv-store |
 | 1899 | HBO Max | max |
-| 1825 | HBO Max Amazon Channel | max |
 | 386 | Peacock Premium | peacock |
 | 387 | Peacock Premium Plus | peacock |
 | 9 | Amazon Prime Video | prime-video |
 | 11 | MUBI | mubi |
-| 201 | MUBI Amazon Channel | mubi |
-| 287 | BFI Player Amazon Channel | bfi-player-classics |
 
-GB "BFI Player" (224) is a different service — deliberately not seeded.
+Deliberately NOT seeded:
+
+- GB "BFI Player" (224) — a different service.
+- **Amazon channel ids (decision 2026-08-23): HBO Max Amazon Channel (1825), MUBI Amazon
+  Channel (201), and BFI Player Amazon Channel (287) are excluded** — his call; Amazon-billed
+  channel storefronts are not how he subscribes. Accepted consequence, raised and decided:
+  287 was TMDB's only US provider id for BFI Player Classics, so **TMDB availability for
+  bfi-player-classics is knowingly invisible** (the registry row stays; revisit only if TMDB
+  ever indexes the service directly).
+- Amazon Video (Amazon's purchase/rental store) — never a candidate; see the availability
+  rule below.
+
+**Availability-kind rule (decision 2026-08-23, binds the Phase 3 adapter):** a `kind='svod'`
+service counts only TMDB **`flatrate`** entries — films included with the subscription. TMDB
+`rent`/`buy` arrays are read only for `kind='store'` services (Apple TV Store). Purchasable-
+from-Amazon is never availability.
+
+**Apple TV Store (provider 2) is the iTunes movie store** — verified in the 2026-08-24
+spike (iTunes purchasability appears via it in the `buy` arrays). It stays seeded as the
+future hook for importing his purchased films (owned-films spike, later phase).
 
 ### `external_ids` (new)
 
@@ -184,7 +200,7 @@ are not displayed. This is the immutability decision working as intended.
 - **Migration (unit, `tests/unit/test_database.py`):** build a v2-shape DB with seeded films/
   listings/omdb/ratings, run `init_db`, assert: every film has a unique v4-format guid;
   criterion `external_ids` rows backfilled from listing URLs; listings/omdb/ratings data
-  intact; registry has 8 services and 11 provider rows grouped correctly; fresh-DB path
+  intact; registry has 8 services and exactly 8 provider rows (no Amazon-channel ids); fresh-DB path
   (001→003) also passes.
 - **Identity (unit):** guid stable across repeated `record_catalog` runs; `UNIQUE(authority,
   value)` rejects a second film claiming an existing external id; `external_ids_for` /

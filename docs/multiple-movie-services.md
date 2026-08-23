@@ -74,6 +74,13 @@ New questions this raises (also folded into the spike lists below):
       whole catalog, and region handling is a real column, not a constant. Minor caveat: sources can drift
       (The Conformist shows Criterion on Metacritic's page but only Kino on TMDB today) —
       availability is a snapshot, refreshed by sync, not a fact.
+- [x] **Provider-seeding decisions (2026-08-23, settled in the Phase 1 spec):**
+      (1) **Amazon channel ids are excluded** (HBO Max 1825, MUBI 201, BFI Player 287) —
+      Amazon-billed storefronts are not how he subscribes; accepted consequence: TMDB
+      availability for BFI Player Classics is knowingly invisible (287 was its only US id).
+      (2) **svod availability = TMDB `flatrate` only**; `rent`/`buy` arrays are read only
+      for store-kind services (Apple TV Store, provider 2 = the iTunes movie store, kept as
+      the future owned-films hook). Purchasable-from-Amazon is never availability.
 - [ ] Data model: `movie_service` needs a **`subscribed` flag** (and the ownership question
       from the working sketch still stands).
 - [ ] Define "**movies I want to see**" for the ranking — above-threshold and unrated-by-me?
