@@ -2,6 +2,8 @@
 
 Personal film brain: it syncs the Criterion Channel catalog and OMDb ratings into a local SQLite database, tracks your own 0–10 ratings, and serves everything through a local Flask dashboard for browsing, filtering, and rating. Everything runs on your machine — the only external account is a free OMDb API key. Other listing sources (Apple Movies, etc.) may be added later.
 
+![The movie-brain dashboard: filter chips, per-column filters, and Metacritic/RT/IMDb ratings with my own rating column](docs/screen-shot.jpg)
+
 ## Getting started
 
 1. Install [uv](https://docs.astral.sh/uv/), then install dependencies: `uv sync` (uv provides Python 3.12+).
