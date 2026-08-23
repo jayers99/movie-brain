@@ -272,7 +272,7 @@ adapter detail the application layer never sees.
       drift (Arrietty 2012-vs-2010), and punctuation (Forbidden Lie$). With parenthetical
       stripping + wider year tolerance + exact-title preference, expect **~95%+**; the
       residue is a small human-review queue. Spike script:
-      scratchpad `match_spike.py` (promote into the repo when the adapter is built).
+      `scripts/discovery/match_spike2.py` (kept in-repo; fold into the adapter when built).
 - [x] ~~Re-run the matching spike with normalization fixes.~~ **Confirmed 2026-08-24: 98%**
       (94/96; 93 exact-title, 1 near-year fallback). Winning rules: strip
       `(re-release)`/`(NNNN)` annotations · punctuation/case-insensitive title compare
@@ -280,8 +280,8 @@ adapter detail the application layer never sees.
       (MC stamps US re-release years). The two residuals both have known fixes: *Dekalog* is
       a TV series on TMDB (needs a TV/multi-search fallback) and *Intolerance* carries a
       subtitle on TMDB (needs prefix-tolerant compare). Verdict: **matching is solved** —
-      normalization function + tiny review queue; scripts `match_spike.py`/`match_spike2.py`
-      in the session scratchpad, promote when building the adapter.
+      normalization function + tiny review queue; the winning matcher and the watch-providers
+      probe are preserved at `scripts/discovery/` (fold into the real adapters when built).
 - [ ] Do Metacritic pages link out to the streaming services (deep links we could store as the
       per-service `url`), or do we need each service's own catalog/API for links?
 
