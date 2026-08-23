@@ -12,7 +12,7 @@ from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.metacritic import crawl_archive, match_archive
 from movie_brain.application.sync import SOURCE, sync
-from movie_brain.infrastructure.config import load_api_key, load_config
+from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import Repository
 
 app = typer.Typer(
@@ -50,8 +50,13 @@ def sync_cmd(
     if not api_key:
         err.print(f"no OMDb key: set OMDB_API_KEY or write {cfg.key_file}")
         raise typer.Exit(2)
-    result = sync(_repo(), api_key, date.today(), force_full=full, ratings_only=ratings_only)
-    console.print(f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk}")
+    result = sync(
+        _repo(), api_key, date.today(), force_full=full, ratings_only=ratings_only, tmdb_token=load_tmdb_token(cfg)
+    )
+    console.print(
+        f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk} · "
+        f"tmdb matched: {result.tmdb_matched} · availability refreshed: {result.tmdb_refreshed}"
+    )
     raise typer.Exit(result.exit_code)
 
 
