@@ -1,3 +1,4 @@
+import pytest
 import re
 import sqlite3
 from datetime import date
@@ -306,6 +307,34 @@ def test_meta(repo):
     repo.set_meta("films_fetched_at", "2026-08-19")
     repo.set_meta("films_fetched_at", "2026-08-20")
     assert repo.get_meta("films_fetched_at") == "2026-08-20"
+
+
+def test_external_id_roundtrip_update_and_uniqueness(repo):
+    a = repo.upsert_film(TRIO)
+    b = repo.upsert_film(QUARTET)
+    repo.set_external_id(a, "tmdb", "603", D1)
+    repo.set_external_id(a, "tmdb", "604", D2)  # same film+authority: value updates
+    repo.set_external_id(a, "imdb", "tt0042980", D2)
+    assert repo.external_ids_for(a) == {"tmdb": "604", "imdb": "tt0042980"}
+    assert repo.external_ids_for(b) == {}
+    with pytest.raises(sqlite3.IntegrityError):  # two films can't claim one external id
+        repo.set_external_id(b, "tmdb", "604", D2)
+
+
+def test_record_catalog_records_criterion_external_ids(repo):
+    repo.record_catalog("criterion", [TRIO], D1)
+    fid = repo.film_id_by_key("trio (1950)")
+    assert fid is not None
+    assert repo.external_ids_for(fid) == {"criterion": "https://c/trio"}
+
+
+def test_services_registry_accessor(repo):
+    services = {s["slug"]: s for s in repo.services()}
+    assert len(services) == 8
+    assert services["criterion"]["subscribed"] == 1
+    assert services["mubi"]["subscribed"] == 0
+    assert services["apple-tv-store"]["kind"] == "store"
+    assert services["prime-video"]["region"] == "US"
 
 
 def test_init_db_backs_up_before_applying_pending_migrations(tmp_path):
