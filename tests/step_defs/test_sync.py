@@ -38,10 +38,18 @@ def movie_item(f: Film) -> dict:
 
 
 @pytest.fixture
-def ctx(repo):
+def ctx(repo, config_dir, nuxt_page):
     rs = responses.RequestsMock(assert_all_requests_are_fired=False)
     rs.start()
-    yield {"repo": repo, "rs": rs, "result": None, "flags": {}}
+    yield {
+        "repo": repo,
+        "rs": rs,
+        "result": None,
+        "flags": {},
+        "config_dir": config_dir,
+        "nuxt_page": nuxt_page,
+        "mc_cards": [],
+    }
     rs.stop()
     rs.reset()
 
@@ -173,6 +181,20 @@ def omdb_repeated_failures(ctx):
     ctx["rs"].add_callback(responses.GET, OMDB_URL, callback=cb)
 
 
+@given(
+    parsers.re(
+        r'the metacritic archive holds "(?P<title>[^"]+)" \((?P<year>\d+)\) scored (?P<score>\d+) as "(?P<slug>[^"]+)"'
+    )
+)
+def metacritic_archive(ctx, title, year, score, slug):
+    from movie_brain.infrastructure.metacritic import archive_dir, page_path
+
+    ctx["mc_cards"].append((title, slug, int(year), int(score)))
+    p = page_path(archive_dir(ctx["config_dir"]), 1)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(ctx["nuxt_page"](ctx["mc_cards"]))
+
+
 def _run(ctx, **kw):
     ctx["result"] = sync(ctx["repo"], "key", TODAY, session=requests.Session(), delay_s=0, log=lambda m: None, **kw)
 
@@ -180,6 +202,11 @@ def _run(ctx, **kw):
 @when("I sync")
 def run_sync(ctx):
     _run(ctx)
+
+
+@when("I sync with a metacritic archive")
+def run_sync_with_archive(ctx):
+    _run(ctx, config_dir=ctx["config_dir"])
 
 
 @when("I sync with --full")
@@ -269,3 +296,8 @@ def quota_flag(ctx):
 @then("the failing flag is set")
 def failing_flag(ctx):
     assert ctx["result"].failing is True
+
+
+@then(parsers.parse('the repository holds a film for key "{key}"'))
+def holds_film_key(ctx, key):
+    assert ctx["repo"].film_id_by_key(key) is not None
