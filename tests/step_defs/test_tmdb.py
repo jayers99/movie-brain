@@ -11,7 +11,7 @@ import responses
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.availability import META_REFRESHED_AT
-from movie_brain.application.sync import sync
+from movie_brain.application.sync import SOURCE, sync
 from movie_brain.domain.models import Film
 from movie_brain.infrastructure.criterion import API_URL, BROWSE_URL
 from movie_brain.infrastructure.omdb import OMDB_URL
@@ -95,6 +95,14 @@ def catalog(ctx, films):
 @given("OMDb knows every film")
 def omdb_ok(ctx):
     ctx["rs"].get(OMDB_URL, json=FOUND)
+
+
+@given(parsers.parse('the repository already holds {films} walked {days:d} days ago'))
+def preloaded(ctx, films, days):
+    flist = parse_titles(films)
+    walked = TODAY - timedelta(days=days)
+    ctx["repo"].record_catalog(SOURCE, flist, walked)
+    ctx["repo"].set_meta("films_fetched_at", walked.isoformat())
 
 
 @pytest.fixture
@@ -198,6 +206,11 @@ def do_sync(ctx, tmdb):
 @when("I sync with a TMDB token")
 def do_sync_tok(ctx, tmdb):
     ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok")
+
+
+@when("I sync with a TMDB token and --ratings-only")
+def do_sync_tok_ratings_only(ctx, tmdb):
+    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok", ratings_only=True)
 
 
 @when("I sync with a TMDB token again the next day")

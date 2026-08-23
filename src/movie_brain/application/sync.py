@@ -117,7 +117,9 @@ def sync(
         log("OMDb lookups failing repeatedly — partial ratings saved; next run resumes.")
 
     tmdb = TmdbStepResult()
-    if tmdb_token is None:
+    if ratings_only:
+        log("ratings-only run — skipping TMDB availability step")
+    elif tmdb_token is None:
         log("no TMDB token — skipping availability step")
     else:
         try:

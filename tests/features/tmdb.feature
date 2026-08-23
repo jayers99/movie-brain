@@ -59,6 +59,12 @@ Feature: TMDB availability
     Then the exit code is 0
     And TMDB search was called exactly 0 times
 
+  Scenario: --ratings-only skips the TMDB step even with a token
+    Given the repository already holds "Trio (1950)" walked 1 days ago
+    When I sync with a TMDB token and --ratings-only
+    Then the exit code is 0
+    And TMDB search was called exactly 0 times
+
   Scenario: TMDB auth failure leaves the rest of the sync intact
     Given TMDB rejects the token
     When I sync with a TMDB token
