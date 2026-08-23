@@ -254,6 +254,53 @@ class Repository:
             ).fetchall()
             return [dict(r) for r in rows]
 
+    # tmdb ---------------------------------------------------------------
+    def films_needing_tmdb_match(self) -> list[tuple[int, str, int | None]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year FROM films f "
+                "WHERE NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["title"]), r["year"]) for r in rows]
+
+    def upsert_tmdb(self, film_id: int, *, found: bool, looked_up: date) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO tmdb (film_id, found, looked_up) VALUES (?, ?, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET found=excluded.found, looked_up=excluded.looked_up",
+                (film_id, int(found), looked_up.isoformat()),
+            )
+
+    def record_tmdb_providers(self, film_id: int, checked: date, payload: str) -> None:
+        with self._conn() as c:
+            c.execute(
+                "UPDATE tmdb SET providers_checked_at = ?, payload = ? WHERE film_id = ?",
+                (checked.isoformat(), payload, film_id),
+            )
+
+    def films_for_provider_refresh(self) -> list[tuple[int, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT t.film_id, x.value FROM tmdb t "
+                "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
+                "WHERE t.found = 1 "
+                "ORDER BY (t.providers_checked_at IS NOT NULL), t.providers_checked_at, t.film_id"
+            ).fetchall()
+            return [(int(r["film_id"]), str(r["value"])) for r in rows]
+
+    def films_tmdb_missed(self) -> list[tuple[int, str, int | None]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year FROM films f JOIN tmdb t ON t.film_id = f.id "
+                "WHERE t.found = 0 ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["title"]), r["year"]) for r in rows]
+
+    def provider_map(self) -> dict[int, str]:
+        with self._conn() as c:
+            rows = c.execute("SELECT tmdb_provider_id, service_slug FROM service_provider").fetchall()
+            return {int(r["tmdb_provider_id"]): str(r["service_slug"]) for r in rows}
+
     # meta -------------------------------------------------------------
     def get_meta(self, key: str) -> str | None:
         with self._conn() as c:

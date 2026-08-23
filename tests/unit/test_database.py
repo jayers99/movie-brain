@@ -386,7 +386,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 4
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 5
     finally:
         conn.close()
 
@@ -439,3 +439,32 @@ def test_review_queue_replaces_unresolved_and_keeps_resolved(repo, today):
         assert conn.execute("SELECT COUNT(*) FROM match_review WHERE resolved = 1").fetchone()[0] == 1
     finally:
         conn.close()
+
+
+class TestTmdbPrimitives:
+    def seed_two(self, repo):
+        repo.record_catalog("criterion", [Film("Trio", 1950, None, "https://c/trio"),
+                                          Film("Quartet", 1948, None, "https://c/quartet")], date(2026, 8, 19))
+        return repo.film_id_by_key("trio (1950)"), repo.film_id_by_key("quartet (1948)")
+
+    def test_films_needing_tmdb_match_excludes_any_tmdb_row(self, repo):
+        trio, quartet = self.seed_two(repo)
+        repo.upsert_tmdb(trio, found=True, looked_up=date(2026, 8, 19))
+        assert repo.films_needing_tmdb_match() == [(quartet, "Quartet", 1948)]
+        repo.upsert_tmdb(quartet, found=False, looked_up=date(2026, 8, 19))
+        assert repo.films_needing_tmdb_match() == []  # found=0 is not retried
+
+    def test_provider_refresh_order_is_stalest_first(self, repo):
+        trio, quartet = self.seed_two(repo)
+        for fid, tid in ((trio, "11"), (quartet, "22")):
+            repo.upsert_tmdb(fid, found=True, looked_up=date(2026, 8, 19))
+            repo.set_external_id(fid, "tmdb", tid, date(2026, 8, 19))
+        repo.record_tmdb_providers(trio, date(2026, 8, 19), "{}")
+        assert repo.films_for_provider_refresh() == [(quartet, "22"), (trio, "11")]  # NULL checked_at first
+
+    def test_missed_films_and_provider_map(self, repo):
+        trio, _ = self.seed_two(repo)
+        repo.upsert_tmdb(trio, found=False, looked_up=date(2026, 8, 19))
+        assert repo.films_tmdb_missed() == [(trio, "Trio", 1950)]
+        pmap = repo.provider_map()
+        assert pmap[258] == "criterion" and pmap[1899] == "max" and pmap[2] == "apple-tv-store"
