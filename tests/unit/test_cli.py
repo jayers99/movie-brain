@@ -57,3 +57,46 @@ def test_export_csv(config_dir, tmp_path):
     out = tmp_path / "x.csv"
     r = runner.invoke(app, ["export", "csv", str(out)])
     assert r.exit_code == 0 and out.exists()
+
+
+def test_metacritic_crawl_reports_and_propagates_exit(config_dir, monkeypatch):
+    from movie_brain.application.metacritic import CrawlReport
+
+    calls = {}
+
+    def fake_crawl(cfg_dir, pages, **kw):
+        calls["pages"] = pages
+        return CrawlReport(0, fetched=8, skipped=2, archived=10)
+
+    monkeypatch.setattr("movie_brain.cli.crawl_archive", fake_crawl)
+    r = runner.invoke(app, ["metacritic", "crawl"])
+    assert r.exit_code == 0 and calls["pages"] == 10
+    assert "fetched: 8" in r.output and "archived: 10" in r.output
+
+    def failing_crawl(cfg_dir, pages, **kw):
+        return CrawlReport(1, fetched=1, skipped=0, archived=1)
+
+    monkeypatch.setattr("movie_brain.cli.crawl_archive", failing_crawl)
+    r = runner.invoke(app, ["metacritic", "crawl", "--pages", "5"])
+    assert r.exit_code == 1
+
+
+def test_metacritic_match_prints_coverage_report(config_dir, monkeypatch):
+    from movie_brain.application.metacritic import MatchReport
+
+    report = MatchReport(0, pages=10, titles=240, floor=94, films=3051, matched=57, expected_missed=3, review_open=5)
+    monkeypatch.setattr("movie_brain.cli.match_archive", lambda repo, cfg_dir, today: report)
+    r = runner.invoke(app, ["metacritic", "match"])
+    assert r.exit_code == 0
+    assert "10 pages" in r.output and "240 titles" in r.output and "floor 94" in r.output
+    assert "57/3051" in r.output and "1.9%" in r.output
+    assert "expected-but-missed: 3" in r.output and "5 open" in r.output
+
+
+def test_metacritic_match_fails_without_archive(config_dir, monkeypatch):
+    from movie_brain.application.metacritic import MatchReport
+
+    empty = MatchReport(1, 0, 0, None, 0, 0, 0, 0)
+    monkeypatch.setattr("movie_brain.cli.match_archive", lambda repo, cfg_dir, today: empty)
+    r = runner.invoke(app, ["metacritic", "match"])
+    assert r.exit_code == 1
