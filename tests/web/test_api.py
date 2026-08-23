@@ -121,3 +121,29 @@ def test_scraped_metascore_is_authoritative_with_omdb_fallback(tmp_path):
     assert films["Linked"]["metacritic_url"] == "https://www.metacritic.com/movie/linked-1950/"
     assert films["Fallback"]["metacritic"] == 70  # OMDb fallback keeps unlinked films scored
     assert films["Fallback"]["metacritic_url"] is None
+
+
+def test_services_in_payloads(repo):
+    films = [Film("Trio", 1950, "Ken", "https://c/trio")]
+    repo.record_catalog("criterion", films, D)
+    fid = repo.film_id_by_key("trio (1950)")
+    for slug in ("max", "mubi", "apple-tv-store"):
+        repo.record_listing(fid, slug, "https://tmdb/w/11", D)
+    app = create_app(repo, today=lambda: D)
+    app.testing = True
+    tc = app.test_client()
+    expected = [{"name": "HBO Max", "subscribed": True}, {"name": "MUBI", "subscribed": False}]
+    assert tc.get(f"/api/films/{fid}").get_json()["services"] == expected  # store row hidden
+    assert tc.get("/api/films").get_json()[0]["services"] == expected
+
+
+def test_stale_service_listing_is_not_current(repo):
+    films = [Film("Trio", 1950, "Ken", "https://c/trio"), Film("Quartet", 1948, None, "https://c/quartet")]
+    repo.record_catalog("criterion", films, D)
+    trio, quartet = repo.film_id_by_key("trio (1950)"), repo.film_id_by_key("quartet (1948)")
+    repo.record_listing(trio, "max", "https://tmdb/w/11", date(2026, 1, 1))  # stale
+    repo.record_listing(quartet, "max", "https://tmdb/w/22", D)  # current — defines max's frontier
+    app = create_app(repo, today=lambda: D)
+    app.testing = True
+    body = {v["title"]: v["services"] for v in app.test_client().get("/api/films").get_json()}
+    assert body["Trio"] == [] and body["Quartet"] == [{"name": "HBO Max", "subscribed": True}]

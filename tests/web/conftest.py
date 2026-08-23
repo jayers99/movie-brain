@@ -66,6 +66,10 @@ def seed(repo: Repository) -> None:
     repo.set_leaving("criterion", {"alpha (1950)": "August 31"})
     repo.set_rating(ids["alpha (1950)"], 9, TODAY)
     repo.set_rating(ids["echo (1990)"], 0, TODAY)
+    # Alpha also streams on Max (subscribed) and MUBI (not) — the drawer's "Also streaming on" line.
+    repo.record_listing(ids["alpha (1950)"], "max", "https://tmdb/w/1", TODAY)
+    repo.record_listing(ids["alpha (1950)"], "mubi", "https://tmdb/w/1", TODAY)
+    repo.record_listing(ids["alpha (1950)"], "apple-tv-store", "https://tmdb/w/1", TODAY)
 
 
 @pytest.fixture(scope="session")

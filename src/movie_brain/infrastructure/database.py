@@ -64,7 +64,23 @@ LEFT JOIN metacritic mc ON mc.slug = x.value
 """
 
 
-def _row_to_view(row: sqlite3.Row) -> FilmView:
+_SERVICES_SQL = """
+SELECT l.film_id, s.name, s.subscribed FROM listings l
+JOIN movie_service s ON s.slug = l.source
+WHERE s.kind = 'svod' AND l.source != 'criterion'
+  AND l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = l.source)
+ORDER BY l.film_id, s.subscribed DESC, s.name
+"""
+
+
+def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
+    out: dict[int, list[dict[str, object]]] = {}
+    for r in c.execute(_SERVICES_SQL):
+        out.setdefault(int(r["film_id"]), []).append({"name": str(r["name"]), "subscribed": bool(r["subscribed"])})
+    return out
+
+
+def _row_to_view(row: sqlite3.Row, services: list[dict[str, object]] | None = None) -> FilmView:
     return FilmView(
         id=row["id"],
         title=row["title"],
@@ -82,6 +98,7 @@ def _row_to_view(row: sqlite3.Row) -> FilmView:
         my_rating=row["score"],
         departed=bool(row["departed"]),
         metacritic_url=f"https://www.metacritic.com/movie/{row['mc_slug']}/" if row["mc_slug"] else None,
+        services=services or [],
     )
 
 
@@ -390,12 +407,15 @@ class Repository:
                 + "OR r.score IS NOT NULL ORDER BY f.id",
                 (source, source),
             ).fetchall()
-            return [_row_to_view(r) for r in rows]
+            services = _services_by_film(c)
+            return [_row_to_view(r, services.get(r["id"])) for r in rows]
 
     def get_view(self, film_id: int) -> FilmView | None:
         with self._conn() as c:
             row = c.execute(_VIEW_SQL + "WHERE f.id = ?", ("criterion", film_id)).fetchone()
-            return None if row is None else _row_to_view(row)
+            if row is None:
+                return None
+            return _row_to_view(row, _services_by_film(c).get(row["id"]))
 
     def get_payload(self, film_id: int) -> str | None:
         with self._conn() as c:

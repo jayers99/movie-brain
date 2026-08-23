@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 
 
 def film_key(title: str, year: int | None) -> str:
@@ -119,6 +119,7 @@ class FilmView:
     departed: bool = False  # no longer in the source's current catalog
     metacritic: int | None = None
     metacritic_url: str | None = None
+    services: list[dict[str, object]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
