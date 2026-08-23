@@ -11,7 +11,7 @@ Personal film brain: Criterion Channel listings + OMDb ratings + my 0–10 ratin
 ## Commands
 
 ```bash
-uv run movie-brain sync [--full|--ratings-only]      # refresh catalog + OMDb ratings
+uv run movie-brain sync [--full|--ratings-only]      # refresh catalog + OMDb ratings; nightly sync now also matches films to TMDB and refreshes weekly availability
 uv run movie-brain metacritic crawl [--pages 10]     # extend the raw browse-page archive (polite, checkpointed)
 uv run movie-brain metacritic match                  # offline: match archive → films, report coverage
 uv run movie-brain dashboard [--port 5556]
@@ -29,7 +29,7 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
 
 - `domain/` — pure, imports nothing else: `Film`, `FilmView`, `film_key`, `merge_yearless`, canned-filter predicates in `filters.py`.
 - `application/` — use cases (`sync`, `ratings`, `export`, `legacy_import`) orchestrating through `Repository`; no SQL or HTTP here.
-- `infrastructure/` — `config` (env / key file), SQLite `Repository` + `migrations/*.sql`, `criterion.py` (VHX API adapter), `omdb.py`.
+- `infrastructure/` — `config` (env / key file), SQLite `Repository` + `migrations/*.sql`, `criterion.py` (VHX API adapter), `omdb.py`, `tmdb.py` (watch-providers adapter).
 - `web/` — Flask `create_app(repo)`, one template; ALL filter/sort logic is client-side vanilla JS in `static/app.js` (virtual-scrolled table, state encoded in the URL).
 - `cli.py` — Typer entry point wiring config → `Repository` → use cases.
 
@@ -41,6 +41,7 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
    `criterion` external id, and bumps listings `last_seen`; `set_leaving` maps
    "Leaving <date>" categories.
 4. OMDb loop over `films_needing_lookup`. Tripwires: a catalog failure leaves the DB untouched; OMDb quota exhaustion or 5 consecutive failures stops lookups but keeps progress (free tier is 1,000/day — the backlog drains across daily runs).
+5. TMDB step (token at `<config_dir>/tmdb-read-token.txt`, else skipped): one-shot match of new films (misses → `match_review`, never retried by sync), then a weekly full US watch-providers refresh writing `listings` rows per service (never `criterion`); own tripwires — TMDB failures never affect exit code or other steps.
 
 ## Rules
 
@@ -58,13 +59,16 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
   `omdb.metacritic`. The raw page archive under `<config_dir>/metacritic/` is the crawl
   checkpoint — archived pages are never re-fetched; parsing reads only the archive. Match
   anomalies land in `match_review` (never deleted, never blocking); no scraping in sync.
+- Availability lives in `listings`: TMDB writes svod sources from `flatrate` only (plus
+  `apple-tv-store` from rent/buy provider 2); Amazon-channel ids are excluded; the weekly
+  refresh is gated by meta `tmdb_providers_refreshed_at`.
 - Canned-filter thresholds and chip names live ONLY in `domain/filters.py`; JS reads thresholds from `/api/config`. Keep `CHIP_PREDICATES` in `app.js` and the chip buttons in `index.html` in lockstep with `_PREDICATES`.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
 
 ## Data
 
-DB: `~/.config/movie-brain/movie-brain.db` (`MOVIE_BRAIN_CONFIG_DIR` overrides the directory). OMDb key: `OMDB_API_KEY` or `<config_dir>/omdb-api-key.txt`. Sync log: `<config_dir>/sync.log`. Daily 3 AM launchd job: `scripts/install-launch-agent.sh`.
+DB: `~/.config/movie-brain/movie-brain.db` (`MOVIE_BRAIN_CONFIG_DIR` overrides the directory). OMDb key: `OMDB_API_KEY` or `<config_dir>/omdb-api-key.txt`. TMDB token: `<config_dir>/tmdb-read-token.txt`. Sync log: `<config_dir>/sync.log`. Daily 3 AM launchd job: `scripts/install-launch-agent.sh`.
 
 Pre-migration backups land in `<config_dir>/backups/` automatically whenever `init_db` is
 about to apply a new migration — each file is the rollback point for one schema change.
