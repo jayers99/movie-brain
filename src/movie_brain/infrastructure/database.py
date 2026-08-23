@@ -135,6 +135,7 @@ class Repository:
             for fid in ids:
                 c.execute("DELETE FROM omdb WHERE film_id = ?", (fid,))
                 c.execute("DELETE FROM listings WHERE film_id = ?", (fid,))
+                c.execute("DELETE FROM external_ids WHERE film_id = ?", (fid,))
                 c.execute("DELETE FROM films WHERE id = ?", (fid,))
         return len(ids)
 
@@ -153,6 +154,12 @@ class Repository:
                     "VALUES ((SELECT id FROM films WHERE key = ?), ?, ?, ?, ?) "
                     "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
                     (film.key, source, film.url, day, day),
+                )
+                c.execute(
+                    "INSERT INTO external_ids (film_id, authority, value, first_seen) "
+                    "VALUES ((SELECT id FROM films WHERE key = ?), ?, ?, ?) "
+                    "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                    (film.key, source, film.url, day),
                 )
 
     def set_leaving(self, source: str, leaving: dict[str, str]) -> None:
@@ -185,6 +192,25 @@ class Repository:
             return [
                 (r["id"], Film(r["title"], r["year"], r["director"], r["url"])) for r in self._current_rows(c, source)
             ]
+
+    # external ids / services ------------------------------------------
+    def set_external_id(self, film_id: int, authority: str, value: str, seen: date) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                (film_id, authority, value, seen.isoformat()),
+            )
+
+    def external_ids_for(self, film_id: int) -> dict[str, str]:
+        with self._conn() as c:
+            rows = c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (film_id,)).fetchall()
+            return {str(r["authority"]): str(r["value"]) for r in rows}
+
+    def services(self) -> list[dict[str, object]]:
+        with self._conn() as c:
+            rows = c.execute("SELECT slug, name, kind, subscribed, region FROM movie_service ORDER BY slug").fetchall()
+            return [dict(r) for r in rows]
 
     # meta -------------------------------------------------------------
     def get_meta(self, key: str) -> str | None:
