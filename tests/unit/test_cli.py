@@ -100,3 +100,15 @@ def test_metacritic_match_fails_without_archive(config_dir, monkeypatch):
     monkeypatch.setattr("movie_brain.cli.match_archive", lambda repo, cfg_dir, today: empty)
     r = runner.invoke(app, ["metacritic", "match"])
     assert r.exit_code == 1
+
+
+def test_metacritic_dial_shows_default_and_sets(config_dir):
+    r = runner.invoke(app, ["metacritic", "dial"])
+    assert r.exit_code == 0
+    assert "100" in r.output  # DEFAULT_TOP_N
+
+    r = runner.invoke(app, ["metacritic", "dial", "500"])
+    assert r.exit_code == 0
+
+    r = runner.invoke(app, ["metacritic", "dial"])
+    assert "500" in r.output
