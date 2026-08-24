@@ -102,4 +102,26 @@ def test_movie_titles():
         f"{TMDB_API}/movie/62518",
         json={"title": "Wild Blood", "original_title": "Vahşi Kan", "release_date": "1983-01-01"},
     )
-    assert TmdbClient("t").movie_titles(62518) == ("Wild Blood", "Vahşi Kan", 1983)
+    assert TmdbClient("t").movie_titles(62518) == ("Wild Blood", "Vahşi Kan", 1983, ())
+
+
+@responses.activate
+def test_movie_titles_folds_alternative_titles_into_the_same_call():
+    responses.get(
+        f"{TMDB_API}/movie/1",
+        json={
+            "title": "The World of Apu",
+            "original_title": "Apur Sansar",
+            "release_date": "1959-01-01",
+            "alternative_titles": {
+                "titles": [
+                    {"iso_3166_1": "IN", "title": "Apur Sansar"},
+                    {"iso_3166_1": "GB", "title": "The World of Apu (Apu Trilogy 3)"},
+                ]
+            },
+        },
+    )
+    titles = TmdbClient("t").movie_titles(1)
+    assert titles.alternatives == ("Apur Sansar", "The World of Apu (Apu Trilogy 3)")
+    assert len(responses.calls) == 1
+    assert "append_to_response=alternative_titles" in responses.calls[0].request.url

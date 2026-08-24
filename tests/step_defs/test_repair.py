@@ -223,6 +223,41 @@ def describe(ctx, tid, title, orig, year):
     ctx["rs"].get(f"{TMDB_API}/movie/{tid}", json={"title": title, "original_title": orig, "release_date": f"{year}-01-01"})
 
 
+@given(parsers.parse('TMDB describes id {tid:d} as "{title}" / "{orig}" from {year:d} with alternative titles "{alts}"'))
+def describe_with_alts(ctx, tid, title, orig, year, alts):
+    ctx["rs"].get(
+        f"{TMDB_API}/movie/{tid}",
+        json={
+            "title": title,
+            "original_title": orig,
+            "release_date": f"{year}-01-01",
+            "alternative_titles": {"titles": [{"iso_3166_1": "XX", "title": a.strip()} for a in alts.split(";")]},
+        },
+    )
+
+
+@when(parsers.parse('I audit links for film "{spec}"'))
+def audit_links_for(ctx, spec):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    ctx["suspects"], _, _ = repair.audit_links(ctx["repo"], TmdbClient("tok"), film_id=fid, log=lambda _m: None)
+
+
+@when(parsers.parse('I apply links for film "{spec}"'))
+def apply_links_for(ctx, spec):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    try:
+        ctx["links"] = repair.repair_links(
+            ctx["repo"], TmdbClient("tok"), TODAY, film_id=fid, apply=True, log=lambda _m: None
+        )
+    except LookupError as exc:
+        ctx["links_error"] = str(exc)
+
+
+@then(parsers.parse('the links repair fails with "{text}"'))
+def links_fails(ctx, text):
+    assert text in ctx["links_error"]
+
+
 @when("I audit links")
 def audit_links(ctx):
     ctx["suspects"], _, _ = repair.audit_links(ctx["repo"], TmdbClient("tok"), log=lambda _m: None)

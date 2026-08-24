@@ -1098,13 +1098,26 @@ class Repository:
                 "WHERE film_id = ? AND resolved = 0",
                 (f" [merged into film {survivor_id} {today.isoformat()}]", loser_id),
             )
+            resolved = cur.rowcount
+            # The survivor's own reviews that named the loser as the counterpart (id-conflict /
+            # year-collision) are satisfied by this merge too; unrelated survivor rows stay open.
+            cur = c.execute(
+                "UPDATE match_review SET resolved = 1, detail = COALESCE(detail, '') || ? "
+                "WHERE film_id = ? AND value = ? AND resolved = 0",
+                (
+                    f" [counterpart film {loser_id} merged into this film {today.isoformat()}]",
+                    survivor_id,
+                    str(loser_id),
+                ),
+            )
+            resolved += cur.rowcount
             full_note = json.dumps({"note": note, "dropped": kept}) if (note or kept) else None
             c.execute(
                 "INSERT INTO film_disposition (film_id, kind, survivor_id, note, created_at) "
                 "VALUES (?, 'merged', ?, ?, ?)",
                 (loser_id, survivor_id, full_note, today.isoformat()),
             )
-            return MergeReport(moved, dropped, cur.rowcount)
+            return MergeReport(moved, dropped, resolved)
 
     # views ------------------------------------------------------------
     def list_views(self, source: str, today: date | None = None) -> list[FilmView]:

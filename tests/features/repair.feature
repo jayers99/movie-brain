@@ -98,6 +98,27 @@ Feature: Dispositioned films stay out of every collector's way
     When I audit links
     Then there are no link suspects
 
+  Scenario: A film matching one of TMDB's alternative titles is not a suspect
+    Given "Alpha (1950)" holds tmdb id "5"
+    And TMDB describes id 5 as "Alfa" / "Alfa" from 1950 with alternative titles "Alpha; Der Alpha"
+    When I audit links
+    Then there are no link suspects
+
+  Scenario: Repairing one film by id clears its link even when the titles agree
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1951)" holds tmdb id "62518"
+    And TMDB describes id 5 as "Alpha" / "Alpha" from 1950
+    And TMDB describes id 62518 as "Wild Blood" / "Vahşi Kan" from 1983
+    When I audit links for film "Alpha (1950)"
+    Then the only link suspect is "Alpha (1950)"
+    When I apply links for film "Alpha (1950)"
+    Then "Alpha (1950)" has no tmdb id and is a TMDB miss
+    And "Alpha (1951)" still holds tmdb id "62518"
+
+  Scenario: Repairing a film that holds no TMDB link is an error
+    When I apply links for film "Alpha (1950)"
+    Then the links repair fails with "no TMDB link"
+
   Scenario: The years worklist lists stale OMDb payloads and applying marks them for refetch
     Given "Alpha (1951)" has an OMDb payload fetched for year 1953
     When I audit years
