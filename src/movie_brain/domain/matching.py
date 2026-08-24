@@ -1,46 +1,76 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from movie_brain.domain.models import TmdbCandidate
 
-_ANNOTATION = re.compile(r"\s*\((?:re-release|\d{4})\)\s*$", re.IGNORECASE)
 _FAR = 10_000  # sort key for year-less candidates: after any real year distance
 
-
-def clean_title(title: str) -> str:
-    """Strip trailing "(1988)" / "(re-release)" annotations Metacritic appends."""
-    return _ANNOTATION.sub("", title).strip()
-
-
-_APPLE_ANNOTATIONS = (
+EDITION_ANNOTATIONS: tuple[str, ...] = (
+    "re-release",
+    "rerelease",
     "unrated",
     "director's cut",
+    "director's edition",
     "extended edition",
     "extended cut",
     "theatrical version",
     "theatrical cut",
     "special edition",
+    "collector's edition",
     "uncut",
     "remastered",
+    "restored",
+    "restored version",
     "4k",
+    "4k restoration",
+    "4k remaster",
     "subtitled",
     "dubbed",
     "english subtitles",
 )
-_APPLE_ANNOTATION = re.compile(
-    r"\s*\((?:" + "|".join(re.escape(a) for a in _APPLE_ANNOTATIONS) + r")\)\s*$",
+_EDITION_ALT = "|".join(re.escape(a) for a in EDITION_ANNOTATIONS)
+_EDITION_RE = re.compile(
+    r"\s*(?:\((?:the\s+)?(" + _EDITION_ALT + r")\)"
+    r"|\[(?:the\s+)?(" + _EDITION_ALT + r")\]"
+    r"|[–—-]\s+(?:the\s+)?(" + _EDITION_ALT + r"))\s*$",
     re.IGNORECASE,
 )
 
 
-def clean_apple_title(title: str) -> str:
-    """Strip one trailing edition annotation the Apple TV library appends."""
-    return _APPLE_ANNOTATION.sub("", title).strip()
+def split_annotations(title: str) -> tuple[str, tuple[str, ...]]:
+    """Peel trailing edition annotations — "(Director's Cut)", "[4K]", "– Special Edition" —
+    one at a time, in any of the sources' bracket/dash conventions. Stacked annotations
+    (multiple trailing parens) are all collected; never strips the title down to empty."""
+    found: list[str] = []
+    t = title
+    while (m := _EDITION_RE.search(t)) and t[: m.start()].strip():
+        found.append(next(g for g in m.groups() if g).casefold())
+        t = t[: m.start()].strip()
+    return t, tuple(found)
 
 
 _TRAILING_YEAR = re.compile(r"\s*\((\d{4})\)\s*$")
+
+
+def clean_title(title: str) -> str:
+    """Strip trailing "(1988)" year parens and edition annotations Metacritic appends."""
+    t = title
+    while True:
+        m = _TRAILING_YEAR.search(t)
+        if m and t[: m.start()].strip():
+            t = t[: m.start()].strip()
+            continue
+        t, found = split_annotations(t)
+        if not found:
+            return t
+
+
+def clean_apple_title(title: str) -> str:
+    """Strip trailing edition annotations the Apple TV library appends."""
+    return split_annotations(title)[0]
 
 
 def parse_apple_title(title: str) -> tuple[str, int | None]:
@@ -60,13 +90,22 @@ def parse_apple_title(title: str) -> tuple[str, int | None]:
     return t, year
 
 
-def norm_title(title: str) -> str:
-    """Punctuation/case-insensitive comparison key ("Forbidden Lie$" == "Forbidden Lies").
+_VOL = re.compile(r"\bvol\b\.?")
 
-    str.isalnum keeps unicode letters/digits and drops every kind of punctuation —
-    including curly quotes, which a character-class regex would silently keep.
+
+def norm_title(title: str) -> str:
+    """Punctuation/case/diacritic-insensitive comparison key.
+
+    Folds diacritics ("Tête" == "Tete"), "&" to "and", "$" to "s", and "vol[.]" to
+    "volume" (word-bounded, so "Volcano" is untouched) before dropping every kind of
+    punctuation — including curly quotes, which a character-class regex would silently
+    keep. str.isalnum keeps unicode letters/digits.
     """
-    return "".join(ch for ch in title.casefold().replace("$", "s") if ch.isalnum())
+    t = unicodedata.normalize("NFKD", title.casefold())
+    t = "".join(ch for ch in t if not unicodedata.combining(ch))
+    t = t.replace("&", " and ").replace("$", "s")
+    t = _VOL.sub("volume", t)
+    return "".join(ch for ch in t if ch.isalnum())
 
 
 @dataclass(frozen=True)
