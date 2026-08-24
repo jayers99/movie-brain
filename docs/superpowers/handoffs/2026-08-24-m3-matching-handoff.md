@@ -74,9 +74,9 @@ Final whole-branch review verdict: ready to merge, zero Critical/Important findi
    The Wolf Man, Romeo & Juliet, …): two DB films resolving to one TMDB movie — exactly
    the merge candidates `repair dupes` needs; each row's `detail` names both film ids
    (note: `value`/detail reflect the FIRST detection — re-derive at resolution time).
-3. **The nightly launchd agent is NOT installed** (`launchctl list` empty; no sync.log).
-   Every "nightly" sync so far was manual. `scripts/install-launch-agent.sh` exists —
-   user's call, still pending.
+3. **Syncs are manual by choice** — the launchd agent is deliberately not installed (user
+   decision, 2026-08-24: "i will run those manual for now"). Don't flag it or wait on a
+   nightly job; if a check needs a sync, run `uv run movie-brain sync` by hand.
 4. **OMDb payloads on year-adopted films were fetched under the old (wrong) years** —
    266 films whose ratings/director/runtime may be for the wrong lookup. An OMDb refetch
    pass for adopted films is M3 triage material.
