@@ -99,12 +99,17 @@ def record_tmdb_match(
 
 
 def tmdb_step(
-    repo: Repository, client: TmdbClient, today: date, log: Callable[[str], None] = _stderr
+    repo: Repository,
+    client: TmdbClient,
+    today: date,
+    *,
+    arbiter: TmdbArbiter | None = None,
+    log: Callable[[str], None] = _stderr,
 ) -> TmdbStepResult:
     matched = missed = refreshed = 0
     consecutive = 0
     aborted = False
-    arbiter = TmdbArbiter(client)
+    arbiter = arbiter if arbiter is not None else TmdbArbiter(client)
     for target in repo.films_needing_tmdb_match():
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
             log("TMDB searches failing repeatedly — stopping; next run resumes.")
