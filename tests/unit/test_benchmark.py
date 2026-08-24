@@ -63,6 +63,50 @@ def test_lawrence_tmdb_reproduces_banked_wrong_match(bench: Any) -> None:
     assert result.wrong_match
 
 
+def test_lawrence_tmdb_new_matcher_returns_none(bench: Any) -> None:
+    """New pick_tmdb_match drops the title-blind top-3 fallback: no title match, no result."""
+    case = next(c for c in bench.GROUND_TRUTHS if c.name == "lawrence-tmdb")
+    result = bench.run_case(case, bench.new_matcher_set())
+    assert result.observed == "none"
+    assert result.expect == "none"
+    assert result.passed
+
+
+def test_kill_bill_vol_1_new_matcher_matches(bench: Any) -> None:
+    case = next(c for c in bench.GROUND_TRUTHS if c.name == "kill-bill-vol-1")
+    result = bench.run_case(case, bench.new_matcher_set())
+    assert result.observed == "match:1"
+    assert result.passed
+
+
+def test_diacritic_fold_new_matcher_matches(bench: Any) -> None:
+    case = next(c for c in bench.GROUND_TRUTHS if c.name == "diacritic-fold")
+    result = bench.run_case(case, bench.new_matcher_set())
+    assert result.observed == "match:1"
+    assert result.passed
+
+
+def test_stop_making_sense_runtime_new_matcher_matches(bench: Any) -> None:
+    case = next(c for c in bench.GROUND_TRUTHS if c.name == "stop-making-sense-runtime")
+    result = bench.run_case(case, bench.new_matcher_set())
+    assert result.observed == "match:1"
+    assert result.passed
+
+
+def test_dominates_true_iff_new_wrong_is_zero_and_le_baseline(bench: Any) -> None:
+    zero = bench.GtSummary(passed=10, failed=0, wrong=0)
+    one = bench.GtSummary(passed=9, failed=1, wrong=1)
+    two = bench.GtSummary(passed=8, failed=2, wrong=2)
+    # New has zero wrong-matches and baseline has some -> dominates.
+    assert bench.dominates(one, zero) is True
+    # New still zero, baseline also zero -> dominates (0 <= 0).
+    assert bench.dominates(zero, zero) is True
+    # New has a wrong-match even though it's <= baseline's -> does not dominate.
+    assert bench.dominates(two, one) is False
+    # New has fewer wrong-matches than baseline but not zero -> does not dominate.
+    assert bench.dominates(two, one) is False
+
+
 def test_replay_apple_rate_math(bench: Any) -> None:
     pool = [
         bench.PoolFilm(1, "Alpha", 1950, None, None),

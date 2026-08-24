@@ -457,3 +457,39 @@ Run: `uv run python scripts/matching_benchmark.py` against the live `~/.config/m
 
 - Metacritic (200 pages, n=4800 parsed titles): match=31.5%, review=0.0%, create=68.5%.
 - Apple TV owned export (`owned-2026-08-23.txt`, n=870 lines): match=99.2%, review=0.8%, create=0.0%. (High match rate because `owned import` already ran against this DB and created a film for every prior miss — the archive replay here only re-matches, never creates.)
+
+## Dominance run (Task 6)
+
+Run: `uv run python scripts/matching_benchmark.py --assert-dominance` against the same live `~/.config/movie-brain` DB (read-only). Exit code: **0** (gate PASS) on the first attempt — none of the permitted tuning knobs (EDITION_ANNOTATIONS additions, rerelease-hint derivation, L2 word-count floor) were needed.
+
+Two live-wiring bugs in the benchmark harness itself were fixed while wiring the new `MatcherSet`, both required to get the ground-truth suite scoring correctly (neither touches `domain/matching.py` or any live caller — the callers were already correct):
+
+- `match_owned`'s `embedded_year` kwarg is a `bool`; the harness was passing the `int | None` year straight through.
+- `application/owned.py` computes `rerelease_hint` from the Apple title's edition annotation *before* `parse_apple_title` strips it (against the original title); the harness now replicates that exactly, otherwise the hint is always `False` and `restored-version`/`directors-edition-dash` wrongly land in review instead of matching on rerelease corroboration.
+
+**Baseline numbers are unchanged from Task 1** (confirms no regression in the frozen snapshot): gt 14-pass/11-fail/1 wrong-match; Metacritic replay 31.5/0.0/68.5; Apple replay 99.2/0.8/0.0.
+
+**Ground-truth suite, new matcher set:** 25 gt-pass / 0 gt-fail / **0 wrong-matches** (was 14/11/1). Every baseline failure is fixed:
+
+| case | expect | baseline | new |
+|---|---|---|---|
+| lawrence-tmdb | none | match:731627 (WRONG-MATCH) | none |
+| stop-making-sense-runtime | match:1 | review | match:1 |
+| kill-bill-vol-1 | match:1 | create | match:1 |
+| kill-bill-stay-distinct | match:2 | create | match:2 |
+| diacritic-fold | match:1 | create | match:1 |
+| ampersand | match:1 | create | match:1 |
+| bracket-rerelease | match:1 | create | match:1 |
+| restored-version | match:1 | create | match:1 |
+| directors-edition-dash | match:1 | create | match:1 |
+| subtitle-prefix | match:1 | create | match:1 |
+| subtitle-weak-no-year | review | create | review |
+
+The remaining 14 ground-truth cases pass under both matchers (unchanged).
+
+**Archive replay, new matcher set** (same corpora as the baseline run):
+
+- Metacritic (n=4800): match=28.8%, review=2.9% (< 5% target), create=68.3%. Review sample (10 of 4800): `Tokyo Story`, `Playtime`, `The Rules of the Game`, `Seven Samurai`, `Killer of Sheep`, `The Battle of Algiers`, `Children of Paradise (1945)`, `Jeanne Dielman, 23, quai du commerce, 1080 Bruxelles`, `Elevator to the Gallows`, `The Life and Death of Colonel Blimp (1945)` — these are the Tokyo-Story-class year-gap cases M1 deliberately routes to review (an M2-arbiter class) rather than risk a remake-era wrong-match; some MC-vs-canonical-title mismatches (long subtitle) also land here.
+- Apple TV owned export (n=870): match=99.2%, review=0.8% (< 5% target), create=0.0% — identical to baseline (`Anna Karenina (2012)`, `King Kong (1976)`, `Hamlet (1996)`, `The Fly (1958)`, `Nosferatu (2024)`, `The Mummy (1932)`, `Scarface (1983)`); this corpus was already re-matched to near-completion by a prior `owned import` run, so it doesn't exercise the year-gap-without-corroboration path the way the Metacritic corpus does.
+
+**Gate verdict:** `--assert-dominance` → PASS (new gt-wrong=0, mc review%=2.9, apple review%=0.8). M1 Done-gate numbers (wrong-match ≈ 0 and strictly ≤ baseline; review load < 5% on both archive replays) are met without loosening any wrong-match safety rule.
