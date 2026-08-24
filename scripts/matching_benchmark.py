@@ -8,6 +8,7 @@ same ``run_case``/``replay_*`` machinery, side by side with this frozen baseline
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import re
 import sqlite3
@@ -18,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NamedTuple, Protocol
 
+from movie_brain.domain import matching as new_matching
 from movie_brain.infrastructure import appletv, metacritic
 from movie_brain.infrastructure.config import load_config
 
@@ -87,6 +89,7 @@ class MatcherSet:
         pick_tmdb_match: Callable[..., int | None],
         parse_apple_title: Callable[[str], tuple[str, int | None]],
         supports_runtime: bool = False,
+        split_annotations: Callable[[str], tuple[str, tuple[str, ...]]] | None = None,
     ) -> None:
         self.norm_title = norm_title
         self.clean_title = clean_title
@@ -95,6 +98,10 @@ class MatcherSet:
         self.pick_tmdb_match = pick_tmdb_match
         self.parse_apple_title = parse_apple_title
         self.supports_runtime = supports_runtime
+        # Only the new (evidence-scored) set needs this: owned.py detects the
+        # rerelease hint against the ORIGINAL apple title before parse_apple_title
+        # strips it, so the benchmark must replicate that live-caller step exactly.
+        self.split_annotations = split_annotations
 
 
 def baseline_matcher_set() -> MatcherSet:
@@ -106,6 +113,21 @@ def baseline_matcher_set() -> MatcherSet:
         pick_tmdb_match=baseline.pick_tmdb_match,
         parse_apple_title=baseline.parse_apple_title,
         supports_runtime=False,
+    )
+
+
+def new_matcher_set() -> MatcherSet:
+    """The M1 evidence-scored matchers (movie_brain.domain.matching), wired to mirror
+    the LIVE callers exactly: application/owned.py and application/metacritic.py."""
+    return MatcherSet(
+        norm_title=new_matching.norm_title,
+        clean_title=new_matching.clean_title,
+        match_film=new_matching.match_film,
+        match_owned=new_matching.match_owned,
+        pick_tmdb_match=new_matching.pick_tmdb_match,
+        parse_apple_title=new_matching.parse_apple_title,
+        supports_runtime=True,
+        split_annotations=new_matching.split_annotations,
     )
 
 
@@ -136,6 +158,24 @@ class Rates:
     match_pct: float
     review_pct: float
     create_pct: float
+    review_samples: tuple[str, ...] = ()  # up to ~10 raw titles that landed in review
+
+
+@dataclass(frozen=True)
+class GtSummary:
+    passed: int
+    failed: int
+    wrong: int
+
+
+def summarize(results: list[CaseResult]) -> GtSummary:
+    passed = sum(1 for r in results if r.passed)
+    return GtSummary(passed=passed, failed=len(results) - passed, wrong=sum(1 for r in results if r.wrong_match))
+
+
+def dominates(baseline_summary: GtSummary, new_summary: GtSummary) -> bool:
+    """True iff the new matcher has zero wrong-matches and is no worse than baseline."""
+    return new_summary.wrong == 0 and new_summary.wrong <= baseline_summary.wrong
 
 
 # --------------------------------------------------------------------------- #
@@ -396,36 +436,28 @@ def _map_verdict(result: MatchResultLike, candidates: list[Any], *, review_on_no
     return "create"
 
 
+def _map_verdict_new(result: MatchResultLike) -> str:
+    """Verdict mapping for the new evidence-scored set, exactly as the live callers
+    (import_owned / match_archive) interpret a MatchResult: winner -> match; tied ->
+    review; a non-tie review reason -> review; a bare MatchResult(None) -> create."""
+    if result.tied:
+        return "review"
+    if result.winner is not None:
+        return f"match:{result.winner}"
+    if getattr(result, "reason", None) is not None:
+        return "review"
+    return "create"
+
+
+def _pool_index(pool: tuple[PoolFilm, ...]) -> new_matching.CandidateIndex:
+    return new_matching.build_candidate_index(pool)
+
+
 def _is_wrong_match(observed: str, expect: str) -> bool:
     return observed.startswith("match:") and observed != expect
 
 
-def run_case(case: Case, matcher_set: MatcherSet) -> CaseResult:
-    """Dispatch by source, mapping the raw matcher return onto the verdict vocabulary
-    exactly as the live callers (match_archive / import_owned / the tmdb step) do."""
-    if case.source == "metacritic":
-        cleaned = matcher_set.clean_title(case.title)
-        key = matcher_set.norm_title(cleaned)
-        candidates = _pool_candidates(case.pool, matcher_set.norm_title, key)
-        result = matcher_set.match_film(cleaned, case.year, candidates)
-        observed = _map_verdict(result, candidates, review_on_no_winner=False)
-    elif case.source == "apple":
-        cleaned, embedded_year = matcher_set.parse_apple_title(case.title)
-        year = embedded_year if embedded_year is not None else case.year
-        key = matcher_set.norm_title(cleaned)
-        candidates = _pool_candidates(case.pool, matcher_set.norm_title, key)
-        if matcher_set.supports_runtime:
-            result = matcher_set.match_owned(
-                cleaned, year, candidates, runtime_min=case.runtime_min, embedded_year=embedded_year
-            )
-        else:
-            result = matcher_set.match_owned(cleaned, year, candidates)
-        observed = _map_verdict(result, candidates, review_on_no_winner=True)
-    elif case.source == "tmdb":
-        winner = matcher_set.pick_tmdb_match(case.title, case.year, list(case.tmdb))
-        observed = f"match:{winner}" if winner is not None else "none"
-    else:
-        raise ValueError(f"unknown case source {case.source!r}")
+def _make_result(case: Case, observed: str) -> CaseResult:
     return CaseResult(
         name=case.name,
         expect=case.expect,
@@ -435,56 +467,142 @@ def run_case(case: Case, matcher_set: MatcherSet) -> CaseResult:
     )
 
 
-def _rates(n: int, match: int, review: int, create: int) -> Rates:
+def run_case(case: Case, matcher_set: MatcherSet) -> CaseResult:
+    """Dispatch by source, mapping the raw matcher return onto the verdict vocabulary
+    exactly as the live callers (match_archive / import_owned / the tmdb step) do."""
+    if case.source == "metacritic":
+        cleaned = matcher_set.clean_title(case.title)
+        if matcher_set.supports_runtime:
+            index = _pool_index(case.pool)
+            # match_film does its own clean_title/split_annotations on the RAW title —
+            # application/metacritic.py passes the raw MC title, not `cleaned`.
+            result = matcher_set.match_film(case.title, case.year, index)
+            observed = _map_verdict_new(result)
+        else:
+            key = matcher_set.norm_title(cleaned)
+            candidates = _pool_candidates(case.pool, matcher_set.norm_title, key)
+            result = matcher_set.match_film(cleaned, case.year, candidates)
+            observed = _map_verdict(result, candidates, review_on_no_winner=False)
+    elif case.source == "apple":
+        cleaned, embedded_year = matcher_set.parse_apple_title(case.title)
+        year = embedded_year if embedded_year is not None else case.year
+        if matcher_set.supports_runtime:
+            assert matcher_set.split_annotations is not None
+            # application/owned.py detects the rerelease hint against the ORIGINAL
+            # title (parse_apple_title already stripped it out of `cleaned`).
+            rerelease_hint = bool(matcher_set.split_annotations(case.title)[1])
+            index = _pool_index(case.pool)
+            result = matcher_set.match_owned(
+                cleaned,
+                year,
+                index,
+                embedded_year=embedded_year is not None,
+                rerelease_hint=rerelease_hint,
+                runtime_min=case.runtime_min,
+            )
+            observed = _map_verdict_new(result)
+        else:
+            key = matcher_set.norm_title(cleaned)
+            candidates = _pool_candidates(case.pool, matcher_set.norm_title, key)
+            result = matcher_set.match_owned(cleaned, year, candidates)
+            observed = _map_verdict(result, candidates, review_on_no_winner=True)
+    elif case.source == "tmdb":
+        winner = matcher_set.pick_tmdb_match(case.title, case.year, list(case.tmdb))
+        observed = f"match:{winner}" if winner is not None else "none"
+    else:
+        raise ValueError(f"unknown case source {case.source!r}")
+    return _make_result(case, observed)
+
+
+_SAMPLE_CAP = 10
+
+
+def _rates(n: int, match: int, review: int, create: int, samples: tuple[str, ...] = ()) -> Rates:
     if n == 0:
-        return Rates(0, 0.0, 0.0, 0.0)
-    return Rates(n, round(100 * match / n, 1), round(100 * review / n, 1), round(100 * create / n, 1))
+        return Rates(0, 0.0, 0.0, 0.0, ())
+    return Rates(
+        n, round(100 * match / n, 1), round(100 * review / n, 1), round(100 * create / n, 1), samples
+    )
 
 
 def replay_metacritic(matcher_set: MatcherSet, films: list[PoolFilm], titles: list[Any]) -> Rates:
     """Replay every parsed Metacritic archive title through the metacritic path,
-    replicating match_archive's by-norm-title candidate bucket."""
+    replicating match_archive's by-norm-title candidate bucket (baseline) or a full
+    CandidateIndex over the corpus (new set — its own lookup does the bucketing)."""
     by_norm: dict[str, list[tuple[int, str, int | None]]] = defaultdict(list)
-    for f in films:
-        by_norm[matcher_set.norm_title(f.title)].append((f.id, f.title, f.year))
+    index: new_matching.CandidateIndex | None = None
+    if matcher_set.supports_runtime:
+        index = new_matching.build_candidate_index(films)
+    else:
+        for f in films:
+            by_norm[matcher_set.norm_title(f.title)].append((f.id, f.title, f.year))
     match = review = create = 0
+    samples: list[str] = []
     for t in titles:
-        cleaned = matcher_set.clean_title(t.title)
-        candidates = by_norm.get(matcher_set.norm_title(cleaned), [])
-        result = matcher_set.match_film(cleaned, t.year, candidates)
-        verdict = _map_verdict(result, candidates, review_on_no_winner=False)
+        if matcher_set.supports_runtime:
+            assert index is not None
+            # match_film does its own clean_title/split_annotations on the RAW title.
+            result = matcher_set.match_film(t.title, t.year, index)
+            verdict = _map_verdict_new(result)
+        else:
+            cleaned = matcher_set.clean_title(t.title)
+            candidates = by_norm.get(matcher_set.norm_title(cleaned), [])
+            result = matcher_set.match_film(cleaned, t.year, candidates)
+            verdict = _map_verdict(result, candidates, review_on_no_winner=False)
         if verdict.startswith("match:"):
             match += 1
         elif verdict == "review":
             review += 1
+            if len(samples) < _SAMPLE_CAP:
+                samples.append(t.title)
         else:
             create += 1
-    return _rates(len(titles), match, review, create)
+    return _rates(len(titles), match, review, create, tuple(samples))
 
 
 def replay_apple(matcher_set: MatcherSet, films: list[PoolFilm], lines: list[Any]) -> Rates:
     """Replay every Apple archive line through the apple path, replicating
-    import_owned's by-norm-title candidate bucket."""
+    import_owned's by-norm-title candidate bucket (baseline) or a full CandidateIndex
+    over the corpus (new set). The Apple archive is 2-column — no per-title runtime,
+    so runtime_min is always None here (director/runtime evidence still flows from
+    the corpus side via the enriched `films` rows)."""
     by_norm: dict[str, list[tuple[int, str, int | None]]] = defaultdict(list)
-    for f in films:
-        by_norm[matcher_set.norm_title(f.title)].append((f.id, f.title, f.year))
+    index: new_matching.CandidateIndex | None = None
+    if matcher_set.supports_runtime:
+        index = new_matching.build_candidate_index(films)
+    else:
+        for f in films:
+            by_norm[matcher_set.norm_title(f.title)].append((f.id, f.title, f.year))
     match = review = create = 0
+    samples: list[str] = []
     for t in lines:
         cleaned, embedded_year = matcher_set.parse_apple_title(t.title)
         year = embedded_year if embedded_year is not None else t.year
-        candidates = by_norm.get(matcher_set.norm_title(cleaned), [])
         if matcher_set.supports_runtime:
-            result = matcher_set.match_owned(cleaned, year, candidates, runtime_min=None, embedded_year=embedded_year)
+            assert index is not None and matcher_set.split_annotations is not None
+            rerelease_hint = bool(matcher_set.split_annotations(t.title)[1])
+            result = matcher_set.match_owned(
+                cleaned,
+                year,
+                index,
+                embedded_year=embedded_year is not None,
+                rerelease_hint=rerelease_hint,
+                runtime_min=None,
+            )
+            verdict = _map_verdict_new(result)
         else:
+            candidates = by_norm.get(matcher_set.norm_title(cleaned), [])
             result = matcher_set.match_owned(cleaned, year, candidates)
-        verdict = _map_verdict(result, candidates, review_on_no_winner=True)
+            verdict = _map_verdict(result, candidates, review_on_no_winner=True)
         if verdict.startswith("match:"):
             match += 1
         elif verdict == "review":
             review += 1
+            if len(samples) < _SAMPLE_CAP:
+                samples.append(t.title)
         else:
             create += 1
-    return _rates(len(lines), match, review, create)
+    return _rates(len(lines), match, review, create, tuple(samples))
 
 
 # --------------------------------------------------------------------------- #
@@ -511,8 +629,10 @@ def load_films(db_path: Path) -> list[PoolFilm]:
     conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     try:
         rows = conn.execute(
-            "SELECT f.id, f.title, f.year, COALESCE(f.director, json_extract(o.payload,'$.Director')), "
-            "json_extract(o.payload,'$.Runtime') FROM films f LEFT JOIN omdb o ON o.film_id=f.id"
+            "SELECT f.id, f.title, f.year, "
+            "COALESCE(f.director, NULLIF(json_extract(o.payload,'$.Director'), 'N/A')), "
+            "NULLIF(json_extract(o.payload,'$.Runtime'), 'N/A') "
+            "FROM films f LEFT JOIN omdb o ON o.film_id=f.id"
         ).fetchall()
     finally:
         conn.close()
@@ -529,20 +649,31 @@ def load_latest_apple_export(config_dir: Path) -> list[Any]:
     return appletv.parse_export(files[-1].read_text())
 
 
-def _print_case_table(results: list[CaseResult]) -> None:
-    print(f"{'case':<32} {'expect':<12} {'observed':<14} {'result'}")
-    for r in results:
-        status = "PASS" if r.passed else ("WRONG-MATCH" if r.wrong_match else "FAIL")
-        print(f"{r.name:<32} {r.expect:<12} {r.observed:<14} {status}")
+def _status(r: CaseResult) -> str:
+    return "PASS" if r.passed else ("WRONG-MATCH" if r.wrong_match else "FAIL")
 
 
-def _print_summary(results: list[CaseResult]) -> None:
-    passed = sum(1 for r in results if r.passed)
-    failed = len(results) - passed
-    wrong = sum(1 for r in results if r.wrong_match)
+def _delta(baseline_r: CaseResult, new_r: CaseResult) -> str:
+    if new_r.passed and not baseline_r.passed:
+        return "FIXED"
+    if baseline_r.passed and not new_r.passed:
+        return "REGRESSED"
+    return ""
+
+
+def _print_case_table(baseline_results: list[CaseResult], new_results: list[CaseResult]) -> None:
+    print(f"{'case':<32} {'expect':<12} {'baseline':<24} {'new':<24} {'delta'}")
+    for b, n in zip(baseline_results, new_results, strict=True):
+        assert b.name == n.name
+        baseline_col = f"{b.observed} [{_status(b)}]"
+        new_col = f"{n.observed} [{_status(n)}]"
+        print(f"{b.name:<32} {b.expect:<12} {baseline_col:<24} {new_col:<24} {_delta(b, n)}")
+
+
+def _print_summary(label: str, summary: GtSummary) -> None:
     print(
-        f"\nbaseline: {passed} gt-pass / {failed} gt-fail; "
-        f"wrong-matches (matched a different id than expected): {wrong}"
+        f"\n{label}: {summary.passed} gt-pass / {summary.failed} gt-fail; "
+        f"wrong-matches (matched a different id than expected): {summary.wrong}"
     )
 
 
@@ -550,28 +681,63 @@ def _print_rates(label: str, rates: Rates) -> None:
     print(
         f"{label}: n={rates.n} match={rates.match_pct}% review={rates.review_pct}% create={rates.create_pct}%"
     )
+    if rates.review_samples:
+        print(f"    review sample ({len(rates.review_samples)} of {rates.n}): {list(rates.review_samples)}")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--assert-dominance",
+        action="store_true",
+        help="exit 1 unless the new matcher has zero gt wrong-matches and review%% < 5.0 on both archive replays",
+    )
+    args = parser.parse_args(argv)
+
     config = load_config()
-    matcher_set = baseline_matcher_set()
+    baseline_set = baseline_matcher_set()
+    new_set = new_matcher_set()
 
-    results = [run_case(case, matcher_set) for case in GROUND_TRUTHS]
-    _print_case_table(results)
-    _print_summary(results)
+    baseline_results = [run_case(case, baseline_set) for case in GROUND_TRUTHS]
+    new_results = [run_case(case, new_set) for case in GROUND_TRUTHS]
+    baseline_summary = summarize(baseline_results)
+    new_summary = summarize(new_results)
+
+    _print_case_table(baseline_results, new_results)
+    _print_summary("baseline", baseline_summary)
+    _print_summary("new", new_summary)
+    print(f"\ndominates(baseline, new): {dominates(baseline_summary, new_summary)}")
 
     films = load_films(config.db_path)
 
     archive = metacritic.archive_dir(config.config_dir)
     mc_titles = metacritic.parse_archive(archive)
-    mc_rates = replay_metacritic(matcher_set, films, mc_titles)
+    baseline_mc_rates = replay_metacritic(baseline_set, films, mc_titles)
+    new_mc_rates = replay_metacritic(new_set, films, mc_titles)
 
     apple_lines = load_latest_apple_export(config.config_dir)
-    apple_rates = replay_apple(matcher_set, films, apple_lines)
+    baseline_apple_rates = replay_apple(baseline_set, films, apple_lines)
+    new_apple_rates = replay_apple(new_set, films, apple_lines)
 
-    print()
-    _print_rates("metacritic archive replay", mc_rates)
-    _print_rates("apple archive replay", apple_rates)
+    print("\nmetacritic archive replay:")
+    _print_rates("  baseline", baseline_mc_rates)
+    _print_rates("  new     ", new_mc_rates)
+    print("\napple archive replay:")
+    _print_rates("  baseline", baseline_apple_rates)
+    _print_rates("  new     ", new_apple_rates)
+
+    gate_ok = (
+        new_summary.wrong == 0
+        and new_mc_rates.review_pct < 5.0
+        and new_apple_rates.review_pct < 5.0
+    )
+    if args.assert_dominance:
+        print(
+            f"\n--assert-dominance: {'PASS' if gate_ok else 'FAIL'} "
+            f"(new gt-wrong={new_summary.wrong}, mc review%={new_mc_rates.review_pct}, "
+            f"apple review%={new_apple_rates.review_pct})"
+        )
+        return 0 if gate_ok else 1
     return 0
 
 
