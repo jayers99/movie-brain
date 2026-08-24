@@ -28,3 +28,11 @@ Feature: Dispositioned films stay out of every collector's way
     Given "Alpha (1951)" is tombstoned
     Then no discovery film needs an OMDb lookup
     And no film needs a TMDB match except "Alpha (1950)"
+
+  Scenario: A multi-hop merge chain resolves matching and owned-import to the ultimate survivor
+    Given the repository also has film "Alpha (1952)"
+    When I merge "Alpha (1951)" into "Alpha (1950)"
+    And I merge "Alpha (1950)" into "Alpha (1952)"
+    And the Apple library contains "Alpha" from 1951
+    Then matching the Metacritic title "Alpha" year 1951 resolves to "Alpha (1952)"
+    And "Alpha (1952)" is owned and "Alpha (1950)" is not

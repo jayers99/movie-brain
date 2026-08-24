@@ -40,6 +40,12 @@ def tombstone(ctx, spec):
     ctx["repo"].tombstone_film(ctx["repo"].film_id_by_key(_key(spec)), TODAY, note="test")
 
 
+@given(parsers.parse('the repository also has film "{spec}"'))
+def also_has(ctx, spec):
+    m = re.fullmatch(r"(.+) \((\d{4})\)", spec)
+    ctx["repo"].create_film(Film(m.group(1), int(m.group(2)), None, ""))
+
+
 @given(parsers.parse('a tombstoned film "{spec}"'))
 def fresh_tombstoned(ctx, spec):
     # A film unrelated to the Alpha/Alpha background pair: title/year far enough from
