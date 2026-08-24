@@ -2,6 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
+from movie_brain.application.repair import DupesReport, YearsReport
 from movie_brain.application.sync import SyncResult
 from movie_brain.cli import app
 
@@ -148,3 +149,41 @@ def test_owned_import_reports_and_propagates_exit(config_dir, monkeypatch):
     monkeypatch.setattr(cli, "import_owned", lambda repo, cfg, today, **kw: OwnedReport(1, 0, 0, 0, 0, 0))
     r = runner.invoke(app, ["owned", "import"])
     assert r.exit_code == 1
+
+
+def test_repair_dupes_dry_run_never_confirms(monkeypatch):
+    seen = {}
+
+    def fake(repo, today, *, apply, confirm, log):
+        seen["apply"] = apply
+        return DupesReport(3, 1, 1, 1, 0, 0)
+
+    monkeypatch.setattr("movie_brain.cli.repair_dupes", fake)
+    r = runner.invoke(app, ["repair", "dupes"])
+    assert r.exit_code == 0 and seen["apply"] is False and "twins: 1" in r.output
+
+
+def test_repair_links_requires_token(config_dir):
+    r = runner.invoke(app, ["repair", "links"])
+    assert r.exit_code == 2 and "TMDB" in r.output
+
+
+def test_repair_years_args_pair(monkeypatch):
+    calls = {}
+
+    def fake(repo, today, *, film_id=None, year=None, apply, log):
+        calls.update(film_id=film_id, year=year, apply=apply)
+        return YearsReport(0, 0, 1, True)
+
+    monkeypatch.setattr("movie_brain.cli.repair_years", fake)
+    r = runner.invoke(app, ["repair", "years", "12", "1927", "--apply"])
+    assert r.exit_code == 0 and calls == {"film_id": 12, "year": 1927, "apply": True}
+
+
+def test_review_resolve_reports_value_errors(monkeypatch):
+    def fake(repo, review_id, **kw):
+        raise ValueError("choose exactly one")
+
+    monkeypatch.setattr("movie_brain.cli.resolve_review", fake)
+    r = runner.invoke(app, ["review", "resolve", "7", "--dismiss", "--create"])
+    assert r.exit_code == 1 and "choose exactly one" in r.output
