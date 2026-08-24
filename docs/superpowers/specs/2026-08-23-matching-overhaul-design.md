@@ -63,6 +63,15 @@ Kill Bill Vol 1/2, Dr. Strangelove (control: correct), Stop Making Sense, the 49
   strictly dominates on wrong-match rate, review load stays tolerable (target: <5% of
   inputs), suite green, no live-DB writes yet.
 
+**Done 2026-08-23:** benchmark — ground truth: baseline 14/25 pass, 11 fail, 1 wrong-match
+(Lawrence→tmdb 731627) vs new matcher 25/25 pass, 0 wrong-match. Archive replays (live DB
+snapshot 2026-08-23): Metacritic n=4,800 — baseline 31.5% match / 0.0% review / 68.5% create
+→ new 2.9% review; Apple n=870 — baseline 99.2% match / 0.8% review → new 0.8% review.
+`--assert-dominance` gate (wrong==0 AND review%<5 both corpora) exits 0, no tuning knobs
+needed. Wrappers (`match_film`, `match_owned`, `pick_tmdb_match`) are thin policy shells over
+the shared `match_candidates` core; Apple export v2 (runtime column) live, old 2-column
+archives still replay. No pipeline or schema change — offline only, as scoped.
+
 ## M2 — authority canonicalization + rematch (live pipeline change)
 
 - TMDB match step adopts the shared matcher (year-tolerant for commerce-created films;
