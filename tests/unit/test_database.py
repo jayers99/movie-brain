@@ -460,7 +460,10 @@ class TestTmdbPrimitives:
             repo.upsert_tmdb(fid, found=True, looked_up=date(2026, 8, 19))
             repo.set_external_id(fid, "tmdb", tid, date(2026, 8, 19))
         repo.record_tmdb_providers(trio, date(2026, 8, 19), "{}")
-        assert repo.films_for_provider_refresh() == [(quartet, "22"), (trio, "11")]  # NULL checked_at first
+        assert repo.films_for_provider_refresh() == [
+            (quartet, "22", True),
+            (trio, "11", False),
+        ]  # NULL checked_at first
 
     def test_missed_films_and_provider_map(self, repo):
         trio, _ = self.seed_two(repo)
@@ -613,7 +616,7 @@ def test_films_for_watchlist_refresh_is_watchlist_and_matched_only(repo, today):
         repo.set_external_id(fid, "tmdb", str(tid), today)
         repo.upsert_tmdb(fid, found=True, looked_up=today)
     repo.toggle_watchlist(a, today)
-    assert repo.films_for_watchlist_refresh() == [(a, "11")]
+    assert repo.films_for_watchlist_refresh() == [(a, "11", True)]
 
 
 def test_films_for_provider_refresh_can_skip_films_checked_today(repo, today):
@@ -621,7 +624,7 @@ def test_films_for_provider_refresh_can_skip_films_checked_today(repo, today):
     repo.set_external_id(a, "tmdb", "11", today)
     repo.upsert_tmdb(a, found=True, looked_up=today)
     repo.record_tmdb_providers(a, today, "{}")
-    assert repo.films_for_provider_refresh() == [(a, "11")]
+    assert repo.films_for_provider_refresh() == [(a, "11", False)]
     assert repo.films_for_provider_refresh(skip_checked_on=today) == []
 
 

@@ -175,6 +175,21 @@ def on_watchlist(ctx, title, year):
     ctx["repo"].toggle_watchlist(fid, TODAY)
 
 
+@given(parsers.parse('TMDB already checked "{title} ({year:d})" as id {tid:d} once'))
+def already_checked(ctx, title, year, tid):
+    # A film's FIRST-ever provider check is a quiet baseline (Task 5) — pre-match and
+    # pre-check the film (dated well before TODAY) so the sync under test is not that
+    # first check, and an arrival can actually be detected as a transition.
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    if fid is None:
+        ctx["repo"].record_catalog(SOURCE, parse_titles(f'"{title} ({year})"'), TODAY - timedelta(days=30))
+        fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    prior = date(2026, 1, 1)
+    ctx["repo"].set_external_id(fid, "tmdb", str(tid), prior)
+    ctx["repo"].upsert_tmdb(fid, found=True, looked_up=prior)
+    ctx["repo"].record_tmdb_providers(fid, prior, "{}")
+
+
 @when("I sync with a TMDB token")
 def do_sync_tok(ctx, tmdb):
     ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok")
