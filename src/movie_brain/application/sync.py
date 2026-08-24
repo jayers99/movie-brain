@@ -15,7 +15,7 @@ from movie_brain.infrastructure.criterion import CatalogError, fetch_films, fetc
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE
 from movie_brain.infrastructure.omdb import AuthError, OmdbClient, QuotaExceeded
-from movie_brain.infrastructure.tmdb import TmdbClient
+from movie_brain.infrastructure.tmdb import TmdbArbiter, TmdbClient
 
 SOURCE = "criterion"
 MAX_CONSECUTIVE_FAILURES = 5
@@ -94,11 +94,14 @@ def sync(
         except Exception as exc:  # noqa: BLE001 — any failure here must not abort the run
             log(f"leaving-soon fetch failed, keeping last-known departures: {exc}")
 
+    tmdb_client = TmdbClient(tmdb_token, session=session) if tmdb_token else None
+    arbiter = TmdbArbiter(tmdb_client) if tmdb_client is not None else None
+
     mc_promoted = 0
     if not ratings_only and config_dir is not None:
         try:
             n = int(repo.get_meta(MC_TOP_N_KEY) or DEFAULT_TOP_N)
-            promote = promote_top_n(repo, config_dir, today, n, log=log)
+            promote = promote_top_n(repo, config_dir, today, n, arbiter=arbiter, log=log)
             mc_promoted = promote.promoted
             if promote.exit_code == 0 and promote.available < promote.n:
                 pages = -(-promote.n // CARDS_PER_PAGE)
@@ -144,11 +147,11 @@ def sync(
     tmdb = TmdbStepResult()
     if ratings_only:
         log("ratings-only run — skipping TMDB availability step")
-    elif tmdb_token is None:
+    elif tmdb_client is None:
         log("no TMDB token — skipping availability step")
     else:
         try:
-            tmdb = tmdb_step(repo, TmdbClient(tmdb_token, session=session), today, log=log)
+            tmdb = tmdb_step(repo, tmdb_client, today, arbiter=arbiter, log=log)
         except Exception as exc:  # noqa: BLE001 — one source failing must never break the others
             log(f"TMDB availability step failed: {exc}")
 

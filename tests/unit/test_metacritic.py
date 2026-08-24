@@ -1,6 +1,8 @@
 import json
+from datetime import date
 
-from movie_brain.domain.models import McTitle
+from movie_brain.application.metacritic import match_archive
+from movie_brain.domain.models import Film, McTitle
 from movie_brain.infrastructure.metacritic import (
     archive_dir,
     archived_pages,
@@ -70,3 +72,30 @@ def test_parse_page_skips_corrupt_card_and_keeps_valid_ones(nuxt_page):
     html = good_html[:start] + json.dumps(data) + good_html[end:]
     titles = parse_page(html, page=1)
     assert [t.slug for t in titles] == ["good-movie"]
+
+
+def _write_tokyo_story_archive(config_dir, nuxt_page):
+    archive = archive_dir(config_dir)
+    p = page_path(archive, 1)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(nuxt_page([("Tokyo Story", "tokyo-story", 1972, 90)]))
+
+
+def test_match_archive_arbiter_resolves_year_gap(repo, config_dir, nuxt_page):
+    # Staged: "Tokyo Story" (1972) in the archive; film: Tokyo Story (1953). The arbiter
+    # finds no same-titled film near 1972 (hit=False) → the trailing gap is a re-release,
+    # the slug is claimed, and no year-gap review is queued.
+    _write_tokyo_story_archive(config_dir, nuxt_page)
+    fid = repo.upsert_film(Film("Tokyo Story", 1953, None, "u"))
+    match_archive(repo, config_dir, date(2026, 8, 24), arbiter=lambda t, y: False, log=lambda m: None)
+    assert repo.external_ids_for(fid)["metacritic"] == "tokyo-story"
+    assert not [r for r in repo.open_reviews("metacritic") if r["reason"] == "year-gap"]
+
+
+def test_match_archive_arbiter_hit_keeps_review(repo, config_dir, nuxt_page):
+    # Arbiter finds a same-titled film near 1972 (hit=True) → remake suspected; the
+    # verdict still lands as a "year-gap" review row (M3 territory to split the reason).
+    _write_tokyo_story_archive(config_dir, nuxt_page)
+    repo.upsert_film(Film("Tokyo Story", 1953, None, "u"))
+    match_archive(repo, config_dir, date(2026, 8, 24), arbiter=lambda t, y: True, log=lambda m: None)
+    assert [r for r in repo.open_reviews("metacritic") if r["reason"] == "year-gap"]

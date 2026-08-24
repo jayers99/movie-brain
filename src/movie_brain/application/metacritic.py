@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 
-from movie_brain.domain.matching import build_candidate_index, clean_title, match_film
+from movie_brain.domain.matching import Arbiter, build_candidate_index, clean_title, match_film
 from movie_brain.domain.models import Film, McTitle, ReviewEntry
 from movie_brain.infrastructure import metacritic as mc
 from movie_brain.infrastructure.database import Repository
@@ -101,6 +101,7 @@ def match_archive(
     config_dir: Path,
     today: date,
     *,
+    arbiter: Arbiter | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> MatchReport:
     """Offline and idempotent: parse the archive, stage titles, link films, report coverage.
@@ -143,7 +144,7 @@ def match_archive(
         # match_film does its own clean_title/split_annotations — pass the raw title so
         # it can detect edition annotations itself (rerelease_hint corroborates a
         # trailing year-gap, e.g. a re-release stamped years after the original).
-        result = match_film(t.title, t.year, index)
+        result = match_film(t.title, t.year, index, arbiter=arbiter)
         if result.tied:
             detail = f"films {sorted(result.tied)} tie for {t.title!r} ({t.year})"
             reviews.append(ReviewEntry("ambiguous-title", value=t.slug, detail=detail))
@@ -198,6 +199,7 @@ def promote_top_n(
     today: date,
     n: int,
     *,
+    arbiter: Arbiter | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> PromoteReport:
     """Mode B: turn the top-N staged titles into real films (offline, idempotent).
@@ -206,7 +208,7 @@ def promote_top_n(
     the dedup guard. Promotion then only ever creates films for slugs nobody owns;
     a film_key collision is the tripwire and queues for review, never overwrites.
     """
-    match_report = match_archive(repo, config_dir, today, log=log)
+    match_report = match_archive(repo, config_dir, today, arbiter=arbiter, log=log)
     if match_report.exit_code != 0:
         return PromoteReport(1, n, 0, 0, 0, 0, 0, match_report)
     claimed = repo.claimed_values(AUTHORITY)
