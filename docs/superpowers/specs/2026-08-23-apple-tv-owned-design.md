@@ -94,8 +94,10 @@ fails. A bare `movie-brain owned` lists nothing extra this phase (sub-app help).
 
 - **Table:** a small `owned` badge after the title, same visual treatment as the `gone`
   badge (title cell, `badge-owned` class), tooltip "Owned on Apple TV".
-- **Drawer:** an "Owned on Apple TV ↗" line; link = the film's `apple-tv-store` listing
-  URL when one exists, else `https://tv.apple.com/search?term=<urlencoded title>`.
+- **Drawer:** an "Owned on Apple TV ↗" line linking to
+  `https://tv.apple.com/search?term=<urlencoded title>` — always the search link, because
+  the stored `apple-tv-store` listing URLs are TMDB watch pages, not Apple pages
+  (amended 2026-08-23 during planning).
 - **Owned chip:** `owned` predicate added to `domain/filters.py` `_PREDICATES` AND
   `app.js` `CHIP_PREDICATES` AND the `index.html` chip row (lockstep rule).
 - **Counts:** `summary()` and the header gain `owned` = total owned across all views
