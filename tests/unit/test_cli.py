@@ -112,3 +112,17 @@ def test_metacritic_dial_shows_default_and_sets(config_dir):
 
     r = runner.invoke(app, ["metacritic", "dial"])
     assert "500" in r.output
+
+
+def test_owned_import_reports_and_propagates_exit(config_dir, monkeypatch):
+    import movie_brain.cli as cli
+    from movie_brain.application.owned import OwnedReport
+
+    monkeypatch.setattr(cli, "import_owned", lambda repo, cfg, today, **kw: OwnedReport(0, 870, 600, 250, 20, 3))
+    r = runner.invoke(app, ["owned", "import"])
+    assert r.exit_code == 0
+    assert "870" in r.output and "600" in r.output and "250" in r.output
+
+    monkeypatch.setattr(cli, "import_owned", lambda repo, cfg, today, **kw: OwnedReport(1, 0, 0, 0, 0, 0))
+    r = runner.invoke(app, ["owned", "import"])
+    assert r.exit_code == 1

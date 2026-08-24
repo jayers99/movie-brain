@@ -11,6 +11,7 @@ from rich.table import Table
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, crawl_archive, match_archive
+from movie_brain.application.owned import import_owned
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import Repository
@@ -24,6 +25,8 @@ export_app = typer.Typer(help="Export data.")
 app.add_typer(export_app, name="export")
 metacritic_app = typer.Typer(help="Metacritic browse archive: crawl pages, match films.")
 app.add_typer(metacritic_app, name="metacritic")
+owned_app = typer.Typer(help="Apple TV owned films: import the library, mark ownership.")
+app.add_typer(owned_app, name="owned")
 console = Console()
 err = Console(stderr=True)
 
@@ -164,3 +167,16 @@ def metacritic_dial(
         return
     repo.set_meta(MC_TOP_N_KEY, str(n))
     console.print(f"top-N set to {n} — applied on the next sync")
+
+
+@owned_app.command("import")
+def owned_import() -> None:
+    """Export the Apple TV library via AppleScript and mark/create owned films."""
+    cfg = load_config()
+    cfg.config_dir.mkdir(parents=True, exist_ok=True)
+    report = import_owned(_repo(), cfg.config_dir, date.today())
+    console.print(
+        f"owned: {report.total} · matched: {report.matched} · created: {report.created} · "
+        f"already: {report.already_owned} · review: {report.review_open}"
+    )
+    raise typer.Exit(report.exit_code)
