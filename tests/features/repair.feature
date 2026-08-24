@@ -71,3 +71,20 @@ Feature: Dispositioned films stay out of every collector's way
     When I audit dupes
     Then exactly 1 group is keyed "alpha"
     And the group "alpha" is a twin with survivor "Alpha (1950)" from source "id-conflict"
+
+  Scenario: A TMDB link whose titles disagree with the film is a suspect and can be cleared
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1951)" holds tmdb id "62518"
+    And TMDB describes id 5 as "Alpha" / "Alpha" from 1950
+    And TMDB describes id 62518 as "Wild Blood" / "Vahşi Kan" from 1983
+    When I audit links
+    Then the only link suspect is "Alpha (1951)"
+    When I apply links
+    Then "Alpha (1951)" has no tmdb id and is a TMDB miss
+    And "Alpha (1950)" still holds tmdb id "5"
+
+  Scenario: A film matching TMDB's original title is not a suspect
+    Given "Alpha (1950)" holds tmdb id "5"
+    And TMDB describes id 5 as "The Alpha Movie" / "Alpha" from 1950
+    When I audit links
+    Then there are no link suspects

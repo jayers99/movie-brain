@@ -56,6 +56,12 @@ class TmdbClient:
         d = self._get(f"/movie/{tmdb_id}").json().get("release_date") or ""
         return int(d[:4]) if len(d) >= 4 and d[:4].isdigit() else None
 
+    def movie_titles(self, tmdb_id: int) -> tuple[str, str, int | None]:
+        d = self._get(f"/movie/{tmdb_id}").json()
+        rd = d.get("release_date") or ""
+        year = int(rd[:4]) if len(rd) >= 4 and rd[:4].isdigit() else None
+        return d.get("title") or "", d.get("original_title") or "", year
+
 
 class TmdbArbiter:
     """Spec principle 4: does TMDB know a same-titled film near the claimed year?

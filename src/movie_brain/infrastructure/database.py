@@ -633,6 +633,25 @@ class Repository:
             ).fetchall()
             return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
 
+    def films_with_tmdb(self) -> list[tuple[int, str, int | None, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, x.value FROM films f "
+                "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
+                "WHERE " + _NOT_DISPOSED + " ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["title"]), r["year"], str(r["value"])) for r in rows]
+
+    def clear_tmdb_link(self, film_id: int, today: date) -> None:
+        """Human-confirmed repair only: drop a wrong TMDB link so the matcher can retry it."""
+        with self._conn() as c:
+            c.execute("DELETE FROM external_ids WHERE film_id = ? AND authority = 'tmdb'", (film_id,))
+            c.execute(
+                "INSERT INTO tmdb (film_id, found, looked_up) VALUES (?, 0, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET found = 0, looked_up = excluded.looked_up",
+                (film_id, today.isoformat()),
+            )
+
     def commerce_films_with_tmdb(self) -> list[tuple[int, str, int | None, str]]:
         with self._conn() as c:
             rows = c.execute(
