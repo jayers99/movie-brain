@@ -689,6 +689,7 @@ class Repository:
                 "FROM films f JOIN omdb o ON o.film_id = f.id "
                 "WHERE o.payload IS NOT NULL AND o.needs_refresh = 0 AND " + _NOT_DISPOSED + " "
                 "AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') "
+                "AND json_extract(o.payload, '$.Year') GLOB '[0-9][0-9][0-9][0-9]*' "
                 "AND oy IS NOT NULL AND oy != COALESCE(f.year, -1) ORDER BY f.id"
             ).fetchall()
             return [(int(r["id"]), str(r["title"]), r["year"], int(r["oy"])) for r in rows]

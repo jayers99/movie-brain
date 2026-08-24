@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import sqlite3
 from datetime import date
 
 import pytest
@@ -18,6 +19,16 @@ from movie_brain.infrastructure.tmdb import TMDB_API, TmdbClient
 scenarios("../features/repair.feature")
 
 TODAY = date(2026, 8, 19)
+
+
+def _omdb_needs_refresh(ctx, film_id: int) -> bool:
+    conn = sqlite3.connect(ctx["repo"].db_path)
+    try:
+        row = conn.execute("SELECT needs_refresh FROM omdb WHERE film_id = ?", (film_id,)).fetchone()
+    finally:
+        conn.close()
+    assert row is not None, f"no omdb row for film {film_id}"
+    return bool(row[0])
 
 
 def _key(spec: str) -> str:
@@ -270,7 +281,7 @@ def stale_is(ctx, spec):
 @then(parsers.parse('"{spec}" needs an OMDb refresh'))
 def needs_refresh(ctx, spec):
     fid = ctx["repo"].film_id_by_key(_key(spec))
-    assert fid in {f for f, _ in ctx["repo"].films_needing_lookup_discovery("criterion", TODAY)}
+    assert _omdb_needs_refresh(ctx, fid)
 
 
 @then(parsers.parse('"{spec}" still has year {year:d}'))
@@ -278,11 +289,11 @@ def still_year(ctx, spec, year):
     assert ctx["repo"].film_id_by_key(_key(spec)) is not None
 
 
-@then(parsers.parse('a film "{spec}" exists and needs an OMDb refresh'))
+@then(parsers.parse('a film "{spec}" exists and its OMDb row is marked for refresh'))
 def exists_refresh(ctx, spec):
     fid = ctx["repo"].film_id_by_key(_key(spec))
     assert fid is not None
-    assert fid in {f for f, _ in ctx["repo"].films_needing_lookup_discovery("criterion", TODAY)}
+    assert _omdb_needs_refresh(ctx, fid)
 
 
 @then(parsers.parse('an open tmdb year-collision review names "{spec}"'))
