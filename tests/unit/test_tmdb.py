@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import pytest
+import requests
 import responses
 
+from movie_brain.domain.models import TmdbCandidate
 from movie_brain.infrastructure.tmdb import TMDB_API, AuthError, TmdbClient, watch_link
 
 
@@ -47,3 +49,48 @@ def test_watch_providers_no_us_region_is_empty(rs):
 
 def test_watch_link():
     assert watch_link(11) == "https://www.themoviedb.org/movie/11/watch?locale=US"
+
+
+def make_result(tmdb_id, title, year, popularity=1.0):
+    return {"id": tmdb_id, "title": title, "original_title": title,
+            "release_date": f"{year}-01-01", "popularity": popularity}
+
+
+@responses.activate
+def test_arbiter_hit_when_same_title_near_claimed_year():
+    responses.get(f"{TMDB_API}/search/movie",
+                  json={"results": [make_result(653, "Nosferatu", 1922), make_result(426063, "Nosferatu", 2024)]})
+    from movie_brain.infrastructure.tmdb import TmdbArbiter
+    arbiter = TmdbArbiter(TmdbClient("tok"))
+    assert arbiter("Nosferatu", 2024) is True
+    assert arbiter("Nosferatu", 1970) is False  # cached: still exactly 1 HTTP call
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_arbiter_seed_avoids_network():
+    from movie_brain.infrastructure.tmdb import TmdbArbiter
+    arbiter = TmdbArbiter(TmdbClient("tok"))
+    arbiter.seed("Stop Making Sense", [TmdbCandidate(606, "Stop Making Sense", "Stop Making Sense", 1984, 5.0)])
+    assert arbiter("Stop Making Sense", 2023) is False
+    assert len(responses.calls) == 0
+
+
+@responses.activate
+def test_arbiter_network_failure_returns_none():
+    responses.get(f"{TMDB_API}/search/movie", body=requests.ConnectionError("boom"))
+    from movie_brain.infrastructure.tmdb import TmdbArbiter
+    arbiter = TmdbArbiter(TmdbClient("tok"))
+    assert arbiter("Vertigo", 1996) is None
+
+
+@responses.activate
+def test_movie_year_parses_release_date():
+    responses.get(f"{TMDB_API}/movie/947", json={"id": 947, "release_date": "1962-12-11"})
+    assert TmdbClient("tok").movie_year(947) == 1962
+
+
+@responses.activate
+def test_movie_year_missing_date_is_none():
+    responses.get(f"{TMDB_API}/movie/947", json={"id": 947, "release_date": ""})
+    assert TmdbClient("tok").movie_year(947) is None

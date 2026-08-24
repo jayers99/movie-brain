@@ -360,3 +360,9 @@ class TestMatchCandidates:
         query = MatchQuery(title="Stop Making Sense", year=1999, year_kind=YearKind.COMMERCE)
         verdict = match_candidates(query, idx, arbiter=lambda t, y: False)
         assert verdict == MatchVerdict(kind="match", film_id=1)
+
+    def test_arbiter_unavailable_falls_back_to_year_gap_review(self) -> None:
+        idx = CandidateIndex([C(1, "Stop Making Sense", 1984)])
+        query = MatchQuery(title="Stop Making Sense", year=2023, year_kind=YearKind.COMMERCE)
+        verdict = match_candidates(query, idx, arbiter=lambda t, y: None)
+        assert verdict.kind == "review" and verdict.reason == "year-gap"

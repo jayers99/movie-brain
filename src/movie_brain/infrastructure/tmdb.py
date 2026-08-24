@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import requests
 
+from movie_brain.domain.matching import norm_title, split_annotations
 from movie_brain.domain.models import TmdbCandidate, TmdbProviders
 
 TMDB_API = "https://api.themoviedb.org/3"
@@ -50,3 +51,39 @@ class TmdbClient:
 
         return TmdbProviders(flatrate=ids("flatrate"), rent=ids("rent"), buy=ids("buy"),
                              link=us.get("link"), payload=resp.text)
+
+    def movie_year(self, tmdb_id: int) -> int | None:
+        d = self._get(f"/movie/{tmdb_id}").json().get("release_date") or ""
+        return int(d[:4]) if len(d) >= 4 and d[:4].isdigit() else None
+
+
+class TmdbArbiter:
+    """Spec principle 4: does TMDB know a same-titled film near the claimed year?
+
+    One cached search per normalized title; ``seed()`` lets a match step donate a
+    search it already performed so arbitration costs no extra API call for that
+    title. Network failure answers ``None`` (arbiter unavailable) — the core then
+    falls back to a year-gap review instead of guessing.
+    """
+
+    def __init__(self, client: TmdbClient) -> None:
+        self._client = client
+        self._cache: dict[str, list[TmdbCandidate]] = {}
+
+    def seed(self, title: str, candidates: list[TmdbCandidate]) -> None:
+        self._cache[norm_title(title)] = candidates
+
+    def __call__(self, title: str, claimed_year: int) -> bool | None:
+        key = norm_title(title)
+        if key not in self._cache:
+            try:
+                self._cache[key] = self._client.search(title)
+            except (AuthError, requests.RequestException):
+                return None
+        stripped = norm_title(split_annotations(title)[0])
+        for c in self._cache[key]:
+            if c.year is None or abs(c.year - claimed_year) > 1:
+                continue
+            if any(norm_title(split_annotations(t)[0]) == stripped for t in (c.title, c.original_title)):
+                return True
+        return False
