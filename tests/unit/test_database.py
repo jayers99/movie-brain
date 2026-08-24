@@ -894,3 +894,14 @@ def test_update_film_year_unknown_id_raises(repo):
 
     with pytest.raises(LookupError):
         repo.update_film_year(999, 1950)
+
+
+def test_stale_omdb_years_excludes_non_numeric_payload_year(repo):
+    d = date(2026, 8, 24)
+    na = repo.upsert_film(Film("Nine A", 1951, None, "u1"))
+    repo.upsert_omdb(na, OmdbRating(None, None, False, None, json.dumps({"Year": "N/A"})), d)
+    stale = repo.upsert_film(Film("Stale One", 1951, None, "u2"))
+    repo.upsert_omdb(stale, OmdbRating(6.0, 50, True, "English", json.dumps({"Year": "1953"})), d)
+    ids = {row[0] for row in repo.stale_omdb_years()}
+    assert na not in ids
+    assert stale in ids

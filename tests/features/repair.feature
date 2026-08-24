@@ -97,10 +97,11 @@ Feature: Dispositioned films stay out of every collector's way
     Then "Alpha (1951)" needs an OMDb refresh
 
   Scenario: A manual year correction is dry-run first, then applied with a refetch mark
+    Given "Alpha (1951)" has an OMDb payload fetched for year 1951
     When I dry-run setting "Alpha (1951)" to 1949
     Then "Alpha (1951)" still has year 1951
     When I apply setting "Alpha (1951)" to 1949
-    Then a film "Alpha (1949)" exists and needs an OMDb refresh
+    Then a film "Alpha (1949)" exists and its OMDb row is marked for refresh
 
   Scenario: A manual year correction that collides queues a merge candidate instead
     When I apply setting "Alpha (1951)" to 1950
