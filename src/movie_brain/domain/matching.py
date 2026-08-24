@@ -405,18 +405,22 @@ def match_film(
     mc_title: str,
     mc_year: int | None,
     candidates: list[_OldCandidate] | list[Candidate] | CandidateIndex,
+    *,
+    arbiter: Arbiter | None = None,
 ) -> MatchResult:
     """Pick the film a Metacritic title refers to — a policy shell over match_candidates.
 
     Metacritic stamps US re-release years, so a film's original year may trail the MC
     year by decades: ``year_kind=COMMERCE`` lets the core treat that trailing drift as
     a neutral gap rather than a conflict, needing edition-annotation corroboration (or
-    the M2 arbiter) to avoid a review. ``candidates`` accepts the old 3-tuple rows, a
-    plain Candidate list, or a prebuilt CandidateIndex.
+    the M2 arbiter) to avoid a review. The ``arbiter`` (principle 4) auto-resolves
+    year-gap reviews by checking if a same-titled film exists near the query year —
+    useful for Tokyo Story–class re-releases. ``candidates`` accepts the old 3-tuple
+    rows, a plain Candidate list, or a prebuilt CandidateIndex.
     """
     cleaned, hint = _clean_title_and_hint(mc_title)
     query = MatchQuery(title=cleaned, year=mc_year, year_kind=YearKind.COMMERCE)
-    verdict = match_candidates(query, _coerce_index(candidates), rerelease_hint=hint)
+    verdict = match_candidates(query, _coerce_index(candidates), rerelease_hint=hint, arbiter=arbiter)
     return _to_match_result(verdict)
 
 
@@ -455,19 +459,32 @@ def match_owned(
     return _to_match_result(verdict)
 
 
-def pick_tmdb_match(title: str, year: int | None, candidates: list[TmdbCandidate]) -> int | None:
+def pick_tmdb_match(
+    title: str,
+    year: int | None,
+    candidates: list[TmdbCandidate],
+    *,
+    commerce_year: bool = False,
+    arbiter: Arbiter | None = None,
+) -> int | None:
     """Pick the TMDB movie a film refers to, or None for the review queue.
 
-    Our years are original years (``DATABASE`` band); each TMDB result is indexed
-    under both its title and original_title so either can earn the title score.
-    Popularity breaks ties among equally-scored candidates. The old title-blind
-    "first of top-3 within ±1 year" fallback is deliberately gone — it was the
-    Lawrence-of-Arabia-to-731627 wrong-match vector.
+    Criterion-walked films carry original years (tight ``DATABASE`` band).
+    ``commerce_year=True`` is for films created by a commerce source (Metacritic
+    promotion, Apple owned import) whose stored year may be a re-release date:
+    the ``COMMERCE`` band makes a trailing gap neutral, and the ``arbiter``
+    (principle 4) decides whether that gap hides a remake (miss → review queue)
+    or a re-release (match the original). Each TMDB result is indexed under both
+    its title and original_title so either can earn the title score; popularity
+    breaks ties. The old title-blind "first of top-3 within ±1 year" fallback is
+    deliberately gone — it was the Lawrence-of-Arabia-to-731627 wrong-match vector.
     """
     index = CandidateIndex()
     for c in candidates:
         index.add(Candidate(id=c.tmdb_id, title=c.title, year=c.year, popularity=c.popularity))
         index.add(Candidate(id=c.tmdb_id, title=c.original_title, year=c.year, popularity=c.popularity))
-    query = MatchQuery(title=title, year=year, year_kind=YearKind.DATABASE)
-    verdict = match_candidates(query, index, popularity_tiebreak=True)
+    query = MatchQuery(
+        title=title, year=year, year_kind=YearKind.COMMERCE if commerce_year else YearKind.DATABASE
+    )
+    verdict = match_candidates(query, index, popularity_tiebreak=True, arbiter=arbiter)
     return verdict.film_id if verdict.kind == "match" else None
