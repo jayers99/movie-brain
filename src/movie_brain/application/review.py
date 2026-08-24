@@ -1,0 +1,133 @@
+from __future__ import annotations
+
+import sqlite3
+from datetime import date
+
+from movie_brain.application.availability import TMDB_AUTHORITY, record_tmdb_match
+from movie_brain.domain.matching import parse_apple_title
+from movie_brain.domain.models import Film, ReviewEntry
+from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.tmdb import TmdbClient
+
+
+def suppress_resolved(repo: Repository, authority: str, entries: list[ReviewEntry]) -> list[ReviewEntry]:
+    """Drop entries a human already resolved (same reason+film+value) — dismiss means dismissed.
+
+    Defined first in this module (ahead of the metacritic/owned imports resolve_review needs)
+    so `from movie_brain.application.review import suppress_resolved` works from
+    metacritic.py/owned.py even though those two modules are imported (locally, inside
+    resolve_review below) by this one — the circular import is broken by keeping this
+    module's own top-level imports one-directional.
+    """
+    done = repo.resolved_review_keys(authority)
+    return [e for e in entries if (e.reason, e.film_id, e.value) not in done]
+
+
+SLUG_REASONS = {"year-gap", "ambiguous-title"}  # metacritic rows keyed by slug, no film_id
+MERGE_REASONS = {"id-conflict", "year-collision"}  # tmdb rows whose "match to X" means "X is my twin"
+
+
+def resolve_review(
+    repo: Repository,
+    review_id: int,
+    *,
+    today: date,
+    film_id: int | None = None,
+    tmdb_id: int | None = None,
+    create: bool = False,
+    dismiss: bool = False,
+    client: TmdbClient | None = None,
+    note: str | None = None,
+) -> str:
+    """Apply exactly one resolution to one open match_review row; returns a one-line outcome.
+
+    Per authority: tmdb no-match → --tmdb-id claims the id through the sync's own write path
+    (year adoption included when a client is given) · tmdb id-conflict/year-collision →
+    --film merges this film INTO the named twin · metacritic slug rows → --film links the
+    slug, --create promotes the staged title · apple-tv rows → --film marks owned, --create
+    creates + marks owned · every row accepts --dismiss. The row is marked resolved, which
+    also suppresses the same anomaly from being re-queued by later runs.
+
+    Imports metacritic/owned locally (not at module top) — those two modules import
+    `suppress_resolved` from this one at their own top level, so a module-level import here
+    would be circular depending on which module a caller happens to import first.
+    """
+    from movie_brain.application.metacritic import AUTHORITY as MC_AUTHORITY
+    from movie_brain.application.metacritic import create_from_staged
+    from movie_brain.application.owned import AUTHORITY as APPLE_AUTHORITY
+
+    chosen = [x for x in (film_id is not None, tmdb_id is not None, create, dismiss) if x]
+    if len(chosen) != 1:
+        raise ValueError("choose exactly one of --film, --tmdb-id, --create, --dismiss")
+    row = repo.review(review_id)
+    if row is None or row["resolved"]:
+        raise ValueError(f"review {review_id} is not open")
+    authority, reason = str(row["authority"]), str(row["reason"])
+    raw_film_id = row["film_id"]
+    rid = int(raw_film_id) if isinstance(raw_film_id, int) else None
+    value = None if row["value"] is None else str(row["value"])
+
+    if dismiss:
+        outcome = "dismissed"
+    elif authority == TMDB_AUTHORITY:
+        if tmdb_id is not None and rid is not None:
+            target = repo.tmdb_target(rid)
+            if target is None:
+                raise ValueError(f"film {rid} not found")
+            year = client.movie_year(tmdb_id) if client is not None else None
+            result = record_tmdb_match(repo, target, tmdb_id, year, today, lambda _m: None)
+            if result == "id-conflict":
+                raise ValueError(f"tmdb id {tmdb_id} is already held by another film — merge instead")
+            outcome = f"matched to tmdb {tmdb_id} ({result})"
+        elif film_id is not None and reason in MERGE_REASONS and rid is not None:
+            if reason == "id-conflict":
+                if value is None:
+                    raise ValueError(f"id-conflict review {review_id} has no claimed tmdb id")
+                holder = repo.film_id_for_external(TMDB_AUTHORITY, value)
+            else:
+                holder = int(value) if value else None
+            if holder != film_id:
+                raise ValueError(f"the twin for this row is film {holder}, not {film_id} (re-derived)")
+            repo.merge_film(rid, film_id, today, note=note or f"review {review_id} {reason}")
+            outcome = f"merged film {rid} into {film_id}"
+        else:
+            raise ValueError(f"tmdb/{reason} accepts --tmdb-id (no-match) or --film (twin) or --dismiss")
+    elif authority == MC_AUTHORITY and reason in SLUG_REASONS and value is not None:
+        if film_id is not None:
+            try:
+                repo.set_external_id(film_id, MC_AUTHORITY, value, today)
+            except sqlite3.IntegrityError as exc:
+                raise ValueError(f"slug {value!r} is already claimed") from exc
+            outcome = f"slug {value} → film {film_id}"
+        elif create:
+            staged = repo.staged_title(value)
+            if staged is None:
+                raise ValueError(f"slug {value!r} is not in the staged archive")
+            new_id = create_from_staged(repo, staged, today)
+            if new_id is None:
+                raise ValueError(f"creating {staged.title!r} ({staged.year}) collides with an existing film")
+            outcome = f"created film {new_id} from slug {value}"
+        else:
+            raise ValueError("metacritic slug rows accept --film, --create or --dismiss")
+    elif authority == APPLE_AUTHORITY and value is not None:
+        if film_id is not None:
+            repo.mark_owned(film_id, today)
+            outcome = f"{value!r} → owned film {film_id}"
+        elif create:
+            cleaned, embedded = parse_apple_title(value)
+            film = Film(cleaned, embedded, None, "")
+            new_id = repo.create_film(film)
+            if new_id is None:
+                new_id = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
+            repo.mark_owned(new_id, today)
+            outcome = f"created owned film {new_id} from {value!r}"
+        else:
+            raise ValueError("apple-tv rows accept --film, --create or --dismiss")
+    else:
+        raise ValueError(f"{authority}/{reason} rows accept only --dismiss")
+
+    repo.resolve_review(review_id, f"{outcome} {today.isoformat()}")
+    for fid in (rid, film_id):
+        if fid is not None:
+            repo.clear_revisit(fid)  # Task 9 replaces the no-op stub in Repository
+    return outcome

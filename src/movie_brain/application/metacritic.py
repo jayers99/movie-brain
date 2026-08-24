@@ -10,6 +10,7 @@ from pathlib import Path
 
 import requests
 
+from movie_brain.application.review import suppress_resolved
 from movie_brain.domain.matching import Arbiter, build_candidate_index, clean_title, match_film
 from movie_brain.domain.models import Film, McTitle, ReviewEntry
 from movie_brain.infrastructure import metacritic as mc
@@ -179,7 +180,7 @@ def match_archive(
             detail = f"omdb metascore {row.omdb_mc} >= floor {floor}, no archive match for {row.title!r} ({row.year})"
             reviews.append(ReviewEntry("expected-miss", film_id=row.id, detail=detail))
 
-    repo.replace_unresolved_reviews(AUTHORITY, reviews, today)
+    repo.replace_unresolved_reviews(AUTHORITY, suppress_resolved(repo, AUTHORITY, reviews), today)
     return MatchReport(
         exit_code=0,
         pages=archived_page_count,
@@ -191,6 +192,19 @@ def match_archive(
         review_open=len(repo.open_reviews(AUTHORITY)),
         warnings=tuple(warnings),
     )
+
+
+def create_from_staged(repo: Repository, t: McTitle, today: date) -> int | None:
+    """Turn one staged Metacritic title into a real film and claim its slug; None on key/slug conflict."""
+    film = Film(clean_title(t.title), t.year, None, MC_MOVIE_URL.format(slug=t.slug))
+    film_id = repo.create_film(film)
+    if film_id is None:
+        return None
+    try:
+        repo.set_external_id(film_id, AUTHORITY, t.slug, today)
+    except sqlite3.IntegrityError:
+        return None
+    return film_id
 
 
 def promote_top_n(
