@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
@@ -1018,15 +1018,17 @@ class Repository:
         """Human-confirmed merge: move every dependent row to the survivor, alias the loser.
 
         One transaction. Survivor rows win on conflict (the dropped loser values are kept
-        in the disposition note); listings widen to the union of both seen windows;
-        transitions (append-only history) simply re-point; the loser's open reviews are
-        resolved as part of the merge. The loser film row is never deleted.
+        in the disposition note — full row for `my_ratings`/`watchlist`/`owned`, just the
+        loser's `film_id` for `omdb`/`tmdb` since those payloads are large); listings widen
+        to the union of both seen windows; transitions (append-only history) simply
+        re-point; the loser's open reviews are resolved as part of the merge. The loser
+        film row is never deleted.
         """
         if loser_id == survivor_id:
             raise ValueError("loser and survivor are the same film")
         moved: dict[str, int] = {}
         dropped: dict[str, int] = {}
-        kept: dict[str, list[object]] = {}
+        kept: dict[str, Any] = {}
         with self._conn() as c:
             self._assert_repairable(c, loser_id)
             self._assert_repairable(c, survivor_id)
@@ -1034,7 +1036,8 @@ class Repository:
             # (never move it) — the survivor keeps its own flag untouched.
             c.execute("DELETE FROM needs_revisit WHERE film_id = ?", (loser_id,))
             for table in _ONE_ROW_TABLES:
-                if c.execute(f"SELECT 1 FROM {table} WHERE film_id = ?", (loser_id,)).fetchone() is None:
+                loser_row = c.execute(f"SELECT * FROM {table} WHERE film_id = ?", (loser_id,)).fetchone()
+                if loser_row is None:
                     continue
                 if c.execute(f"SELECT 1 FROM {table} WHERE film_id = ?", (survivor_id,)).fetchone() is None:
                     c.execute(f"UPDATE {table} SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id))
@@ -1042,6 +1045,14 @@ class Repository:
                 else:
                     c.execute(f"DELETE FROM {table} WHERE film_id = ?", (loser_id,))
                     dropped[table] = 1
+                    if table == "my_ratings":
+                        kept[table] = {"score": loser_row["score"], "rated_at": loser_row["rated_at"]}
+                    elif table in ("omdb", "tmdb"):
+                        kept[table] = {"film_id": loser_id}
+                    elif table == "watchlist":
+                        kept[table] = {"added_on": loser_row["added_on"]}
+                    elif table == "owned":
+                        kept[table] = {"first_imported": loser_row["first_imported"]}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",

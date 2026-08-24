@@ -201,7 +201,9 @@ def test_revisit_toggle_and_note(client):
     assert d["needs_revisit"] is True and d["revisit_note"] == "wrong film"
     assert client.put(f"/api/films/{fid}/revisit", json={"note": "year suspect"}).status_code == 200
     assert client.get(f"/api/films/{fid}").get_json()["revisit_note"] == "year suspect"
+    assert client.put(f"/api/films/{fid}/revisit", json={}).status_code == 400
     r = client.post(f"/api/films/{fid}/revisit")
     assert r.get_json() == {"needs_revisit": False}
+    assert client.put(f"/api/films/{fid}/revisit", json={"note": "too late"}).status_code == 404
     assert client.post("/api/films/999/revisit").status_code == 404
     assert "needs_revisit" in client.get("/api/config").get_json()["chips"]

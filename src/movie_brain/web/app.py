@@ -56,7 +56,7 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
     @app.put("/api/films/<int:film_id>/revisit")
     def put_revisit_note(film_id: int) -> tuple[Response, int]:
         body = request.get_json(silent=True)
-        if not isinstance(body, dict) or not isinstance(body.get("note"), (str, type(None))):
+        if not isinstance(body, dict) or "note" not in body or not isinstance(body["note"], (str, type(None))):
             return jsonify({"error": 'body must be JSON {"note": str | null}'}), 400
         if not repo.set_revisit_note(film_id, body["note"] or None):
             return jsonify({"error": "not flagged"}), 404
