@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
-from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry
+from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -29,6 +29,22 @@ class FilmRow(NamedTuple):
     director: str | None
     runtime_min: int | None
     omdb_mc: int | None
+
+
+class TmdbMatchTarget(NamedTuple):
+    """One film awaiting a TMDB match, with the policy bit the wrapper needs."""
+
+    film_id: int
+    title: str
+    year: int | None
+    commerce: bool  # no criterion listing → commerce-created; year is COMMERCE band
+
+
+_TMDB_TARGET_SELECT = (
+    "SELECT f.id, f.title, f.year, "
+    "NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') AS commerce "
+    "FROM films f "
+)
 
 
 def init_db(db_path: Path) -> None:
@@ -412,10 +428,20 @@ class Repository:
             rows = c.execute("SELECT film_id FROM external_ids WHERE authority = ?", (authority,)).fetchall()
             return {int(r["film_id"]) for r in rows}
 
-    def replace_unresolved_reviews(self, authority: str, entries: list[ReviewEntry], created: date) -> None:
-        # Derived state, recomputed per match run — the immutability rule binds films, not this queue.
+    def replace_unresolved_reviews(
+        self, authority: str, entries: list[ReviewEntry], created: date, *, reason: str | None = None
+    ) -> None:
+        # Derived state, recomputed per match run — the immutability rule binds films, not
+        # this queue. reason scopes the replace so recomputing one reason's rows (tmdb
+        # no-match) can't wipe durable rows queued under the same authority (year-collision).
         with self._conn() as c:
-            c.execute("DELETE FROM match_review WHERE authority = ? AND resolved = 0", (authority,))
+            if reason is None:
+                c.execute("DELETE FROM match_review WHERE authority = ? AND resolved = 0", (authority,))
+            else:
+                c.execute(
+                    "DELETE FROM match_review WHERE authority = ? AND resolved = 0 AND reason = ?",
+                    (authority, reason),
+                )
             for e in entries:
                 c.execute(
                     "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "
@@ -442,13 +468,53 @@ class Repository:
             return [dict(r) for r in rows]
 
     # tmdb ---------------------------------------------------------------
-    def films_needing_tmdb_match(self) -> list[tuple[int, str, int | None]]:
+    def films_needing_tmdb_match(self) -> list[TmdbMatchTarget]:
         with self._conn() as c:
             rows = c.execute(
-                "SELECT f.id, f.title, f.year FROM films f "
-                "WHERE NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
+                _TMDB_TARGET_SELECT
+                + "WHERE NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
             ).fetchall()
-            return [(int(r["id"]), str(r["title"]), r["year"]) for r in rows]
+            return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
+
+    def films_tmdb_missed_targets(self) -> list[TmdbMatchTarget]:
+        with self._conn() as c:
+            rows = c.execute(
+                _TMDB_TARGET_SELECT + "JOIN tmdb t ON t.film_id = f.id WHERE t.found = 0 ORDER BY f.id"
+            ).fetchall()
+            return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
+
+    def commerce_films_with_tmdb(self) -> list[tuple[int, str, int | None, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, x.value FROM films f "
+                "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
+                "WHERE NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') "
+                "ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["title"]), r["year"], str(r["value"])) for r in rows]
+
+    def update_film_year(self, film_id: int, year: int) -> int | None:
+        """Adopt an authority year: rewrite films.year and recompute key.
+
+        Returns the id of a film already holding the recomputed key — the
+        detected-twin case; the caller queues a year-collision review and this
+        film stays untouched (never overwrite, collectors never delete).
+        """
+        with self._conn() as c:
+            row = c.execute("SELECT title FROM films WHERE id = ?", (film_id,)).fetchone()
+            new_key = film_key(str(row["title"]), year)
+            clash = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            if clash is not None:
+                return int(clash["id"])
+            c.execute("UPDATE films SET year = ?, key = ? WHERE id = ?", (year, new_key, film_id))
+            return None
+
+    def film_id_for_external(self, authority: str, value: str) -> int | None:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT film_id FROM external_ids WHERE authority = ? AND value = ?", (authority, value)
+            ).fetchone()
+            return None if row is None else int(row["film_id"])
 
     def upsert_tmdb(self, film_id: int, *, found: bool, looked_up: date) -> None:
         with self._conn() as c:
