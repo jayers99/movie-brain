@@ -1,4 +1,14 @@
-from movie_brain.domain.matching import MatchResult, clean_title, match_film, norm_title, pick_tmdb_match
+import pytest
+
+from movie_brain.domain.matching import (
+    MatchResult,
+    clean_apple_title,
+    clean_title,
+    match_film,
+    match_owned,
+    norm_title,
+    pick_tmdb_match,
+)
 from movie_brain.domain.models import TmdbCandidate
 
 
@@ -87,3 +97,50 @@ class TestPickTmdbMatch:
 
     def test_no_candidates(self):
         assert pick_tmdb_match("Anything", 2000, []) is None
+
+
+@pytest.mark.parametrize(
+    ("raw", "cleaned"),
+    [
+        ("Anchorman 2: The Legend Continues (Unrated)", "Anchorman 2: The Legend Continues"),
+        ("Blade Runner (Director's Cut)", "Blade Runner"),
+        ("Apocalypse Now (Extended Edition)", "Apocalypse Now"),
+        ("Dune (Theatrical Version)", "Dune"),
+        ("Alien (Special Edition)", "Alien"),
+        ("Trainspotting (Uncut)", "Trainspotting"),
+        ("Jaws (Remastered)", "Jaws"),
+        ("Lawrence of Arabia (4K)", "Lawrence of Arabia"),
+        ("Parasite (Subtitled)", "Parasite"),
+        ("Spirited Away (Dubbed)", "Spirited Away"),
+        ("Amelie (English Subtitles)", "Amelie"),
+        ("Shaun of the Dead", "Shaun of the Dead"),  # no annotation
+        ("Notting Hill (1999)", "Notting Hill (1999)"),  # unknown parenthetical kept
+    ],
+)
+def test_clean_apple_title(raw, cleaned):
+    assert clean_apple_title(raw) == cleaned
+
+
+def test_match_owned_exact_year_wins():
+    cands = [(1, "Solaris", 1972), (2, "Solaris", 2002)]
+    assert match_owned("Solaris", 2002, cands).winner == 2
+
+
+def test_match_owned_accepts_one_year_drift():
+    assert match_owned("Alpha", 1951, [(1, "Alpha", 1950)]).winner == 1
+
+
+def test_match_owned_rejects_two_year_drift():
+    r = match_owned("Alpha", 1952, [(1, "Alpha", 1950)])
+    assert r.winner is None and r.tied == ()
+
+
+def test_match_owned_tie_is_ambiguous():
+    r = match_owned("Twin", 1979, [(1, "Twin", 1978), (2, "Twin", 1980)])
+    assert r.winner is None and set(r.tied) == {1, 2}
+
+
+def test_match_owned_yearless_needs_unique_candidate():
+    assert match_owned("Solo", None, [(1, "Solo", 1996)]).winner == 1
+    r = match_owned("Twin", None, [(1, "Twin", 1978), (2, "Twin", 1980)])
+    assert r.winner is None and set(r.tied) == {1, 2}

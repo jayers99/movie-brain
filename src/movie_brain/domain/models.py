@@ -70,6 +70,14 @@ class McTitle:
 
 
 @dataclass(frozen=True)
+class OwnedTitle:
+    """One movie from the user's Apple TV library export."""
+
+    title: str
+    year: int | None
+
+
+@dataclass(frozen=True)
 class TmdbCandidate:
     """One TMDB search result, reduced to what matching needs."""
 

@@ -66,3 +66,11 @@ def test_film_view_to_dict_round_trips_fields():
     d = v.to_dict()
     assert d["id"] == 1 and d["imdb"] == 7.1 and d["my_rating"] == 8 and d["pending"] is False
     assert d["departed"] is True and d["metacritic"] == 88
+
+
+def test_owned_title_holds_title_and_optional_year():
+    from movie_brain.domain.models import OwnedTitle
+
+    t = OwnedTitle("Step Brothers", 2008)
+    assert (t.title, t.year) == ("Step Brothers", 2008)
+    assert OwnedTitle("Unknown", None).year is None

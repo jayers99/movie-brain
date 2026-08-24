@@ -14,6 +14,32 @@ def clean_title(title: str) -> str:
     return _ANNOTATION.sub("", title).strip()
 
 
+_APPLE_ANNOTATIONS = (
+    "unrated",
+    "director's cut",
+    "extended edition",
+    "extended cut",
+    "theatrical version",
+    "theatrical cut",
+    "special edition",
+    "uncut",
+    "remastered",
+    "4k",
+    "subtitled",
+    "dubbed",
+    "english subtitles",
+)
+_APPLE_ANNOTATION = re.compile(
+    r"\s*\((?:" + "|".join(re.escape(a) for a in _APPLE_ANNOTATIONS) + r")\)\s*$",
+    re.IGNORECASE,
+)
+
+
+def clean_apple_title(title: str) -> str:
+    """Strip one trailing edition annotation the Apple TV library appends."""
+    return _APPLE_ANNOTATION.sub("", title).strip()
+
+
 def norm_title(title: str) -> str:
     """Punctuation/case-insensitive comparison key ("Forbidden Lie$" == "Forbidden Lies").
 
@@ -52,6 +78,32 @@ def match_film(mc_title: str, mc_year: int | None, candidates: list[tuple[int, s
     if len(ranked) > 1 and sort_key(ranked[0]) == sort_key(ranked[1]):
         tied = tuple(c[0] for c in ranked if sort_key(c) == sort_key(ranked[0]))
         return MatchResult(winner=None, tied=tied)
+    return MatchResult(winner=ranked[0][0])
+
+
+def match_owned(
+    title: str, year: int | None, candidates: list[tuple[int, str, int | None]]
+) -> MatchResult:
+    """Pick the film an owned Apple title refers to.
+
+    Apple years are release years, so drift is small: exact year wins, else the
+    unique candidate within +/-1; a year-less side needs a unique candidate.
+    Ties are ambiguous and go to review, never guessed.
+    """
+    if year is None:
+        if len(candidates) == 1:
+            return MatchResult(winner=candidates[0][0])
+        return MatchResult(winner=None, tied=tuple(c[0] for c in candidates)) if candidates else MatchResult(None)
+    viable = [c for c in candidates if c[2] is None or abs(c[2] - year) <= 1]
+    if not viable:
+        return MatchResult(winner=None)
+
+    def sort_key(c: tuple[int, str, int | None]) -> tuple[int, int]:
+        return (1, _FAR) if c[2] is None else (0 if c[2] == year else 1, abs(c[2] - year))
+
+    ranked = sorted(viable, key=sort_key)
+    if len(ranked) > 1 and sort_key(ranked[0]) == sort_key(ranked[1]):
+        return MatchResult(winner=None, tied=tuple(c[0] for c in ranked if sort_key(c) == sort_key(ranked[0])))
     return MatchResult(winner=ranked[0][0])
 
 
