@@ -16,7 +16,7 @@
 - Collectors never delete; the matcher only ever matches, reviews, or creates.
 - `match_film`, `match_owned`, `pick_tmdb_match` keep their names, return types (`MatchResult` / `int | None`), and accept their current positional argument shapes (old 3-tuple candidate lists must still work). Extra evidence arrives via optional keyword args and richer candidate types.
 - M1 Done gate (spec): new matcher **wrong-match ≈ 0** on ground truths and strictly ≤ baseline wrong-matches; **review load < 5%** of archive-replay inputs (target — report the real number either way); suite + `uv run ruff check .` + `uv run mypy` green.
-- Review-queue reason strings visible to the live DB stay as-is in M1: `ambiguous-owned`, `year-drift` (apple-tv), `ambiguous-title`, `film-multiple-slugs`, `slug-conflict`, `expected-miss`, `key-conflict` (metacritic), `no-match` (tmdb).
+- Review-queue reason strings visible to the live DB stay as-is in M1: `ambiguous-owned`, `year-drift` (apple-tv), `ambiguous-title`, `film-multiple-slugs`, `slug-conflict`, `expected-miss`, `key-conflict` (metacritic), `no-match` (tmdb). ONE additive exception: metacritic gains `year-gap` (Task 4) — a review verdict MUST reach `match_review` so `promote_top_n`'s anomalous-slug skip prevents twin-creation of review-band titles.
 - Execution happens in a git worktree (superpowers:using-git-worktrees); branch name `feature/M1-matching-overhaul`.
 - Commit style: brief single line, why-focused. All commands via `uv run`.
 
@@ -111,7 +111,9 @@ Never strip to an empty title. Returns (stripped title, annotations found). `rer
 
 **Verdict** (`match_candidates(query, index, *, rerelease_hint=False, popularity_tiebreak=False, arbiter=None)`):
 1. No candidates at any level → `create`.
-2. Candidates found but ALL disqualified → `review("year-impossible")` if every disqualification was year-only under DATABASE/COMMERCE-early rules... simplify: any candidates existed → `review("year-drift-band")`? **No — exact rule:** all disqualified → `review` with reason `"year-impossible"` when all disqualifications were by year, else `"conflict"`. (Wrappers map both onto their existing queue reasons.)
+2. Candidates found but ALL disqualified — split by WHY:
+   - Every disqualification was the COMMERCE-early rule (query year impossibly EARLIER than every candidate) → `create`. Commerce years never precede originals, so the queried film genuinely predates everything we hold — a distinct film, not a twin (MC "Solaris" 1972 with only the 2002 film in corpus must create the 1972 original).
+   - Any disqualification was DATABASE-year, director, or runtime → `review("conflict")`. Never twin silently on a hard-evidence conflict (owned "Nosferatu" 2024 whose runtime rules out the 1922 film → review, not create).
 3. Rank survivors by score desc. Tie at the top: if `popularity_tiebreak` and exactly one top-scorer has strictly max popularity → it wins; otherwise `review("ambiguous", tied=(ids...))`.
 4. Unique winner with `gap` flag and NO corroboration (corroboration = `rerelease_hint` or director +3 earned or runtime +2 earned): if `arbiter` given → `arbiter(query.title, query.year)` True → `review("remake-suspected")`, False → `match`; no arbiter → `review("year-gap")`.
 5. Winner matched only at level 2 with no year points and no director/runtime points → `review("weak-title")`.
@@ -168,7 +170,9 @@ Bank ALL of these (ids are per-case-local; `expect` is correct behavior — base
 | name | source | query | pool / tmdb candidates | expect |
 |---|---|---|---|---|
 | lawrence-mc-rerelease | metacritic | "Lawrence of Arabia (re-release)", 2002 | (1, "Lawrence of Arabia", 1962) | match:1 |
-| lawrence-tmdb | tmdb | "Lawrence of Arabia", 2002 | (947,"Lawrence of Arabia","…",1962,40.0), (731627,"Lawrence: After Arabia","…",2021,2.0), (99,"Arabia",2002,1.0) | none |
+| lawrence-tmdb | tmdb | "Lawrence of Arabia", 2002 | (947,"Lawrence of Arabia","…",1962,40.0), (731627,"Lawrence: After Arabia","…",2002,2.0), (99,"Arabia","…",1990,1.0) | none |
+
+(731627's year is 2002 ON PURPOSE: the baseline's "first of top-3 within ±1 year" fallback must reproduce the banked wrong match `match:731627`; the new matcher has no title-blind fallback and must return none.)
 | stop-making-sense-no-runtime | apple | "Stop Making Sense", 2023 | (1,"Stop Making Sense",1984,None,88) | review |
 | stop-making-sense-runtime | apple | "Stop Making Sense", 2023, runtime_min=88 | (1,"Stop Making Sense",1984,None,88) | match:1 |
 | rear-window-embedded | apple | "Rear Window (1954)", 2013 | (1,"Rear Window",1954,"Alfred Hitchcock",112) | match:1 |
@@ -314,15 +318,14 @@ class TestMatchCandidates:
     def test_commerce_gap_no_corroboration_reviews(self):     # Stop Making Sense, no runtime → review("year-gap")
     def test_commerce_gap_with_runtime_matches(self):          # runtime 88≈88 → match
     def test_commerce_gap_with_rerelease_hint_matches(self):   # Lawrence MC → match
-    def test_commerce_year_earlier_than_film_disqualifies(self):  # MC "Solaris" 1972 vs film 2002 → create
-    def test_database_year_two_off_disqualifies(self):         # embedded 1954 vs cand 1952 → no survivor
+    def test_commerce_year_earlier_than_all_candidates_creates(self):  # MC "Solaris" 1972 vs film 2002 → create (distinct earlier film)
+    def test_database_year_two_off_reviews(self):              # embedded 1954 vs cand 1952 → review("conflict"), never twin
     # director / runtime evidence
-    def test_director_conflict_disqualifies(self): ...
+    def test_director_conflict_reviews(self): ...              # director mismatch disqualifies → review("conflict")
     def test_shared_director_in_comma_list_supports(self):     # "Ken Annakin, Harold French" vs "Harold French"
-    def test_runtime_divergence_disqualifies(self):            # 132 vs 94 (>15%) → review (all disqualified)
+    def test_runtime_divergence_reviews(self):                 # 132 vs 94 (>15%) disqualifies → review("conflict")
     # verdicts
     def test_no_candidates_creates(self): ...
-    def test_all_disqualified_reviews_not_creates(self): ...   # remake hazard: never twin silently
     def test_tie_reviews_with_tied_ids(self): ...
     def test_popularity_tiebreak_only_when_enabled(self): ...  # same score, pop 8 vs 5 → match with flag, review without
     def test_l2_alone_without_year_reviews_weak_title(self): ...
@@ -370,8 +373,8 @@ FROM films f LEFT JOIN omdb o ON o.film_id = f.id ORDER BY f.id
 
   runtime parsed in Python: `int(m.group(1)) if (m := re.match(r"(\d+) min", r)) else None`.
   - Wrappers: coerce list inputs (`tuple` len 3 → `Candidate(id, title, year)`; already-`Candidate` passthrough; `CandidateIndex` passthrough) then call the core with their policy flags; map `MatchVerdict` → `MatchResult` (match→winner; ambiguous→tied; other review→reason; create→bare `MatchResult(None)`).
-  - `owned.py`: replace the `by_norm` dict with `index = build_candidate_index(repo.films_for_matching())`; per title call `match_owned(cleaned, year, index, embedded_year=embedded_year is not None, runtime_min=t.runtime_min)` — verdict mapping keeps EXACT current review reasons: tied→`ambiguous-owned`, reason set→`year-drift`, else create path unchanged (including the key-collision fallback and the `index.add(...)` equivalent of the old `by_norm[...].append`).
-  - `metacritic.py`: build index once from `films_for_matching()` rows; `match_film(cleaned, t.year, index)`; `result.reason` (non-tie review) counts as unmatched exactly like today's no-winner (no new queue reasons in M1); `expected_missed` loop reads `row.omdb_mc` from `FilmRow`.
+  - `owned.py`: replace the `by_norm` dict with `index = build_candidate_index(repo.films_for_matching())`; per title call `match_owned(cleaned, year, index, embedded_year=embedded_year is not None)` — `runtime_min` is wired in Task 5 when `OwnedTitle` gains the field (do NOT reference `t.runtime_min` in this task; it does not exist yet). Verdict mapping keeps EXACT current review reasons: winner→match; tied→`ambiguous-owned`; reason set→`year-drift`; bare `MatchResult(None)`→create path unchanged (including the key-collision fallback and `index.add(...)` replacing the old `by_norm[...].append`).
+  - `metacritic.py`: build index once from `films_for_matching()` rows; `match_film(cleaned, t.year, index)`; winner→claim slug as today; tied→`ambiguous-title` as today; **`result.reason` set (non-tie review, e.g. year-gap band) → queue `ReviewEntry("year-gap", value=t.slug, detail=f"{t.title!r} ({t.year}) vs …")`** — this is load-bearing: `promote_top_n` skips slugs present in open reviews, so without this entry a review-band title (Tokyo Story 1972) would fall through to promotion and CREATE a twin. Bare no-winner (create verdict) stays unclaimed exactly as today. `expected_missed` loop reads `row.omdb_mc` from `FilmRow`. Add a step_def or unit assertion: a year-gap staged title is NOT promoted by `promote_top_n` and lands in `match_review`.
 - [ ] **Step 4: Run** `uv run pytest -v` → whole suite PASS (step_defs prove wrapper policies per source).
 - [ ] **Step 5:** `uv run ruff check . && uv run mypy` → green.
 - [ ] **Step 6: Commit** `match: wrappers are policy shells over the shared core; candidates carry director+runtime`
