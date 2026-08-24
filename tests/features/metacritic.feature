@@ -30,7 +30,7 @@ Feature: Metacritic archive
 
   Scenario: Match links an archived title to its film
     Given the repository holds the film "Seven Samurai (1954)"
-    And the archive holds "Seven Samurai" (1956) scored 98 as "seven-samurai-1954"
+    And the archive holds "Seven Samurai" (1955) scored 98 as "seven-samurai-1954"
     When I match
     Then "Seven Samurai (1954)" has metacritic slug "seven-samurai-1954"
     And the coverage report says 1 of 1 films matched
@@ -93,9 +93,17 @@ Feature: Metacritic archive
 
   Scenario: Promotion never twins a film the matcher already linked
     Given the repository holds the film "Seven Samurai (1954)"
-    And the archive holds "Seven Samurai" (1956) scored 98 as "seven-samurai-1954"
+    And the archive holds "Seven Samurai" (1955) scored 98 as "seven-samurai-1954"
     When I promote the top 10
     Then "Seven Samurai (1954)" has metacritic slug "seven-samurai-1954"
+    And the repository holds 1 films
+    And the promote report says 0 promoted
+
+  Scenario: A year-gap review-band title is skipped, not promoted as a twin
+    Given the repository holds the film "Tokyo Story (1953)"
+    And the archive holds "Tokyo Story" (1972) scored 90 as "tokyo-story"
+    When I promote the top 10
+    Then the review queue has a "year-gap" entry
     And the repository holds 1 films
     And the promote report says 0 promoted
 

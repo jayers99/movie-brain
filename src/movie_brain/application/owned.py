@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import sys
-from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from movie_brain.domain.matching import match_owned, norm_title, parse_apple_title
+from movie_brain.domain.matching import Candidate, build_candidate_index, match_owned, parse_apple_title
 from movie_brain.domain.models import Film, OwnedTitle, ReviewEntry
 from movie_brain.infrastructure import appletv
 from movie_brain.infrastructure.database import Repository
@@ -49,9 +48,7 @@ def import_owned(
         log(f"Apple TV export failed, database unchanged: {exc}")
         return OwnedReport(1, 0, 0, 0, 0, 0)
 
-    by_norm: dict[str, list[tuple[int, str, int | None]]] = defaultdict(list)
-    for film_id, title, year, _ in repo.films_for_matching():
-        by_norm[norm_title(title)].append((film_id, title, year))
+    index = build_candidate_index(repo.films_for_matching())
 
     matched = created = already = 0
     reviews: list[ReviewEntry] = []
@@ -60,8 +57,7 @@ def import_owned(
         # A year embedded in the title is the original release year; the track's
         # year field can be a remaster/re-release year (truth-holder rule).
         year = embedded_year if embedded_year is not None else t.year
-        candidates = by_norm.get(norm_title(cleaned), [])
-        result = match_owned(cleaned, year, candidates)
+        result = match_owned(cleaned, year, index, embedded_year=embedded_year is not None)
         if result.tied:
             detail = f"films {sorted(result.tied)} tie for {t.title!r} ({year})"
             reviews.append(ReviewEntry("ambiguous-owned", value=t.title, detail=detail))
@@ -69,10 +65,11 @@ def import_owned(
         if result.winner is not None:
             film_id = result.winner
             matched += 1
-        elif candidates:
-            # The title exists but every candidate's year is too far off — a re-release
-            # year or a remake. Without director data to arbitrate, ask; never twin.
-            detail = f"{cleaned!r} ({year}) vs films {sorted(c[0] for c in candidates)}"
+        elif result.reason is not None:
+            # The title exists but the evidence conflicts — a re-release year, a
+            # remake, or a hard-evidence mismatch. Without more to arbitrate, ask;
+            # never twin.
+            detail = f"{cleaned!r} ({year}) — review reason {result.reason!r}"
             reviews.append(ReviewEntry("year-drift", value=t.title, detail=detail))
             continue
         else:
@@ -84,7 +81,7 @@ def import_owned(
                 matched += 1
             else:
                 film_id = new_id
-                by_norm[norm_title(cleaned)].append((film_id, cleaned, year))
+                index.add(Candidate(id=film_id, title=cleaned, year=year))
                 created += 1
         if not repo.mark_owned(film_id, today):
             already += 1

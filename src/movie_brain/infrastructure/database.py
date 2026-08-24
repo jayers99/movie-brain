@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 import sys
 import uuid
@@ -7,6 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import date, timedelta
 from pathlib import Path
+from typing import NamedTuple
 
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry
@@ -14,6 +16,19 @@ from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, Revie
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 TMDB_REFRESH_STAMP = "tmdb_providers_refreshed_at"
+
+_RUNTIME_MIN = re.compile(r"(\d+)\s*min")
+
+
+class FilmRow(NamedTuple):
+    """One film's matching evidence: read-time COALESCE of films + omdb payload."""
+
+    id: int
+    title: str
+    year: int | None
+    director: str | None
+    runtime_min: int | None
+    omdb_mc: int | None
 
 
 def init_db(db_path: Path) -> None:
@@ -373,13 +388,24 @@ class Repository:
         with self._conn() as c:
             return int(c.execute("SELECT COUNT(*) FROM metacritic").fetchone()[0])
 
-    def films_for_matching(self) -> list[tuple[int, str, int | None, int | None]]:
+    def films_for_matching(self) -> list[FilmRow]:
         with self._conn() as c:
             rows = c.execute(
-                "SELECT f.id, f.title, f.year, o.metacritic FROM films f "
-                "LEFT JOIN omdb o ON o.film_id = f.id ORDER BY f.id"
+                "SELECT f.id, f.title, f.year, "
+                "COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director, "
+                "NULLIF(json_extract(o.payload, '$.Runtime'), 'N/A') AS runtime, "
+                "o.metacritic "
+                "FROM films f LEFT JOIN omdb o ON o.film_id = f.id ORDER BY f.id"
             ).fetchall()
-            return [(int(r["id"]), str(r["title"]), r["year"], r["metacritic"]) for r in rows]
+            out = []
+            for r in rows:
+                runtime_raw = r["runtime"]
+                m = _RUNTIME_MIN.match(runtime_raw) if runtime_raw else None
+                runtime_min = int(m.group(1)) if m else None
+                out.append(
+                    FilmRow(int(r["id"]), str(r["title"]), r["year"], r["director"], runtime_min, r["metacritic"])
+                )
+            return out
 
     def film_ids_with_external(self, authority: str) -> set[int]:
         with self._conn() as c:

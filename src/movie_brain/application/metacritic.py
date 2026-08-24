@@ -10,7 +10,7 @@ from pathlib import Path
 
 import requests
 
-from movie_brain.domain.matching import clean_title, match_film, norm_title
+from movie_brain.domain.matching import build_candidate_index, clean_title, match_film
 from movie_brain.domain.models import Film, McTitle, ReviewEntry
 from movie_brain.infrastructure import metacritic as mc
 from movie_brain.infrastructure.database import Repository
@@ -123,9 +123,7 @@ def match_archive(
     repo.upsert_mc_titles(titles, today)
 
     films = repo.films_for_matching()
-    by_norm: dict[str, list[tuple[int, str, int | None]]] = defaultdict(list)
-    for film_id, title, year, _ in films:
-        by_norm[norm_title(title)].append((film_id, title, year))
+    index = build_candidate_index(films)
 
     # Dedupe by slug before matching: the sorted walk can shift between crawl sessions and
     # re-place the same title on a second page. _verify (above) already saw the raw list and
@@ -136,13 +134,21 @@ def match_archive(
     reviews: list[ReviewEntry] = []
     slugs_by_film: dict[int, list[str]] = defaultdict(list)
     for t in deduped_titles:
-        cleaned = clean_title(t.title)
-        result = match_film(cleaned, t.year, by_norm.get(norm_title(cleaned), []))
+        # match_film does its own clean_title/split_annotations — pass the raw title so
+        # it can detect edition annotations itself (rerelease_hint corroborates a
+        # trailing year-gap, e.g. a re-release stamped years after the original).
+        result = match_film(t.title, t.year, index)
         if result.tied:
             detail = f"films {sorted(result.tied)} tie for {t.title!r} ({t.year})"
             reviews.append(ReviewEntry("ambiguous-title", value=t.slug, detail=detail))
         elif result.winner is not None:
             slugs_by_film[result.winner].append(t.slug)
+        elif result.reason is not None:
+            # A non-tie review verdict (e.g. year-gap): must land in match_review so
+            # promote_top_n's anomalous-slug skip prevents a twin being created for
+            # this review-band title (Tokyo Story class).
+            detail = f"{t.title!r} ({t.year}) vs review reason {result.reason!r}"
+            reviews.append(ReviewEntry("year-gap", value=t.slug, detail=detail))
 
     for film_id, slugs in sorted(slugs_by_film.items()):
         if len(slugs) > 1:
@@ -160,11 +166,11 @@ def match_archive(
     scores = [t.score for t in titles if t.score is not None]
     floor = min(scores) if scores else None
     expected_missed = 0
-    for film_id, title, year, omdb_mc in films:
-        if omdb_mc is not None and floor is not None and omdb_mc >= floor and film_id not in linked:
+    for row in films:
+        if row.omdb_mc is not None and floor is not None and row.omdb_mc >= floor and row.id not in linked:
             expected_missed += 1
-            detail = f"omdb metascore {omdb_mc} >= floor {floor}, no archive match for {title!r} ({year})"
-            reviews.append(ReviewEntry("expected-miss", film_id=film_id, detail=detail))
+            detail = f"omdb metascore {row.omdb_mc} >= floor {floor}, no archive match for {row.title!r} ({row.year})"
+            reviews.append(ReviewEntry("expected-miss", film_id=row.id, detail=detail))
 
     repo.replace_unresolved_reviews(AUTHORITY, reviews, today)
     return MatchReport(
