@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from movie_brain.domain.matching import Candidate, build_candidate_index, match_owned, parse_apple_title
+from movie_brain.domain.matching import (
+    Candidate,
+    build_candidate_index,
+    match_owned,
+    parse_apple_title,
+    split_annotations,
+)
 from movie_brain.domain.models import Film, OwnedTitle, ReviewEntry
 from movie_brain.infrastructure import appletv
 from movie_brain.infrastructure.database import Repository
@@ -57,7 +63,14 @@ def import_owned(
         # A year embedded in the title is the original release year; the track's
         # year field can be a remaster/re-release year (truth-holder rule).
         year = embedded_year if embedded_year is not None else t.year
-        result = match_owned(cleaned, year, index, embedded_year=embedded_year is not None)
+        # parse_apple_title already stripped any edition annotation from `cleaned` —
+        # detect it against the ORIGINAL title so match_owned's rerelease corroboration
+        # (a re-release/restored-version annotation excusing a commerce-year gap) isn't
+        # dead code for this caller.
+        rerelease_hint = bool(split_annotations(t.title)[1])
+        result = match_owned(
+            cleaned, year, index, embedded_year=embedded_year is not None, rerelease_hint=rerelease_hint
+        )
         if result.tied:
             detail = f"films {sorted(result.tied)} tie for {t.title!r} ({year})"
             reviews.append(ReviewEntry("ambiguous-owned", value=t.title, detail=detail))

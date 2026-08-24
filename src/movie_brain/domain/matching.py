@@ -423,6 +423,7 @@ def match_owned(
     *,
     embedded_year: bool = False,
     runtime_min: int | None = None,
+    rerelease_hint: bool = False,
 ) -> MatchResult:
     """Pick the film an owned Apple title refers to — a policy shell over match_candidates.
 
@@ -431,6 +432,13 @@ def match_owned(
     (looser ``COMMERCE`` band, same trailing-drift-is-neutral treatment as Metacritic).
     ``candidates`` accepts the old 3-tuple rows, a plain Candidate list, or a prebuilt
     CandidateIndex.
+
+    ``title`` is stripped of any edition annotations it still carries (matching
+    match_film's own-title-stripping policy), OR'd with the caller-supplied
+    ``rerelease_hint``: callers such as owned.py that pre-strip the title before
+    calling (e.g. via ``parse_apple_title``) must detect the annotation themselves
+    against the ORIGINAL title and pass it through here — otherwise the hint is
+    always False and the rerelease-corroboration path is dead for them.
     """
     cleaned, hint = split_annotations(title)
     query = MatchQuery(
@@ -439,7 +447,7 @@ def match_owned(
         year_kind=YearKind.DATABASE if embedded_year else YearKind.COMMERCE,
         runtime_min=runtime_min,
     )
-    verdict = match_candidates(query, _coerce_index(candidates), rerelease_hint=bool(hint))
+    verdict = match_candidates(query, _coerce_index(candidates), rerelease_hint=rerelease_hint or bool(hint))
     return _to_match_result(verdict)
 
 

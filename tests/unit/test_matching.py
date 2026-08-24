@@ -216,6 +216,20 @@ def test_match_owned_field_year_gap_with_runtime_corroboration_matches():
     assert match_owned("Stop Making Sense", 1999, [cand], runtime_min=88) == MatchResult(winner=1)
 
 
+def test_match_owned_rerelease_hint_kwarg_corroborates_commerce_gap():
+    # Fix round 1: owned.py pre-strips annotations before calling match_owned (via
+    # parse_apple_title), so match_owned's own internal split_annotations(title) hint
+    # is always False for that caller. The explicit rerelease_hint kwarg is how a
+    # caller that already stripped the title can still corroborate a commerce-year
+    # gap — e.g. "The Leopard (Restored Version)" (2004) vs the 1963 original.
+    r = match_owned("The Leopard", 2004, [(1, "The Leopard", 1963)], rerelease_hint=True)
+    assert r == MatchResult(winner=1)
+    # Without the kwarg (and no annotation left in the already-stripped title), the
+    # same gap is uncorroborated and reviews instead of guessing.
+    r2 = match_owned("The Leopard", 2004, [(1, "The Leopard", 1963)])
+    assert r2 == MatchResult(None, (), "year-gap")
+
+
 def test_match_owned_accepts_plain_tuple_candidate_index_and_list():
     # Old-style (id, title, year) tuples, a list[Candidate], and a prebuilt
     # CandidateIndex must all still work as the candidates argument.
