@@ -25,6 +25,7 @@ uv run pytest                                        # whole suite (~5s)
 uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by keyword
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py
 uv run ruff check . && uv run mypy                   # lint + types (mypy also runs as a pre-commit hook)
+uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regression gate: ground truth + archive replays
 ```
 
 ## Architecture (hexagonal — dependencies point inward)
@@ -82,6 +83,12 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
   Apple title (`parse_apple_title`) > Apple's track year field (remaster-prone) > Metacritic
   year (US-re-release-prone). Director-confirmed matching via the iTunes Search API is the
   planned upgrade (roadmap parallel track).
+- Matching is one evidence-scored core: `domain/matching.py`'s `match_candidates` (three-level
+  candidate index, source-aware year policy, director/runtime/popularity evidence, `Arbiter`
+  hook) is the only matcher; `match_film` (Metacritic), `match_owned` (Apple), and
+  `pick_tmdb_match` (TMDB) are thin per-source policy wrappers over it — never re-implement
+  matching logic in a wrapper. `scripts/matching_benchmark.py` (ground truth + Metacritic/Apple
+  archive replays, `--assert-dominance` gate) is the regression check before touching matching.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
 
@@ -95,7 +102,8 @@ about to apply a new migration — each file is the rollback point for one schem
 Metacritic archive: `<config_dir>/metacritic/pages/page-NNNN.html` + `fetch-log.jsonl`.
 
 Apple TV archive: `<config_dir>/appletv/owned-<YYYY-MM-DD>.txt` (raw osascript export,
-archived before parsing — one file per `owned import` run).
+archived before parsing — one file per `owned import` run). 3-column since export v2 (adds
+runtime seconds); old 2-column archives still replay.
 
 On first use, macOS asks once to allow notifications from osascript; until approved, the
 nightly sync's watchlist notification won't display.
