@@ -107,7 +107,7 @@ class FilmView:
     title: str
     year: int | None
     director: str | None
-    url: str
+    url: str | None
     language: str | None
     imdb: float | None
     rt: int | None
@@ -122,6 +122,7 @@ class FilmView:
     services: list[dict[str, object]] = field(default_factory=list)
     watchlisted: bool = False
     new_on: list[dict[str, object]] = field(default_factory=list)  # [{source, name, appeared_on}], arrivals window only
+    criterion: bool = True  # has a Criterion listing (current or departed); False = discovery-only
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

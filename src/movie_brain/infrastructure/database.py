@@ -56,9 +56,10 @@ _VIEW_SQL = """
 SELECT f.id, f.title, f.year, f.director, l.url, o.language, o.imdb, o.rt,
        COALESCE(mc.score, o.metacritic) AS metacritic, x.value AS mc_slug, o.found,
        (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
-       (l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source)) AS departed
+       COALESCE(l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source), 0) AS departed,
+       (l.film_id IS NOT NULL) AS criterion
 FROM films f
-JOIN listings l ON l.film_id = f.id AND l.source = ?
+LEFT JOIN listings l ON l.film_id = f.id AND l.source = ?
 LEFT JOIN omdb o ON o.film_id = f.id
 LEFT JOIN my_ratings r ON r.film_id = f.id
 LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic'
@@ -134,6 +135,7 @@ def _row_to_view(
         services=services or [],
         watchlisted=watchlisted,
         new_on=new_on or [],
+        criterion=bool(row["criterion"]),
     )
 
 
@@ -593,7 +595,8 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 _VIEW_SQL
-                + "WHERE l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
+                + "WHERE l.film_id IS NULL "
+                + "OR l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
                 + "OR r.score IS NOT NULL ORDER BY f.id",
                 (source, source),
             ).fetchall()
@@ -625,12 +628,14 @@ class Repository:
 
     def summary(self, source: str) -> dict[str, int]:
         views = self.list_views(source)
+        crit = [v for v in views if v.criterion]
         return {
-            "films": len(views),
-            "rated": sum(1 for v in views if v.found is True),
-            "pending": sum(1 for v in views if v.pending),
-            "unmatched": sum(1 for v in views if v.found is False),
-            "leaving": sum(1 for v in views if v.leaving_date is not None),
-            "mine": sum(1 for v in views if v.my_rating is not None),
-            "departed": sum(1 for v in views if v.departed),
+            "films": len(crit),
+            "rated": sum(1 for v in crit if v.found is True),
+            "pending": sum(1 for v in crit if v.pending),
+            "unmatched": sum(1 for v in crit if v.found is False),
+            "leaving": sum(1 for v in crit if v.leaving_date is not None),
+            "mine": sum(1 for v in crit if v.my_rating is not None),
+            "departed": sum(1 for v in crit if v.departed),
+            "discovery": sum(1 for v in views if not v.criterion),
         }
