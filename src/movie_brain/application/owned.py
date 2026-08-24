@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from movie_brain.application.review import suppress_resolved
 from movie_brain.domain.matching import (
     Candidate,
     build_candidate_index,
@@ -55,6 +56,7 @@ def import_owned(
         return OwnedReport(1, 0, 0, 0, 0, 0)
 
     index = build_candidate_index(repo.films_for_matching())
+    tombstoned = repo.tombstoned_keys()
 
     matched = created = already = 0
     reviews: list[ReviewEntry] = []
@@ -92,10 +94,13 @@ def import_owned(
             continue
         else:
             film = Film(cleaned, year, None, "")
+            if film.key in tombstoned:
+                log(f"skipping tombstoned film {film.key!r} from the Apple library")
+                continue
             new_id = repo.create_film(film)
             if new_id is None:
-                # Exact film_key collision: that IS the film (same title+year).
-                film_id = repo.film_id_by_key(film.key) or 0
+                # Exact film_key collision: that IS the film (same title+year) — or its alias.
+                film_id = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
                 matched += 1
             else:
                 film_id = new_id
@@ -104,5 +109,5 @@ def import_owned(
         if not repo.mark_owned(film_id, today):
             already += 1
 
-    repo.replace_unresolved_reviews(AUTHORITY, reviews, today)
+    repo.replace_unresolved_reviews(AUTHORITY, suppress_resolved(repo, AUTHORITY, reviews), today)
     return OwnedReport(0, len(titles), matched, created, already, len(repo.open_reviews(AUTHORITY)))

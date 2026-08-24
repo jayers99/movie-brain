@@ -22,6 +22,13 @@ uv run movie-brain export csv PATH
 uv run movie-brain status
 uv run movie-brain rematch                            # one-shot repair: rematch TMDB misses, reconcile non-Criterion years (needs TMDB token; idempotent)
 
+uv run movie-brain repair dupes [--apply] [--yes]     # audit norm-title + id-conflict dup groups; --apply merges TWIN groups only (--yes skips the per-group prompt)
+uv run movie-brain repair links [--apply]             # re-validate every stored TMDB link against TMDB's title/original_title; --apply clears confirmed-wrong links
+uv run movie-brain repair years [FILM_ID YEAR] [--apply]  # year worklist: open year-collisions + stale OMDb payloads; --apply marks stale rows for OMDb refetch; with FILM_ID YEAR, corrects one film's year
+uv run movie-brain review list [--authority A] [--reason R]   # open match_review rows (filterable)
+uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, or dismiss
+uv run movie-brain review revisits                    # films the user flagged "needs revisit" in the drawer
+
 uv run pytest                                        # whole suite (~5s)
 uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by keyword
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py
@@ -86,7 +93,13 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   planned upgrade (roadmap parallel track). Exception: a TMDB match on a commerce-created film
   (no Criterion listing) canonicalizes `films.year` to TMDB's original year and recomputes
   `key` (`record_tmdb_match`) — write-back never overwrites on a key collision, it queues a
-  durable `year-collision` row in `match_review` as a merge candidate instead.
+  durable `year-collision` row in `match_review` as a merge candidate instead. Exactly one holder
+  of the target key does not block: this film's OWN merged-away loser, whose dead key
+  `update_film_year` retires in place (`key || ' #' || id`, since `films.key` is UNIQUE) so its
+  survivor can adopt the year it was holding. Every other holder blocks, under its CANONICAL id —
+  a loser merged into some *other* survivor reports that survivor, so the review names the live
+  identity a human must reconcile. A TOMBSTONED holder blocks as itself: `tombstoned_keys()` is
+  the guard that stops the ingesters re-creating it, and that guard IS the key.
 - Matching is one evidence-scored core: `domain/matching.py`'s `match_candidates` (three-level
   candidate index, source-aware year policy, director/runtime/popularity evidence, `Arbiter`
   hook) is the only matcher; `match_film` (Metacritic), `match_owned` (Apple), and
@@ -95,7 +108,38 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   archive replays, `--assert-dominance` gate) is the regression check before touching matching.
   `movie-brain rematch` is the one-shot, idempotent repair verb: re-matches every TMDB miss and
   fresh-checks TMDB's release year for every non-Criterion matched film, adopting disagreements
-  through the same write-back path as sync.
+  through the same write-back path as sync. A rerelease-annotated commerce year (a `*-re-release`
+  / restoration-slug year) is NOT year evidence: when the winning candidate sits exactly at that
+  annotated year AND any other surviving candidate carries a year gap, the matcher refuses and
+  queues a `rerelease-ambiguous` review rather than guess between a re-release of the gapped film
+  and a genuinely same-titled film at the claimed year (the Metropolis case; benchmark ground
+  truth). The gapped candidate need not be the older one — any surviving gap arms the rule.
+- Dispositions: `film_disposition` is the identity ledger written ONLY by the repair verbs.
+  `merged` aliases a losing identity to its survivor — `films_for_matching` returns the loser's
+  title under the ultimate survivor's id (multi-hop chains resolve to the final survivor), so an
+  ingester matching the old title lands on the canonical row; `tombstoned` hides the film and
+  blocks re-creation. Every film read model carries the `_NOT_DISPOSED` guard. `merge_film` moves
+  owned/watchlist/my_ratings/external_ids/listings/omdb/tmdb/availability_transitions rows to the
+  survivor (survivor wins every conflict; when a one-row table's loser value is dropped it's
+  recorded in the disposition note — full row for `my_ratings`/`watchlist`/`owned`, just the
+  loser's `film_id` for `omdb`/`tmdb` since those payloads are large), resolves the loser's open
+  `match_review` rows, and KEEPS the loser's `films` row —
+  collectors never delete. A retired key stays retired: `update_film_year` renames a loser's key
+  to `key || ' #' || id` only when that loser's OWN survivor adopts the year, and if the survivor
+  later moves year again the freed key is simply left unowned (harmless; re-claiming it is a
+  deferred edge).
+- Review resolution: a resolved `match_review` row is a standing decision, not a closed ticket.
+  `suppress_resolved`, `rebuild_no_match_queue`, and `queue_review_once` all consult resolved
+  rows and never re-queue one — a `--dismiss` is permanent. Actions are per-authority: `--film`
+  matches/merges into an existing film, `--tmdb-id` claims a TMDB id (tmdb `no-match`),
+  `--create` promotes the staged Metacritic title or owned Apple title into a real film, and
+  `--dismiss` closes the row. Resolution re-derives the conflict at resolution time rather than
+  trusting the row's stored `value`.
+- `needs_revisit` is user-response data on the watchlist pattern: own table (film_id, marked_on,
+  optional note), the dashboard drawer toggle / its API is the only UI writer, sync never touches
+  it, and a filter chip surfaces it. It is cleared automatically when the film's review is
+  resolved, when `repair years --apply` fixes the year, when the film is merged away (loser), or
+  when it is tombstoned. `review revisits` prints the flagged worklist.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
 

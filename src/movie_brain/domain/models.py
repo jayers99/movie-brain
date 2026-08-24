@@ -133,6 +133,8 @@ class FilmView:
     new_on: list[dict[str, object]] = field(default_factory=list)  # [{source, name, appeared_on}], arrivals window only
     criterion: bool = True  # has a Criterion listing (current or departed); False = discovery-only
     owned: bool = False  # in my Apple TV library (owned table); import is the only writer
+    needs_revisit: bool = False  # drawer-flagged as factually suspect; drawer toggle is the only writer
+    revisit_note: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

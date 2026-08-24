@@ -94,3 +94,12 @@ def test_movie_year_parses_release_date():
 def test_movie_year_missing_date_is_none():
     responses.get(f"{TMDB_API}/movie/947", json={"id": 947, "release_date": ""})
     assert TmdbClient("tok").movie_year(947) is None
+
+
+@responses.activate
+def test_movie_titles():
+    responses.get(
+        f"{TMDB_API}/movie/62518",
+        json={"title": "Wild Blood", "original_title": "Vahşi Kan", "release_date": "1983-01-01"},
+    )
+    assert TmdbClient("t").movie_titles(62518) == ("Wild Blood", "Vahşi Kan", 1983)

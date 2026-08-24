@@ -391,7 +391,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 7
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 9
     finally:
         conn.close()
 
@@ -758,6 +758,108 @@ def test_mark_owned_is_idempotent_and_views_expose_it(repo):
     assert repo.summary("criterion")["owned"] == 2
 
 
+# ---- M3: film_disposition (merge/tombstone) ---------------------------------
+
+D = date(2026, 8, 19)
+
+
+def _two_films(repo):
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha")], D)
+    a = repo.film_id_by_key("alpha (1950)")
+    b = repo.create_film(Film("Alpha", 1951, None, ""))  # commerce twin, off-by-one year
+    return a, b
+
+
+def test_merge_moves_every_fk_and_records_disposition(repo):
+    a, b = _two_films(repo)
+    repo.set_external_id(b, "metacritic", "alpha-slug", D)
+    repo.set_external_id(b, "tmdb", "77", D)
+    repo.upsert_tmdb(b, found=True, looked_up=D)
+    repo.upsert_omdb(b, OmdbRating(7.0, 80, True, "English", '{"Title": "Alpha"}'), D)
+    repo.set_rating(b, 8, D)
+    repo.toggle_watchlist(b, D)
+    repo.mark_owned(b, D)
+    repo.record_listing_with_transition(b, "max", "https://m/alpha", D)
+    repo.append_reviews("tmdb", [ReviewEntry("id-conflict", film_id=b, value="77")], D)
+
+    report = repo.merge_film(b, a, D, note="twin")
+
+    assert repo.disposition_of(b) == ("merged", a)
+    assert repo.canonical_film_id(b) == a and repo.canonical_film_id(a) == a
+    assert repo.external_ids_for(a) == {"criterion": "https://c/alpha", "metacritic": "alpha-slug", "tmdb": "77"}
+    assert repo.external_ids_for(b) == {}
+    assert a in repo.owned_film_ids() and a in repo.watchlist_film_ids()
+    assert repo.all_my_ratings() == {"alpha (1950)": 8}
+    assert repo.get_payload(a) == '{"Title": "Alpha"}'
+    assert [t for t in repo.films_for_provider_refresh() if t[0] == a] == [(a, "77", True)]
+    assert report.moved["listings"] == 1 and report.reviews_resolved == 1
+    assert repo.open_reviews("tmdb") == []
+    with sqlite3.connect(repo.db_path) as c:
+        # record_catalog's baseline criterion walk already fired one transition for `a`
+        # before the merge; merge_film re-points b's `max` transition onto a rather than
+        # collapsing history, so both rows land on the survivor.
+        rows = c.execute("SELECT film_id FROM availability_transitions").fetchall()
+        assert {r[0] for r in rows} == {a} and len(rows) == 2
+        assert c.execute("SELECT COUNT(*) FROM films").fetchone()[0] == 2  # loser row kept
+
+
+def test_merge_keeps_survivor_rows_on_conflict_and_notes_dropped(repo):
+    a, b = _two_films(repo)
+    repo.set_external_id(a, "tmdb", "1", D)
+    repo.set_external_id(b, "tmdb", "2", D)
+    repo.set_rating(a, 9, D)
+    repo.set_rating(b, 3, D)
+    report = repo.merge_film(b, a, D)
+    assert repo.external_ids_for(a)["tmdb"] == "1"
+    assert repo.all_my_ratings() == {"alpha (1950)": 9}
+    assert report.dropped == {"external_ids": 1, "my_ratings": 1}
+    with sqlite3.connect(repo.db_path) as c:
+        c.row_factory = sqlite3.Row
+        note = c.execute("SELECT note FROM film_disposition WHERE film_id = ?", (b,)).fetchone()["note"]
+    dropped = json.loads(note)["dropped"]
+    assert dropped["my_ratings"]["score"] == 3
+    assert dropped["my_ratings"]["rated_at"] == D.isoformat()
+
+
+def test_merge_listing_conflict_widens_seen_window(repo):
+    a, b = _two_films(repo)
+    repo.record_listing(a, "max", "https://m/a", date(2026, 8, 10))
+    repo.record_listing(b, "max", "https://m/b", date(2026, 8, 1))
+    repo.record_listing(b, "max", "https://m/b", date(2026, 8, 19))
+    repo.merge_film(b, a, D)
+    with sqlite3.connect(repo.db_path) as c:
+        row = c.execute(
+            "SELECT first_seen, last_seen, url FROM listings WHERE film_id = ? AND source='max'", (a,)
+        ).fetchone()
+    assert row == ("2026-08-01", "2026-08-19", "https://m/a")
+
+
+def test_merge_rejects_self_disposed_and_unknown(repo):
+    a, b = _two_films(repo)
+    with pytest.raises(ValueError):
+        repo.merge_film(a, a, D)
+    with pytest.raises(ValueError):
+        repo.merge_film(999, a, D)
+    repo.tombstone_film(b, D, note="junk")
+    assert repo.disposition_of(b) == ("tombstoned", None)
+    assert repo.tombstoned_keys() == {"alpha (1951)"}
+    assert repo.disposed_film_ids() == {b}
+    with pytest.raises(ValueError):
+        repo.merge_film(b, a, D)
+    with pytest.raises(ValueError):
+        repo.merge_film(a, b, D)
+
+
+def test_tombstoning_a_flagged_film_clears_the_revisit_flag_and_worklist(repo):
+    a, b = _two_films(repo)
+    repo.toggle_revisit(b, D, note="wrong film")
+    assert [r[0] for r in repo.revisits()] == [b]
+    repo.tombstone_film(b, D, note="junk")
+    assert repo.revisits() == []
+    with sqlite3.connect(repo.db_path) as c:
+        assert c.execute("SELECT 1 FROM needs_revisit WHERE film_id = ?", (b,)).fetchone() is None
+
+
 def test_films_needing_tmdb_match_flags_commerce(repo):
     a = repo.upsert_film(Film("Trio", 1950, None, "https://c/trio"))
     repo.record_listing(a, "criterion", "https://c/trio", date(2026, 8, 24))
@@ -781,6 +883,63 @@ def test_update_film_year_collision_returns_twin_and_writes_nothing(repo):
     assert repo.film_id_by_key("nosferatu (1979)") == twin  # untouched
 
 
+def test_update_film_year_ignores_merged_away_key_holder(repo):
+    """A merge must not block its own survivor from adopting the loser's year.
+
+    The loser's films row is deliberately never deleted, so it keeps its key.
+    That key is not a live identity: it is retired in place and the survivor
+    takes it.
+    """
+    d = date(2026, 8, 24)
+    a = repo.upsert_film(Film("Alpha", 1950, None, "u1"))
+    b = repo.upsert_film(Film("Alpha", 1951, None, "u2"))
+    repo.merge_film(b, a, d)
+
+    assert repo.update_film_year(a, 1951) is None
+    assert repo.film_id_by_key("alpha (1951)") == a
+    assert repo.film_id_by_key(f"alpha (1951) #{b}") == b  # loser's key retired, not deleted
+    assert repo.disposition_of(b) == ("merged", a)
+
+
+def test_update_film_year_merged_key_of_another_survivor_blocks(repo):
+    """Only THIS film's own loser may have its key retired.
+
+    C (Alpha 1970) was merged into D. An unrelated commerce film A (Alpha 1971)
+    must not steal 'alpha (1970)': that key belongs to D's identity now, so the
+    clash is reported under D and a durable year-collision review follows.
+    """
+    d = date(2026, 8, 24)
+    c_id = repo.upsert_film(Film("Alpha", 1970, None, "u1"))
+    d_id = repo.upsert_film(Film("Delta", 1980, None, "u2"))
+    repo.merge_film(c_id, d_id, d)
+    a_id = repo.upsert_film(Film("Alpha", 1971, None, "u3"))
+
+    assert repo.update_film_year(a_id, 1970) == d_id
+    assert repo.film_id_by_key("alpha (1971)") == a_id  # untouched
+    assert repo.film_id_by_key("alpha (1970)") == c_id  # loser's key untouched
+
+
+def test_update_film_year_collision_with_live_film_writes_nothing(repo):
+    a = repo.upsert_film(Film("Alpha", 1950, None, "u1"))
+    b = repo.upsert_film(Film("Alpha", 1951, None, "u2"))
+
+    assert repo.update_film_year(a, 1951) == b
+    assert repo.film_id_by_key("alpha (1950)") == a  # untouched
+    assert repo.film_id_by_key("alpha (1951)") == b
+
+
+def test_update_film_year_tombstoned_key_holder_still_blocks(repo):
+    """A tombstone's key IS the re-creation guard (tombstoned_keys) — never hand it away."""
+    d = date(2026, 8, 24)
+    a = repo.upsert_film(Film("Alpha", 1950, None, "u1"))
+    b = repo.upsert_film(Film("Alpha", 1951, None, "u2"))
+    repo.tombstone_film(b, d)
+
+    assert repo.update_film_year(a, 1951) == b
+    assert repo.film_id_by_key("alpha (1950)") == a  # untouched
+    assert repo.tombstoned_keys() == {"alpha (1951)"}
+
+
 def test_replace_unresolved_reviews_reason_scope(repo):
     d = date(2026, 8, 24)
     a = repo.upsert_film(Film("Trio", 1950, None, "u1"))
@@ -801,3 +960,21 @@ def test_commerce_films_with_tmdb_excludes_criterion(repo):
     assert repo.commerce_films_with_tmdb() == [(b, "Stop Making Sense", 2023, "606")]
     assert repo.film_id_for_external("tmdb", "606") == b
     assert repo.film_id_for_external("tmdb", "999") is None
+
+
+def test_update_film_year_unknown_id_raises(repo):
+    import pytest
+
+    with pytest.raises(LookupError):
+        repo.update_film_year(999, 1950)
+
+
+def test_stale_omdb_years_excludes_non_numeric_payload_year(repo):
+    d = date(2026, 8, 24)
+    na = repo.upsert_film(Film("Nine A", 1951, None, "u1"))
+    repo.upsert_omdb(na, OmdbRating(None, None, False, None, json.dumps({"Year": "N/A"})), d)
+    stale = repo.upsert_film(Film("Stale One", 1951, None, "u2"))
+    repo.upsert_omdb(stale, OmdbRating(6.0, 50, True, "English", json.dumps({"Year": "1953"})), d)
+    ids = {row[0] for row in repo.stale_omdb_years()}
+    assert na not in ids
+    assert stale in ids

@@ -28,6 +28,7 @@
     watchlist: (f) => f.watchlisted,
     owned: (f) => f.owned,
     not_owned: (f) => !f.owned,
+    needs_revisit: (f) => f.needs_revisit,
   };
 
   // ---- filtering / sorting ----
@@ -308,7 +309,8 @@
     const streaming = (d.services || [])
       .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`).join(', ');
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
-    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button></h2>
+    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
+      ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${p.Plot && p.Plot !== 'N/A' ? `<p>${poster}${esc(p.Plot)}</p>` : poster}
       <dl>${fields}</dl>
@@ -377,6 +379,48 @@
     const film = state.films.find((f) => f.id === +b.dataset.id);
     if (film) { film.watchlisted = watchlisted; applyFilters(); }
   });
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.revisit-toggle'); if (!b) return;
+    const id = Number(b.dataset.id);
+    const r = await fetch(`/api/films/${id}/revisit`, { method: 'POST' });
+    if (!r.ok) { toast('Could not update revisit flag'); return; }
+    const { needs_revisit } = await r.json();
+    b.textContent = needs_revisit ? '⚑' : '⚐';
+    const film = state.films.find((f) => f.id === id);
+    if (film) { film.needs_revisit = needs_revisit; if (!needs_revisit) film.revisit_note = null; applyFilters(); }
+    // Patch the drawer DOM in place — reopening (openDrawer) would clear drawerOpenPushed
+    // and desync closeDrawer()'s history-back bookkeeping (see the fromPopstate comment above).
+    let note = body.querySelector('.revisit-note');
+    if (needs_revisit && !note) {
+      note = document.createElement('input');
+      note.className = 'revisit-note';
+      note.dataset.id = String(id);
+      note.placeholder = 'what looks wrong?';
+      note.value = (film && film.revisit_note) || '';
+      b.closest('h2').insertAdjacentElement('afterend', note);
+    } else if (!needs_revisit && note) {
+      note.remove();
+    }
+  });
+  async function commitRevisitNote(input) {
+    if (input.dataset.busy) return;
+    const id = Number(input.dataset.id);
+    const film = state.films.find((f) => f.id === id);
+    const current = (film && film.revisit_note) || '';
+    if (input.value === current) return;
+    input.dataset.busy = '1';
+    try {
+      const r = await fetch(`/api/films/${id}/revisit`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: input.value }) });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      if (film) film.revisit_note = input.value;
+    } catch (err) {
+      input.value = current; toast(`Could not save note: ${err.message}`);
+    } finally {
+      delete input.dataset.busy;
+    }
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input.revisit-note')) e.target.blur(); });
+  document.addEventListener('focusout', (e) => { if (e.target.matches('input.revisit-note')) commitRevisitNote(e.target); });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!langPanel.hidden) { closeLangPanel(); return; }
