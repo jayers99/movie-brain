@@ -85,6 +85,20 @@ archives still replay. No pipeline or schema change — offline only, as scoped.
 - Done when: Lawrence-class contamination is gone from the live DB (audit query returns
   zero uncorrected non-Criterion year mismatches outside the merge queue).
 
+**Done 2026-08-24:** merged to main (`ba72e94`; 388 tests, ruff, mypy, dominance gate all
+green). Live rematch run 1: 486 misses → 88 rematched / 368 still missed (no-match queue) /
+28 id-conflicts queued as durable merge candidates; 1,421 non-Criterion films year-checked,
+266 years adopted (201 off-by-one commerce corrections, 62 re-release-class multi-year
+moves, 0 collisions); **audit = 0** uncorrected mismatches outside the merge queue — the
+Done criterion. Run 2 confirms convergence (2 residual matches from TMDB search jitter,
+queue rows stable under the dedup guard, audit 0 again). Promotion arbiter live: the 25
+metacritic `year-gap` rows resolved to 23 `remake-suspected` refusals (King Kong '05,
+Manchurian Candidate '04, Invisible Man '20 … genuine remakes, correctly NOT matched to our
+originals — M3 resolution fodder) with the true re-release cases auto-matched. One-off
+repair (Lawrence precedent): film 4492 "Rambo: First Blood" carried a pre-M1 wrong link
+(tmdb 62518, Vahşi Kan 1983) whose year pass B then adopted; link cleared, year restored to
+1982, film now in the no-match queue. Stale-wrong-link re-validation is M3 scope.
+
 ## M3 — repair & merge surface (Phase 8 pulled forward, scoped)
 
 - **`movie-brain repair dupes`**: the norm-title audit as a verb; groups classified by TMDB
