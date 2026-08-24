@@ -65,9 +65,10 @@ def test_match_exact_year_wins():
     assert match_film("Nosferatu", 1979, candidates) == MatchResult(winner=2)
 
 
-def test_match_us_rerelease_year_drift():
-    # MC stamps the US release year: Tokyo Story 1972 must still match the 1953 film.
-    assert match_film("Tokyo Story", 1972, [(5, "Tokyo Story", 1953)]) == MatchResult(winner=5)
+def test_match_us_rerelease_year_drift_reviews_uncorroborated_gap():
+    # MC stamps the US release year: an uncorroborated 19-year trailing gap is no longer
+    # auto-matched (was: match) — M1 keeps wrong-match ~0 and asks for the M2 arbiter class.
+    assert match_film("Tokyo Story", 1972, [(5, "Tokyo Story", 1953)]) == MatchResult(None, (), "year-gap")
 
 
 def test_match_rejects_film_far_newer_than_mc_year():
@@ -113,9 +114,12 @@ class TestPickTmdbMatch:
         cands = [c(4, "Forbidden Lies", 2007, original="Forbidden Lie$")]
         assert pick_tmdb_match("Forbidden Lie$", 2007, cands) == 4
 
-    def test_near_year_fallback_takes_first_of_top_three(self):
+    def test_no_title_match_near_year_fallback_removed(self):
+        # The old title-blind "first of top-3 within +/-1 year" fallback is gone — it was
+        # the Lawrence-of-Arabia-to-731627 wrong-match vector — so a title with no title
+        # hit at all is a create/None, never a near-year guess.
         cands = [c(5, "Something Else", 1961), c(6, "Other", 1990), c(7, "Another", 1960)]
-        assert pick_tmdb_match("The Original Title", 1960, cands) == 5
+        assert pick_tmdb_match("The Original Title", 1960, cands) is None
 
     def test_fallback_never_reaches_past_top_three(self):
         cands = [c(1, "A", 1990), c(2, "B", 1990), c(3, "C", 1990), c(4, "D", 1960)]
@@ -179,9 +183,10 @@ def test_match_owned_accepts_one_year_drift():
     assert match_owned("Alpha", 1951, [(1, "Alpha", 1950)]).winner == 1
 
 
-def test_match_owned_rejects_two_year_drift():
-    r = match_owned("Alpha", 1952, [(1, "Alpha", 1950)])
-    assert r.winner is None and r.tied == ()
+def test_match_owned_commerce_two_year_drift_reviews_year_gap():
+    # Default (no embedded_year) is COMMERCE: an uncorroborated >1-year gap reviews
+    # rather than silently rejecting — same year-gap rule as match_film.
+    assert match_owned("Alpha", 1952, [(1, "Alpha", 1950)]) == MatchResult(None, (), "year-gap")
 
 
 def test_match_owned_tie_is_ambiguous():
@@ -193,6 +198,40 @@ def test_match_owned_yearless_needs_unique_candidate():
     assert match_owned("Solo", None, [(1, "Solo", 1996)]).winner == 1
     r = match_owned("Twin", None, [(1, "Twin", 1978), (2, "Twin", 1980)])
     assert r.winner is None and set(r.tied) == {1, 2}
+
+
+def test_match_owned_embedded_year_is_tight_database_band():
+    # An embedded title year is DATABASE-trust: exact wins...
+    assert match_owned("Rear Window", 1954, [(1, "Rear Window", 1954)], embedded_year=True).winner == 1
+    # ...and a 2-year disagreement disqualifies (DATABASE, |delta|>1) rather than
+    # trailing-gap-reviewing like the COMMERCE default.
+    r = match_owned("Nosferatu", 1924, [(1, "Nosferatu", 1922)], embedded_year=True)
+    assert r == MatchResult(None, (), "conflict")
+
+
+def test_match_owned_field_year_gap_with_runtime_corroboration_matches():
+    # A plain (non-embedded) field year is COMMERCE: a trailing gap alone would review,
+    # but a corroborating runtime match earns the win.
+    cand = Candidate(1, "Stop Making Sense", 1984, runtime_min=88)
+    assert match_owned("Stop Making Sense", 1999, [cand], runtime_min=88) == MatchResult(winner=1)
+
+
+def test_match_owned_accepts_plain_tuple_candidate_index_and_list():
+    # Old-style (id, title, year) tuples, a list[Candidate], and a prebuilt
+    # CandidateIndex must all still work as the candidates argument.
+    tuple_result = match_owned("Solaris", 1972, [(1, "Solaris", 1972)])
+    candidate_result = match_owned("Solaris", 1972, [Candidate(1, "Solaris", 1972)])
+    index = CandidateIndex([Candidate(1, "Solaris", 1972)])
+    index_result = match_owned("Solaris", 1972, index)
+    assert tuple_result == candidate_result == index_result == MatchResult(winner=1)
+
+
+def test_match_film_maps_review_reason_onto_match_result():
+    # A level-2 (colon-prefix) hit with no year support reviews "weak-title" — match_film
+    # must surface that core reason on MatchResult.reason, not just winner=None.
+    idx = CandidateIndex([Candidate(1, "Hearts of Darkness: A Filmmaker's Apocalypse", 1991)])
+    result = match_film("Hearts of Darkness", None, idx)
+    assert result == MatchResult(None, (), "weak-title")
 
 
 def C(

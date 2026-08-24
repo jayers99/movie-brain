@@ -1,3 +1,4 @@
+import json
 import re
 import sqlite3
 from datetime import date
@@ -5,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import Film, McTitle, OmdbRating, ReviewEntry
-from movie_brain.infrastructure.database import MIGRATIONS_DIR, Repository, init_db
+from movie_brain.infrastructure.database import MIGRATIONS_DIR, FilmRow, Repository, init_db
 
 TRIO = Film("Trio", 1950, "Ken Annakin", "https://c/trio")
 QUARTET = Film("Quartet", 1948, "Ken Annakin", "https://c/quartet")
@@ -414,8 +415,25 @@ def test_films_for_matching_includes_omdb_metascore(repo, today):
     repo.upsert_omdb(fid, OmdbRating(None, None, True, metacritic=85), today)
     fid2 = repo.upsert_film(Film("Beta", 1960, "Bob", "https://c/beta"))
     rows = repo.films_for_matching()
-    assert (fid, "Alpha", 1950, 85) in rows
-    assert (fid2, "Beta", 1960, None) in rows
+    assert FilmRow(fid, "Alpha", 1950, "Ann", None, 85) in rows
+    assert FilmRow(fid2, "Beta", 1960, "Bob", None, None) in rows
+
+
+def test_films_for_matching_reads_director_and_runtime_from_omdb_payload(repo, today):
+    # NULL films.director falls back to the OMDb payload; "91 min" parses to 91.
+    fid = repo.upsert_film(Film("Gamma", 1970, None, "https://c/gamma"))
+    payload = json.dumps({"Director": "Jane Doe", "Runtime": "91 min"})
+    repo.upsert_omdb(fid, OmdbRating(None, None, True, payload=payload), today)
+    row = next(r for r in repo.films_for_matching() if r.id == fid)
+    assert (row.director, row.runtime_min) == ("Jane Doe", 91)
+
+
+def test_films_for_matching_treats_omdb_na_as_missing(repo, today):
+    fid = repo.upsert_film(Film("Delta", 1980, None, "https://c/delta"))
+    payload = json.dumps({"Director": "N/A", "Runtime": "N/A"})
+    repo.upsert_omdb(fid, OmdbRating(None, None, True, payload=payload), today)
+    row = next(r for r in repo.films_for_matching() if r.id == fid)
+    assert (row.director, row.runtime_min) == (None, None)
 
 
 def test_film_ids_with_external(repo, today):
