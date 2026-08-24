@@ -315,8 +315,11 @@ another chip; the kind-on-edge version keeps a service's identity in one row (on
 adapter), lets ownership extend to other stores later (e.g. Prime purchases) without twin rows,
 and keeps "which services stream this?" queries from having to exclude owned-rows.
 
-- [ ] **Spike: pick the ownership model** — pseudo-service rows vs. kind-on-the-join (or a
-      separate `owned` table). Decide with the iTunes-export spike in hand.
+- [x] ~~**Spike: pick the ownership model** — pseudo-service rows vs. kind-on-the-join (or a
+      separate `owned` table). Decide with the iTunes-export spike in hand.~~
+      **Decision (2026-08-23): dedicated `owned` table (watchlist pattern), AppleScript export
+      as acquisition (870 cloud purchases visible); privacy-portal export remains the
+      completeness backstop.**
 - [ ] Formalize `movie_service`: what does a service row carry (name, slug, kind, base URL)?
       Does `listings.source` become a foreign key to it?
 - [x] ~~Retention rules per service?~~ **Decision (2026-08-24): the film database is
@@ -366,8 +369,12 @@ and keeps "which services stream this?" queries from having to exclude owned-row
 
 ### iTunes / owned films
 
-- [ ] **Spike: how to export my iTunes/Apple TV purchase list.** Apple API? Family Sharing
-      caveats? Manual export from the TV app? One-shot import vs. periodic sync?
+- [x] ~~**Spike: how to export my iTunes/Apple TV purchase list.** Apple API? Family Sharing
+      caveats? Manual export from the TV app? One-shot import vs. periodic sync?~~ **Answered
+      2026-08-23: AppleScript** — `movie-brain owned import` drives the Apple TV app via
+      osascript (no Apple API, no Family Sharing handling), archiving the raw export before
+      parsing, one-shot per run (never in nightly sync). Sees 870 cloud purchases; the
+      privacy-portal export is the completeness backstop for the rest.
 - [ ] Are purchases title+year strings or Apple IDs — and how do they map to `film_key`?
 
 ### UI / product

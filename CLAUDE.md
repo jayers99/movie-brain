@@ -15,6 +15,7 @@ uv run movie-brain sync [--full|--ratings-only]      # refresh catalog + OMDb ra
 uv run movie-brain metacritic crawl [--pages 10]     # extend the raw browse-page archive (polite, checkpointed)
 uv run movie-brain metacritic match                  # offline: match archive → films, report coverage
 uv run movie-brain metacritic dial [N]                # show/set the Mode-B top-N; promotion runs in nightly sync
+uv run movie-brain owned import                       # AppleScript export of the Apple TV library → mark/create owned films (macOS, never in sync)
 uv run movie-brain dashboard [--port 5556]
 uv run movie-brain import-legacy [--from DIR]        # one-shot criterion-ratings import
 uv run movie-brain export csv PATH
@@ -70,6 +71,11 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
   (MAX fallback when no stamp; criterion keeps MAX(last_seen)).
 - `_VIEW_SQL` drives from `films` with a LEFT JOIN on the criterion listing (not an inner join) so Mode-B films with no Criterion listing are visible; `list_views` keeps Criterion parity by filtering to no-listing OR current OR rated (unrated departed still hidden). `FilmView.url` is nullable (populated only from a Criterion listing; Mode-B/discovery films are always `None` here — their link is `FilmView.metacritic_url`, set at match/promotion time) and `FilmView.criterion` is a bool. `summary()` stays criterion-scoped plus a `discovery` count. The dashboard's scope toggle (client-side URL state, default `criterion`; `all` reveals discovery films) is app.js-only — the server always returns the full view. `export csv` writes `list_views` unfiltered, so it also includes discovery films (empty `url` cell) — this is intended, not a bug.
 - Canned-filter thresholds and chip names live ONLY in `domain/filters.py`; JS reads thresholds from `/api/config`. Keep `CHIP_PREDICATES` in `app.js` and the chip buttons in `index.html` in lockstep with `_PREDICATES`.
+- `owned` is possession data on the watchlist pattern: `owned import` is the only writer, rows
+  are permanent (never unmarked), and there's no `listings`/`availability_transitions`
+  interaction. Ambiguous title matches (a tie on year) queue to `match_review` under authority
+  `apple-tv`, never guessed; unmatched owned titles become real films (generated guid) that the
+  existing discovery machinery (OMDb/TMDB) enriches like any other film.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
 
@@ -81,6 +87,9 @@ Pre-migration backups land in `<config_dir>/backups/` automatically whenever `in
 about to apply a new migration — each file is the rollback point for one schema change.
 
 Metacritic archive: `<config_dir>/metacritic/pages/page-NNNN.html` + `fetch-log.jsonl`.
+
+Apple TV archive: `<config_dir>/appletv/owned-<YYYY-MM-DD>.txt` (raw osascript export,
+archived before parsing — one file per `owned import` run).
 
 On first use, macOS asks once to allow notifications from osascript; until approved, the
 nightly sync's watchlist notification won't display.
