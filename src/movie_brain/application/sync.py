@@ -113,7 +113,8 @@ def sync(
     looked_up = 0
     quota_hit = False
     consecutive = 0
-    for film_id, film in repo.films_needing_lookup(SOURCE, today):
+    lookup_queue = repo.films_needing_lookup(SOURCE, today) + repo.films_needing_lookup_discovery(SOURCE, today)
+    for film_id, film in lookup_queue:
         if quota_hit or consecutive >= MAX_CONSECUTIVE_FAILURES:
             break
         try:

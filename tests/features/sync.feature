@@ -139,3 +139,11 @@ Feature: Daily sync
     And OMDb knows every film
     When I sync with a metacritic archive
     Then the exit code is 0
+
+  Scenario: Promoted films get OMDb ratings the same night
+    Given the Criterion browse page exposes a token
+    And the Criterion catalog has films "Alpha (1950)"
+    And OMDb knows every film
+    And the metacritic archive holds "Fresh Find" (2020) scored 95 as "fresh-find"
+    When I sync with a metacritic archive
+    Then the film for key "fresh find (2020)" has an OMDb rating

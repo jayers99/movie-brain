@@ -301,3 +301,15 @@ def failing_flag(ctx):
 @then(parsers.parse('the repository holds a film for key "{key}"'))
 def holds_film_key(ctx, key):
     assert ctx["repo"].film_id_by_key(key) is not None
+
+
+@then(parsers.parse('the film for key "{key}" has an OMDb rating'))
+def film_has_omdb(ctx, key):
+    fid = ctx["repo"].film_id_by_key(key)
+    assert fid is not None
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(ctx["repo"].db_path)
+    row = conn.execute("SELECT found FROM omdb WHERE film_id = ?", (fid,)).fetchone()
+    conn.close()
+    assert row is not None and row[0] == 1

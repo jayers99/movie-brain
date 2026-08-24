@@ -492,6 +492,33 @@ class Repository:
                 for r in self._current_rows(c, source, where, (cutoff,))
             ]
 
+    def films_needing_lookup_discovery(self, source: str, today: date) -> list[tuple[int, Film]]:
+        """Discovery films (no listing for `source`, i.e. never on Criterion) needing OMDb."""
+        cutoff = (today - timedelta(days=MISS_RETRY_DAYS)).isoformat()
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, x.value AS slug FROM films f "
+                "LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic' "
+                "WHERE NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = ?) "
+                "AND (NOT EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id) "
+                "OR EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id AND "
+                "(o.needs_refresh = 1 OR (o.found = 0 AND (o.year_fallback = 0 OR o.looked_up <= ?))))) "
+                "ORDER BY f.id",
+                (source, cutoff),
+            ).fetchall()
+            return [
+                (
+                    int(r["id"]),
+                    Film(
+                        str(r["title"]),
+                        r["year"],
+                        None,
+                        f"https://www.metacritic.com/movie/{r['slug']}/" if r["slug"] else "",
+                    ),
+                )
+                for r in rows
+            ]
+
     def upsert_omdb(
         self,
         film_id: int,
