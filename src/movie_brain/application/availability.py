@@ -10,8 +10,8 @@ import requests
 
 from movie_brain.domain.matching import pick_tmdb_match
 from movie_brain.domain.models import ReviewEntry
-from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository
-from movie_brain.infrastructure.tmdb import AuthError, TmdbClient, watch_link
+from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository, TmdbMatchTarget
+from movie_brain.infrastructure.tmdb import AuthError, TmdbArbiter, TmdbClient, watch_link
 
 TMDB_AUTHORITY = "tmdb"
 STORE_PROVIDER_ID = 2  # Apple TV Store (iTunes) — the only rent/buy id we record
@@ -32,51 +32,127 @@ class TmdbStepResult:
     watchlist_refreshed: int = 0
 
 
+def queue_review_once(repo: Repository, authority: str, entry: ReviewEntry, today: date) -> bool:
+    """Append a durable review row unless an open one with the same reason+film already exists.
+
+    Durable reasons (year-collision, id-conflict) survive the per-run no-match rebuild,
+    so idempotent passes must not stack duplicates.
+    """
+    for r in repo.open_reviews(authority):
+        if r["reason"] == entry.reason and r["film_id"] == entry.film_id:
+            return False
+    repo.append_reviews(authority, [entry], today)
+    return True
+
+
+def record_tmdb_match(
+    repo: Repository,
+    target: TmdbMatchTarget,
+    winner_id: int,
+    winner_year: int | None,
+    today: date,
+    log: Callable[[str], None],
+) -> str:
+    """The one TMDB match write path: claim the id, flag found, canonicalize the year.
+
+    Commerce-created films adopt TMDB's original year (spec principle 5) — a key
+    collision is a detected twin and queues year-collision instead of overwriting.
+    Returns "matched" or "id-conflict".
+    """
+    try:
+        repo.set_external_id(target.film_id, TMDB_AUTHORITY, str(winner_id), today)
+    except sqlite3.IntegrityError:
+        holder = repo.film_id_for_external(TMDB_AUTHORITY, str(winner_id))
+        log(f"tmdb id conflict for {target.title!r}: id {winner_id} already claimed by film {holder}")
+        repo.upsert_tmdb(target.film_id, found=False, looked_up=today)
+        queue_review_once(
+            repo,
+            TMDB_AUTHORITY,
+            ReviewEntry(
+                "id-conflict",
+                film_id=target.film_id,
+                value=str(winner_id),
+                detail=f"{target.title!r} ({target.year}) vs film {holder} — same tmdb id, likely twins",
+            ),
+            today,
+        )
+        return "id-conflict"
+    repo.upsert_tmdb(target.film_id, found=True, looked_up=today)
+    if target.commerce and winner_year is not None and winner_year != target.year:
+        clash = repo.update_film_year(target.film_id, winner_year)
+        if clash is not None:
+            queue_review_once(
+                repo,
+                TMDB_AUTHORITY,
+                ReviewEntry(
+                    "year-collision",
+                    film_id=target.film_id,
+                    value=str(clash),
+                    detail=f"{target.title!r}: adopting {winner_year} over {target.year} "
+                    f"collides with film {clash} — merge candidate",
+                ),
+                today,
+            )
+        else:
+            log(f"adopted TMDB year {winner_year} for {target.title!r} (was {target.year})")
+    return "matched"
+
+
 def tmdb_step(
     repo: Repository, client: TmdbClient, today: date, log: Callable[[str], None] = _stderr
 ) -> TmdbStepResult:
     matched = missed = refreshed = 0
     consecutive = 0
     aborted = False
+    arbiter = TmdbArbiter(client)
     for target in repo.films_needing_tmdb_match():
-        film_id, title, year = target.film_id, target.title, target.year
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
             log("TMDB searches failing repeatedly — stopping; next run resumes.")
             aborted = True
             break
         try:
-            candidates = client.search(title)
+            candidates = client.search(target.title)
         except AuthError as exc:
             log(f"TMDB rejected the token: {exc}")
             return TmdbStepResult(matched, missed, refreshed)
         except requests.RequestException as exc:
-            log(f"TMDB search failed for {title!r}: {exc}")
+            log(f"TMDB search failed for {target.title!r}: {exc}")
             consecutive += 1
             continue
         consecutive = 0
-        winner = pick_tmdb_match(title, year, candidates)
+        arbiter.seed(target.title, candidates)
+        winner = pick_tmdb_match(
+            target.title,
+            target.year,
+            candidates,
+            commerce_year=target.commerce,
+            arbiter=arbiter if target.commerce else None,
+        )
         if winner is None:
-            repo.upsert_tmdb(film_id, found=False, looked_up=today)
+            repo.upsert_tmdb(target.film_id, found=False, looked_up=today)
             missed += 1
         else:
-            try:
-                repo.set_external_id(film_id, TMDB_AUTHORITY, str(winner), today)
-            except sqlite3.IntegrityError:
-                # UNIQUE(authority, value): another film already claimed this tmdb id.
-                # Contain it here — one bad match must never block the whole step; queue
-                # this film for review and move on, same as an ordinary no-match.
-                log(f"tmdb id conflict for {title!r}: id {winner} already claimed")
-                repo.upsert_tmdb(film_id, found=False, looked_up=today)
+            winner_year = next((c.year for c in candidates if c.tmdb_id == winner), None)
+            if record_tmdb_match(repo, target, winner, winner_year, today, log) == "matched":
+                matched += 1
+            else:
                 missed += 1
-                continue
-            repo.upsert_tmdb(film_id, found=True, looked_up=today)
-            matched += 1
 
     # Recomputed from found=0 rows each run, so a tripwired match pass never loses entries.
+    # Scoped to reason="no-match" so it never wipes the durable year-collision/id-conflict
+    # rows record_tmdb_match queues above — and a film already holding one of those durable
+    # rows (also found=0, since it couldn't claim its id) is excluded here too, so it isn't
+    # double-queued under both reasons.
+    durably_flagged = {r["film_id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] != "no-match"}
     repo.replace_unresolved_reviews(
         TMDB_AUTHORITY,
-        [ReviewEntry("no-match", film_id=fid, detail=f"{t} ({y})") for fid, t, y in repo.films_tmdb_missed()],
+        [
+            ReviewEntry("no-match", film_id=fid, detail=f"{t} ({y})")
+            for fid, t, y in repo.films_tmdb_missed()
+            if fid not in durably_flagged
+        ],
         today,
+        reason="no-match",
     )
 
     # A tripwired match pass means TMDB is unhealthy right now — don't start (or stamp) a

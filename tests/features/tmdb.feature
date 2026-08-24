@@ -104,3 +104,34 @@ Feature: TMDB availability
     Given TMDB streams id 11 on providers 1899 and 258
     When I sync with a TMDB token 8 days later
     Then an availability transition for "max" is recorded
+
+  Scenario: A commerce film with a re-release year matches the original and adopts its year
+    Given a commerce film "Stop Making Sense" from 2023
+    And TMDB knows "Stop Making Sense" as id 606 released 1984
+    When I sync with a TMDB token
+    Then "Stop Making Sense (1984)" has external id "606" for authority "tmdb"
+    And the film "Stop Making Sense" has year 1984 and key "stop making sense (1984)"
+    And TMDB search was called exactly 2 times
+
+  Scenario: Year write-back that collides with an existing key queues year-collision
+    Given a commerce film "Nosferatu" from 2024
+    And the Criterion catalog has films "Nosferatu (1922)"
+    And TMDB knows "Nosferatu" as id 653 released 1922
+    When I sync with a TMDB token
+    Then the film "Nosferatu" from 2024 still has year 2024
+    And the tmdb review queue holds a "year-collision" entry
+    When I sync with a TMDB token again the next day
+    Then the tmdb review queue holds 1 "year-collision" entries
+
+  Scenario: A criterion film never gets a year write-back
+    Given TMDB knows "Trio" as id 11 released 1949
+    And TMDB streams id 11 on providers 1899 and 258
+    When I sync with a TMDB token
+    Then the film "Trio" from 1950 still has year 1950
+
+  Scenario: Two films whose TMDB search both resolve to the same id — the second queues id-conflict
+    Given a commerce film "Trio" from 1952
+    And the Criterion catalog has films "Trio (1950)"
+    And TMDB knows "Trio" as id 11 released 1950
+    When I sync with a TMDB token
+    Then the tmdb review queue holds a "id-conflict" entry
