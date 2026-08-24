@@ -49,3 +49,16 @@ Feature: match_review rows are resolved by CLI and never come back
     Given an open tmdb "no-match" review for "King Kong (1933)"
     Then resolving it with create fails
     And resolving it with both dismiss and film "Alpha (1950)" fails
+
+  Scenario: A --film target that is a merged loser resolves to its survivor
+    Given the archive staged "Alpha" (1990) as slug "alpha-rr"
+    And an open metacritic "year-gap" review for slug "alpha-rr"
+    And "King Kong (1933)" is merged into "Alpha (1950)"
+    When I resolve it with film "King Kong (1933)"
+    Then "Alpha (1950)" holds metacritic slug "alpha-rr"
+
+  Scenario: A --film target that is tombstoned is refused
+    Given the archive staged "Alpha" (1990) as slug "alpha-rr"
+    And an open metacritic "year-gap" review for slug "alpha-rr"
+    And "King Kong (1933)" is tombstoned
+    Then resolving it with film "King Kong (1933)" fails

@@ -195,7 +195,15 @@ def match_archive(
 
 
 def create_from_staged(repo: Repository, t: McTitle, today: date) -> int | None:
-    """Turn one staged Metacritic title into a real film and claim its slug; None on key/slug conflict."""
+    """Turn one staged Metacritic title into a real film and claim its slug; None on key/slug conflict.
+
+    Checks the slug isn't already claimed BEFORE creating the film — creating first and
+    discovering the slug conflict only at set_external_id would orphan a fresh, unlinked
+    film row. The IntegrityError catch stays as a backstop for a same-slug race between
+    the check and the write.
+    """
+    if t.slug in repo.claimed_values(AUTHORITY):
+        return None
     film = Film(clean_title(t.title), t.year, None, MC_MOVIE_URL.format(slug=t.slug))
     film_id = repo.create_film(film)
     if film_id is None:

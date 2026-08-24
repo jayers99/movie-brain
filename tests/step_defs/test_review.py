@@ -81,6 +81,16 @@ def holds_tmdb(ctx, spec, tid):
     ctx["repo"].upsert_tmdb(fid, found=True, looked_up=TODAY)
 
 
+@given(parsers.parse('"{loser}" is merged into "{survivor}"'))
+def merge_before(ctx, loser, survivor):
+    ctx["repo"].merge_film(_id(ctx["repo"], loser), _id(ctx["repo"], survivor), TODAY, note="test")
+
+
+@given(parsers.parse('"{spec}" is tombstoned'))
+def tombstoned_before(ctx, spec):
+    ctx["repo"].tombstone_film(_id(ctx["repo"], spec), TODAY, note="test")
+
+
 @given(parsers.parse('the archive staged "{title}" ({year:d}) as slug "{slug}"'))
 def staged(ctx, title, year, slug):
     ctx["repo"].upsert_mc_titles([McTitle(slug, title, year, 85, 1, 1)], TODAY)
@@ -186,3 +196,9 @@ def create_fails(ctx):
 def both_fail(ctx, spec):
     with pytest.raises(ValueError):
         rv.resolve_review(ctx["repo"], ctx["review_id"], dismiss=True, film_id=_id(ctx["repo"], spec), today=TODAY)
+
+
+@then(parsers.parse('resolving it with film "{spec}" fails'))
+def with_film_fails(ctx, spec):
+    with pytest.raises(ValueError):
+        rv.resolve_review(ctx["repo"], ctx["review_id"], film_id=_id(ctx["repo"], spec), today=TODAY)

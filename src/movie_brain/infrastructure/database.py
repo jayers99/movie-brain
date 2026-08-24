@@ -565,8 +565,10 @@ class Repository:
             )
 
     def tmdb_target(self, film_id: int) -> TmdbMatchTarget | None:
+        # Mirrors films_needing_tmdb_match's _NOT_DISPOSED filter: a merged-away or
+        # tombstoned film is never a valid tmdb match target.
         with self._conn() as c:
-            r = c.execute(_TMDB_TARGET_SELECT + "WHERE f.id = ?", (film_id,)).fetchone()
+            r = c.execute(_TMDB_TARGET_SELECT + "WHERE f.id = ? AND " + _NOT_DISPOSED, (film_id,)).fetchone()
             return None if r is None else TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"]))
 
     # tmdb ---------------------------------------------------------------

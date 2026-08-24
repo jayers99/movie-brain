@@ -59,6 +59,16 @@ def resolve_review(
     chosen = [x for x in (film_id is not None, tmdb_id is not None, create, dismiss) if x]
     if len(chosen) != 1:
         raise ValueError("choose exactly one of --film, --tmdb-id, --create, --dismiss")
+    if film_id is not None:
+        # --film targets an id chosen by a human, possibly stale by the time this runs
+        # (merged away, tombstoned) — canonicalize to the ultimate survivor and refuse a
+        # tombstoned or nonexistent id outright, never bind a slug/ownership to a dead film.
+        film_id = repo.canonical_film_id(film_id)
+        disposition = repo.disposition_of(film_id)
+        if disposition is not None and disposition[0] == "tombstoned":
+            raise ValueError(f"film {film_id} is tombstoned")
+        if repo.get_view(film_id, today) is None:
+            raise ValueError(f"film {film_id} not found")
     row = repo.review(review_id)
     if row is None or row["resolved"]:
         raise ValueError(f"review {review_id} is not open")
@@ -103,9 +113,13 @@ def resolve_review(
             staged = repo.staged_title(value)
             if staged is None:
                 raise ValueError(f"slug {value!r} is not in the staged archive")
+            if value in repo.claimed_values(MC_AUTHORITY):
+                raise ValueError(f"slug {value!r} is already claimed")
             new_id = create_from_staged(repo, staged, today)
             if new_id is None:
-                raise ValueError(f"creating {staged.title!r} ({staged.year}) collides with an existing film")
+                raise ValueError(
+                    f"creating {staged.title!r} ({staged.year}) collides with an existing film's key"
+                )
             outcome = f"created film {new_id} from slug {value}"
         else:
             raise ValueError("metacritic slug rows accept --film, --create or --dismiss")
