@@ -887,3 +887,10 @@ def test_commerce_films_with_tmdb_excludes_criterion(repo):
     assert repo.commerce_films_with_tmdb() == [(b, "Stop Making Sense", 2023, "606")]
     assert repo.film_id_for_external("tmdb", "606") == b
     assert repo.film_id_for_external("tmdb", "999") is None
+
+
+def test_update_film_year_unknown_id_raises(repo):
+    import pytest
+
+    with pytest.raises(LookupError):
+        repo.update_film_year(999, 1950)

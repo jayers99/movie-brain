@@ -8,8 +8,9 @@ from datetime import date
 
 import requests
 
-from movie_brain.application.availability import MAX_CONSECUTIVE_FAILURES, TMDB_AUTHORITY
+from movie_brain.application.availability import MAX_CONSECUTIVE_FAILURES, TMDB_AUTHORITY, queue_review_once
 from movie_brain.domain.matching import norm_title, split_annotations
+from movie_brain.domain.models import ReviewEntry
 from movie_brain.infrastructure.database import RepairFilm, Repository
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
@@ -199,3 +200,77 @@ def repair_links(
         if cleared:
             log(f"cleared {cleared} links — run `movie-brain rematch` to re-match them with the current matcher")
     return LinksReport(1 if tripwired else 0, checked, len(suspects), cleared)
+
+
+@dataclass(frozen=True)
+class YearsAudit:
+    collisions: tuple[dict[str, object], ...]
+    stale: tuple[tuple[int, str, int | None, int], ...]
+
+
+@dataclass(frozen=True)
+class YearsReport:
+    collisions: int
+    stale: int
+    refresh_marked: int
+    changed: bool = False
+    collided_with: int | None = None
+
+
+def audit_years(repo: Repository) -> YearsAudit:
+    collisions = tuple(r for r in repo.list_reviews(TMDB_AUTHORITY, "year-collision"))
+    return YearsAudit(collisions, tuple(repo.stale_omdb_years()))
+
+
+def repair_years(
+    repo: Repository,
+    today: date,
+    *,
+    film_id: int | None = None,
+    year: int | None = None,
+    apply: bool,
+    log: Callable[[str], None] = _stderr,
+) -> YearsReport:
+    """No args: list the worklist (open year-collisions + stale OMDb payloads); --apply marks the
+    stale payloads for refetch. With FILM_ID YEAR: dry-run the correction; --apply writes it
+    through update_film_year (collision → year-collision review, never an overwrite) and marks
+    the film's OMDb row for refetch so ratings/director/runtime are re-fetched under the new year."""
+    if (film_id is None) != (year is None):
+        raise ValueError("give both FILM_ID and YEAR, or neither")
+    audit = audit_years(repo)
+    if film_id is not None and year is not None:
+        view = repo.get_view(film_id)
+        if view is None:
+            raise LookupError(f"unknown film {film_id}")
+        log(f"#{film_id} {view.title!r}: {view.year} → {year}{'' if apply else ' (dry-run)'}")
+        if not apply:
+            return YearsReport(len(audit.collisions), len(audit.stale), 0)
+        clash = repo.update_film_year(film_id, year)
+        if clash is not None:
+            detail = (
+                f"{view.title!r}: setting {year} over {view.year} "
+                f"collides with film {clash} — merge candidate"
+            )
+            queue_review_once(
+                repo, TMDB_AUTHORITY,
+                ReviewEntry("year-collision", film_id=film_id, value=str(clash), detail=detail),
+                today,
+            )
+            log(f"collides with film {clash} — queued year-collision, nothing written")
+            return YearsReport(len(audit.collisions), len(audit.stale), 0, False, clash)
+        repo.mark_omdb_refresh(film_id)
+        repo.clear_revisit(film_id)
+        return YearsReport(len(audit.collisions), len(audit.stale), 1, True)
+    for r in audit.collisions:
+        log(
+            f"collision #{r['id']}: film {r['film_id']} {r['title']!r} ({r['year']}) "
+            f"vs film {r['value']} — {r['detail']}"
+        )
+    for fid, title, fy, oy in audit.stale:
+        log(f"stale omdb: #{fid} {title!r} year {fy}, payload fetched for {oy}")
+    marked = 0
+    if apply:
+        for fid, _t, _fy, _oy in audit.stale:
+            repo.mark_omdb_refresh(fid)
+            marked += 1
+    return YearsReport(len(audit.collisions), len(audit.stale), marked)

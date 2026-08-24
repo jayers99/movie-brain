@@ -88,3 +88,21 @@ Feature: Dispositioned films stay out of every collector's way
     And TMDB describes id 5 as "The Alpha Movie" / "Alpha" from 1950
     When I audit links
     Then there are no link suspects
+
+  Scenario: The years worklist lists stale OMDb payloads and applying marks them for refetch
+    Given "Alpha (1951)" has an OMDb payload fetched for year 1953
+    When I audit years
+    Then the stale OMDb list is exactly "Alpha (1951)"
+    When I apply years
+    Then "Alpha (1951)" needs an OMDb refresh
+
+  Scenario: A manual year correction is dry-run first, then applied with a refetch mark
+    When I dry-run setting "Alpha (1951)" to 1949
+    Then "Alpha (1951)" still has year 1951
+    When I apply setting "Alpha (1951)" to 1949
+    Then a film "Alpha (1949)" exists and needs an OMDb refresh
+
+  Scenario: A manual year correction that collides queues a merge candidate instead
+    When I apply setting "Alpha (1951)" to 1950
+    Then "Alpha (1951)" still has year 1951
+    And an open tmdb year-collision review names "Alpha (1950)"

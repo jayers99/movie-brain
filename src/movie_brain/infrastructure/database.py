@@ -672,12 +672,30 @@ class Repository:
         """
         with self._conn() as c:
             row = c.execute("SELECT title FROM films WHERE id = ?", (film_id,)).fetchone()
+            if row is None:
+                raise LookupError(f"unknown film {film_id}")
             new_key = film_key(str(row["title"]), year)
             clash = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
             if clash is not None:
                 return int(clash["id"])
             c.execute("UPDATE films SET year = ?, key = ? WHERE id = ?", (year, new_key, film_id))
             return None
+
+    def stale_omdb_years(self) -> list[tuple[int, str, int | None, int]]:
+        """Non-Criterion films whose OMDb payload was fetched under a different year than films.year."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, CAST(substr(json_extract(o.payload, '$.Year'), 1, 4) AS INTEGER) AS oy "
+                "FROM films f JOIN omdb o ON o.film_id = f.id "
+                "WHERE o.payload IS NOT NULL AND o.needs_refresh = 0 AND " + _NOT_DISPOSED + " "
+                "AND NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') "
+                "AND oy IS NOT NULL AND oy != COALESCE(f.year, -1) ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["title"]), r["year"], int(r["oy"])) for r in rows]
+
+    def mark_omdb_refresh(self, film_id: int) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE omdb SET needs_refresh = 1 WHERE film_id = ?", (film_id,))
 
     def film_id_for_external(self, authority: str, value: str) -> int | None:
         with self._conn() as c:
