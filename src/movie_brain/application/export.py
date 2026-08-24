@@ -49,7 +49,7 @@ def write_csv(repo: Repository, path: Path, source: str = "criterion") -> int:
                     v.imdb if v.imdb is not None else "",
                     _status(v),
                     v.leaving_date or "",
-                    v.url,
+                    v.url or "",
                     v.my_rating if v.my_rating is not None else "",
                 ]
             )

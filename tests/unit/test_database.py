@@ -122,6 +122,7 @@ def test_init_db_is_idempotent(tmp_path):
         "leaving": 0,
         "mine": 0,
         "departed": 0,
+        "discovery": 0,
     }
 
 
@@ -248,6 +249,7 @@ def test_views_and_summary(repo):
         "leaving": 1,
         "mine": 1,
         "departed": 0,
+        "discovery": 0,
     }
 
 
@@ -671,3 +673,29 @@ def test_top_staged_titles_bounds_by_rank(repo):
     )
     assert [t.slug for t in repo.top_staged_titles(2)] == ["first", "second"]
     assert repo.staged_title_count() == 3
+
+
+def test_list_views_includes_discovery_films_and_keeps_criterion_parity(repo):
+    day = date(2026, 8, 19)
+    # Criterion: Alpha current; Bravo departed-unrated (hidden); Echo departed-rated (shown).
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha"),
+                                      Film("Bravo", 1960, "Bob", "https://c/bravo"),
+                                      Film("Echo", 1990, "Eve", "https://c/echo")], date(2026, 1, 1))
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha")], day)
+    repo.set_rating(repo.film_id_by_key("echo (1990)"), 8, day)
+    # Discovery: Golf, no criterion listing, scraped metascore 88.
+    gid = repo.create_film(Film("Golf", 2020, None, ""))
+    repo.set_external_id(gid, "metacritic", "golf-2020", day)
+    repo.upsert_mc_titles([McTitle("golf-2020", "Golf", 2020, 88, 1, 1)], day)
+
+    views = {v.title: v for v in repo.list_views("criterion", day)}
+    assert set(views) == {"Alpha", "Echo", "Golf"}  # Bravo (departed, unrated) stays hidden
+    assert views["Alpha"].criterion is True and views["Alpha"].departed is False
+    assert views["Echo"].criterion is True and views["Echo"].departed is True
+    golf = views["Golf"]
+    assert golf.criterion is False and golf.url is None and golf.departed is False
+    assert golf.metacritic == 88 and golf.metacritic_url == "https://www.metacritic.com/movie/golf-2020/"
+    assert repo.get_view(gid, day).title == "Golf"
+
+    s = repo.summary("criterion")
+    assert s["films"] == 2 and s["discovery"] == 1
