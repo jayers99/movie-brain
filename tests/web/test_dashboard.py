@@ -113,7 +113,7 @@ def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Pa
     # follows, then the unrated Charlie/Delta by title.
     assert first_titles(dash, 6) == ["Alpha", "Echo", "Bravo", "Foxtrot", "Charlie", "Delta"]
     expect(dash.locator("#count-films")).to_have_text("6")
-    expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 7")  # +1 for the discovery-only Golf
+    expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 6")  # default scope excludes discovery-only Golf
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
 
 

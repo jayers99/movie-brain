@@ -124,7 +124,9 @@ def sync(
             continue
         except AuthError as exc:
             log(f"OMDb rejected the API key: {exc}")
-            return SyncResult(2, full_walk, len(repo.current_films(SOURCE)), looked_up, False, False)
+            return SyncResult(
+                2, full_walk, len(repo.current_films(SOURCE)), looked_up, False, False, mc_promoted=mc_promoted
+            )
         except requests.RequestException as exc:
             log(f"lookup failed for {film.title!r}: {exc}")
             consecutive += 1
