@@ -83,7 +83,7 @@ def report_already(ctx, n):
     assert ctx["report"].already_owned == n
 
 
-@then(parsers.parse('the owned review queue has an "{reason}" entry'))
+@then(parsers.re(r'the owned review queue has an? "(?P<reason>[^"]+)" entry'))
 def review_entry(ctx, reason):
     assert any(r["reason"] == reason for r in ctx["repo"].open_reviews(AUTHORITY))
 

@@ -73,9 +73,15 @@ uv run ruff check . && uv run mypy                   # lint + types (mypy also r
 - Canned-filter thresholds and chip names live ONLY in `domain/filters.py`; JS reads thresholds from `/api/config`. Keep `CHIP_PREDICATES` in `app.js` and the chip buttons in `index.html` in lockstep with `_PREDICATES`.
 - `owned` is possession data on the watchlist pattern: `owned import` is the only writer, rows
   are permanent (never unmarked), and there's no `listings`/`availability_transitions`
-  interaction. Ambiguous title matches (a tie on year) queue to `match_review` under authority
-  `apple-tv`, never guessed; unmatched owned titles become real films (generated guid) that the
-  existing discovery machinery (OMDb/TMDB) enriches like any other film.
+  interaction. Ambiguous matches (candidate ties) and big year disagreements (`year-drift`)
+  queue to `match_review` under authority `apple-tv`, never guessed and never twinned;
+  unmatched owned titles become real films (generated guid) that the existing discovery
+  machinery (OMDb/TMDB) enriches like any other film.
+- Year truth-holder: `films.year` is the original release year and importers never edit it on
+  matched films. Precedence when sources disagree: Criterion/TMDB > a year embedded in an
+  Apple title (`parse_apple_title`) > Apple's track year field (remaster-prone) > Metacritic
+  year (US-re-release-prone). Director-confirmed matching via the iTunes Search API is the
+  planned upgrade (roadmap parallel track).
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
 

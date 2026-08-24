@@ -131,6 +131,7 @@ def test_chip_labels_and_order(dash: Page):
         "New arrivals",
         "Watchlist",
         "Owned",
+        "Not owned",
         "Clear",
     ]
 
@@ -439,3 +440,10 @@ def test_drawer_shows_owned_link(dash):
     link = dash.locator("#drawer-body a.owned-link")
     link.wait_for()
     assert "tv.apple.com/search" in link.get_attribute("href")
+
+
+def test_not_owned_chip_hides_owned_films(dash: Page):
+    dash.click('[data-chip="not_owned"]')
+    dash.wait_for_selector("#films tbody[data-count]")
+    assert dash.locator("tr[data-id]", has_text="Alpha").count() == 0  # Alpha is the owned seed
+    dash.click('[data-chip="not_owned"]')

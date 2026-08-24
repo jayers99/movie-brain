@@ -49,6 +49,7 @@ def test_chip_names_are_stable():
         "new_arrivals",
         "watchlist",
         "owned",
+        "not_owned",
     )
 
 
@@ -124,3 +125,8 @@ def test_thresholds_expose_new_arrival_days():
 def test_owned_chip_matches_owned_views():
     assert matches(view(owned=True), ["owned"], TODAY)
     assert not matches(view(owned=False), ["owned"], TODAY)
+
+
+def test_not_owned_chip_excludes_owned_views():
+    assert matches(view(owned=False), ["not_owned"], TODAY)
+    assert not matches(view(owned=True), ["not_owned"], TODAY)

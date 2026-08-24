@@ -7,6 +7,7 @@ from movie_brain.domain.matching import (
     match_film,
     match_owned,
     norm_title,
+    parse_apple_title,
     pick_tmdb_match,
 )
 from movie_brain.domain.models import TmdbCandidate
@@ -119,6 +120,23 @@ class TestPickTmdbMatch:
 )
 def test_clean_apple_title(raw, cleaned):
     assert clean_apple_title(raw) == cleaned
+
+
+@pytest.mark.parametrize(
+    ("raw", "title", "year"),
+    [
+        ("Rear Window (1954)", "Rear Window", 1954),  # embedded year is the original release year
+        ("Vertigo (1958)", "Vertigo", 1958),
+        ("Ran (1985)", "Ran", 1985),
+        ("12 Angry Men (1957) (Unrated)", "12 Angry Men", 1957),  # annotation outside the year
+        ("Anchorman 2: The Legend Continues (Unrated)", "Anchorman 2: The Legend Continues", None),
+        ("Blade Runner (Director's Cut)", "Blade Runner", None),
+        ("Shaun of the Dead", "Shaun of the Dead", None),
+        ("(1985)", "(1985)", None),  # never strip down to an empty title
+    ],
+)
+def test_parse_apple_title(raw, title, year):
+    assert parse_apple_title(raw) == (title, year)
 
 
 def test_match_owned_exact_year_wins():

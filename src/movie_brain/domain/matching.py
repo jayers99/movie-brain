@@ -40,6 +40,26 @@ def clean_apple_title(title: str) -> str:
     return _APPLE_ANNOTATION.sub("", title).strip()
 
 
+_TRAILING_YEAR = re.compile(r"\s*\((\d{4})\)\s*$")
+
+
+def parse_apple_title(title: str) -> tuple[str, int | None]:
+    """Split an Apple library title into (title, embedded year).
+
+    Apple embeds the original release year in the title ("Rear Window (1954)")
+    while the track's year field may carry a remaster/re-release year — so an
+    embedded year outranks the field. Edition annotations may wrap the year;
+    both are stripped, but never down to an empty title.
+    """
+    t = clean_apple_title(title)
+    year = None
+    m = _TRAILING_YEAR.search(t)
+    if m and t[: m.start()].strip():
+        year = int(m.group(1))
+        t = clean_apple_title(t[: m.start()].strip())
+    return t, year
+
+
 def norm_title(title: str) -> str:
     """Punctuation/case-insensitive comparison key ("Forbidden Lie$" == "Forbidden Lies").
 
