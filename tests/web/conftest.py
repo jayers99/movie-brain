@@ -80,6 +80,8 @@ def seed(repo: Repository) -> None:
     gid = repo.create_film(Film("Golf", 2020, None, ""))
     repo.set_external_id(gid, "metacritic", "golf-2020", TODAY)
     repo.upsert_mc_titles([McTitle("golf-2020", "Golf", 2020, 88, 1, 1)], TODAY)
+    # Alpha is the one owned film — English keeps it visible in the default view.
+    repo.mark_owned(ids["alpha (1950)"], TODAY)
 
 
 @pytest.fixture(scope="session")

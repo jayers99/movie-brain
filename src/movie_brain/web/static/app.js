@@ -26,6 +26,7 @@
     departed: (f) => f.departed,
     new_arrivals: (f) => (f.new_on || []).some((t) => daysBetween(t.appeared_on, state.cfg.today) <= state.cfg.canned_thresholds.new_arrival_days),
     watchlist: (f) => f.watchlisted,
+    owned: (f) => f.owned,
   };
 
   // ---- filtering / sorting ----
@@ -82,6 +83,7 @@
     $('#count-mine').textContent = n((x) => x.my_rating != null);
     $('#count-departed').textContent = n((x) => x.departed);
     $('#count-discovery').textContent = state.films.length - f.length;
+    $('#count-owned').textContent = state.films.filter((x) => x.owned).length;
   }
 
   // ---- virtual-scrolled rows ----
@@ -89,7 +91,8 @@
   const fmt = (v, suffix = '') => (v == null ? '—' : `${v}${suffix}`);
   function rowHtml(f) {
     const link = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
-    const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '');
+    const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '')
+      + (f.owned ? ' <span class="badge-owned" title="Owned on Apple TV">owned</span>' : '');
     return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
@@ -311,6 +314,7 @@
       ${sources ? `<ul class="sources">${sources}</ul>` : d.pending ? '<p class="meta">OMDb lookup pending.</p>' : d.found === false ? '<p class="meta">No OMDb match.</p>' : ''}
       <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
         ${d.metacritic_url ? ` <a class="criterion" href="${esc(d.metacritic_url)}" target="_blank" rel="noopener">Open on Metacritic ↗</a>` : ''}
+        ${d.owned ? ` <a class="criterion owned-link" href="https://tv.apple.com/search?term=${encodeURIComponent(d.title)}" target="_blank" rel="noopener">Owned on Apple TV ↗</a>` : ''}
         &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
       ${streaming ? `<p class="meta">Also streaming on: ${streaming}</p>` : ''}

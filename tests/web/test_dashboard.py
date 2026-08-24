@@ -130,6 +130,7 @@ def test_chip_labels_and_order(dash: Page):
         "Departed",
         "New arrivals",
         "Watchlist",
+        "Owned",
         "Clear",
     ]
 
@@ -236,7 +237,7 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     expect(drawer).to_be_visible()
     expect(drawer.locator("h2")).to_have_text("Alpha ☆")  # star button: Alpha isn't watchlisted
     expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
-    expect(drawer.locator("a.criterion")).to_have_attribute("href", "https://c/alpha")
+    expect(drawer.locator("a.criterion:not(.owned-link)")).to_have_attribute("href", "https://c/alpha")
     expect(drawer.locator("div.meta")).not_to_contain_text("Leaving")  # moved to the bottom
     expect(drawer.locator("#drawer-body > :last-child")).to_have_text("Leaving August 31")
     assert "film=" in dash.url
@@ -423,3 +424,18 @@ def test_drawer_star_toggles_watchlist(dash):
     dash.wait_for_selector('.watch-toggle:has-text("★")')
     star.click()  # leave the session-scoped seed as we found it
     dash.wait_for_selector('.watch-toggle:has-text("☆")')
+
+
+def test_owned_badge_and_chip(dash):
+    row = dash.locator("tr[data-id]", has_text="Alpha")
+    assert row.locator(".badge-owned").count() == 1
+    dash.click('[data-chip="owned"]')
+    dash.wait_for_selector("#films tbody[data-count='1']")
+    assert dash.locator("tr[data-id]").count() == 1
+
+
+def test_drawer_shows_owned_link(dash):
+    dash.locator("tr[data-id]", has_text="Alpha").click()
+    link = dash.locator("#drawer-body a.owned-link")
+    link.wait_for()
+    assert "tv.apple.com/search" in link.get_attribute("href")
