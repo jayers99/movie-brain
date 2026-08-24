@@ -113,6 +113,47 @@ repair (Lawrence precedent): film 4492 "Rambo: First Blood" carried a pre-M1 wro
 - Done when: the 49 dup groups are dispositioned, owned marks sit on canonical rows, and
   `match_review` open counts are decidable by CLI instead of accumulating.
 
+**Done 2026-08-24:** live repair run on the worktree branch against the real DB (backup
+`movie-brain.db.bak-pre-m3`). `repair dupes` found **68 groups** (28 id-conflict + 40
+norm-title) — 28 twins, 24 distinct, 16 undecided. Three of the 28 "twins" were read as
+stale pre-M1 claims rather than real twins (film 4307 Willy Wonka vs 1689 *Factory*
+holding tmdb 252; 4280 Nymphomaniac Vol. II vs 4279 holding Vol. II's id 249397; 2163 THE
+AMPUTEE Version 1 vs 2162 Version 2) and were dismissed with a note — a dismissal is a
+standing decision, and the rematch that followed confirmed it: the three re-detections
+printed but no row came back. `repair dupes --apply --yes` then merged the remaining
+**25 twin groups** (25 `merged` dispositions, 0 tombstones, 0 declined). `repair years
+--apply` marked **151 stale OMDb payloads** for refetch (0 open year-collisions).
+`repair links` found **134 suspects but cleared 0**: the set is a mixed bag, not the
+uniform wrong-film class the plan pre-authorized — ~124 are legitimate alternate-title
+matches (English retitlings, translated titles, subtitle variants) and only ~6 are truly
+wrong films (#341→World War Z, #2939→House by the River, #4257→US Tour, #4462→Django,
+#4488→West Side Story doc, #1689 *Factory*→Willy Wonka), so the whole list went to the
+user's worklist instead. All **23 metacritic `year-gap` remake-suspected rows** resolved
+`--create` (films 4673–4695); the sync that followed OMDb-looked-up 174 films and
+TMDB-matched all 23, adopting 7 original years off the Metacritic re-release years.
+`rematch`: 383 misses → 11 rematched / 369 still missed, 1,445 years re-checked, **0
+adopted** with **5 year-collisions queued**, **audit = 0** uncorrected non-Criterion year
+mismatches outside the merge queue. Those 5 are the run's one genuine finding: pass B tried
+to correct the five merge survivors that kept an Apple remaster year (Woodstock 2014→1970,
+Monty Python 1999→1975, The Last Picture Show 2014→1971, Dog Day Afternoon 2014→1975,
+Ben-Hur 2001→1959) and was blocked because `update_film_year`'s collision probe does not
+exclude `film_disposition`-covered rows — the colliding film is in every case that
+survivor's own merged-away loser, whose `films` row (correctly) still exists and still holds
+the key. Follow-up filed in the handoff: the probe should ignore disposed identities.
+Done criteria: **owned-on-disposed = 0** (owned marks all sit on canonical rows);
+a second `repair dupes` dry-run reports **twins: 0** (42 distinct, 20 undecided — the 20
+need a TMDB backfill before they can be classified, the 42 grew from 24 as the created
+remakes legitimately joined their originals' title groups); open reviews **544 → 510**,
+every one decidable by `review list`/`review resolve` rather than accumulating.
+Benchmark: ground truth **26/26 pass, 0 wrong-match** (baseline 14/26, 2 wrong-match)
+including the newly banked `metropolis-rerelease-same-year-twin` case, `--assert-dominance`
+exit 0 (mc review 3.0%, apple review 4.4%); suite, ruff, and mypy green. Residual for the
+user, not blockers: 11 stale `id-conflict` rows whose counterpart is already merged (they
+were filed against the film that became the *survivor*, and `merge_film` only resolves the
+*loser's* reviews — follow-up), 7 apple-tv `year-drift`, 372 tmdb `no-match`, the 134 link
+suspects, and the 20 undecided dup groups. **Backlog item 9 (needs-revisit drawer flag)
+shipped inside M3.**
+
 ## Out of scope (tracked, not here)
 
 iTunes Search API adapter (director-confirmed matching, store ids — roadmap parallel
