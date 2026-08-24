@@ -132,17 +132,21 @@ user's worklist instead. All **23 metacritic `year-gap` remake-suspected rows** 
 `--create` (films 4673–4695); the sync that followed OMDb-looked-up 174 films and
 TMDB-matched all 23, adopting 7 original years off the Metacritic re-release years.
 `rematch` run 1: 383 misses → 11 rematched / 369 still missed, 1,445 years re-checked, **0
-adopted** with **5 year-collisions queued**, **audit = 0**. Those 5 exposed the run's one
+adopted** with **5 year-collisions queued** (the CLI counter printed 10 — re-detections,
+not rows; the dedup guard kept 5), **audit = 0**. Those 5 exposed the run's one
 genuine defect: pass B tried to correct the five merge survivors that kept an Apple remaster
 year (Woodstock 2014→1970, Monty Python 1999→1975, The Last Picture Show 2014→1971, Dog
 Day Afternoon 2014→1975, Ben-Hur 2001→1959) and was blocked every time by that survivor's
 *own merged-away loser* — `update_film_year`'s collision probe treated any key-holder as a
 live identity, and a merged loser's `films` row is deliberately never deleted, so it kept
-the key its survivor was entitled to. **Fixed in this milestone**: the probe now ignores
-merged-away holders (`_NOT_MERGED_AWAY`) and retires the dead key in place (`key || ' #' ||
-id`) so the UNIQUE constraint lets the survivor take it. A *tombstoned* holder still blocks
-by design — `tombstoned_keys()` is the guard that stops collectors re-creating a tombstoned
-film and that guard IS the key, so handing it away would silently disarm it. `rematch` run 2
+the key its survivor was entitled to. **Fixed in this milestone**: exactly one holder of
+the target key no longer blocks — this film's OWN merged-away loser, whose dead key is
+retired in place (`key || ' #' || id`) so the UNIQUE constraint lets its survivor take it.
+Every other holder still blocks, and blocks under its CANONICAL id: a loser merged into some
+*other* survivor reports that survivor, so the year-collision review names the live identity
+a human must reconcile rather than a hidden row. A *tombstoned* holder blocks as itself by
+design — `tombstoned_keys()` is the guard that stops collectors re-creating a tombstoned film
+and that guard IS the key, so handing it away would silently disarm it. `rematch` run 2
 after the fix: **adopted 5, collisions queued 0, audit 0** — all five survivor years are now
 canonical. Done criteria: **owned-on-disposed = 0** (owned marks all sit on canonical rows);
 a second `repair dupes` dry-run reports **twins: 0** (42 distinct, 20 undecided — the 20

@@ -66,7 +66,7 @@ and deleting the worktree is the first thing the next session should do (see
 | `repair links` | checked 4,246 · **suspects 134 · cleared 0** (deliberate — see worklist (c)) |
 | remake creates | **23** (`review resolve … --create`, films **4673–4695**) |
 | `sync` | films 3,049 · **looked up 174** · full walk · **tmdb matched 23** · promoted 0 |
-| `rematch` run 1 | misses 383 → **11 rematched** / 369 still missed · year-checked 1,445 · adopted 0 · **5 year-collisions queued** · **audit 0** |
+| `rematch` run 1 | misses 383 → **11 rematched** / 369 still missed · year-checked 1,445 · adopted 0 · **5 year-collisions queued** (CLI printed 10 — re-detections, dedup guard kept 5) · **audit 0** |
 | collision-probe fix + `rematch` run 2 | **adopted 5** · collisions queued 0 · **audit 0** — survivor years now canonical |
 | queue hygiene | 16 merge-artifact rows dismissed (5 `year-collision` + 11 `id-conflict`) |
 | benchmark | ground truth **26/26, 0 wrong-match** (baseline 14/26, 2 wrong) · `--assert-dominance` **exit 0** (mc review 3.1%, apple 4.8%) |
@@ -303,8 +303,10 @@ live identity.
 
 **Fixed in this milestone** (`Repository.update_film_year`):
 
-- The probe now uses `_NOT_MERGED_AWAY` — a merged-away holder is not a live identity and
-  no longer blocks.
+- Exactly one holder no longer blocks: **this film's own merged-away loser**. Any other
+  holder still blocks, reported under its *canonical* id — a loser merged into some other
+  survivor names that survivor, so the year-collision review points at the live identity a
+  human would have to reconcile.
 - Because `films.key` is UNIQUE, the dead key is **retired in place** first, inside the same
   transaction: `UPDATE films SET key = key || ' #' || id`. The survivor then takes the clean
   key.

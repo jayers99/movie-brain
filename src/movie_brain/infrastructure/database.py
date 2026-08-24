@@ -74,10 +74,6 @@ _TMDB_TARGET_SELECT = (
 # tombstoned films are hidden outright, merged losers are aliased onto their survivor
 # (films_for_matching) rather than surfaced under their own id.
 _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
-# A merged loser was folded into its survivor: its key is dead and the survivor may take
-# it. A TOMBSTONED film is different — tombstoned_keys() is the guard that stops collectors
-# re-creating it, and that guard IS the key, so a tombstone still blocks.
-_NOT_MERGED_AWAY = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id AND d.kind = 'merged')"
 
 
 def init_db(db_path: Path) -> None:
@@ -677,15 +673,22 @@ class Repository:
     def update_film_year(self, film_id: int, year: int) -> int | None:
         """Adopt an authority year: rewrite films.year and recompute key.
 
-        Returns the id of a LIVE film already holding the recomputed key — the
-        detected-twin case; the caller queues a year-collision review and this
-        film stays untouched (never overwrite, collectors never delete).
+        Returns the id of the film whose identity already owns the recomputed
+        key — the detected-twin case; the caller queues a year-collision review
+        and this film stays untouched (never overwrite, collectors never delete).
 
-        A merged-away loser does NOT block: it was folded into its survivor, so
-        its key is retired in place (suffixed with its own id, which is unique)
-        and the survivor takes the key it is entitled to. Without this a merge
-        would permanently block its own survivor from adopting the loser's year,
-        because the loser's films row is deliberately never deleted.
+        The one holder that does NOT block is this film's OWN merged-away loser:
+        it was folded into *this* film, so its key is dead and belongs here. It
+        is retired in place (suffixed with its own id, which is unique) and this
+        film takes it. Without that, a merge would permanently block its own
+        survivor from adopting the loser's year, since the loser's films row is
+        deliberately never deleted.
+
+        Every other holder blocks, and blocks under its CANONICAL id: a loser
+        merged into some *other* survivor reports that survivor as the clash, so
+        the review names the live identity a human would have to reconcile. A
+        tombstoned holder blocks as itself — tombstoned_keys() is the guard that
+        stops the ingesters re-creating it, and that guard IS the key.
         """
         with self._conn() as c:
             row = c.execute("SELECT title FROM films WHERE id = ?", (film_id,)).fetchone()
@@ -693,14 +696,19 @@ class Repository:
                 raise LookupError(f"unknown film {film_id}")
             new_key = film_key(str(row["title"]), year)
             # films.key is UNIQUE, so at most one other film can hold new_key.
-            clash = c.execute(
-                "SELECT f.id FROM films f WHERE f.key = ? AND f.id != ? AND " + _NOT_MERGED_AWAY,
-                (new_key, film_id),
-            ).fetchone()
-            if clash is not None:
-                return int(clash["id"])
-            # Any remaining holder is a merged loser: retire its key so UNIQUE lets the survivor in.
-            c.execute("UPDATE films SET key = key || ' #' || id WHERE key = ? AND id != ?", (new_key, film_id))
+            holder = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            if holder is not None:
+                held_by = int(holder["id"])
+                disposed = c.execute(
+                    "SELECT 1 FROM film_disposition WHERE film_id = ?", (held_by,)
+                ).fetchone()
+                if disposed is None:
+                    return held_by  # a live film owns that key
+                canonical = self._canonical_in(c, held_by)
+                if canonical != film_id:
+                    return canonical  # another identity owns it (tombstones report themselves)
+                # This film's own merged-away loser: retire the dead key.
+                c.execute("UPDATE films SET key = key || ' #' || id WHERE id = ?", (held_by,))
             c.execute("UPDATE films SET year = ?, key = ? WHERE id = ?", (year, new_key, film_id))
             return None
 
@@ -927,19 +935,24 @@ class Repository:
             row = c.execute("SELECT kind, survivor_id FROM film_disposition WHERE film_id = ?", (film_id,)).fetchone()
             return None if row is None else (str(row["kind"]), row["survivor_id"])
 
+    @staticmethod
+    def _canonical_in(c: sqlite3.Connection, film_id: int) -> int:
+        """Follow merged→survivor chains on an open connection (cycle-safe)."""
+        seen: set[int] = set()
+        while film_id not in seen:
+            seen.add(film_id)
+            row = c.execute(
+                "SELECT survivor_id FROM film_disposition WHERE film_id = ? AND kind = 'merged'", (film_id,)
+            ).fetchone()
+            if row is None:
+                return film_id
+            film_id = int(row["survivor_id"])
+        return film_id
+
     def canonical_film_id(self, film_id: int) -> int:
         """Follow merged→survivor chains; tombstoned and undisposed films are their own canon."""
-        seen: set[int] = set()
         with self._conn() as c:
-            while film_id not in seen:
-                seen.add(film_id)
-                row = c.execute(
-                    "SELECT survivor_id FROM film_disposition WHERE film_id = ? AND kind = 'merged'", (film_id,)
-                ).fetchone()
-                if row is None:
-                    return film_id
-                film_id = int(row["survivor_id"])
-            return film_id
+            return self._canonical_in(c, film_id)
 
     def disposed_film_ids(self) -> set[int]:
         with self._conn() as c:
