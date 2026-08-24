@@ -406,3 +406,14 @@ def test_match_film_arbiter_resolves_year_gap():
     assert result.winner == 7
     hit = match_film("Tokyo Story", 1972, index, arbiter=lambda t, y: True)
     assert hit.winner is None and hit.reason == "remake-suspected"
+
+
+def test_rerelease_hint_with_same_year_twin_and_older_original_is_review():
+    from movie_brain.domain.matching import Candidate, match_film
+
+    pool = [Candidate(1, "Metropolis", 1927), Candidate(2, "Metropolis", 2001)]
+    assert match_film("Metropolis (re-release)", 2001, pool).reason == "rerelease-ambiguous"
+    # No annotation → the exact-year film is the honest answer.
+    assert match_film("Metropolis", 2001, pool).winner == 2
+    # Annotation but no same-year twin → hint excuses the gap, original matches (Lawrence class).
+    assert match_film("Metropolis (re-release)", 2001, [Candidate(1, "Metropolis", 1927)]).winner == 1
