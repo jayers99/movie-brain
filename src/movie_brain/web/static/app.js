@@ -381,20 +381,46 @@
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.revisit-toggle'); if (!b) return;
-    const r = await fetch(`/api/films/${b.dataset.id}/revisit`, { method: 'POST' });
+    const id = Number(b.dataset.id);
+    const r = await fetch(`/api/films/${id}/revisit`, { method: 'POST' });
     if (!r.ok) { toast('Could not update revisit flag'); return; }
     const { needs_revisit } = await r.json();
-    const film = state.films.find((f) => f.id === Number(b.dataset.id));
+    b.textContent = needs_revisit ? '⚑' : '⚐';
+    const film = state.films.find((f) => f.id === id);
     if (film) { film.needs_revisit = needs_revisit; if (!needs_revisit) film.revisit_note = null; applyFilters(); }
-    openDrawer(Number(b.dataset.id), false);
+    // Patch the drawer DOM in place — reopening (openDrawer) would clear drawerOpenPushed
+    // and desync closeDrawer()'s history-back bookkeeping (see the fromPopstate comment above).
+    let note = body.querySelector('.revisit-note');
+    if (needs_revisit && !note) {
+      note = document.createElement('input');
+      note.className = 'revisit-note';
+      note.dataset.id = String(id);
+      note.placeholder = 'what looks wrong?';
+      note.value = (film && film.revisit_note) || '';
+      b.closest('h2').insertAdjacentElement('afterend', note);
+    } else if (!needs_revisit && note) {
+      note.remove();
+    }
   });
-  body.addEventListener('change', async (e) => {
-    const i = e.target.closest('.revisit-note'); if (!i) return;
-    const r = await fetch(`/api/films/${i.dataset.id}/revisit`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: i.value }) });
-    if (!r.ok) { toast('Could not save note'); return; }
-    const film = state.films.find((f) => f.id === Number(i.dataset.id));
-    if (film) film.revisit_note = i.value;
-  });
+  async function commitRevisitNote(input) {
+    if (input.dataset.busy) return;
+    const id = Number(input.dataset.id);
+    const film = state.films.find((f) => f.id === id);
+    const current = (film && film.revisit_note) || '';
+    if (input.value === current) return;
+    input.dataset.busy = '1';
+    try {
+      const r = await fetch(`/api/films/${id}/revisit`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: input.value }) });
+      if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+      if (film) film.revisit_note = input.value;
+    } catch (err) {
+      input.value = current; toast(`Could not save note: ${err.message}`);
+    } finally {
+      delete input.dataset.busy;
+    }
+  }
+  document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input.revisit-note')) e.target.blur(); });
+  document.addEventListener('focusout', (e) => { if (e.target.matches('input.revisit-note')) commitRevisitNote(e.target); });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!langPanel.hidden) { closeLangPanel(); return; }

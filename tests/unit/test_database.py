@@ -844,6 +844,16 @@ def test_merge_rejects_self_disposed_and_unknown(repo):
         repo.merge_film(a, b, D)
 
 
+def test_tombstoning_a_flagged_film_clears_the_revisit_flag_and_worklist(repo):
+    a, b = _two_films(repo)
+    repo.toggle_revisit(b, D, note="wrong film")
+    assert [r[0] for r in repo.revisits()] == [b]
+    repo.tombstone_film(b, D, note="junk")
+    assert repo.revisits() == []
+    with sqlite3.connect(repo.db_path) as c:
+        assert c.execute("SELECT 1 FROM needs_revisit WHERE film_id = ?", (b,)).fetchone() is None
+
+
 def test_films_needing_tmdb_match_flags_commerce(repo):
     a = repo.upsert_film(Film("Trio", 1950, None, "https://c/trio"))
     repo.record_listing(a, "criterion", "https://c/trio", date(2026, 8, 24))
