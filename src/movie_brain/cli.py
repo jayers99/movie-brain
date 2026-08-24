@@ -12,11 +12,13 @@ from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, crawl_archive, match_archive
 from movie_brain.application.owned import import_owned
+from movie_brain.application.rematch import rematch
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
 from movie_brain.infrastructure.notify import notify
+from movie_brain.infrastructure.tmdb import TmdbClient
 
 app = typer.Typer(
     name="movie-brain", help="Personal film brain: Criterion listings, OMDb ratings, my ratings.", no_args_is_help=True
@@ -179,4 +181,25 @@ def owned_import() -> None:
         f"owned: {report.total} · matched: {report.matched} · created: {report.created} · "
         f"already: {report.already_owned} · review: {report.review_open}"
     )
+    raise typer.Exit(report.exit_code)
+
+
+@app.command("rematch")
+def rematch_cmd() -> None:
+    """One-shot repair: rematch TMDB misses, reconcile non-Criterion years (idempotent)."""
+    cfg = load_config()
+    token = load_tmdb_token(cfg)
+    if not token:
+        err.print(f"no TMDB token: set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}")
+        raise typer.Exit(2)
+    report = rematch(_repo(), TmdbClient(token), date.today())
+    console.print(
+        f"misses: {report.misses} · rematched: {report.rematched} · still missed: {report.still_missed} · "
+        f"id conflicts: {report.id_conflicts}"
+    )
+    console.print(
+        f"year-checked: {report.checked} · adopted: {report.years_adopted} · "
+        f"collisions queued: {report.collisions_queued}"
+    )
+    console.print(f"audit: {report.uncorrected} uncorrected non-criterion year mismatches outside the merge queue")
     raise typer.Exit(report.exit_code)

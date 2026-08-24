@@ -59,6 +59,28 @@ def test_export_csv(config_dir, tmp_path):
     assert r.exit_code == 0 and out.exists()
 
 
+def test_rematch_requires_tmdb_token(config_dir):
+    r = runner.invoke(app, ["rematch"])
+    assert r.exit_code == 2
+    assert "MOVIE_BRAIN_TMDB_TOKEN" in r.output
+
+
+def test_rematch_propagates_exit_code(config_dir, monkeypatch):
+    (config_dir / "tmdb-read-token.txt").write_text("tok")
+    from movie_brain.application.rematch import RematchReport
+
+    calls = {}
+
+    def fake_rematch(repo, client, today, **kw):
+        calls["token"] = client.headers["Authorization"]
+        return RematchReport(1, 0, 0, 0, 0, 0, 0, 0, 0)
+
+    monkeypatch.setattr("movie_brain.cli.rematch", fake_rematch)
+    r = runner.invoke(app, ["rematch"])
+    assert r.exit_code == 1
+    assert calls["token"] == "Bearer tok"
+
+
 def test_metacritic_crawl_reports_and_propagates_exit(config_dir, monkeypatch):
     from movie_brain.application.metacritic import CrawlReport
 
