@@ -22,4 +22,15 @@ Running list of ideas for movie-brain. Add new items at the bottom; strike or ch
    pass can drain it (resolving clears the flag). Optional nicety: pre-fill the note with
    what looks wrong ("year suspect", "wrong film").
 
+10. [ ] **Curated top-N lists** — import named ranked lists (top 100 / top N) and show in
+    the drawer, per list, whether the film is on it and at what rank. Data model on the
+    external-authority pattern: a `lists` registry (slug PK, name, source URL, size, ordered
+    or unordered) plus `list_entries` (list_slug + film_id + rank + raw title/year as listed),
+    matched through the shared `match_candidates` core (never a new matcher); unmatched or
+    ambiguous entries queue to `match_review` under the list's authority so the human pass
+    resolves them, and entries with no film in the DB become discovery films via the Mode-B
+    promotion path. Drawer shows a "Lists" row of `<list name> #<rank>` badges; later, a
+    filter chip / sort per list. First list to build: **Cahiers du Cinéma's 100 Ideal
+    Cinematheque Films** (Cahiers' 2008 "100 films pour une cinémathèque idéale").
+
 Items 1 and 2 have grown into a feature of their own — discovery lives in [multiple-movie-services.md](multiple-movie-services.md); items 4–7 in [cinema-companion.md](cinema-companion.md).
