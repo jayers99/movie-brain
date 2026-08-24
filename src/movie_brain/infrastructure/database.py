@@ -431,22 +431,43 @@ class Repository:
 
     def films_for_matching(self) -> list[FilmRow]:
         with self._conn() as c:
+            disposition_rows = c.execute("SELECT film_id, kind, survivor_id FROM film_disposition").fetchall()
+            raw_survivor = {
+                int(r["film_id"]): int(r["survivor_id"]) for r in disposition_rows if r["kind"] == "merged"
+            }
+            tombstoned = {int(r["film_id"]) for r in disposition_rows if r["kind"] == "tombstoned"}
+            # Resolve every merged loser straight to its ULTIMATE survivor (chain-walk once,
+            # in memory, from the single film_disposition read above) — record_catalog and
+            # canonical_film_id already chain-walk; this read model must match them, or a
+            # multi-hop merge (A -> B, then B -> C) would alias A's evidence under the
+            # no-longer-canonical B instead of C.
+            canonical: dict[int, int] = {}
+            for loser in raw_survivor:
+                fid = loser
+                seen: set[int] = set()
+                while fid in raw_survivor and fid not in seen:
+                    seen.add(fid)
+                    fid = raw_survivor[fid]
+                canonical[loser] = fid
+
             rows = c.execute(
-                "SELECT COALESCE(d.survivor_id, f.id) AS id, f.title, f.year, "
+                "SELECT f.id, f.title, f.year, "
                 "COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director, "
                 "NULLIF(json_extract(o.payload, '$.Runtime'), 'N/A') AS runtime, "
                 "o.metacritic "
-                "FROM films f LEFT JOIN omdb o ON o.film_id = f.id "
-                "LEFT JOIN film_disposition d ON d.film_id = f.id "
-                "WHERE d.film_id IS NULL OR d.kind = 'merged' ORDER BY f.id"
+                "FROM films f LEFT JOIN omdb o ON o.film_id = f.id ORDER BY f.id"
             ).fetchall()
             out = []
             for r in rows:
+                film_id = int(r["id"])
+                if film_id in tombstoned:
+                    continue
+                resolved_id = canonical.get(film_id, film_id)
                 runtime_raw = r["runtime"]
                 m = _RUNTIME_MIN.match(runtime_raw) if runtime_raw else None
                 runtime_min = int(m.group(1)) if m else None
                 out.append(
-                    FilmRow(int(r["id"]), str(r["title"]), r["year"], r["director"], runtime_min, r["metacritic"])
+                    FilmRow(resolved_id, str(r["title"]), r["year"], r["director"], runtime_min, r["metacritic"])
                 )
             return out
 
