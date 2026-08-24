@@ -93,11 +93,13 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   planned upgrade (roadmap parallel track). Exception: a TMDB match on a commerce-created film
   (no Criterion listing) canonicalizes `films.year` to TMDB's original year and recomputes
   `key` (`record_tmdb_match`) — write-back never overwrites on a key collision, it queues a
-  durable `year-collision` row in `match_review` as a merge candidate instead. A MERGED-away
-  film is not a live collision: `update_film_year` ignores it and retires its dead key in
-  place (`key || ' #' || id`, since `films.key` is UNIQUE) so the survivor can adopt the year
-  its loser was holding. A TOMBSTONED holder still blocks — `tombstoned_keys()` is the guard
-  that stops the ingesters re-creating it, and that guard IS the key.
+  durable `year-collision` row in `match_review` as a merge candidate instead. Exactly one holder
+  of the target key does not block: this film's OWN merged-away loser, whose dead key
+  `update_film_year` retires in place (`key || ' #' || id`, since `films.key` is UNIQUE) so its
+  survivor can adopt the year it was holding. Every other holder blocks, under its CANONICAL id —
+  a loser merged into some *other* survivor reports that survivor, so the review names the live
+  identity a human must reconcile. A TOMBSTONED holder blocks as itself: `tombstoned_keys()` is
+  the guard that stops the ingesters re-creating it, and that guard IS the key.
 - Matching is one evidence-scored core: `domain/matching.py`'s `match_candidates` (three-level
   candidate index, source-aware year policy, director/runtime/popularity evidence, `Arbiter`
   hook) is the only matcher; `match_film` (Metacritic), `match_owned` (Apple), and
@@ -107,9 +109,11 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   `movie-brain rematch` is the one-shot, idempotent repair verb: re-matches every TMDB miss and
   fresh-checks TMDB's release year for every non-Criterion matched film, adopting disagreements
   through the same write-back path as sync. A rerelease-annotated commerce year (a `*-re-release`
-  / restoration-slug year) is NOT year evidence when an older same-title candidate also survives
-  scoring — the matcher refuses and queues a `rerelease-ambiguous` review instead of matching the
-  same-titled film sitting at the claimed year (the Metropolis case; benchmark ground truth).
+  / restoration-slug year) is NOT year evidence: when the winning candidate sits exactly at that
+  annotated year AND any other surviving candidate carries a year gap, the matcher refuses and
+  queues a `rerelease-ambiguous` review rather than guess between a re-release of the gapped film
+  and a genuinely same-titled film at the claimed year (the Metropolis case; benchmark ground
+  truth). The gapped candidate need not be the older one — any surviving gap arms the rule.
 - Dispositions: `film_disposition` is the identity ledger written ONLY by the repair verbs.
   `merged` aliases a losing identity to its survivor — `films_for_matching` returns the loser's
   title under the ultimate survivor's id (multi-hop chains resolve to the final survivor), so an
@@ -118,7 +122,10 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   owned/watchlist/my_ratings/external_ids/listings/omdb/tmdb/availability_transitions rows to the
   survivor (survivor wins every conflict, the loser's contribution is recorded in the disposition
   note), resolves the loser's open `match_review` rows, and KEEPS the loser's `films` row —
-  collectors never delete.
+  collectors never delete. A retired key stays retired: `update_film_year` renames a loser's key
+  to `key || ' #' || id` only when that loser's OWN survivor adopts the year, and if the survivor
+  later moves year again the freed key is simply left unowned (harmless; re-claiming it is a
+  deferred edge).
 - Review resolution: a resolved `match_review` row is a standing decision, not a closed ticket.
   `suppress_resolved`, `rebuild_no_match_queue`, and `queue_review_once` all consult resolved
   rows and never re-queue one — a `--dismiss` is permanent. Actions are per-authority: `--film`

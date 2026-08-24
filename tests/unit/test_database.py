@@ -891,7 +891,26 @@ def test_update_film_year_ignores_merged_away_key_holder(repo):
 
     assert repo.update_film_year(a, 1951) is None
     assert repo.film_id_by_key("alpha (1951)") == a
+    assert repo.film_id_by_key(f"alpha (1951) #{b}") == b  # loser's key retired, not deleted
     assert repo.disposition_of(b) == ("merged", a)
+
+
+def test_update_film_year_merged_key_of_another_survivor_blocks(repo):
+    """Only THIS film's own loser may have its key retired.
+
+    C (Alpha 1970) was merged into D. An unrelated commerce film A (Alpha 1971)
+    must not steal 'alpha (1970)': that key belongs to D's identity now, so the
+    clash is reported under D and a durable year-collision review follows.
+    """
+    d = date(2026, 8, 24)
+    c_id = repo.upsert_film(Film("Alpha", 1970, None, "u1"))
+    d_id = repo.upsert_film(Film("Delta", 1980, None, "u2"))
+    repo.merge_film(c_id, d_id, d)
+    a_id = repo.upsert_film(Film("Alpha", 1971, None, "u3"))
+
+    assert repo.update_film_year(a_id, 1970) == d_id
+    assert repo.film_id_by_key("alpha (1971)") == a_id  # untouched
+    assert repo.film_id_by_key("alpha (1970)") == c_id  # loser's key untouched
 
 
 def test_update_film_year_collision_with_live_film_writes_nothing(repo):
