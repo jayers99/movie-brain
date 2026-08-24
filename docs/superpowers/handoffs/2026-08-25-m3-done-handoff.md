@@ -7,7 +7,7 @@ M2→M3 handoff this one supersedes), and CLAUDE.md (updated on the M3 branch).
 
 ## Status — M3 is COMPLETE on `feature/M3-repair-surface`, NOT merged and NOT pushed
 
-15 commits `23b9e39..0296681` (plan + Tasks 1–9) plus the final docs commit. The worktree
+17 commits from `23b9e39` (plan + Tasks 1–9, the final docs commit, and the year-write-back fix). The worktree
 lives at `.claude/worktrees/M3-repair-surface`. Suite, ruff, mypy, and
 `scripts/matching_benchmark.py --assert-dominance` all green at the tip. Merging to `main`
 and deleting the worktree is the first thing the next session should do (see
@@ -46,6 +46,11 @@ and deleting the worktree is the first thing the next session should do (see
   refuses and queues `rerelease-ambiguous` instead of matching the same-titled film sitting
   at the claimed year. This is the Metropolis case, now benchmark ground truth
   (`metropolis-rerelease-same-year-twin`).
+- **Year write-back ignores dispositioned keys** (`Repository.update_film_year`): a
+  merged-away key-holder is not a live identity, so it no longer blocks its own survivor
+  from adopting the correct year; the dead key is retired in place (`key || ' #' || id`)
+  because `films.key` is UNIQUE. A tombstoned holder still blocks by design — see the
+  survivor-policy note.
 - **Backlog item 9 shipped inside M3**: the `needs_revisit` drawer flag (own table, drawer
   toggle + its API the only UI writer, filter chip, `review revisits` worklist, cleared on
   review resolution / `repair years --apply` / merge-as-loser / tombstone).
@@ -61,12 +66,14 @@ and deleting the worktree is the first thing the next session should do (see
 | `repair links` | checked 4,246 · **suspects 134 · cleared 0** (deliberate — see worklist (c)) |
 | remake creates | **23** (`review resolve … --create`, films **4673–4695**) |
 | `sync` | films 3,049 · **looked up 174** · full walk · **tmdb matched 23** · promoted 0 |
-| `rematch` | misses 383 → **11 rematched** / 369 still missed · year-checked 1,445 · **adopted 0** · **audit 0** |
-| benchmark | ground truth **26/26, 0 wrong-match** (baseline 14/26, 2 wrong) · `--assert-dominance` **exit 0** (mc review 3.0%, apple 4.4%) |
+| `rematch` run 1 | misses 383 → **11 rematched** / 369 still missed · year-checked 1,445 · adopted 0 · **5 year-collisions queued** · **audit 0** |
+| collision-probe fix + `rematch` run 2 | **adopted 5** · collisions queued 0 · **audit 0** — survivor years now canonical |
+| queue hygiene | 16 merge-artifact rows dismissed (5 `year-collision` + 11 `id-conflict`) |
+| benchmark | ground truth **26/26, 0 wrong-match** (baseline 14/26, 2 wrong) · `--assert-dominance` **exit 0** (mc review 3.1%, apple 4.8%) |
 | dispositions | `merged` **25**, no tombstones |
 | **owned on disposed films** | **0** ← the Done criterion |
 | `repair dupes` re-run | **twins 0** · distinct 42 · undecided 20 |
-| open reviews | **544 → 510** |
+| open reviews | **544 → 494** |
 
 Open reviews after, by authority/reason:
 
@@ -78,10 +85,12 @@ metacritic/film-multiple-slugs  3
 metacritic/key-conflict         1
 metacritic/slug-conflict        5
 metacritic/year-gap             2
-tmdb/id-conflict               11   <- all stale, see (f)
 tmdb/no-match                 372
-tmdb/year-collision             5
+                        total 494
 ```
+
+`tmdb/id-conflict` and `tmdb/year-collision` are both **empty** — the merge-artifact rows
+were closed during this session's queue hygiene (see the survivor-policy note).
 
 ---
 
@@ -233,23 +242,21 @@ claim stands. Current state:
 252. Doing the import first will just re-hit the same conflict. Same shape for
 Nymphomaniac (#4279 should hold Vol. I's id, not 249397).
 
-### (f) 11 stale `tmdb/id-conflict` rows — safe to bulk-dismiss
+### (f) merge-artifact review rows — **DONE, nothing for you here**
 
-```
-3084 #4088 | 3086 #4096 | 3087 #4119 | 3092 #4315 | 3093 #4330 | 3094 #4363
-3096 #4471 | 3098 #4602 | 3099 #4636 | 3100 #4638 | 3102 #4669
-```
+Closed during this session. Recorded so the numbers reconcile:
 
-Every one names a counterpart film that is **already merged into the row's own film** —
-verified against `film_disposition`. They stayed open because `merge_film` resolves the
-*loser's* open reviews, and these rows happened to be filed against the film that became
-the *survivor*. Harmless but noisy.
+- **11 `tmdb/id-conflict`** rows (3084 #4088, 3086 #4096, 3087 #4119, 3092 #4315, 3093 #4330,
+  3094 #4363, 3096 #4471, 3098 #4602, 3099 #4636, 3100 #4638, 3102 #4669) — each named a
+  counterpart already merged into that same film, verified against `film_disposition`.
+- **5 `tmdb/year-collision`** rows (4469–4473) — satisfied by the collision-probe fix below.
 
-*Follow-up (small):* `merge_film` should also resolve the survivor's open reviews that name
-the loser. Until then: `uv run movie-brain review resolve <ID> --dismiss --note "merged"`
-for each of the 11.
+All 16 dismissed with `--note "counterpart already merged into this film"`. Both reasons now
+sit at **zero** open rows.
 
----
+*Riding note (not fixed):* `merge_film` resolves only the **loser's** open reviews. These 11
+survived because they were filed against the film that became the **survivor**. A future
+merge can reproduce the artifact — see next-phase candidate 4.
 
 ## Riding minors (deferred during M3 — all safe, none blocking)
 
@@ -279,47 +286,48 @@ count *re-detections* per run, so the CLI wording reads as "newly queued" when i
 (this is exactly what produced the three "tmdb id conflict for …" lines in the M3 rematch
 even though no row was queued); `TmdbArbiter` has no negative caching.
 
-## Survivor-policy note (read before judging the merged rows)
+## Survivor-policy note (resolved — read for the reasoning)
 
 `repair dupes` ranks survivors **rated > owned > criterion > plain**. That means an *owned*
 row wins over a *criterion* row even when the owned row carries a worse year — and Apple
-track years are remaster-prone, so several survivors kept an artifact year at merge time:
+track years are remaster-prone, so five survivors kept an artifact year at merge time:
 Woodstock 2014 (not 1970), Monty Python and the Holy Grail 1999 (not 1975), The Last Picture
 Show 2014 (not 1971), Dog Day Afternoon 2014 (not 1975), Ben-Hur 2001 (not 1959).
 
-`rematch` pass B *did* try to correct all five — and **was blocked by the merge itself**.
-This is the one genuine finding of the live run:
+`rematch` pass B tried to correct all five and **was blocked by the merge itself** — the
+one genuine defect the live run surfaced. In every case the "colliding" film was that
+survivor's *own merged-away loser*: because collectors never delete, the loser's `films` row
+survives with its original `key`, so `woodstock (1970)` was still occupied by #3150 and
+#4315 could not take it. `update_film_year`'s collision probe treated any key-holder as a
+live identity.
+
+**Fixed in this milestone** (`Repository.update_film_year`):
+
+- The probe now uses `_NOT_MERGED_AWAY` — a merged-away holder is not a live identity and
+  no longer blocks.
+- Because `films.key` is UNIQUE, the dead key is **retired in place** first, inside the same
+  transaction: `UPDATE films SET key = key || ' #' || id`. The survivor then takes the clean
+  key.
+- A **tombstoned** holder still blocks, deliberately. `tombstoned_keys()` is the guard that
+  stops `owned.py` and `metacritic.py` re-creating a tombstoned film, and that guard *is*
+  the key — retiring it would silently disarm the tombstone. This is a deviation from the
+  literal "merged-away/tombstoned" instruction, taken because the tombstone guard is
+  load-bearing in both ingesters; it is pinned by
+  `test_update_film_year_tombstoned_key_holder_still_blocks`.
+
+`rematch` run 2 confirmed it live — **adopted 5, collisions queued 0, audit 0**:
 
 ```
-4469 #4315 'Woodstock': adopting 1970 over 2014 collides with film 3150 — merge candidate
-4470 #4330 'Monty Python and the Holy Grail': adopting 1975 over 1999 collides with film 3301
-4471 #4363 'The Last Picture Show': adopting 1971 over 2014 collides with film 3229
-4472 #4471 'Dog Day Afternoon': adopting 1975 over 2014 collides with film 3673
-4473 #4602 'Ben-Hur': adopting 1959 over 2001 collides with film 3338
+adopted TMDB year 1970 for 'Woodstock' (was 2014)
+adopted TMDB year 1975 for 'Monty Python and the Holy Grail' (was 1999)
+adopted TMDB year 1971 for 'The Last Picture Show' (was 2014)
+adopted TMDB year 1975 for 'Dog Day Afternoon' (was 2014)
+adopted TMDB year 1959 for 'Ben-Hur' (was 2001)
 ```
 
-In every case the "colliding" film **is that survivor's own merged-away loser**. Because
-collectors never delete, the loser's `films` row survives the merge and keeps its `key` —
-so `films.key = 'woodstock1970'` is still occupied by #3150, and #4315 cannot adopt 1970.
-`update_film_year`'s collision check does not exclude `film_disposition`-covered rows, so a
-merged loser reads as a competing identity when it is nothing of the kind. That is why pass
-B reported **adopted: 0** and **queued 5 year-collisions** instead.
-
-**Follow-up (the right fix):** make `update_film_year`'s collision probe ignore films
-carrying a `film_disposition` row. A merged/tombstoned identity should not be able to block
-its own survivor from taking the correct year. This is a one-clause change to the collision
-SELECT plus a scenario, and it retires all five rows at the next `rematch`.
-
-**Workaround until then** (the years are cosmetically wrong in the dashboard today):
-
-```bash
-uv run movie-brain repair years 4315 1970            # dry-run — will report the same collision
-uv run movie-brain repair years 4315 1970 --apply    # writes films.year, recomputes key, marks OMDb stale
-uv run movie-brain sync                              # refetch the OMDb payload under the right year
-```
-
-`repair years` routes through the same `update_film_year`, so it will hit the same guard —
-fix the guard first rather than hand-editing the DB.
+Survivor rows now hold the canonical year and a clean key; the merged losers hold retired
+keys (`woodstock (1970) #3150`, …). **No action needed from you** — the years in the
+dashboard are correct.
 
 ## Backups
 
@@ -345,7 +353,9 @@ uv run movie-brain repair dupes | tail -1
 # expect: twins: 0 (new twins mean a fresh dup pair arrived — merge it)
 
 uv run movie-brain review list | head -1
-# expect: ~510 open, drifting only with new sync anomalies
+# expect: ~494 open, drifting only with new sync anomalies. tmdb/id-conflict and
+# tmdb/year-collision should both be EMPTY — a year-collision reappearing on a merge
+# survivor would mean the update_film_year disposition fix regressed.
 
 uv run python scripts/matching_benchmark.py --assert-dominance | tail -1
 # expect: PASS, gt-wrong=0
@@ -357,10 +367,6 @@ yourself; don't wait on a nightly job.
 
 ## Next-phase candidates
 
-0. **`update_film_year` must ignore disposed films in its collision check** (see the
-   survivor-policy section) — the smallest and most clearly-correct item on this list. Five
-   merged survivors are currently stuck at an Apple artifact year because their own
-   merged-away loser still holds the key they need. Do this one first.
 1. **iTunes Search API adapter** (the spec's tracked parallel track, and the highest-value
    item): director- and runtime-confirmed matching for Apple titles plus real store ids.
    This is the lever on worklist (d) — it would auto-resolve a meaningful slice of the 372
@@ -373,8 +379,9 @@ yourself; don't wait on a nightly job.
 4. **Alternate-title whitelist for `repair links`** — so the ~124 legitimate retitlings stop
    drowning the six real problems. TMDB's `/alternative_titles` endpoint is the natural
    source.
-5. **`merge_film` resolves the survivor's reviews too** — retires worklist (f) and stops the
-   class recurring.
+5. **`merge_film` resolves the survivor's reviews too** — the 11 stale `id-conflict` rows
+   cleaned up this session were filed against the film that became the *survivor*, and
+   `merge_film` only resolves the *loser's*. Small, and it stops the class recurring.
 
 ## Entry-point prompt (paste into a fresh session)
 
@@ -385,12 +392,12 @@ yourself; don't wait on a nightly job.
 > then run that handoff's first-run checks (syncs are manual by choice). M3 landed the
 > `film_disposition` ledger, `repair dupes|links|years`, the `review list|resolve|revisits`
 > CLI, the needs-revisit drawer flag, and the rerelease-ambiguous matcher rule; the live run
-> merged 25 twin groups, created 23 remakes, and left open reviews at 510, all decidable by
-> CLI. The handoff's worklist (a)–(f) is the user's, not yours to auto-drain. Next-phase
+> merged 25 twin groups, created 23 remakes, adopted 5 blocked survivor years after fixing
+> `update_film_year`'s collision probe, and left open reviews at 494, all decidable by CLI. The handoff's worklist (a)–(e) is the user's, not yours to auto-drain ((f) is already closed). Next-phase
 > candidates in priority order: the iTunes Search adapter (director-confirmed matching —
 > the real lever on the 372-row no-match queue), `repair links --film ID` + an
-> alternate-title whitelist, `merge_film` resolving the survivor's reviews, and the default
-> dashboard scope. Constraints: collectors never delete outside human-confirmed repair
+> alternate-title whitelist, `merge_film` resolving the survivor's reviews (not just the
+> loser's), and the default dashboard scope. Constraints: collectors never delete outside human-confirmed repair
 > verbs; keep `scripts/matching_benchmark.py --assert-dominance` green; suite/ruff/mypy
 > green. Use the superpowers flow: brainstorm → writing-plans → subagent-driven TDD in a
 > fresh git worktree.

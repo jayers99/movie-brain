@@ -877,6 +877,44 @@ def test_update_film_year_collision_returns_twin_and_writes_nothing(repo):
     assert repo.film_id_by_key("nosferatu (1979)") == twin  # untouched
 
 
+def test_update_film_year_ignores_merged_away_key_holder(repo):
+    """A merge must not block its own survivor from adopting the loser's year.
+
+    The loser's films row is deliberately never deleted, so it keeps its key.
+    That key is not a live identity: it is retired in place and the survivor
+    takes it.
+    """
+    d = date(2026, 8, 24)
+    a = repo.upsert_film(Film("Alpha", 1950, None, "u1"))
+    b = repo.upsert_film(Film("Alpha", 1951, None, "u2"))
+    repo.merge_film(b, a, d)
+
+    assert repo.update_film_year(a, 1951) is None
+    assert repo.film_id_by_key("alpha (1951)") == a
+    assert repo.disposition_of(b) == ("merged", a)
+
+
+def test_update_film_year_collision_with_live_film_writes_nothing(repo):
+    a = repo.upsert_film(Film("Alpha", 1950, None, "u1"))
+    b = repo.upsert_film(Film("Alpha", 1951, None, "u2"))
+
+    assert repo.update_film_year(a, 1951) == b
+    assert repo.film_id_by_key("alpha (1950)") == a  # untouched
+    assert repo.film_id_by_key("alpha (1951)") == b
+
+
+def test_update_film_year_tombstoned_key_holder_still_blocks(repo):
+    """A tombstone's key IS the re-creation guard (tombstoned_keys) — never hand it away."""
+    d = date(2026, 8, 24)
+    a = repo.upsert_film(Film("Alpha", 1950, None, "u1"))
+    b = repo.upsert_film(Film("Alpha", 1951, None, "u2"))
+    repo.tombstone_film(b, d)
+
+    assert repo.update_film_year(a, 1951) == b
+    assert repo.film_id_by_key("alpha (1950)") == a  # untouched
+    assert repo.tombstoned_keys() == {"alpha (1951)"}
+
+
 def test_replace_unresolved_reviews_reason_scope(repo):
     d = date(2026, 8, 24)
     a = repo.upsert_film(Film("Trio", 1950, None, "u1"))
