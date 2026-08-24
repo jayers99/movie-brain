@@ -27,6 +27,7 @@
     new_arrivals: (f) => (f.new_on || []).some((t) => daysBetween(t.appeared_on, state.cfg.today) <= state.cfg.canned_thresholds.new_arrival_days),
     watchlist: (f) => f.watchlisted,
     owned: (f) => f.owned,
+    not_owned: (f) => !f.owned,
   };
 
   // ---- filtering / sorting ----

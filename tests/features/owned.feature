@@ -51,3 +51,18 @@ Feature: Apple TV owned films
     When I import owned films
     Then the owned import exit code is 1
     And the repository holds 0 films
+
+  Scenario: A year embedded in the title beats a re-release year field
+    Given the repository holds the film "Rear Window (1954)"
+    And my Apple TV library has "Rear Window (1954)" (2013)
+    When I import owned films
+    Then "Rear Window (1954)" is owned
+    And the repository holds 1 films
+
+  Scenario: A big year disagreement goes to review, never a twin
+    Given the repository holds the film "Solaris (1972)"
+    And my Apple TV library has "Solaris" (2002)
+    When I import owned films
+    Then the owned review queue has a "year-drift" entry
+    And the repository holds 1 films
+    And no film is owned

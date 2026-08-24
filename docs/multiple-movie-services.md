@@ -211,7 +211,10 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 **Parallel tracks, not on this critical path** (each its own future spec run): practice-loop
 notes + rubric (independent of services; any time), MCP server (independent driving adapter),
 power search (wants Phase 3's structured metadata; port from yt-brain), iTunes ownership
-(blocked on the export spike), ratings sync (TMDB/Metacritic; latest of all).
+(**landed 2026-08-23** — AppleScript import, `owned` table, badges/chips; follow-up:
+director-confirmed matching + stable store ids + deep links via the **iTunes Search API**,
+since the AppleScript export carries no artist/director data and year fields are
+remaster-prone), ratings sync (TMDB/Metacritic; latest of all).
 
 ## Facts collected so far
 
