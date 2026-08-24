@@ -46,6 +46,15 @@ Feature: Dispositioned films stay out of every collector's way
     Then "Alpha (1951)" is merged into "Alpha (1950)"
     And the id-conflict review is resolved
 
+  Scenario: An id-conflict pair with mismatched titles is undecided, not a tautological twin
+    Given "Alpha (1950)" holds tmdb id "5"
+    And the repository also has film "Factory (1970)"
+    And "Factory (1970)" has an open id-conflict review claiming tmdb id "5"
+    When I audit dupes
+    Then the group "alpha" is undecided from source "id-conflict"
+    When I apply dupes confirming every group
+    Then nothing was merged
+
   Scenario: Distinct TMDB ids are kept both
     Given "Alpha (1950)" holds tmdb id "5"
     And "Alpha (1951)" holds tmdb id "6"

@@ -212,6 +212,12 @@ def exactly_n_groups_keyed(ctx, n, key):
     assert sum(1 for g in ctx["groups"] if g.key == key) == n
 
 
+@then(parsers.parse('the group "{key}" is undecided from source "{source}"'))
+def is_undecided_from_source(ctx, key, source):
+    g = next(g for g in ctx["groups"] if g.key == key and g.source == source)
+    assert g.verdict == "undecided"
+
+
 @given(parsers.parse('TMDB describes id {tid:d} as "{title}" / "{orig}" from {year:d}'))
 def describe(ctx, tid, title, orig, year):
     ctx["rs"].get(f"{TMDB_API}/movie/{tid}", json={"title": title, "original_title": orig, "release_date": f"{year}-01-01"})

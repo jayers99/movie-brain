@@ -37,12 +37,14 @@ def queue_review_once(repo: Repository, authority: str, entry: ReviewEntry, toda
 
     Durable reasons (year-collision, id-conflict) survive the per-run no-match rebuild,
     so idempotent passes must not stack duplicates. A row a human already resolved for
-    this same reason+film is a standing decision — never re-queued.
+    this same reason+film+value is a standing decision — never re-queued; a *different*
+    value for the same reason+film (e.g. a fresh id-conflict claim after the old one was
+    dismissed) is a new anomaly and must still be queued (matches `suppress_resolved`).
     """
     for r in repo.open_reviews(authority):
         if r["reason"] == entry.reason and r["film_id"] == entry.film_id:
             return False
-    if any(k[0] == entry.reason and k[1] == entry.film_id for k in repo.resolved_review_keys(authority)):
+    if (entry.reason, entry.film_id, entry.value) in repo.resolved_review_keys(authority):
         return False  # a human already decided this one
     repo.append_reviews(authority, [entry], today)
     return True

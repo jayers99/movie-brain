@@ -120,8 +120,10 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   ingester matching the old title lands on the canonical row; `tombstoned` hides the film and
   blocks re-creation. Every film read model carries the `_NOT_DISPOSED` guard. `merge_film` moves
   owned/watchlist/my_ratings/external_ids/listings/omdb/tmdb/availability_transitions rows to the
-  survivor (survivor wins every conflict, the loser's contribution is recorded in the disposition
-  note), resolves the loser's open `match_review` rows, and KEEPS the loser's `films` row —
+  survivor (survivor wins every conflict; when a one-row table's loser value is dropped it's
+  recorded in the disposition note — full row for `my_ratings`/`watchlist`/`owned`, just the
+  loser's `film_id` for `omdb`/`tmdb` since those payloads are large), resolves the loser's open
+  `match_review` rows, and KEEPS the loser's `films` row —
   collectors never delete. A retired key stays retired: `update_film_year` renames a loser's key
   to `key || ' #' || id` only when that loser's OWN survivor adopts the year, and if the survivor
   later moves year again the freed key is simply left unowned (harmless; re-claiming it is a

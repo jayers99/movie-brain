@@ -160,7 +160,7 @@ were filed against the film that became the *survivor*) were dismissed, leaving 
 `tmdb/id-conflict` and zero `tmdb/year-collision`**.
 Benchmark: ground truth **26/26 pass, 0 wrong-match** (baseline 14/26, 2 wrong-match)
 including the newly banked `metropolis-rerelease-same-year-twin` case, `--assert-dominance`
-exit 0 (mc review 3.1%, apple review 4.8%); 436 tests, ruff, and mypy green. Residual for
+exit 0 (mc review 3.1%, apple review 4.8%); 439 tests, ruff, and mypy green. Residual for
 the user, not blockers: 7 apple-tv `year-drift`, 372 tmdb `no-match`, the 134 link suspects,
 and the 20 undecided dup groups. Riding note: `merge_film` still resolves only the loser's
 reviews, so a future merge can leave the same stale-review-on-survivor artifact. **Backlog item 9 (needs-revisit drawer flag)

@@ -813,6 +813,12 @@ def test_merge_keeps_survivor_rows_on_conflict_and_notes_dropped(repo):
     assert repo.external_ids_for(a)["tmdb"] == "1"
     assert repo.all_my_ratings() == {"alpha (1950)": 9}
     assert report.dropped == {"external_ids": 1, "my_ratings": 1}
+    with sqlite3.connect(repo.db_path) as c:
+        c.row_factory = sqlite3.Row
+        note = c.execute("SELECT note FROM film_disposition WHERE film_id = ?", (b,)).fetchone()["note"]
+    dropped = json.loads(note)["dropped"]
+    assert dropped["my_ratings"]["score"] == 3
+    assert dropped["my_ratings"]["rated_at"] == D.isoformat()
 
 
 def test_merge_listing_conflict_widens_seen_window(repo):

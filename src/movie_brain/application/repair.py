@@ -50,6 +50,12 @@ def _group_key(title: str) -> str:
 
 def _classify(key: str, films: tuple[RepairFilm, ...], source: str) -> DupGroup:
     ids = {f.tmdb for f in films}
+    if source == "id-conflict" and len({_group_key(f.title) for f in films}) != 1:
+        # The loser was lent the holder's own tmdb id purely so this function can reuse the
+        # id-equality test below — that makes every id-conflict pair look like a twin by
+        # construction. A title mismatch means the flagged film's claim is bogus (it's not
+        # the holder's twin at all), so refuse to classify on the borrowed id.
+        return DupGroup(key, films, "undecided", None, (), source)
     if len(films) >= 2 and len(ids) == 1 and None not in ids:
         survivor = max(films, key=_rank)
         return DupGroup(key, films, "twin", survivor.id, tuple(f.id for f in films if f.id != survivor.id), source)

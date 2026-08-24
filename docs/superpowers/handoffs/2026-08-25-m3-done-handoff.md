@@ -280,6 +280,13 @@ From `.superpowers/sdd/2026-08-24-m3-repair-surface/progress.md`:
   focusout-PUT vs toggle-POST race can toast a spurious "not flagged" error (state stays
   correct).
 
+**Final review deferred minors** (final-review fix wave, 2026-08-24): `set_leaving` can't
+reach a merged film's key (needs the same chain-walk `record_catalog` already does);
+`watchlist_transitions_on` lacks a disposition guard; there's no Playwright test for the
+revisit UI; `review.py`'s function-local import is a cycle-break that should extract a
+`review_queue` module instead; `toggle_revisit` accepts disposed film ids (unreachable from
+the UI today, but not guarded).
+
 Carried over and still open from M2: rematch's pass-A tripwire early-returns before the
 no-match rebuild (self-healing next run, but asymmetric); `collisions_queued`/`id_conflicts`
 count *re-detections* per run, so the CLI wording reads as "newly queued" when it isn't
@@ -288,8 +295,11 @@ even though no row was queued); `TmdbArbiter` has no negative caching.
 
 ## Survivor-policy note (resolved — read for the reasoning)
 
-`repair dupes` ranks survivors **rated > owned > criterion > plain**. That means an *owned*
-row wins over a *criterion* row even when the owned row carries a worse year — and Apple
+`repair dupes` ranks survivors by `_rank`: **criterion > rated > owned > watchlisted >
+omdb_found > lowest id**. Criterion always wins first, so the five affected pairs below were
+never criterion-vs-owned — in each, *neither* side held a Criterion listing, so the tie broke
+on the next tier down, **owned beating a plain (unrated, unwatchlisted) row**. That still let
+an owned row win over a plain row even when the owned row carried a worse year — and Apple
 track years are remaster-prone, so five survivors kept an artifact year at merge time:
 Woodstock 2014 (not 1970), Monty Python and the Holy Grail 1999 (not 1975), The Last Picture
 Show 2014 (not 1971), Dog Day Afternoon 2014 (not 1975), Ben-Hur 2001 (not 1959).

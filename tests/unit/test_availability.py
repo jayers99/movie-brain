@@ -24,6 +24,25 @@ def test_queue_review_once_is_idempotent(repo):
     assert len(rows) == 1
 
 
+def test_queue_review_once_resolved_suppression_is_value_scoped(repo):
+    """A dismissed row is a standing decision only for its own (reason, film, VALUE) —
+    a fresh id-conflict claiming a *different* tmdb id for the same film is a new
+    anomaly, not the one the human already resolved, and must still be queued."""
+    fid = repo.upsert_film(Film("Nosferatu", 2024, None, "https://mc/nosferatu"))
+    first = ReviewEntry("id-conflict", film_id=fid, value="5", detail="claimed by 5")
+    assert queue_review_once(repo, "tmdb", first, TODAY) is True
+    review_id = next(r["id"] for r in repo.open_reviews("tmdb") if r["film_id"] == fid)
+    repo.resolve_review(review_id, "dismissed")
+
+    same_value = ReviewEntry("id-conflict", film_id=fid, value="5", detail="claimed by 5 again")
+    other_value = ReviewEntry("id-conflict", film_id=fid, value="6", detail="claimed by 6")
+
+    assert queue_review_once(repo, "tmdb", same_value, TODAY) is False
+    assert queue_review_once(repo, "tmdb", other_value, TODAY) is True
+    rows = [r for r in repo.open_reviews("tmdb") if r["reason"] == "id-conflict" and r["film_id"] == fid]
+    assert [r["value"] for r in rows] == ["6"]
+
+
 def test_record_tmdb_match_replay_does_not_double_queue_year_collision(repo):
     """Task 6's rematch reuses record_tmdb_match verbatim, including on films already
     reviewed once — the queue_review_once guard inside it (not the per-run no-match
