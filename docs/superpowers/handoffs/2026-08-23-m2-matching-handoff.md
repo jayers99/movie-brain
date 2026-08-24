@@ -4,11 +4,22 @@
 `docs/superpowers/specs/2026-08-23-matching-overhaul-design.md` (binding spec for M1–M3,
 M1's Done line now filled in) and CLAUDE.md before any M2 work.
 
-## Status — M1 is code-complete on `feature/M1-matching-overhaul` (not yet merged to `main`)
+## Status — M1 is MERGED to `main` and pushed (through `2975032`)
 
-Worktree: `.claude/worktrees/M1-matching-overhaul`. Commits `5077c69..d87cfb5` (Tasks 1–6),
-plus this docs commit closing Task 7. superpowers:finishing-a-development-branch runs next
-to integrate the branch.
+Commits `5077c69..2975032` (Tasks 1–7 + the final-review fix wave) fast-forwarded onto
+`main` 2026-08-23 and pushed to origin. Merged result verified: 353 tests (incl.
+Playwright), ruff, mypy all green. The feature branch and its worktree are deleted —
+M2 starts from a fresh worktree off `main`.
+
+## First-run checks for the M2 session (2 minutes, before building)
+
+- Tonight's 3 AM sync is the new matcher's FIRST live run. Expect ~25 new `year-gap`
+  rows under authority `metacritic` in `match_review` (unclaimed review-band slugs only —
+  the claimed-slug filter landed in `2975032`), and NO new films whose norm-title
+  duplicates an existing one (twin check). If either looks wrong, stop and investigate
+  before M2 work.
+- The next `owned import` (manual, whenever run) is the first 3-column v2 export — the
+  first live exercise of runtime evidence. Glance at the apple-tv review count after.
 
 **Files landed:**
 - `scripts/matching_baseline.py` — frozen pre-M1 matchers (exempt from DRY; duplication is
