@@ -163,6 +163,28 @@ def tmdb_knows(tmdb, title, year, tid):
     tmdb["register_providers"](tid)
 
 
+@given(parsers.parse('TMDB knows "{title}" as id {tid:d} released {year:d}'))
+def tmdb_knows_released(tmdb, title, tid, year):
+    """Same as above, but the search-result year can differ from the film's stored
+    year — the write-back/arbiter scenarios need to seed a TMDB release year that
+    disagrees with the film's own year."""
+    tmdb["search"][title] = {
+        "id": tid,
+        "title": title,
+        "original_title": title,
+        "release_date": f"{year}-01-01",
+        "popularity": 5.0,
+    }
+    tmdb["register_providers"](tid)
+
+
+@given(parsers.parse('a commerce film "{title}" from {year:d}'))
+def commerce_film(ctx, title, year):
+    """No criterion listing → the match loop treats this as commerce-created, per
+    TmdbMatchTarget.commerce (year is COMMERCE band, eligible for year write-back)."""
+    ctx["repo"].upsert_film(Film(title, year, None, f"https://mc/{title.lower()}"))
+
+
 @given(parsers.parse("TMDB streams id {tid:d} on providers {a:d} and {b:d}"))
 def tmdb_streams(tmdb, tid, a, b):
     tmdb["providers"][tid] = {"link": f"https://tmdb/w/{tid}", "flatrate": [{"provider_id": a}, {"provider_id": b}]}
@@ -258,6 +280,35 @@ def provider_calls(tmdb, n):
 @then(parsers.parse("the tmdb review queue holds {n:d} entries"))
 def review_n(ctx, n):
     assert len(ctx["repo"].open_reviews("tmdb")) == n
+
+
+@then(parsers.parse('the tmdb review queue holds a "{reason}" entry'))
+def review_has_reason(ctx, reason):
+    reasons = [r["reason"] for r in ctx["repo"].open_reviews("tmdb")]
+    assert reason in reasons, f"no {reason!r} entry in {reasons}"
+
+
+@then(parsers.parse('the tmdb review queue holds {n:d} "{reason}" entries'))
+def review_reason_count(ctx, n, reason):
+    got = sum(1 for r in ctx["repo"].open_reviews("tmdb") if r["reason"] == reason)
+    assert got == n
+
+
+@then(parsers.parse('the film "{title}" has year {year:d} and key "{key}"'))
+def film_year_and_key(ctx, title, year, key):
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        row = c.execute("SELECT year, key FROM films WHERE key = ?", (key,)).fetchone()
+    assert row is not None, f"no film with key {key!r}"
+    assert row[0] == year
+
+
+@then(parsers.parse('the film "{title}" from {orig_year:d} still has year {year:d}'))
+def film_still_has_year(ctx, title, orig_year, year):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({orig_year})")
+    assert fid is not None, f"no film with key {title.lower()} ({orig_year})"
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        row = c.execute("SELECT year FROM films WHERE id = ?", (fid,)).fetchone()
+    assert row[0] == year
 
 
 @then(parsers.parse('"{title} ({year:d})" is currently listed on "{slug}"'))
