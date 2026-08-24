@@ -66,3 +66,10 @@ Feature: Apple TV owned films
     Then the owned review queue has a "year-drift" entry
     And the repository holds 1 films
     And no film is owned
+
+  Scenario: A rerelease annotation corroborates a commerce-year gap
+    Given the repository holds the film "The Leopard (1963)"
+    And my Apple TV library has "The Leopard (Restored Version)" (2004)
+    When I import owned films
+    Then "The Leopard (1963)" is owned
+    And the repository holds 1 films
