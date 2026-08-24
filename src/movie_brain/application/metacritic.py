@@ -213,6 +213,7 @@ def promote_top_n(
         return PromoteReport(1, n, 0, 0, 0, 0, 0, match_report)
     claimed = repo.claimed_values(AUTHORITY)
     anomalous = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
+    tombstoned = repo.tombstoned_keys()
     candidates = repo.top_staged_titles(n)
     reviews: list[ReviewEntry] = []
     promoted = already_linked = skipped = conflicts = 0
@@ -224,15 +225,17 @@ def promote_top_n(
             skipped += 1
             continue
         film = Film(clean_title(t.title), t.year, None, MC_MOVIE_URL.format(slug=t.slug))
+        if film.key in tombstoned:
+            # A human hid this film; the archive re-surfacing its title/year is not a
+            # resurrection request. Never overwrite, never re-promote.
+            skipped += 1
+            continue
         film_id = repo.create_film(film)
         if film_id is None:
+            existing = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
             conflicts += 1
             detail = f"promotion of {t.title!r} ({t.year}) collides with existing key {film.key!r}"
-            reviews.append(
-                ReviewEntry(
-                    "key-conflict", film_id=repo.film_id_by_key(film.key), value=t.slug, detail=detail
-                )
-            )
+            reviews.append(ReviewEntry("key-conflict", film_id=existing, value=t.slug, detail=detail))
             continue
         try:
             repo.set_external_id(film_id, AUTHORITY, t.slug, today)

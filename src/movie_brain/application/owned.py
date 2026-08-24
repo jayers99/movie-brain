@@ -55,6 +55,7 @@ def import_owned(
         return OwnedReport(1, 0, 0, 0, 0, 0)
 
     index = build_candidate_index(repo.films_for_matching())
+    tombstoned = repo.tombstoned_keys()
 
     matched = created = already = 0
     reviews: list[ReviewEntry] = []
@@ -92,10 +93,13 @@ def import_owned(
             continue
         else:
             film = Film(cleaned, year, None, "")
+            if film.key in tombstoned:
+                log(f"skipping tombstoned film {film.key!r} from the Apple library")
+                continue
             new_id = repo.create_film(film)
             if new_id is None:
-                # Exact film_key collision: that IS the film (same title+year).
-                film_id = repo.film_id_by_key(film.key) or 0
+                # Exact film_key collision: that IS the film (same title+year) — or its alias.
+                film_id = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
                 matched += 1
             else:
                 film_id = new_id
