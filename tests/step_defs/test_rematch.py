@@ -32,10 +32,12 @@ def ctx(repo):
 @pytest.fixture
 def tmdb(ctx):
     """A minimal TMDB world: search index + movie-detail years, with call counters."""
-    world = {"search": {}, "movies": {}, "search_calls": 0, "detail_calls": 0}
+    world = {"search": {}, "movies": {}, "search_calls": 0, "detail_calls": 0, "reject": False}
 
     def do_search(request):
         world["search_calls"] += 1
+        if world["reject"]:
+            return (401, {}, json.dumps({"status_message": "bad token"}))
         title = parse_qs(urlparse(request.url).query)["query"][0]
         hit = world["search"].get(title)
         results = [hit] if hit else []
@@ -43,6 +45,8 @@ def tmdb(ctx):
 
     def do_detail(request):
         world["detail_calls"] += 1
+        if world["reject"]:
+            return (401, {}, json.dumps({"status_message": "bad token"}))
         tid = int(request.url.rsplit("/", 1)[-1])
         year = world["movies"].get(tid)
         release_date = f"{year}-01-01" if year else ""
@@ -51,6 +55,11 @@ def tmdb(ctx):
     ctx["rs"].add_callback(responses.GET, f"{TMDB_API}/search/movie", callback=do_search)
     ctx["rs"].add_callback(responses.GET, _DETAIL_RE, callback=do_detail)
     return world
+
+
+@given("TMDB rejects the token")
+def tmdb_reject(tmdb):
+    tmdb["reject"] = True
 
 
 @given("a fresh repository")
@@ -87,6 +96,14 @@ def film_exists(ctx, title, year):
 
 @given(parsers.parse('TMDB knows "{title}" as id {tid:d} released {year:d}'))
 def tmdb_knows_released(tmdb, title, tid, year):
+    """Search only — deliberately does NOT arm the /movie/{id} detail endpoint.
+
+    Pass A's match (and any commerce write-back or collision) is driven entirely by
+    the search result. Leaving the detail endpoint unarmed means pass B's fresh look
+    at the same now-matched film (run in the same call, right after pass A) sees no
+    data and skips — so a scenario that wants pass B to also see this film's year
+    must arm it explicitly via "TMDB movie {id} was released in {year}".
+    """
     tmdb["search"][title] = {
         "id": tid,
         "title": title,
@@ -94,10 +111,10 @@ def tmdb_knows_released(tmdb, title, tid, year):
         "release_date": f"{year}-01-01",
         "popularity": 5.0,
     }
-    tmdb["movies"][tid] = year
 
 
 @given(parsers.parse("TMDB movie {tid:d} was released in {year:d}"))
+@then(parsers.parse("TMDB movie {tid:d} was released in {year:d}"))
 def tmdb_movie_year(tmdb, tid, year):
     tmdb["movies"][tid] = year
 
@@ -174,6 +191,26 @@ def second_report(ctx, rematched, adopted):
     assert r.years_adopted == adopted
 
 
+@then(parsers.parse("the second report says {rematched:d} rematched"))
+def second_report_rematched_only(ctx, rematched):
+    r = ctx["reports"][-1]
+    assert r.rematched == rematched
+
+
+@then(parsers.parse("the rematch report says {rematched:d} rematched and {collisions:d} collision queued"))
+def report_rematched_collisions(ctx, rematched, collisions):
+    r = ctx["reports"][-1]
+    assert r.rematched == rematched
+    assert r.collisions_queued == collisions
+
+
+@then(parsers.parse("the rematch report says {rematched:d} rematched and {conflicts:d} id conflicts"))
+def report_rematched_conflicts(ctx, rematched, conflicts):
+    r = ctx["reports"][-1]
+    assert r.rematched == rematched
+    assert r.id_conflicts == conflicts
+
+
 @then(parsers.parse('the tmdb review queue holds {n:d} "{reason}" entries'))
 def review_reason_count(ctx, n, reason):
     got = sum(1 for r in ctx["repo"].open_reviews("tmdb") if r["reason"] == reason)
@@ -183,3 +220,8 @@ def review_reason_count(ctx, n, reason):
 @then(parsers.parse("TMDB movie details were fetched {n:d} times"))
 def detail_calls(tmdb, n):
     assert tmdb["detail_calls"] == n
+
+
+@then(parsers.parse("the rematch exit code is {n:d}"))
+def exit_code(ctx, n):
+    assert ctx["reports"][-1].exit_code == n

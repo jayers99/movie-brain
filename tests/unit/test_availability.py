@@ -36,7 +36,7 @@ def test_record_tmdb_match_replay_does_not_double_queue_year_collision(repo):
     outcome1 = record_tmdb_match(repo, target, 653, 1922, TODAY, lambda msg: None)
     outcome2 = record_tmdb_match(repo, target, 653, 1922, TODAY, lambda msg: None)
 
-    assert outcome1 == "matched"
-    assert outcome2 == "matched"
+    assert outcome1 == "collision"
+    assert outcome2 == "collision"
     reviews = [r for r in repo.open_reviews("tmdb") if r["reason"] == "year-collision" and r["film_id"] == fid]
     assert len(reviews) == 1
