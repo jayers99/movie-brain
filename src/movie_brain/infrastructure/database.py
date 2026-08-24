@@ -110,12 +110,17 @@ def _watchlist_ids(c: sqlite3.Connection) -> set[int]:
     return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM watchlist")}
 
 
+def _owned_ids(c: sqlite3.Connection) -> set[int]:
+    return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM owned")}
+
+
 def _row_to_view(
     row: sqlite3.Row,
     services: list[dict[str, object]] | None = None,
     *,
     watchlisted: bool = False,
     new_on: list[dict[str, object]] | None = None,
+    owned: bool = False,
 ) -> FilmView:
     return FilmView(
         id=row["id"],
@@ -138,6 +143,7 @@ def _row_to_view(
         watchlisted=watchlisted,
         new_on=new_on or [],
         criterion=bool(row["criterion"]),
+        owned=owned,
     )
 
 
@@ -591,6 +597,20 @@ class Repository:
         with self._conn() as c:
             return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM watchlist")}
 
+    # owned -------------------------------------------------------------
+    def mark_owned(self, film_id: int, today: date, source: str = "apple-tv") -> bool:
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO owned (film_id, source, first_imported) VALUES (?, ?, ?) "
+                "ON CONFLICT(film_id) DO NOTHING",
+                (film_id, source, today.isoformat()),
+            )
+            return cur.rowcount > 0
+
+    def owned_film_ids(self) -> set[int]:
+        with self._conn() as c:
+            return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM owned")}
+
     # views ------------------------------------------------------------
     def list_views(self, source: str, today: date | None = None) -> list[FilmView]:
         cutoff = ((today or date.today()) - timedelta(days=NEW_ARRIVAL_DAYS)).isoformat()
@@ -605,8 +625,15 @@ class Repository:
             services = _services_by_film(c)
             new_on = _new_on_by_film(c, cutoff)
             wl = _watchlist_ids(c)
+            ow = _owned_ids(c)
             return [
-                _row_to_view(r, services.get(r["id"]), watchlisted=r["id"] in wl, new_on=new_on.get(r["id"]))
+                _row_to_view(
+                    r,
+                    services.get(r["id"]),
+                    watchlisted=r["id"] in wl,
+                    new_on=new_on.get(r["id"]),
+                    owned=r["id"] in ow,
+                )
                 for r in rows
             ]
 
@@ -621,6 +648,7 @@ class Repository:
                 _services_by_film(c).get(row["id"]),
                 watchlisted=row["id"] in _watchlist_ids(c),
                 new_on=_new_on_by_film(c, cutoff).get(row["id"]),
+                owned=row["id"] in _owned_ids(c),
             )
 
     def get_payload(self, film_id: int) -> str | None:
@@ -640,4 +668,5 @@ class Repository:
             "mine": sum(1 for v in crit if v.my_rating is not None),
             "departed": sum(1 for v in crit if v.departed),
             "discovery": sum(1 for v in views if not v.criterion),
+            "owned": sum(1 for v in views if v.owned),
         }

@@ -123,6 +123,7 @@ def test_init_db_is_idempotent(tmp_path):
         "mine": 0,
         "departed": 0,
         "discovery": 0,
+        "owned": 0,
     }
 
 
@@ -250,6 +251,7 @@ def test_views_and_summary(repo):
         "mine": 1,
         "departed": 0,
         "discovery": 0,
+        "owned": 0,
     }
 
 
@@ -388,7 +390,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 6
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 7
     finally:
         conn.close()
 
@@ -718,3 +720,21 @@ def test_director_falls_back_to_omdb_payload(repo):
     assert views["Alpha"].director == "Ann"
     assert views["Golf"].director == "Alfred Hitchcock"
     assert views["Hotel"].director is None
+
+
+def test_mark_owned_is_idempotent_and_views_expose_it(repo):
+    day = date(2026, 8, 19)
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha")], day)
+    aid = repo.film_id_by_key("alpha (1950)")
+    gid = repo.create_film(Film("Golf", 2020, None, ""))
+
+    assert repo.mark_owned(aid, day) is True
+    assert repo.mark_owned(aid, day) is False  # second call: already owned, no error
+    assert repo.mark_owned(gid, day) is True
+    assert repo.owned_film_ids() == {aid, gid}
+
+    views = {v.title: v for v in repo.list_views("criterion", day)}
+    assert views["Alpha"].owned is True and views["Golf"].owned is True
+    assert repo.get_view(aid, day).owned is True
+    # owned counts across all views — the discovery film Golf is included.
+    assert repo.summary("criterion")["owned"] == 2
