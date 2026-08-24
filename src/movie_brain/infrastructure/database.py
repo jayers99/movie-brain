@@ -47,6 +47,20 @@ class MergeReport(NamedTuple):
     reviews_resolved: int
 
 
+class RepairFilm(NamedTuple):
+    """One non-dispositioned film's repair-audit evidence."""
+
+    id: int
+    title: str
+    year: int | None
+    tmdb: str | None
+    criterion: bool
+    rated: bool
+    owned: bool
+    watchlisted: bool
+    omdb_found: bool
+
+
 _ONE_ROW_TABLES = ("omdb", "tmdb", "my_ratings", "watchlist", "owned")  # film_id PRIMARY KEY tables
 
 
@@ -470,6 +484,33 @@ class Repository:
                     FilmRow(resolved_id, str(r["title"]), r["year"], r["director"], runtime_min, r["metacritic"])
                 )
             return out
+
+    def films_for_repair(self) -> list[RepairFilm]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, x.value AS tmdb, "
+                "EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') AS criterion, "
+                "EXISTS (SELECT 1 FROM my_ratings r WHERE r.film_id = f.id) AS rated, "
+                "EXISTS (SELECT 1 FROM owned w WHERE w.film_id = f.id) AS owned, "
+                "EXISTS (SELECT 1 FROM watchlist w WHERE w.film_id = f.id) AS watchlisted, "
+                "COALESCE((SELECT o.found FROM omdb o WHERE o.film_id = f.id), 0) AS omdb_found "
+                "FROM films f LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
+                "WHERE " + _NOT_DISPOSED + " ORDER BY f.id"
+            ).fetchall()
+            return [
+                RepairFilm(
+                    int(r["id"]),
+                    str(r["title"]),
+                    r["year"],
+                    r["tmdb"],
+                    bool(r["criterion"]),
+                    bool(r["rated"]),
+                    bool(r["owned"]),
+                    bool(r["watchlisted"]),
+                    bool(r["omdb_found"]),
+                )
+                for r in rows
+            ]
 
     def film_ids_with_external(self, authority: str) -> set[int]:
         with self._conn() as c:
