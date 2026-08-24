@@ -12,4 +12,14 @@ Running list of ideas for movie-brain. Add new items at the bottom; strike or ch
 7. [ ] **Taste clustering** — model liked/disliked films (genre, director, …) to order the watch queue intelligently. Seeded in [cinema-companion.md](cinema-companion.md).
 8. [ ] **Power search bar** — field-scoped syntax (`actor: Orson Welles`) with exact / fuzzy / semantic modes, semantic plot search included ("boy grows up through his teenage years" → *Boyhood*); port the working syntax/UX from my YouTube brain page. Seeded in [cinema-companion.md](cinema-companion.md).
 
+9. [ ] **"Needs revisit" flag in the drawer** — a user-set mark on a film whose facts look
+   wrong (wrong year, misidentified — e.g. the Metropolis-anime and Rambo/Vahşi Kan wrong
+   matches found 2026-08-24) or that otherwise needs factual work. Toggle lives in the
+   drawer pane next to the watchlist toggle and follows the watchlist pattern: user-response
+   data, its own table (film_id + marked_on + optional free-text note), drawer toggle is the
+   only writer, never touched by sync/importers. Surface as a filter chip so flagged films
+   are one click away, and feed the queue into M3's repair/review-resolution CLI so a human
+   pass can drain it (resolving clears the flag). Optional nicety: pre-fill the note with
+   what looks wrong ("year suspect", "wrong film").
+
 Items 1 and 2 have grown into a feature of their own — discovery lives in [multiple-movie-services.md](multiple-movie-services.md); items 4–7 in [cinema-companion.md](cinema-companion.md).
