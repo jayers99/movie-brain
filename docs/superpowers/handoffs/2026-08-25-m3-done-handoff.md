@@ -5,13 +5,13 @@
 lines all filled in), `docs/superpowers/handoffs/2026-08-24-m3-matching-handoff.md` (the
 M2→M3 handoff this one supersedes), and CLAUDE.md (updated on the M3 branch).
 
-## Status — M3 is COMPLETE on `feature/M3-repair-surface`, NOT merged and NOT pushed
+## Status — M3 is MERGED to local `main` (merge commit `0589692`, 2026-08-24), NOT pushed
 
-17 commits from `23b9e39` (plan + Tasks 1–9, the final docs commit, and the year-write-back fix). The worktree
-lives at `.claude/worktrees/M3-repair-surface`. Suite, ruff, mypy, and
-`scripts/matching_benchmark.py --assert-dominance` all green at the tip. Merging to `main`
-and deleting the worktree is the first thing the next session should do (see
-`superpowers:finishing-a-development-branch`).
+19 commits `23b9e39..e4c0128` (plan, Tasks 1–10, two review fix rounds, the final-review
+hardening commit) merged into `main` alongside the backlog-10 docs commit; worktree and
+branch deleted. Merged result verified: 439 tests, ruff, mypy, and
+`scripts/matching_benchmark.py --assert-dominance` (gt 26/26, mc 3.1%, apple 4.8%) all
+green. `main` is ahead of `origin/main` — pushing is the user's call.
 
 **What landed, per verb:**
 
