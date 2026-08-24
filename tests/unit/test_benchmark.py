@@ -101,8 +101,8 @@ def test_dominates_true_iff_new_wrong_is_zero_and_le_baseline(bench: Any) -> Non
     assert bench.dominates(one, zero) is True
     # New still zero, baseline also zero -> dominates (0 <= 0).
     assert bench.dominates(zero, zero) is True
-    # New has a wrong-match even though it's <= baseline's -> does not dominate.
-    assert bench.dominates(two, one) is False
+    # New has more wrong-matches than baseline -> does not dominate.
+    assert bench.dominates(one, two) is False
     # New has fewer wrong-matches than baseline but not zero -> does not dominate.
     assert bench.dominates(two, one) is False
 

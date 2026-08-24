@@ -76,6 +76,18 @@ isn't "new", so it silently sat unmatched). M2's rematch pass is what covers it;
 lands a correct tmdb id (expect near id 947, Lawrence of Arabia 1962) as an early smoke
 check once the rematch CLI exists.
 
+## Pickup items (final review)
+
+- **T3 disqualification-ordering comment**: `_score`'s `_Disqualify.COMMERCE_EARLY` vs
+  `.OTHER` split in `domain/matching.py` needs a comment explaining why the split matters
+  for the all-disqualified verdict step (COMMERCE_EARLY-only → `create`, any OTHER →
+  `review("conflict")`) — not yet documented at the call site.
+- **Owned `year-drift` detail strings lost their candidate film ids** in the T4
+  policy-shell refactor (`application/owned.py`, the `result.reason is not None` branch) —
+  restore them, `ambiguous-owned`'s tied-id detail is the model to match.
+- ~~`dominates()` test duplicate~~ — fixed by this fix-wave commit
+  (`tests/unit/test_benchmark.py`).
+
 ## Carried data debt (M1 found it, M1 did not touch it — M2/M3 territory)
 
 - **49 dup norm-title groups** (24 involve owned films) — merges need M3's alias/tombstone

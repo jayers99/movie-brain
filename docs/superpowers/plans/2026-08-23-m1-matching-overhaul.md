@@ -128,6 +128,7 @@ Never strip to an empty title. Returns (stripped title, annotations found). `rer
 - `norm_title("Léon") == "leon"` (diacritics fold).
 - `match_film("Tokyo Story", 1972, [(5, "Tokyo Story", 1953)])` → review `year-gap` (was: match). M2's arbiter auto-resolves this class; M1 keeps wrong-match ≈ 0 instead.
 - `pick_tmdb_match` no-title-match near-year fallback → `None` (was: first of top 3).
+- A Metacritic year trailing the film by exactly 2 (old rule accepted `<= mc_year + 2`) now falls in the commerce gap band → review `year-gap` (the Seven Samurai 1956→1955 feature-data edit); same class as the Tokyo Story case above, M2's arbiter auto-drains it.
 
 ---
 
