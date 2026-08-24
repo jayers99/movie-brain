@@ -77,7 +77,16 @@ Final whole-branch review verdict: ready to merge, zero Critical/Important findi
 3. **Syncs are manual by choice** — the launchd agent is deliberately not installed (user
    decision, 2026-08-24: "i will run those manual for now"). Don't flag it or wait on a
    nightly job; if a check needs a sync, run `uv run movie-brain sync` by hand.
-4. **OMDb payloads on year-adopted films were fetched under the old (wrong) years** —
+4. **Same-title-at-claimed-year is a wrong-match shape the evidence model can't catch**
+   (found live 2026-08-24, user report): film 3105 "Metropolis" — the MC re-release slug
+   (2002 restoration of Lang's 1927 silent) promoted with commerce year 2001, and the 2001
+   anime Metropolis matched on year evidence with no gap, so no review and no arbitration
+   ever fired. One-off repair applied (year 1927, tmdb 19, Fritz Lang, OMDb refetched;
+   backup `movie-brain.db.bak-pre-metropolis-fix`). **Bank this as a benchmark ground-truth
+   case in M3**, and note `*-re-release` MC slugs deserve a suspicious eye toward
+   same-titled candidates AT the commerce year — the slug itself is evidence the year is
+   not an original year.
+5. **OMDb payloads on year-adopted films were fetched under the old (wrong) years** —
    266 films whose ratings/director/runtime may be for the wrong lookup. An OMDb refetch
    pass for adopted films is M3 triage material.
 
