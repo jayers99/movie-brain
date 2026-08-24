@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import date
 
@@ -235,3 +236,56 @@ def cleared(ctx, spec):
 @then(parsers.parse('"{spec}" still holds tmdb id "{tid}"'))
 def still_holds(ctx, spec, tid):
     assert ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))["tmdb"] == tid
+
+
+@given(parsers.parse('"{spec}" has an OMDb payload fetched for year {year:d}'))
+def stale_payload(ctx, spec, year):
+    from movie_brain.domain.models import OmdbRating
+
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    ctx["repo"].upsert_omdb(fid, OmdbRating(6.0, 50, True, "English", json.dumps({"Year": str(year)})), TODAY)
+
+
+@when("I audit years")
+def audit_years(ctx):
+    ctx["years_audit"] = repair.audit_years(ctx["repo"])
+
+
+@when("I apply years")
+def apply_years(ctx):
+    ctx["years"] = repair.repair_years(ctx["repo"], TODAY, apply=True, log=lambda _m: None)
+
+
+@when(parsers.parse('I {mode} setting "{spec}" to {year:d}'))
+def set_year(ctx, mode, spec, year):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    ctx["years"] = repair.repair_years(ctx["repo"], TODAY, film_id=fid, year=year, apply=(mode == "apply"), log=lambda _m: None)
+
+
+@then(parsers.parse('the stale OMDb list is exactly "{spec}"'))
+def stale_is(ctx, spec):
+    assert [s[0] for s in ctx["years_audit"].stale] == [ctx["repo"].film_id_by_key(_key(spec))]
+
+
+@then(parsers.parse('"{spec}" needs an OMDb refresh'))
+def needs_refresh(ctx, spec):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    assert fid in {f for f, _ in ctx["repo"].films_needing_lookup_discovery("criterion", TODAY)}
+
+
+@then(parsers.parse('"{spec}" still has year {year:d}'))
+def still_year(ctx, spec, year):
+    assert ctx["repo"].film_id_by_key(_key(spec)) is not None
+
+
+@then(parsers.parse('a film "{spec}" exists and needs an OMDb refresh'))
+def exists_refresh(ctx, spec):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    assert fid is not None
+    assert fid in {f for f, _ in ctx["repo"].films_needing_lookup_discovery("criterion", TODAY)}
+
+
+@then(parsers.parse('an open tmdb year-collision review names "{spec}"'))
+def collision_named(ctx, spec):
+    rows = [r for r in ctx["repo"].open_reviews("tmdb") if r["reason"] == "year-collision"]
+    assert rows and rows[0]["value"] == str(ctx["repo"].film_id_by_key(_key(spec)))
