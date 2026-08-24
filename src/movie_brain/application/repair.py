@@ -6,9 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from movie_brain.application.availability import TMDB_AUTHORITY
+import requests
+
+from movie_brain.application.availability import MAX_CONSECUTIVE_FAILURES, TMDB_AUTHORITY
 from movie_brain.domain.matching import norm_title, split_annotations
 from movie_brain.infrastructure.database import RepairFilm, Repository
+from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 
 def _stderr(msg: str) -> None:
@@ -128,3 +131,71 @@ def repair_dupes(
             merged += 1
     counts = {v: sum(1 for g in groups if g.verdict == v) for v in ("twin", "distinct", "undecided")}
     return DupesReport(len(groups), counts["twin"], counts["distinct"], counts["undecided"], merged, declined)
+
+
+@dataclass(frozen=True)
+class LinkSuspect:
+    film_id: int
+    title: str
+    year: int | None
+    tmdb_id: str
+    tmdb_title: str
+    tmdb_original: str
+    tmdb_year: int | None
+
+
+@dataclass(frozen=True)
+class LinksReport:
+    exit_code: int
+    checked: int
+    suspects: int
+    cleared: int
+
+
+def _same_title(ours: str, theirs: str) -> bool:
+    return norm_title(split_annotations(ours)[0]) == norm_title(split_annotations(theirs)[0])
+
+
+def audit_links(
+    repo: Repository, client: TmdbClient, *, log: Callable[[str], None] = _stderr
+) -> tuple[list[LinkSuspect], int, bool]:
+    """Every TMDB link whose title AND original_title both disagree with ours (Rambo/Vahşi Kan class)."""
+    suspects: list[LinkSuspect] = []
+    checked = consecutive = 0
+    for film_id, title, year, value in repo.films_with_tmdb():
+        if consecutive >= MAX_CONSECUTIVE_FAILURES:
+            log("TMDB failing repeatedly — stopping; repair links is safe to re-run.")
+            return suspects, checked, True
+        try:
+            t_title, t_orig, t_year = client.movie_titles(int(value))
+        except AuthError as exc:
+            log(f"TMDB rejected the token: {exc}")
+            return suspects, checked, True
+        except (requests.RequestException, ValueError) as exc:
+            log(f"TMDB details failed for film {film_id}: {exc}")
+            consecutive += 1
+            continue
+        consecutive = 0
+        checked += 1
+        if not (_same_title(title, t_title) or _same_title(title, t_orig)):
+            suspects.append(LinkSuspect(film_id, title, year, value, t_title, t_orig, t_year))
+    return suspects, checked, False
+
+
+def repair_links(
+    repo: Repository, client: TmdbClient, today: date, *, apply: bool, log: Callable[[str], None] = _stderr
+) -> LinksReport:
+    suspects, checked, tripwired = audit_links(repo, client, log=log)
+    for s in suspects:
+        log(
+            f"#{s.film_id:<5} {s.title!r} ({s.year}) → tmdb {s.tmdb_id} "
+            f"{s.tmdb_title!r} / {s.tmdb_original!r} ({s.tmdb_year})"
+        )
+    cleared = 0
+    if apply:
+        for s in suspects:
+            repo.clear_tmdb_link(s.film_id, today)
+            cleared += 1
+        if cleared:
+            log(f"cleared {cleared} links — run `movie-brain rematch` to re-match them with the current matcher")
+    return LinksReport(1 if tripwired else 0, checked, len(suspects), cleared)

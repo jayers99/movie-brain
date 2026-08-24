@@ -4,6 +4,7 @@ import re
 from datetime import date
 
 import pytest
+import responses
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application import repair
@@ -11,6 +12,7 @@ from movie_brain.application.metacritic import promote_top_n
 from movie_brain.application.owned import import_owned
 from movie_brain.domain.matching import build_candidate_index, match_film
 from movie_brain.domain.models import Film, McTitle, OwnedTitle, ReviewEntry
+from movie_brain.infrastructure.tmdb import TMDB_API, TmdbClient
 
 scenarios("../features/repair.feature")
 
@@ -25,7 +27,11 @@ def _key(spec: str) -> str:
 
 @pytest.fixture
 def ctx(repo, config_dir):
-    return {"repo": repo, "config_dir": config_dir, "promote": None}
+    rs = responses.RequestsMock(assert_all_requests_are_fired=False)
+    rs.start()
+    yield {"repo": repo, "config_dir": config_dir, "promote": None, "rs": rs}
+    rs.stop()
+    rs.reset()
 
 
 @given(parsers.parse('a repository with films "{crit}" on Criterion and "{comm}" from commerce'))
@@ -192,3 +198,40 @@ def nothing_merged(ctx):
 @then(parsers.parse('exactly {n:d} group is keyed "{key}"'))
 def exactly_n_groups_keyed(ctx, n, key):
     assert sum(1 for g in ctx["groups"] if g.key == key) == n
+
+
+@given(parsers.parse('TMDB describes id {tid:d} as "{title}" / "{orig}" from {year:d}'))
+def describe(ctx, tid, title, orig, year):
+    ctx["rs"].get(f"{TMDB_API}/movie/{tid}", json={"title": title, "original_title": orig, "release_date": f"{year}-01-01"})
+
+
+@when("I audit links")
+def audit_links(ctx):
+    ctx["suspects"], _, _ = repair.audit_links(ctx["repo"], TmdbClient("tok"), log=lambda _m: None)
+
+
+@when("I apply links")
+def apply_links(ctx):
+    ctx["links"] = repair.repair_links(ctx["repo"], TmdbClient("tok"), TODAY, apply=True, log=lambda _m: None)
+
+
+@then(parsers.parse('the only link suspect is "{spec}"'))
+def only_suspect(ctx, spec):
+    assert [s.film_id for s in ctx["suspects"]] == [ctx["repo"].film_id_by_key(_key(spec))]
+
+
+@then("there are no link suspects")
+def no_suspects(ctx):
+    assert ctx["suspects"] == []
+
+
+@then(parsers.parse('"{spec}" has no tmdb id and is a TMDB miss'))
+def cleared(ctx, spec):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    assert "tmdb" not in ctx["repo"].external_ids_for(fid)
+    assert fid in {t.film_id for t in ctx["repo"].films_tmdb_missed_targets()}
+
+
+@then(parsers.parse('"{spec}" still holds tmdb id "{tid}"'))
+def still_holds(ctx, spec, tid):
+    assert ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))["tmdb"] == tid
