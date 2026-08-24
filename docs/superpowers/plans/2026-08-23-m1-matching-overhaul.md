@@ -443,3 +443,17 @@ def test_parse_export_missing_value_duration():
 - Spec coverage: normalization fixes → Task 2; annotation grammar → Task 2; three-level index → Task 3; evidence scorer incl. director/runtime/popularity/arbiter hook → Task 3; policy wrappers with kept signatures → Task 4; source-aware year policy → Tasks 3–4; Apple export v2 → Task 5; benchmark-first with baseline → Task 1, dominance → Task 6; Done-line + M2 handoff → Task 7. Out of M1 by design: arbiter wiring, year write-back, rematch, merges.
 - The Tokyo-Story / tmdb-fallback / Léon expectation changes are deliberate spec consequences, listed under "Intentional behavior changes" — implementers must not "fix" them back.
 - `scripts/matching_baseline.py` is exempt from the DRY instinct: it is a frozen snapshot, duplication is its job.
+
+## Baseline (Task 1)
+
+Run: `uv run python scripts/matching_benchmark.py` against the live `~/.config/movie-brain` (read-only; DB checksum verified unchanged before/after).
+
+**Ground-truth suite:** 14 gt-pass / 11 gt-fail; wrong-matches (matched a different id than expected): 1.
+
+- The 1 wrong-match is the banked `lawrence-tmdb` case: baseline's title-blind "first of top-3 within ±1 year" fallback returns `match:731627` where the correct verdict is `none`.
+- The 10 non-wrong-match failures are all cases the baseline can't normalize/annotate its way to a candidate at all, so it falls through to `create`/`review` instead of the expected `match:N`: `stop-making-sense-runtime` (ignores runtime evidence), `kill-bill-vol-1`, `kill-bill-stay-distinct` ("Vol." vs "Volume" not folded), `diacritic-fold` ("Tête" vs "Tete" not folded), `ampersand` ("&" dropped instead of expanded to "and"), `bracket-rerelease` (`[re-release]` not recognized, only `(re-release)`), `restored-version` ("Restored Version" not in the known Apple annotation list), `directors-edition-dash` (dash-suffixed edition text not stripped), `subtitle-prefix` and `subtitle-weak-no-year` (no fuzzy/subtitle-prefix matching). None of these are baseline bugs — they are exactly the normalization/matching gaps M1 exists to close.
+
+**Archive replay** (real corpora, no synthetic pool):
+
+- Metacritic (200 pages, n=4800 parsed titles): match=31.5%, review=0.0%, create=68.5%.
+- Apple TV owned export (`owned-2026-08-23.txt`, n=870 lines): match=99.2%, review=0.8%, create=0.0%. (High match rate because `owned import` already ran against this DB and created a film for every prior miss — the archive replay here only re-matches, never creates.)
