@@ -962,7 +962,8 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT n.film_id, f.title, f.year, n.marked_on, n.note FROM needs_revisit n "
-                "JOIN films f ON f.id = n.film_id ORDER BY n.marked_on, n.film_id"
+                "JOIN films f ON f.id = n.film_id WHERE " + _NOT_DISPOSED + " "
+                "ORDER BY n.marked_on, n.film_id"
             ).fetchall()
             return [(int(r["film_id"]), str(r["title"]), r["year"], str(r["marked_on"]), r["note"]) for r in rows]
 
@@ -975,6 +976,9 @@ class Repository:
     def tombstone_film(self, film_id: int, today: date, note: str | None = None) -> None:
         with self._conn() as c:
             self._assert_repairable(c, film_id)
+            # A tombstone is a resolution, same as a merge is for its loser: drop any
+            # needs_revisit flag rather than leaving it to haunt the (now-hidden) film.
+            c.execute("DELETE FROM needs_revisit WHERE film_id = ?", (film_id,))
             c.execute(
                 "INSERT INTO film_disposition (film_id, kind, survivor_id, note, created_at) "
                 "VALUES (?, 'tombstoned', NULL, ?, ?)",
