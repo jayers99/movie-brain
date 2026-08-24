@@ -1,9 +1,15 @@
 import pytest
 
 from movie_brain.domain.matching import (
+    Candidate,
+    CandidateIndex,
+    MatchQuery,
     MatchResult,
+    MatchVerdict,
+    YearKind,
     clean_apple_title,
     clean_title,
+    match_candidates,
     match_film,
     match_owned,
     norm_title,
@@ -187,3 +193,117 @@ def test_match_owned_yearless_needs_unique_candidate():
     assert match_owned("Solo", None, [(1, "Solo", 1996)]).winner == 1
     r = match_owned("Twin", None, [(1, "Twin", 1978), (2, "Twin", 1980)])
     assert r.winner is None and set(r.tied) == {1, 2}
+
+
+def C(
+    id: int,
+    title: str,
+    year: int | None,
+    director: str | None = None,
+    runtime: int | None = None,
+    pop: float | None = None,
+) -> Candidate:
+    return Candidate(id, title, year, director, runtime, pop)
+
+
+class TestCandidateIndex:
+    def test_l0_exact_beats_l1(self) -> None:
+        # A decoy candidate whose L1 (annotation-stripped) bucket also normalizes to
+        # "nosferatu" must not surface once an L0 exact hit is found.
+        idx = CandidateIndex([C(1, "Nosferatu", 1922), C(2, "Nosferatu (Remastered)", 2000)])
+        level, hits = idx.lookup("Nosferatu")
+        assert level == 0
+        assert [c.id for c in hits] == [1]
+
+    def test_l1_annotation_stripped(self) -> None:
+        idx = CandidateIndex([C(1, "The Leopard", 1963)])
+        assert idx.lookup("The Leopard (Restored Version)") == (1, [C(1, "The Leopard", 1963)])
+
+    def test_l2_subtitle_prefix_requires_two_words(self) -> None:
+        idx = CandidateIndex([C(1, "Hearts of Darkness: A Filmmaker's Apocalypse", 1991)])
+        level, hits = idx.lookup("Hearts of Darkness")
+        assert level == 2 and hits[0].id == 1
+        # single-word prefix never indexes: "Ran: Something" must NOT be reachable via "Ran"
+        idx2 = CandidateIndex([C(2, "Ran: Something", 1985)])
+        level2, hits2 = idx2.lookup("Ran")
+        assert level2 == -1 and hits2 == []
+
+
+class TestMatchCandidates:
+    # commerce year: neutral-with-gap, disqualifying-early
+    def test_commerce_gap_no_corroboration_reviews(self) -> None:
+        idx = CandidateIndex([C(1, "Stop Making Sense", 1984)])
+        query = MatchQuery(title="Stop Making Sense", year=1999, year_kind=YearKind.COMMERCE)
+        assert match_candidates(query, idx) == MatchVerdict(kind="review", reason="year-gap")
+
+    def test_commerce_gap_with_runtime_matches(self) -> None:
+        idx = CandidateIndex([C(1, "Stop Making Sense", 1984, runtime=88)])
+        query = MatchQuery(title="Stop Making Sense", year=1999, year_kind=YearKind.COMMERCE, runtime_min=88)
+        assert match_candidates(query, idx) == MatchVerdict(kind="match", film_id=1)
+
+    def test_commerce_gap_with_rerelease_hint_matches(self) -> None:
+        idx = CandidateIndex([C(1, "Lawrence of Arabia", 1962)])
+        query = MatchQuery(title="Lawrence of Arabia", year=2012, year_kind=YearKind.COMMERCE)
+        assert match_candidates(query, idx, rerelease_hint=True) == MatchVerdict(kind="match", film_id=1)
+
+    def test_commerce_year_earlier_than_all_candidates_creates(self) -> None:
+        idx = CandidateIndex([C(1, "Solaris", 2002)])
+        query = MatchQuery(title="Solaris", year=1972, year_kind=YearKind.COMMERCE)
+        assert match_candidates(query, idx) == MatchVerdict(kind="create")
+
+    def test_database_year_two_off_reviews(self) -> None:
+        idx = CandidateIndex([C(1, "Nosferatu", 1952)])
+        query = MatchQuery(title="Nosferatu", year=1954, year_kind=YearKind.DATABASE)
+        assert match_candidates(query, idx) == MatchVerdict(kind="review", reason="conflict")
+
+    # director / runtime evidence
+    def test_director_conflict_reviews(self) -> None:
+        idx = CandidateIndex([C(1, "Titanic", 1953, director="Jean Negulesco")])
+        query = MatchQuery(title="Titanic", year=1953, year_kind=YearKind.DATABASE, director="James Cameron")
+        assert match_candidates(query, idx) == MatchVerdict(kind="review", reason="conflict")
+
+    def test_shared_director_in_comma_list_supports(self) -> None:
+        idx = CandidateIndex([C(1, "Swiss Family Robinson", 1960, director="Ken Annakin, Harold French")])
+        query = MatchQuery(title="Swiss Family Robinson", year=1960, year_kind=YearKind.DATABASE, director="Harold French")
+        assert match_candidates(query, idx) == MatchVerdict(kind="match", film_id=1)
+
+    def test_runtime_divergence_reviews(self) -> None:
+        idx = CandidateIndex([C(1, "Nosferatu", 1922, runtime=94)])
+        query = MatchQuery(title="Nosferatu", year=1922, year_kind=YearKind.DATABASE, runtime_min=132)
+        assert match_candidates(query, idx) == MatchVerdict(kind="review", reason="conflict")
+
+    # verdicts
+    def test_no_candidates_creates(self) -> None:
+        idx = CandidateIndex([])
+        query = MatchQuery(title="Anything", year=2000, year_kind=YearKind.DATABASE)
+        assert match_candidates(query, idx) == MatchVerdict(kind="create")
+
+    def test_tie_reviews_with_tied_ids(self) -> None:
+        idx = CandidateIndex([C(1, "Twin", 1978), C(2, "Twin", 1980)])
+        query = MatchQuery(title="Twin", year=1979, year_kind=YearKind.DATABASE)
+        verdict = match_candidates(query, idx)
+        assert verdict == MatchVerdict(kind="review", reason="ambiguous", tied=(1, 2))
+
+    def test_popularity_tiebreak_only_when_enabled(self) -> None:
+        idx = CandidateIndex([C(1, "Twin", 1979, pop=5.0), C(2, "Twin", 1979, pop=8.0)])
+        query = MatchQuery(title="Twin", year=1979, year_kind=YearKind.DATABASE)
+        assert match_candidates(query, idx) == MatchVerdict(kind="review", reason="ambiguous", tied=(1, 2))
+        assert match_candidates(query, idx, popularity_tiebreak=True) == MatchVerdict(kind="match", film_id=2)
+
+    def test_l2_alone_without_year_reviews_weak_title(self) -> None:
+        idx = CandidateIndex([C(1, "Hearts of Darkness: A Filmmaker's Apocalypse", 1991)])
+        query = MatchQuery(title="Hearts of Darkness", year=None, year_kind=YearKind.DATABASE)
+        assert match_candidates(query, idx) == MatchVerdict(kind="review", reason="weak-title")
+
+    # arbitration hook (interface only)
+    def test_arbiter_hit_reviews_remake_suspected(self) -> None:
+        idx = CandidateIndex([C(1, "Stop Making Sense", 1984)])
+        query = MatchQuery(title="Stop Making Sense", year=1999, year_kind=YearKind.COMMERCE)
+        verdict = match_candidates(query, idx, arbiter=lambda t, y: True)
+        assert verdict == MatchVerdict(kind="review", reason="remake-suspected")
+
+    def test_arbiter_miss_matches_original(self) -> None:
+        idx = CandidateIndex([C(1, "Stop Making Sense", 1984)])
+        query = MatchQuery(title="Stop Making Sense", year=1999, year_kind=YearKind.COMMERCE)
+        verdict = match_candidates(query, idx, arbiter=lambda t, y: False)
+        assert verdict == MatchVerdict(kind="match", film_id=1)
