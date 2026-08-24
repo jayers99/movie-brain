@@ -56,6 +56,11 @@ _TMDB_TARGET_SELECT = (
     "FROM films f "
 )
 
+# A dispositioned film (tombstoned or merged-away) has no row of its own in any read model:
+# tombstoned films are hidden outright, merged losers are aliased onto their survivor
+# (films_for_matching) rather than surfaced under their own id.
+_NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
+
 
 def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -305,6 +310,13 @@ class Repository:
             # every untouched-yet row as a reappearance.
             row = c.execute("SELECT MAX(last_seen) AS m FROM listings WHERE source = ?", (source,)).fetchone()
             frontier = None if row["m"] is None else str(row["m"])
+            # A merged loser's key can still show up on a fresh catalog walk (its listing
+            # follows it to the survivor); a tombstoned film's own id is untouched — the
+            # human hid it, so a reappearing listing stays hidden with it. Nothing is deleted.
+            dispositions = {
+                int(r["film_id"]): (str(r["kind"]), r["survivor_id"])
+                for r in c.execute("SELECT film_id, kind, survivor_id FROM film_disposition")
+            }
             for film in films:
                 c.execute(
                     "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
@@ -313,6 +325,8 @@ class Repository:
                     (str(uuid.uuid4()), film.title, film.year, film.director, film.key),
                 )
                 film_id = int(c.execute("SELECT id FROM films WHERE key = ?", (film.key,)).fetchone()["id"])
+                while film_id in dispositions and dispositions[film_id][0] == "merged":
+                    film_id = int(dispositions[film_id][1])  # alias → survivor (chains allowed)
                 self._write_listing(c, film_id, source, film.url, day, frontier)
                 try:
                     c.execute(
@@ -351,6 +365,7 @@ class Repository:
         sql = (
             "SELECT f.id, f.title, f.year, f.director, l.url FROM films f JOIN listings l ON l.film_id = f.id "
             "WHERE l.source = ? AND l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
+            "AND " + _NOT_DISPOSED + " "
             + extra_where
             + " ORDER BY f.id"
         )
@@ -417,11 +432,13 @@ class Repository:
     def films_for_matching(self) -> list[FilmRow]:
         with self._conn() as c:
             rows = c.execute(
-                "SELECT f.id, f.title, f.year, "
+                "SELECT COALESCE(d.survivor_id, f.id) AS id, f.title, f.year, "
                 "COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director, "
                 "NULLIF(json_extract(o.payload, '$.Runtime'), 'N/A') AS runtime, "
                 "o.metacritic "
-                "FROM films f LEFT JOIN omdb o ON o.film_id = f.id ORDER BY f.id"
+                "FROM films f LEFT JOIN omdb o ON o.film_id = f.id "
+                "LEFT JOIN film_disposition d ON d.film_id = f.id "
+                "WHERE d.film_id IS NULL OR d.kind = 'merged' ORDER BY f.id"
             ).fetchall()
             out = []
             for r in rows:
@@ -482,14 +499,19 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 _TMDB_TARGET_SELECT
-                + "WHERE NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
+                + "WHERE "
+                + _NOT_DISPOSED
+                + " AND NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
             ).fetchall()
             return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
 
     def films_tmdb_missed_targets(self) -> list[TmdbMatchTarget]:
         with self._conn() as c:
             rows = c.execute(
-                _TMDB_TARGET_SELECT + "JOIN tmdb t ON t.film_id = f.id WHERE t.found = 0 ORDER BY f.id"
+                _TMDB_TARGET_SELECT
+                + "JOIN tmdb t ON t.film_id = f.id WHERE t.found = 0 AND "
+                + _NOT_DISPOSED
+                + " ORDER BY f.id"
             ).fetchall()
             return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
 
@@ -499,6 +521,7 @@ class Repository:
                 "SELECT f.id, f.title, f.year, x.value FROM films f "
                 "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
                 "WHERE NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') "
+                "AND " + _NOT_DISPOSED + " "
                 "ORDER BY f.id"
             ).fetchall()
             return [(int(r["id"]), str(r["title"]), r["year"], str(r["value"])) for r in rows]
@@ -547,7 +570,9 @@ class Repository:
                 "SELECT t.film_id, x.value, (t.providers_checked_at IS NULL) AS first_check FROM tmdb t "
                 "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
                 "JOIN watchlist w ON w.film_id = t.film_id "
-                "WHERE t.found = 1 ORDER BY t.film_id"
+                "WHERE t.found = 1 "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = t.film_id) "
+                "ORDER BY t.film_id"
             ).fetchall()
             return [(int(r["film_id"]), str(r["value"]), bool(r["first_check"])) for r in rows]
 
@@ -558,7 +583,10 @@ class Repository:
             rows = c.execute(
                 "SELECT t.film_id, x.value, (t.providers_checked_at IS NULL) AS first_check FROM tmdb t "
                 "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
-                "WHERE t.found = 1 " + where + "ORDER BY (t.providers_checked_at IS NOT NULL), "
+                "WHERE t.found = 1 "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = t.film_id) "
+                + where
+                + "ORDER BY (t.providers_checked_at IS NOT NULL), "
                 "t.providers_checked_at, t.film_id",
                 params,
             ).fetchall()
@@ -568,7 +596,7 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT f.id, f.title, f.year FROM films f JOIN tmdb t ON t.film_id = f.id "
-                "WHERE t.found = 0 ORDER BY f.id"
+                "WHERE t.found = 0 AND " + _NOT_DISPOSED + " ORDER BY f.id"
             ).fetchall()
             return [(int(r["id"]), str(r["title"]), r["year"]) for r in rows]
 
@@ -615,6 +643,7 @@ class Repository:
                 "AND (NOT EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id) "
                 "OR EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id AND "
                 "(o.needs_refresh = 1 OR (o.found = 0 AND (o.year_fallback = 0 OR o.looked_up <= ?))))) "
+                "AND " + _NOT_DISPOSED + " "
                 "ORDER BY f.id",
                 (source, cutoff),
             ).fetchall()
@@ -843,9 +872,11 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 _VIEW_SQL
-                + "WHERE l.film_id IS NULL "
+                + "WHERE "
+                + _NOT_DISPOSED
+                + " AND (l.film_id IS NULL "
                 + "OR l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
-                + "OR r.score IS NOT NULL ORDER BY f.id",
+                + "OR r.score IS NOT NULL) ORDER BY f.id",
                 (source, source),
             ).fetchall()
             services = _services_by_film(c)
@@ -866,7 +897,9 @@ class Repository:
     def get_view(self, film_id: int, today: date | None = None) -> FilmView | None:
         cutoff = ((today or date.today()) - timedelta(days=NEW_ARRIVAL_DAYS)).isoformat()
         with self._conn() as c:
-            row = c.execute(_VIEW_SQL + "WHERE f.id = ?", ("criterion", film_id)).fetchone()
+            row = c.execute(
+                _VIEW_SQL + "WHERE f.id = ? AND " + _NOT_DISPOSED, ("criterion", film_id)
+            ).fetchone()
             if row is None:
                 return None
             return _row_to_view(
