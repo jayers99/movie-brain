@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 import sys
@@ -38,6 +39,15 @@ class TmdbMatchTarget(NamedTuple):
     title: str
     year: int | None
     commerce: bool  # no criterion listing → commerce-created; year is COMMERCE band
+
+
+class MergeReport(NamedTuple):
+    moved: dict[str, int]
+    dropped: dict[str, int]
+    reviews_resolved: int
+
+
+_ONE_ROW_TABLES = ("omdb", "tmdb", "my_ratings", "watchlist", "owned")  # film_id PRIMARY KEY tables
 
 
 _TMDB_TARGET_SELECT = (
@@ -702,6 +712,130 @@ class Repository:
     def owned_film_ids(self) -> set[int]:
         with self._conn() as c:
             return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM owned")}
+
+    # dispositions -----------------------------------------------------
+    def disposition_of(self, film_id: int) -> tuple[str, int | None] | None:
+        with self._conn() as c:
+            row = c.execute("SELECT kind, survivor_id FROM film_disposition WHERE film_id = ?", (film_id,)).fetchone()
+            return None if row is None else (str(row["kind"]), row["survivor_id"])
+
+    def canonical_film_id(self, film_id: int) -> int:
+        """Follow merged→survivor chains; tombstoned and undisposed films are their own canon."""
+        seen: set[int] = set()
+        with self._conn() as c:
+            while film_id not in seen:
+                seen.add(film_id)
+                row = c.execute(
+                    "SELECT survivor_id FROM film_disposition WHERE film_id = ? AND kind = 'merged'", (film_id,)
+                ).fetchone()
+                if row is None:
+                    return film_id
+                film_id = int(row["survivor_id"])
+            return film_id
+
+    def disposed_film_ids(self) -> set[int]:
+        with self._conn() as c:
+            return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM film_disposition")}
+
+    def tombstoned_keys(self) -> set[str]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.key FROM films f JOIN film_disposition d ON d.film_id = f.id WHERE d.kind = 'tombstoned'"
+            ).fetchall()
+            return {str(r["key"]) for r in rows}
+
+    def _assert_repairable(self, c: sqlite3.Connection, film_id: int) -> None:
+        if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+            raise ValueError(f"unknown film {film_id}")
+        if c.execute("SELECT 1 FROM film_disposition WHERE film_id = ?", (film_id,)).fetchone() is not None:
+            raise ValueError(f"film {film_id} is already dispositioned")
+
+    def tombstone_film(self, film_id: int, today: date, note: str | None = None) -> None:
+        with self._conn() as c:
+            self._assert_repairable(c, film_id)
+            c.execute(
+                "INSERT INTO film_disposition (film_id, kind, survivor_id, note, created_at) "
+                "VALUES (?, 'tombstoned', NULL, ?, ?)",
+                (film_id, note, today.isoformat()),
+            )
+
+    def merge_film(self, loser_id: int, survivor_id: int, today: date, note: str | None = None) -> MergeReport:
+        """Human-confirmed merge: move every dependent row to the survivor, alias the loser.
+
+        One transaction. Survivor rows win on conflict (the dropped loser values are kept
+        in the disposition note); listings widen to the union of both seen windows;
+        transitions (append-only history) simply re-point; the loser's open reviews are
+        resolved as part of the merge. The loser film row is never deleted.
+        """
+        if loser_id == survivor_id:
+            raise ValueError("loser and survivor are the same film")
+        moved: dict[str, int] = {}
+        dropped: dict[str, int] = {}
+        kept: dict[str, list[object]] = {}
+        with self._conn() as c:
+            self._assert_repairable(c, loser_id)
+            self._assert_repairable(c, survivor_id)
+            for table in _ONE_ROW_TABLES:
+                if c.execute(f"SELECT 1 FROM {table} WHERE film_id = ?", (loser_id,)).fetchone() is None:
+                    continue
+                if c.execute(f"SELECT 1 FROM {table} WHERE film_id = ?", (survivor_id,)).fetchone() is None:
+                    c.execute(f"UPDATE {table} SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id))
+                    moved[table] = 1
+                else:
+                    c.execute(f"DELETE FROM {table} WHERE film_id = ?", (loser_id,))
+                    dropped[table] = 1
+            for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
+                twin = c.execute(
+                    "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
+                    (survivor_id, row["source"]),
+                ).fetchone()
+                if twin is None:
+                    c.execute(
+                        "UPDATE listings SET film_id = ? WHERE film_id = ? AND source = ?",
+                        (survivor_id, loser_id, row["source"]),
+                    )
+                    moved["listings"] = moved.get("listings", 0) + 1
+                else:
+                    c.execute(
+                        "UPDATE listings SET first_seen = MIN(first_seen, ?), last_seen = MAX(last_seen, ?), "
+                        "leaving_date = COALESCE(leaving_date, ?) WHERE film_id = ? AND source = ?",
+                        (row["first_seen"], row["last_seen"], row["leaving_date"], survivor_id, row["source"]),
+                    )
+                    c.execute("DELETE FROM listings WHERE film_id = ? AND source = ?", (loser_id, row["source"]))
+                    dropped["listings"] = dropped.get("listings", 0) + 1
+            for row in c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (loser_id,)).fetchall():
+                held = c.execute(
+                    "SELECT 1 FROM external_ids WHERE film_id = ? AND authority = ?", (survivor_id, row["authority"])
+                ).fetchone()
+                if held is None:
+                    c.execute(
+                        "UPDATE external_ids SET film_id = ? WHERE film_id = ? AND authority = ?",
+                        (survivor_id, loser_id, row["authority"]),
+                    )
+                    moved["external_ids"] = moved.get("external_ids", 0) + 1
+                else:
+                    c.execute(
+                        "DELETE FROM external_ids WHERE film_id = ? AND authority = ?", (loser_id, row["authority"])
+                    )
+                    dropped["external_ids"] = dropped.get("external_ids", 0) + 1
+                    kept.setdefault("external_ids", []).append({row["authority"]: row["value"]})
+            cur = c.execute(
+                "UPDATE availability_transitions SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)
+            )
+            if cur.rowcount:
+                moved["availability_transitions"] = cur.rowcount
+            cur = c.execute(
+                "UPDATE match_review SET resolved = 1, detail = COALESCE(detail, '') || ? "
+                "WHERE film_id = ? AND resolved = 0",
+                (f" [merged into film {survivor_id} {today.isoformat()}]", loser_id),
+            )
+            full_note = json.dumps({"note": note, "dropped": kept}) if (note or kept) else None
+            c.execute(
+                "INSERT INTO film_disposition (film_id, kind, survivor_id, note, created_at) "
+                "VALUES (?, 'merged', ?, ?, ?)",
+                (loser_id, survivor_id, full_note, today.isoformat()),
+            )
+            return MergeReport(moved, dropped, cur.rowcount)
 
     # views ------------------------------------------------------------
     def list_views(self, source: str, today: date | None = None) -> list[FilmView]:
