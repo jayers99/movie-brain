@@ -515,6 +515,60 @@ class Repository:
             ).fetchall()
             return [dict(r) for r in rows]
 
+    def review(self, review_id: int) -> dict[str, object] | None:
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM match_review WHERE id = ?", (review_id,)).fetchone()
+            return None if row is None else dict(row)
+
+    def list_reviews(self, authority: str | None = None, reason: str | None = None) -> list[dict[str, object]]:
+        where = ["m.resolved = 0"]
+        params: list[object] = []
+        if authority:
+            where.append("m.authority = ?")
+            params.append(authority)
+        if reason:
+            where.append("m.reason = ?")
+            params.append(reason)
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT m.id, m.authority, m.film_id, m.value, m.reason, m.detail, m.created_at, "
+                "f.title, f.year FROM match_review m LEFT JOIN films f ON f.id = m.film_id "
+                "WHERE " + " AND ".join(where) + " ORDER BY m.authority, m.reason, m.id",
+                params,
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def resolve_review(self, review_id: int, note: str) -> None:
+        with self._conn() as c:
+            c.execute(
+                "UPDATE match_review SET resolved = 1, detail = COALESCE(detail, '') || ? WHERE id = ?",
+                (f" [{note}]", review_id),
+            )
+
+    def resolved_review_keys(self, authority: str) -> set[tuple[str, int | None, str | None]]:
+        """(reason, film_id, value) of every resolved row — a resolution is a standing decision."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT reason, film_id, value FROM match_review WHERE authority = ? AND resolved = 1", (authority,)
+            ).fetchall()
+            return {(str(r["reason"]), r["film_id"], r["value"]) for r in rows}
+
+    def staged_title(self, slug: str) -> McTitle | None:
+        with self._conn() as c:
+            r = c.execute(
+                "SELECT slug, title, year, score, rank, page FROM metacritic WHERE slug = ?", (slug,)
+            ).fetchone()
+            return (
+                None
+                if r is None
+                else McTitle(str(r["slug"]), str(r["title"]), r["year"], r["score"], int(r["rank"]), int(r["page"]))
+            )
+
+    def tmdb_target(self, film_id: int) -> TmdbMatchTarget | None:
+        with self._conn() as c:
+            r = c.execute(_TMDB_TARGET_SELECT + "WHERE f.id = ?", (film_id,)).fetchone()
+            return None if r is None else TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"]))
+
     # tmdb ---------------------------------------------------------------
     def films_needing_tmdb_match(self) -> list[TmdbMatchTarget]:
         with self._conn() as c:
@@ -793,6 +847,10 @@ class Repository:
                 "SELECT f.key FROM films f JOIN film_disposition d ON d.film_id = f.id WHERE d.kind = 'tombstoned'"
             ).fetchall()
             return {str(r["key"]) for r in rows}
+
+    def clear_revisit(self, film_id: int) -> None:
+        """No-op stub — Task 9 adds the needs_revisit table and replaces this body."""
+        return None
 
     def _assert_repairable(self, c: sqlite3.Connection, film_id: int) -> None:
         if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:

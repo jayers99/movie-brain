@@ -11,6 +11,7 @@ from movie_brain.application.availability import (
     MAX_CONSECUTIVE_FAILURES,
     TMDB_AUTHORITY,
     queue_review_once,
+    rebuild_no_match_queue,
     record_tmdb_match,
 )
 from movie_brain.domain.matching import pick_tmdb_match
@@ -144,20 +145,8 @@ def rematch(
                 today,
             )
 
-    # Recomputed from found=0 rows each run, mirroring tmdb_step's rebuild: a film
-    # already holding an open durable review (year-collision, id-conflict) under a
-    # non-"no-match" reason is excluded here too, so it isn't double-queued.
-    durably_flagged = {r["film_id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] != "no-match"}
-    repo.replace_unresolved_reviews(
-        TMDB_AUTHORITY,
-        [
-            ReviewEntry("no-match", film_id=fid, detail=f"{t} ({y})")
-            for fid, t, y in repo.films_tmdb_missed()
-            if fid not in durably_flagged
-        ],
-        today,
-        reason="no-match",
-    )
+    # Recomputed from found=0 rows each run, mirroring tmdb_step's rebuild.
+    rebuild_no_match_queue(repo, today)
     tripwired = consecutive >= MAX_CONSECUTIVE_FAILURES
     return RematchReport(
         1 if tripwired else 0,

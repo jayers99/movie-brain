@@ -36,13 +36,39 @@ def queue_review_once(repo: Repository, authority: str, entry: ReviewEntry, toda
     """Append a durable review row unless an open one with the same reason+film already exists.
 
     Durable reasons (year-collision, id-conflict) survive the per-run no-match rebuild,
-    so idempotent passes must not stack duplicates.
+    so idempotent passes must not stack duplicates. A row a human already resolved for
+    this same reason+film is a standing decision — never re-queued.
     """
     for r in repo.open_reviews(authority):
         if r["reason"] == entry.reason and r["film_id"] == entry.film_id:
             return False
+    if any(k[0] == entry.reason and k[1] == entry.film_id for k in repo.resolved_review_keys(authority)):
+        return False  # a human already decided this one
     repo.append_reviews(authority, [entry], today)
     return True
+
+
+def rebuild_no_match_queue(repo: Repository, today: date) -> None:
+    """Recompute tmdb no-match rows from found=0 films; durable and resolved rows are untouched.
+
+    Scoped to reason="no-match" so it never wipes the durable year-collision/id-conflict
+    rows record_tmdb_match queues — and a film already holding one of those durable rows
+    (also found=0, since it couldn't claim its id) is excluded here too, so it isn't
+    double-queued under both reasons. A film whose no-match row a human already resolved
+    (dismissed, or matched by hand elsewhere) is a standing decision, never re-queued.
+    """
+    durably_flagged = {r["film_id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] != "no-match"}
+    dismissed = {k[1] for k in repo.resolved_review_keys(TMDB_AUTHORITY) if k[0] == "no-match"}
+    repo.replace_unresolved_reviews(
+        TMDB_AUTHORITY,
+        [
+            ReviewEntry("no-match", film_id=fid, detail=f"{t} ({y})")
+            for fid, t, y in repo.films_tmdb_missed()
+            if fid not in durably_flagged and fid not in dismissed
+        ],
+        today,
+        reason="no-match",
+    )
 
 
 def record_tmdb_match(
@@ -148,21 +174,7 @@ def tmdb_step(
                 missed += 1
 
     # Recomputed from found=0 rows each run, so a tripwired match pass never loses entries.
-    # Scoped to reason="no-match" so it never wipes the durable year-collision/id-conflict
-    # rows record_tmdb_match queues above — and a film already holding one of those durable
-    # rows (also found=0, since it couldn't claim its id) is excluded here too, so it isn't
-    # double-queued under both reasons.
-    durably_flagged = {r["film_id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] != "no-match"}
-    repo.replace_unresolved_reviews(
-        TMDB_AUTHORITY,
-        [
-            ReviewEntry("no-match", film_id=fid, detail=f"{t} ({y})")
-            for fid, t, y in repo.films_tmdb_missed()
-            if fid not in durably_flagged
-        ],
-        today,
-        reason="no-match",
-    )
+    rebuild_no_match_queue(repo, today)
 
     # A tripwired match pass means TMDB is unhealthy right now — don't start (or stamp) a
     # refresh pass that would then gate for a week having refreshed nothing.

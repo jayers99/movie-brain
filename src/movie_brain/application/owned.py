@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from movie_brain.application.review import suppress_resolved
 from movie_brain.domain.matching import (
     Candidate,
     build_candidate_index,
@@ -108,5 +109,5 @@ def import_owned(
         if not repo.mark_owned(film_id, today):
             already += 1
 
-    repo.replace_unresolved_reviews(AUTHORITY, reviews, today)
+    repo.replace_unresolved_reviews(AUTHORITY, suppress_resolved(repo, AUTHORITY, reviews), today)
     return OwnedReport(0, len(titles), matched, created, already, len(repo.open_reviews(AUTHORITY)))
