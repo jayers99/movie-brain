@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from movie_brain.domain.models import OwnedTitle
 from movie_brain.infrastructure.appletv import AppleTvError, archive_path, fetch_owned, parse_export
 
 TODAY = date(2026, 8, 19)
@@ -50,3 +51,14 @@ def test_run_osascript_timeout_becomes_appletv_error():
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="osascript", timeout=300)
         with pytest.raises(AppleTvError, match="osascript timed out after 300s"):
             _run_osascript()
+
+
+def test_parse_export_v2_three_columns():
+    text = "Vertigo (1958)\t1958\t7702.5\nOld Line\t1990\n"
+    titles = parse_export(text)
+    assert titles[0] == OwnedTitle("Vertigo (1958)", 1958, 128)   # 7702.5 s → round(/60) = 128 min
+    assert titles[1] == OwnedTitle("Old Line", 1990, None)        # v1 archive replays
+
+
+def test_parse_export_missing_value_duration():
+    assert parse_export("X\t1990\tmissing value\n")[0].runtime_min is None
