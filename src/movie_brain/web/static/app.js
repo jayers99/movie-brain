@@ -28,6 +28,7 @@
     watchlist: (f) => f.watchlisted,
     owned: (f) => f.owned,
     not_owned: (f) => !f.owned,
+    needs_revisit: (f) => f.needs_revisit,
   };
 
   // ---- filtering / sorting ----
@@ -308,7 +309,8 @@
     const streaming = (d.services || [])
       .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`).join(', ');
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
-    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button></h2>
+    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
+      ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${p.Plot && p.Plot !== 'N/A' ? `<p>${poster}${esc(p.Plot)}</p>` : poster}
       <dl>${fields}</dl>
@@ -376,6 +378,22 @@
     b.textContent = watchlisted ? '★' : '☆';
     const film = state.films.find((f) => f.id === +b.dataset.id);
     if (film) { film.watchlisted = watchlisted; applyFilters(); }
+  });
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.revisit-toggle'); if (!b) return;
+    const r = await fetch(`/api/films/${b.dataset.id}/revisit`, { method: 'POST' });
+    if (!r.ok) { toast('Could not update revisit flag'); return; }
+    const { needs_revisit } = await r.json();
+    const film = state.films.find((f) => f.id === Number(b.dataset.id));
+    if (film) { film.needs_revisit = needs_revisit; if (!needs_revisit) film.revisit_note = null; applyFilters(); }
+    openDrawer(Number(b.dataset.id), false);
+  });
+  body.addEventListener('change', async (e) => {
+    const i = e.target.closest('.revisit-note'); if (!i) return;
+    const r = await fetch(`/api/films/${i.dataset.id}/revisit`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note: i.value }) });
+    if (!r.ok) { toast('Could not save note'); return; }
+    const film = state.films.find((f) => f.id === Number(i.dataset.id));
+    if (film) film.revisit_note = i.value;
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;

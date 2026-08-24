@@ -44,6 +44,24 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
             return jsonify({"error": "not found"}), 404
         return jsonify({"watchlisted": watchlisted}), 200
 
+    @app.post("/api/films/<int:film_id>/revisit")
+    def toggle_revisit(film_id: int) -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        note = body.get("note") if isinstance(body, dict) and isinstance(body.get("note"), str) else None
+        flagged = repo.toggle_revisit(film_id, today(), note=note or None)
+        if flagged is None:
+            return jsonify({"error": "not found"}), 404
+        return jsonify({"needs_revisit": flagged}), 200
+
+    @app.put("/api/films/<int:film_id>/revisit")
+    def put_revisit_note(film_id: int) -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not isinstance(body.get("note"), (str, type(None))):
+            return jsonify({"error": 'body must be JSON {"note": str | null}'}), 400
+        if not repo.set_revisit_note(film_id, body["note"] or None):
+            return jsonify({"error": "not flagged"}), 404
+        return jsonify({"ok": True}), 200
+
     @app.put("/api/films/<int:film_id>/rating")
     def put_rating(film_id: int) -> tuple[Response, int]:
         body = request.get_json(silent=True)

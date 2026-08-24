@@ -391,7 +391,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 8
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 9
     finally:
         conn.close()
 

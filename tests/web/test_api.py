@@ -191,3 +191,17 @@ def test_films_expose_owned(seeded_repo):
     films = {f["title"]: f for f in app.test_client().get("/api/films").get_json()}
     assert films["Alpha"]["owned"] is True
     assert films["Bravo"]["owned"] is False
+
+
+def test_revisit_toggle_and_note(client):
+    fid = client.get("/api/films").get_json()[0]["id"]
+    r = client.post(f"/api/films/{fid}/revisit", json={"note": "wrong film"})
+    assert r.status_code == 200 and r.get_json() == {"needs_revisit": True}
+    d = client.get(f"/api/films/{fid}").get_json()
+    assert d["needs_revisit"] is True and d["revisit_note"] == "wrong film"
+    assert client.put(f"/api/films/{fid}/revisit", json={"note": "year suspect"}).status_code == 200
+    assert client.get(f"/api/films/{fid}").get_json()["revisit_note"] == "year suspect"
+    r = client.post(f"/api/films/{fid}/revisit")
+    assert r.get_json() == {"needs_revisit": False}
+    assert client.post("/api/films/999/revisit").status_code == 404
+    assert "needs_revisit" in client.get("/api/config").get_json()["chips"]
