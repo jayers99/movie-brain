@@ -36,3 +36,30 @@ Feature: Dispositioned films stay out of every collector's way
     And the Apple library contains "Alpha" from 1951
     Then matching the Metacritic title "Alpha" year 1951 resolves to "Alpha (1952)"
     And "Alpha (1952)" is owned and "Alpha (1950)" is not
+
+  Scenario: Same-TMDB-id norm-title twins merge into the Criterion survivor
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1951)" has an open id-conflict review claiming tmdb id "5"
+    When I audit dupes
+    Then the group "alpha" is a twin with survivor "Alpha (1950)" from source "id-conflict"
+    When I apply dupes confirming every group
+    Then "Alpha (1951)" is merged into "Alpha (1950)"
+    And the id-conflict review is resolved
+
+  Scenario: Distinct TMDB ids are kept both
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1951)" holds tmdb id "6"
+    When I audit dupes
+    Then the group "alpha" is distinct
+
+  Scenario: A group missing TMDB evidence is undecided and never merged in batch
+    When I audit dupes
+    Then the group "alpha" is undecided
+    When I apply dupes confirming every group
+    Then nothing was merged
+
+  Scenario: Declining the confirmation merges nothing
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1951)" has an open id-conflict review claiming tmdb id "5"
+    When I apply dupes declining every group
+    Then nothing was merged

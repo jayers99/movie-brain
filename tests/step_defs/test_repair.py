@@ -6,10 +6,11 @@ from datetime import date
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from movie_brain.application import repair
 from movie_brain.application.metacritic import promote_top_n
 from movie_brain.application.owned import import_owned
 from movie_brain.domain.matching import build_candidate_index, match_film
-from movie_brain.domain.models import Film, McTitle, OwnedTitle
+from movie_brain.domain.models import Film, McTitle, OwnedTitle, ReviewEntry
 
 scenarios("../features/repair.feature")
 
@@ -130,3 +131,59 @@ def no_discovery(ctx):
 @then(parsers.parse('no film needs a TMDB match except "{spec}"'))
 def only_one_tmdb(ctx, spec):
     assert [t.film_id for t in ctx["repo"].films_needing_tmdb_match()] == [ctx["repo"].film_id_by_key(_key(spec))]
+
+
+@given(parsers.parse('"{spec}" holds tmdb id "{tid}"'))
+def holds(ctx, spec, tid):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    ctx["repo"].set_external_id(fid, "tmdb", tid, TODAY)
+    ctx["repo"].upsert_tmdb(fid, found=True, looked_up=TODAY)
+
+
+@given(parsers.parse('"{spec}" has an open id-conflict review claiming tmdb id "{tid}"'))
+def conflict(ctx, spec, tid):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
+    ctx["repo"].append_reviews("tmdb", [ReviewEntry("id-conflict", film_id=fid, value=tid, detail=spec)], TODAY)
+
+
+@when("I audit dupes")
+def audit(ctx):
+    ctx["groups"] = repair.audit_dupes(ctx["repo"])
+
+
+@when(parsers.parse("I apply dupes {mode} every group"))
+def apply(ctx, mode):
+    ctx["dupes"] = repair.repair_dupes(
+        ctx["repo"], TODAY, apply=True, confirm=lambda _g: mode == "confirming", log=lambda _m: None
+    )
+
+
+@then(parsers.parse('the group "{key}" is a twin with survivor "{spec}" from source "{source}"'))
+def is_twin(ctx, key, spec, source):
+    g = next(g for g in ctx["groups"] if g.key == key)
+    assert g.verdict == "twin" and g.survivor == ctx["repo"].film_id_by_key(_key(spec)) and g.source == source
+
+
+# Anchored to a bare verdict word (not parsers.parse) so this never also matches the more
+# specific "is a twin with survivor ... from source ..." step text above — parsers.parse's
+# {verdict} is a greedy wildcard and would otherwise collide with it.
+@then(parsers.re(r'the group "(?P<key>[^"]+)" is (?P<verdict>twin|distinct|undecided)$'))
+def has_verdict(ctx, key, verdict):
+    assert next(g for g in ctx["groups"] if g.key == key).verdict == verdict
+
+
+@then(parsers.parse('"{loser}" is merged into "{survivor}"'))
+def merged_into(ctx, loser, survivor):
+    r = ctx["repo"]
+    assert r.disposition_of(r.film_id_by_key(_key(loser))) == ("merged", r.film_id_by_key(_key(survivor)))
+
+
+@then("the id-conflict review is resolved")
+def conflict_resolved(ctx):
+    assert ctx["repo"].open_reviews("tmdb") == []
+
+
+@then("nothing was merged")
+def nothing_merged(ctx):
+    assert ctx["dupes"].merged == 0 and ctx["repo"].disposed_film_ids() == set()
