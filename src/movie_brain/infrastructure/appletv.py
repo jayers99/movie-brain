@@ -16,8 +16,11 @@ from movie_brain.domain.models import OwnedTitle
 
 _SCRIPT = """
 tell application "TV"
+    -- Batch-read names and years as two separate evaluations; AppleScript
+    -- doesn't guarantee identical ordering, so we guard against count mismatch.
     set ns to name of (every track of library playlist 1 whose media kind is movie)
     set ys to year of (every track of library playlist 1 whose media kind is movie)
+    if (count of ns) is not (count of ys) then error "name/year count mismatch"
 end tell
 set out to ""
 repeat with i from 1 to count of ns
@@ -36,7 +39,10 @@ def archive_path(config_dir: Path, today: date) -> Path:
 
 
 def _run_osascript() -> str:
-    result = subprocess.run(["osascript", "-e", _SCRIPT], capture_output=True, text=True, timeout=300)
+    try:
+        result = subprocess.run(["osascript", "-e", _SCRIPT], capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired as e:
+        raise AppleTvError("osascript timed out after 300s") from e
     if result.returncode != 0:
         raise AppleTvError(f"osascript failed: {result.stderr.strip() or result.returncode}")
     return result.stdout
