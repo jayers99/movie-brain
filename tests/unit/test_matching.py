@@ -366,3 +366,43 @@ class TestMatchCandidates:
         query = MatchQuery(title="Stop Making Sense", year=2023, year_kind=YearKind.COMMERCE)
         verdict = match_candidates(query, idx, arbiter=lambda t, y: None)
         assert verdict.kind == "review" and verdict.reason == "year-gap"
+
+
+def _tc(tmdb_id, title, year, popularity=1.0):
+    return TmdbCandidate(tmdb_id, title, title, year, popularity)
+
+
+def test_pick_tmdb_commerce_rerelease_matches_original_when_no_remake():
+    # Stop Making Sense: commerce-created with the 2023 re-release year; TMDB only
+    # knows the 1984 original → arbiter finds nothing near 2023 → match it.
+    cands = [_tc(606, "Stop Making Sense", 1984)]
+    arbiter = lambda t, y: False  # noqa: E731
+    assert pick_tmdb_match("Stop Making Sense", 2023, cands, commerce_year=True, arbiter=arbiter) == 606
+
+
+def test_pick_tmdb_commerce_gap_without_arbiter_is_a_miss():
+    cands = [_tc(606, "Stop Making Sense", 1984)]
+    assert pick_tmdb_match("Stop Making Sense", 2023, cands, commerce_year=True) is None
+
+
+def test_pick_tmdb_commerce_remake_suspected_is_a_miss():
+    cands = [_tc(606, "Stop Making Sense", 1984)]
+    assert pick_tmdb_match("Stop Making Sense", 2023, cands, commerce_year=True, arbiter=lambda t, y: True) is None
+
+
+def test_pick_tmdb_database_band_unchanged():
+    # Criterion-walked films keep the tight band: a 2-year gap disqualifies.
+    cands = [_tc(947, "Lawrence of Arabia", 1962)]
+    assert pick_tmdb_match("Lawrence of Arabia", 1962, cands) == 947
+    assert pick_tmdb_match("Lawrence of Arabia", 1964, cands) is None
+
+
+def test_match_film_arbiter_resolves_year_gap():
+    # Tokyo Story class: MC's 1972 US release vs our 1953 film — the arbiter says
+    # no same-titled film exists near 1972, so the gap is a re-release: match.
+    index = CandidateIndex([Candidate(id=7, title="Tokyo Story", year=1953)])
+    assert match_film("Tokyo Story", 1972, index).winner is None  # no arbiter: review
+    result = match_film("Tokyo Story", 1972, index, arbiter=lambda t, y: False)
+    assert result.winner == 7
+    hit = match_film("Tokyo Story", 1972, index, arbiter=lambda t, y: True)
+    assert hit.winner is None and hit.reason == "remake-suspected"
