@@ -156,8 +156,9 @@ class MatchVerdict:
 
 
 # (title, claimed_year) -> same-titled film exists near claimed_year.
-# M1: interface only — nothing wires a real one.
-Arbiter = Callable[[str, int], bool]
+# None = the authority is unreachable right now: fall back to the year-gap review,
+# never guess and never let an infrastructure failure escape the verdict.
+Arbiter = Callable[[str, int], bool | None]
 
 _TITLE_POINTS: dict[int, int] = {0: 3, 1: 2, 2: 1}
 
@@ -311,7 +312,10 @@ def match_candidates(
     if result.gap and not (rerelease_hint or result.corroborated):
         if arbiter is not None:
             claimed_year = query.year if query.year is not None else 0
-            if arbiter(query.title, claimed_year):
+            hit = arbiter(query.title, claimed_year)
+            if hit is None:
+                return MatchVerdict(kind="review", reason="year-gap")
+            if hit:
                 return MatchVerdict(kind="review", reason="remake-suspected")
             return MatchVerdict(kind="match", film_id=winner.id)
         return MatchVerdict(kind="review", reason="year-gap")
