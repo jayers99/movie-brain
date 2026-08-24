@@ -160,7 +160,7 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
 | 2 | Metacritic adapter, Mode A (enrich Criterion) — **done** | 1 | low (additive columns/joins) |
 | 3 | TMDB availability adapter — **done** | 1 | medium (sync flow) |
 | 4 | Watchlist + availability alerts — **done** | 3 | low |
-| 5 | Metacritic Mode B: top-N dial (start N=100) | 2 | low at N=100 — grows with the dial |
+| 5 | Metacritic Mode B: top-N dial (start N=100) — **done** | 2 | low at N=100 — grows with the dial |
 | 6 | Full-service import pattern | 5 | low (Criterion is the precedent) |
 | 7 | Subscription advisor | 5 | low (read-only view) |
 | 8 | DB maintenance suite | late by design | none until used |
@@ -186,12 +186,17 @@ of it"), the way Criterion works today. Films arrive individually, not by rating
    watchlist provider pass ahead of the weekly full refresh, one summary macOS notification
    per sync, and dashboard "New arrivals"/"Watchlist" chips + drawer star toggle and "New on"
    line.
-5. **Metacritic Mode B — the top-N dial.** Crawler per the scrape contract (checkpoint/
+5. **Done (2026-08-23).** **Metacritic Mode B — the top-N dial.** Crawler per the scrape contract (checkpoint/
    resume, raw archive, staging) with **N as config, set to 100**; staging → films via the
    matcher (unmatched → log for the later review queue); dashboard gains the minimum
    source-awareness to stay usable as N grows (default view = my services / Criterion
    parity). Then exercise the system and simply raise N next sync. Done when: top-100 lives
-   in the app, model validated, N=1,000 is a config change not a project.
+   in the app, model validated, N=1,000 is a config change not a project. Landed as: N
+   resident in meta (`mc_top_n`, `metacritic dial [N]`), nightly offline promotion
+   (match-first dedup guard, key/slug conflicts → `match_review`) between the Criterion walk
+   and the OMDb loop, a criterion/all dashboard scope toggle over a source-agnostic
+   `_VIEW_SQL`, quiet first-ever TMDB provider checks (no false "new arrival"), and the OMDb
+   loop widened to cover discovery films.
 6. **Full-service import pattern.** Generalize "import a service's whole catalog" beyond
    Criterion (future: MUBI, BFI Player Classics — small paid catalogs worth having whole).
    Done when: adding such a service is configuration + an adapter, not a redesign.
