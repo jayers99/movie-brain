@@ -7,7 +7,8 @@ M1 and M2 Done lines filled in) and CLAUDE.md (updated on the M2 branch) before 
 ## Status — M2 is MERGED to `main` and pushed (through `ba72e94`)
 
 Commits `a0317a4..ba72e94` (plan + Tasks 1–7) fast-forwarded onto `main` 2026-08-24 and
-pushed. Merged result verified: 388 tests, ruff, mypy, and
+pushed; post-merge docs/repair commits through `d36203b` (M2 Done line, this handoff, the
+Metropolis banking, backlog item 9). Merged result verified: 388 tests, ruff, mypy, and
 `scripts/matching_benchmark.py --assert-dominance` all green. Worktree and branch deleted.
 Final whole-branch review verdict: ready to merge, zero Critical/Important findings.
 
@@ -118,6 +119,13 @@ Final whole-branch review verdict: ready to merge, zero Critical/Important findi
   open `match_review` counts are decidable by CLI instead of accumulating.
 - Session finding to fold in: pre-M1 tmdb-link re-validation (finding 1 above) belongs in
   `repair dupes`/`repair years` scope.
+- **Planning decision for the M3 session (user-requested, decide at brainstorm/plan time,
+  don't silently drop):** backlog item 9 (`docs/backlog.md`) — a user-set "needs revisit"
+  drawer flag for factually suspect films (watchlist pattern: own table with film_id +
+  marked_on + optional note, drawer toggle the only writer, filter chip, never touched by
+  sync). It feeds exactly the review-resolution surface M3 builds, so the user wants it
+  considered for inclusion in M3 rather than left in the backlog; resolving a film via the
+  M3 CLI should clear its flag. If it stays out of M3, say why in the M3 Done line.
 
 ## First-run checks for the M3 session (2 minutes, before building)
 
@@ -135,13 +143,20 @@ Final whole-branch review verdict: ready to merge, zero Critical/Important findi
 > M3 of the movie-brain matching overhaul. Read
 > docs/superpowers/specs/2026-08-23-matching-overhaul-design.md (binding, M1/M2 Done lines
 > filled), docs/superpowers/handoffs/2026-08-24-m3-matching-handoff.md, and CLAUDE.md
-> first, and run the handoff's first-run checks before building. M2 landed authority
+> first, and run the handoff's first-run checks before building (syncs are manual by
+> choice — run one yourself if a check needs fresh data). M2 landed authority
 > canonicalization live (year write-back, durable year-collision/id-conflict queues, the
 > rematch verb, promotion arbitration). Build M3: (1) the identity-disposition migration +
-> `repair dupes` (merge/alias/tombstone, ingesters check dispositions); (2) `repair years`
-> (dry-run → apply); (3) the match_review resolution CLI (match to X / create / dismiss);
-> fold in re-validation of pre-M1 tmdb links (the Rambo/Vahşi Kan class — see the handoff's
-> live findings). Constraints: collectors never delete outside human-confirmed repair verbs;
-> keep scripts/matching_benchmark.py --assert-dominance green; suite/ruff/mypy green;
-> update the spec's M3 Done line when it lands. Use the superpowers flow: the spec exists —
-> go straight to writing-plans, then subagent-driven TDD in a fresh git worktree.
+> `repair dupes` (merge/alias/tombstone, ingesters check dispositions — the 28 id-conflict
+> rows and 49 dup norm-title groups are the worklist); (2) `repair years` (dry-run →
+> apply); (3) the match_review resolution CLI (match to X / create / dismiss), draining
+> 371 no-match, 23 remake-suspected, 7 apple-tv year-drifts. Fold in: re-validation of
+> pre-M1 tmdb links (Rambo/Vahşi Kan class), banking the Metropolis same-title-at-claimed-
+> year case as benchmark ground truth, and decide explicitly whether backlog item 9 (the
+> "needs revisit" drawer flag, which feeds this same review surface) ships inside M3 — see
+> the handoff's live findings and planning-decision bullet. Constraints: collectors never
+> delete outside human-confirmed repair verbs; keep
+> scripts/matching_benchmark.py --assert-dominance green; suite/ruff/mypy green; update
+> the spec's M3 Done line and write the next handoff when it lands. Use the superpowers
+> flow: the spec exists — go straight to writing-plans, then subagent-driven TDD in a
+> fresh git worktree.
