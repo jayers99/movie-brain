@@ -10,6 +10,7 @@ from pathlib import Path
 
 import requests
 
+from movie_brain.application.review import suppress_resolved
 from movie_brain.domain.matching import Arbiter, build_candidate_index, clean_title, match_film
 from movie_brain.domain.models import Film, McTitle, ReviewEntry
 from movie_brain.infrastructure import metacritic as mc
@@ -179,7 +180,7 @@ def match_archive(
             detail = f"omdb metascore {row.omdb_mc} >= floor {floor}, no archive match for {row.title!r} ({row.year})"
             reviews.append(ReviewEntry("expected-miss", film_id=row.id, detail=detail))
 
-    repo.replace_unresolved_reviews(AUTHORITY, reviews, today)
+    repo.replace_unresolved_reviews(AUTHORITY, suppress_resolved(repo, AUTHORITY, reviews), today)
     return MatchReport(
         exit_code=0,
         pages=archived_page_count,
@@ -191,6 +192,27 @@ def match_archive(
         review_open=len(repo.open_reviews(AUTHORITY)),
         warnings=tuple(warnings),
     )
+
+
+def create_from_staged(repo: Repository, t: McTitle, today: date) -> int | None:
+    """Turn one staged Metacritic title into a real film and claim its slug; None on key/slug conflict.
+
+    Checks the slug isn't already claimed BEFORE creating the film — creating first and
+    discovering the slug conflict only at set_external_id would orphan a fresh, unlinked
+    film row. The IntegrityError catch stays as a backstop for a same-slug race between
+    the check and the write.
+    """
+    if t.slug in repo.claimed_values(AUTHORITY):
+        return None
+    film = Film(clean_title(t.title), t.year, None, MC_MOVIE_URL.format(slug=t.slug))
+    film_id = repo.create_film(film)
+    if film_id is None:
+        return None
+    try:
+        repo.set_external_id(film_id, AUTHORITY, t.slug, today)
+    except sqlite3.IntegrityError:
+        return None
+    return film_id
 
 
 def promote_top_n(
@@ -213,6 +235,7 @@ def promote_top_n(
         return PromoteReport(1, n, 0, 0, 0, 0, 0, match_report)
     claimed = repo.claimed_values(AUTHORITY)
     anomalous = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
+    tombstoned = repo.tombstoned_keys()
     candidates = repo.top_staged_titles(n)
     reviews: list[ReviewEntry] = []
     promoted = already_linked = skipped = conflicts = 0
@@ -224,15 +247,17 @@ def promote_top_n(
             skipped += 1
             continue
         film = Film(clean_title(t.title), t.year, None, MC_MOVIE_URL.format(slug=t.slug))
+        if film.key in tombstoned:
+            # A human hid this film; the archive re-surfacing its title/year is not a
+            # resurrection request. Never overwrite, never re-promote.
+            skipped += 1
+            continue
         film_id = repo.create_film(film)
         if film_id is None:
+            existing = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
             conflicts += 1
             detail = f"promotion of {t.title!r} ({t.year}) collides with existing key {film.key!r}"
-            reviews.append(
-                ReviewEntry(
-                    "key-conflict", film_id=repo.film_id_by_key(film.key), value=t.slug, detail=detail
-                )
-            )
+            reviews.append(ReviewEntry("key-conflict", film_id=existing, value=t.slug, detail=detail))
             continue
         try:
             repo.set_external_id(film_id, AUTHORITY, t.slug, today)

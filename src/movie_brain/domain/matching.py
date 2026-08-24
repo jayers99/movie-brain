@@ -309,6 +309,12 @@ def match_candidates(
     else:
         winner, result = top[0]
 
+    if rerelease_hint and result.year_points == 2 and any(r.gap for _, r in survivors):
+        # The source flagged this as an edition, so its year is an edition year, not
+        # evidence — yet an exact-year same-title film sits beside an older one. Either
+        # could be right (re-release of the older vs a same-titled newer film): never guess.
+        return MatchVerdict(kind="review", reason="rerelease-ambiguous")
+
     if result.gap and not (rerelease_hint or result.corroborated):
         if arbiter is not None:
             claimed_year = query.year if query.year is not None else 0

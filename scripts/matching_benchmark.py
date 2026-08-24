@@ -412,6 +412,21 @@ GROUND_TRUTHS: list[Case] = [
         pool=(PoolFilm(1, "Twin", 1978, None, None), PoolFilm(2, "Twin", 1980, None, None)),
         expect="review",
     ),
+    Case(
+        # Live 2026-08-24: MC slug metropolis-re-release (Lang 1927, 2002 restoration) carried
+        # commerce year 2001; the 2001 anime "Metropolis" matched on year evidence with no gap,
+        # so neither review nor arbitration fired. The annotation says 2001 is an EDITION year,
+        # so a same-year twin next to an older same-title film must go to review.
+        name="metropolis-rerelease-same-year-twin",
+        source="metacritic",
+        title="Metropolis (re-release)",
+        year=2001,
+        pool=(
+            PoolFilm(1, "Metropolis", 1927, "Fritz Lang", 153),
+            PoolFilm(2, "Metropolis", 2001, "Rintaro", 108),
+        ),
+        expect="review",
+    ),
 ]
 
 
