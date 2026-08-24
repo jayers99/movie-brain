@@ -282,6 +282,18 @@ def review_list(
     console.print(table)
 
 
+@review_app.command("revisits")
+def review_revisits() -> None:
+    """Films flagged 'needs revisit' in the drawer — the human worklist for repair/resolve."""
+    rows = _repo().revisits()
+    table = Table(title=f"needs revisit ({len(rows)})")
+    for col in ("film", "title", "year", "marked", "note"):
+        table.add_column(col)
+    for fid, title, year, marked, note in rows:
+        table.add_row(f"#{fid}", title, str(year or ""), marked, note or "")
+    console.print(table)
+
+
 @review_app.command("resolve")
 def review_resolve(
     review_id: Annotated[int, typer.Argument(help="match_review id (see `review list`).")],

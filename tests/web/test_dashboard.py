@@ -132,6 +132,7 @@ def test_chip_labels_and_order(dash: Page):
         "Watchlist",
         "Owned",
         "Not owned",
+        "Needs revisit",
         "Clear",
     ]
 
@@ -236,7 +237,7 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     dash.click("#films tbody tr[data-id] .info >> nth=0")
     drawer = dash.locator("#drawer")
     expect(drawer).to_be_visible()
-    expect(drawer.locator("h2")).to_have_text("Alpha ☆")  # star button: Alpha isn't watchlisted
+    expect(drawer.locator("h2")).to_have_text("Alpha ☆⚐")  # star + flag buttons: Alpha isn't watchlisted/flagged
     expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
     expect(drawer.locator("a.criterion:not(.owned-link)")).to_have_attribute("href", "https://c/alpha")
     expect(drawer.locator("div.meta")).not_to_contain_text("Leaving")  # moved to the bottom
@@ -265,14 +266,14 @@ def test_drawer_poster_sits_below_meta_top_aligned_with_plot(dash: Page):
 def test_drawer_opens_on_load_from_url(dash: Page, server: str):
     fid = dash.locator("#films tbody tr[data-id]").first.get_attribute("data-id")
     dash.goto(f"{server}/?film={fid}")
-    expect(dash.locator("#drawer h2")).to_have_text("Alpha ☆")
+    expect(dash.locator("#drawer h2")).to_have_text("Alpha ☆⚐")
     dash.click("#drawer-backdrop", position={"x": 10, "y": 10})
     expect(dash.locator("#drawer")).to_be_hidden()
 
 
 def test_row_click_opens_drawer_but_title_link_does_not(dash: Page):
     dash.click("#films tbody tr[data-id] .c-year >> nth=1")
-    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆⚐")
     dash.click("#drawer-close")
     expect(dash.locator("#drawer")).to_be_hidden()
 
@@ -338,9 +339,9 @@ def test_drawer_race_shows_latest_requested_film(dash: Page):
     )
     dash.click(f'#films tbody tr[data-id="{alpha_id}"] .info')
     dash.click(f'#films tbody tr[data-id="{echo_id}"] .info')
-    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆⚐")
     dash.wait_for_timeout(400)  # let the superseded, slow Alpha response land and confirm it's a no-op
-    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆⚐")
 
 
 # ---- empty database: separate server/page fixtures so the seeded `dash`/`server`

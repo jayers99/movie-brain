@@ -174,6 +174,10 @@ def _owned_ids(c: sqlite3.Connection) -> set[int]:
     return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM owned")}
 
 
+def _revisit_by_film(c: sqlite3.Connection) -> dict[int, str | None]:
+    return {int(r["film_id"]): r["note"] for r in c.execute("SELECT film_id, note FROM needs_revisit")}
+
+
 def _row_to_view(
     row: sqlite3.Row,
     services: list[dict[str, object]] | None = None,
@@ -181,6 +185,7 @@ def _row_to_view(
     watchlisted: bool = False,
     new_on: list[dict[str, object]] | None = None,
     owned: bool = False,
+    revisit: tuple[bool, str | None] = (False, None),
 ) -> FilmView:
     return FilmView(
         id=row["id"],
@@ -204,6 +209,8 @@ def _row_to_view(
         new_on=new_on or [],
         criterion=bool(row["criterion"]),
         owned=owned,
+        needs_revisit=revisit[0],
+        revisit_note=revisit[1],
     )
 
 
@@ -929,9 +936,35 @@ class Repository:
             ).fetchall()
             return {str(r["key"]) for r in rows}
 
+    # needs revisit -------------------------------------------------------
+    def toggle_revisit(self, film_id: int, today: date, note: str | None = None) -> bool | None:
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                return None
+            if c.execute("SELECT 1 FROM needs_revisit WHERE film_id = ?", (film_id,)).fetchone() is None:
+                c.execute(
+                    "INSERT INTO needs_revisit (film_id, marked_on, note) VALUES (?, ?, ?)",
+                    (film_id, today.isoformat(), note),
+                )
+                return True
+            c.execute("DELETE FROM needs_revisit WHERE film_id = ?", (film_id,))
+            return False
+
+    def set_revisit_note(self, film_id: int, note: str | None) -> bool:
+        with self._conn() as c:
+            return c.execute("UPDATE needs_revisit SET note = ? WHERE film_id = ?", (note, film_id)).rowcount > 0
+
     def clear_revisit(self, film_id: int) -> None:
-        """No-op stub — Task 9 adds the needs_revisit table and replaces this body."""
-        return None
+        with self._conn() as c:
+            c.execute("DELETE FROM needs_revisit WHERE film_id = ?", (film_id,))
+
+    def revisits(self) -> list[tuple[int, str, int | None, str, str | None]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT n.film_id, f.title, f.year, n.marked_on, n.note FROM needs_revisit n "
+                "JOIN films f ON f.id = n.film_id ORDER BY n.marked_on, n.film_id"
+            ).fetchall()
+            return [(int(r["film_id"]), str(r["title"]), r["year"], str(r["marked_on"]), r["note"]) for r in rows]
 
     def _assert_repairable(self, c: sqlite3.Connection, film_id: int) -> None:
         if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
@@ -964,6 +997,9 @@ class Repository:
         with self._conn() as c:
             self._assert_repairable(c, loser_id)
             self._assert_repairable(c, survivor_id)
+            # The merge IS the loser's resolution: drop its needs_revisit flag outright
+            # (never move it) — the survivor keeps its own flag untouched.
+            c.execute("DELETE FROM needs_revisit WHERE film_id = ?", (loser_id,))
             for table in _ONE_ROW_TABLES:
                 if c.execute(f"SELECT 1 FROM {table} WHERE film_id = ?", (loser_id,)).fetchone() is None:
                     continue
@@ -1043,6 +1079,7 @@ class Repository:
             new_on = _new_on_by_film(c, cutoff)
             wl = _watchlist_ids(c)
             ow = _owned_ids(c)
+            rv = _revisit_by_film(c)
             return [
                 _row_to_view(
                     r,
@@ -1050,6 +1087,7 @@ class Repository:
                     watchlisted=r["id"] in wl,
                     new_on=new_on.get(r["id"]),
                     owned=r["id"] in ow,
+                    revisit=(r["id"] in rv, rv.get(r["id"])),
                 )
                 for r in rows
             ]
@@ -1062,12 +1100,14 @@ class Repository:
             ).fetchone()
             if row is None:
                 return None
+            rv = _revisit_by_film(c)
             return _row_to_view(
                 row,
                 _services_by_film(c).get(row["id"]),
                 watchlisted=row["id"] in _watchlist_ids(c),
                 new_on=_new_on_by_film(c, cutoff).get(row["id"]),
                 owned=row["id"] in _owned_ids(c),
+                revisit=(row["id"] in rv, rv.get(row["id"])),
             )
 
     def get_payload(self, film_id: int) -> str | None:

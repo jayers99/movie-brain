@@ -39,6 +39,7 @@ _PREDICATES: dict[str, Predicate] = {
     "watchlist": lambda v, _: v.watchlisted,
     "owned": lambda v, _: v.owned,
     "not_owned": lambda v, _: not v.owned,
+    "needs_revisit": lambda v, _: v.needs_revisit,
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)

@@ -50,6 +50,7 @@ def test_chip_names_are_stable():
         "watchlist",
         "owned",
         "not_owned",
+        "needs_revisit",
     )
 
 
@@ -130,3 +131,15 @@ def test_owned_chip_matches_owned_views():
 def test_not_owned_chip_excludes_owned_views():
     assert matches(view(owned=False), ["not_owned"], TODAY)
     assert not matches(view(owned=True), ["not_owned"], TODAY)
+
+
+def test_needs_revisit_chip():
+    from dataclasses import replace
+
+    from movie_brain.domain.filters import CHIPS, matches
+    from movie_brain.domain.models import FilmView
+
+    v = FilmView(1, "A", 1950, None, None, None, None, None, None, False, None, None, None)
+    assert "needs_revisit" in CHIPS
+    assert not matches(v, ["needs_revisit"], date(2026, 8, 19))
+    assert matches(replace(v, needs_revisit=True), ["needs_revisit"], date(2026, 8, 19))
