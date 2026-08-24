@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import Film, McTitle, OmdbRating, ReviewEntry
-from movie_brain.infrastructure.database import MIGRATIONS_DIR, FilmRow, Repository, init_db
+from movie_brain.infrastructure.database import MIGRATIONS_DIR, FilmRow, Repository, TmdbMatchTarget, init_db
 
 TRIO = Film("Trio", 1950, "Ken Annakin", "https://c/trio")
 QUARTET = Film("Quartet", 1948, "Ken Annakin", "https://c/quartet")
@@ -472,7 +472,7 @@ class TestTmdbPrimitives:
     def test_films_needing_tmdb_match_excludes_any_tmdb_row(self, repo):
         trio, quartet = self.seed_two(repo)
         repo.upsert_tmdb(trio, found=True, looked_up=date(2026, 8, 19))
-        assert repo.films_needing_tmdb_match() == [(quartet, "Quartet", 1948)]
+        assert repo.films_needing_tmdb_match() == [TmdbMatchTarget(quartet, "Quartet", 1948, False)]
         repo.upsert_tmdb(quartet, found=False, looked_up=date(2026, 8, 19))
         assert repo.films_needing_tmdb_match() == []  # found=0 is not retried
 
@@ -756,3 +756,48 @@ def test_mark_owned_is_idempotent_and_views_expose_it(repo):
     assert repo.get_view(aid, day).owned is True
     # owned counts across all views — the discovery film Golf is included.
     assert repo.summary("criterion")["owned"] == 2
+
+
+def test_films_needing_tmdb_match_flags_commerce(repo):
+    a = repo.upsert_film(Film("Trio", 1950, None, "https://c/trio"))
+    repo.record_listing(a, "criterion", "https://c/trio", date(2026, 8, 24))
+    b = repo.upsert_film(Film("Stop Making Sense", 2023, None, "https://mc/sms"))
+    targets = {t.film_id: t for t in repo.films_needing_tmdb_match()}
+    assert targets[a].commerce is False
+    assert targets[b].commerce is True
+
+
+def test_update_film_year_recomputes_key(repo):
+    fid = repo.upsert_film(Film("Stop Making Sense", 2023, None, "u"))
+    assert repo.update_film_year(fid, 1984) is None
+    assert repo.film_id_by_key("stop making sense (1984)") == fid
+    assert repo.film_id_by_key("stop making sense (2023)") is None
+
+
+def test_update_film_year_collision_returns_twin_and_writes_nothing(repo):
+    orig = repo.upsert_film(Film("Nosferatu", 1922, None, "u1"))
+    twin = repo.upsert_film(Film("Nosferatu", 1979, None, "u2"))
+    assert repo.update_film_year(twin, 1922) == orig
+    assert repo.film_id_by_key("nosferatu (1979)") == twin  # untouched
+
+
+def test_replace_unresolved_reviews_reason_scope(repo):
+    d = date(2026, 8, 24)
+    a = repo.upsert_film(Film("Trio", 1950, None, "u1"))
+    b = repo.upsert_film(Film("Stop Making Sense", 2023, None, "u2"))
+    repo.append_reviews("tmdb", [ReviewEntry("year-collision", film_id=a)], d)
+    repo.replace_unresolved_reviews("tmdb", [ReviewEntry("no-match", film_id=b)], d, reason="no-match")
+    reasons = sorted(r["reason"] for r in repo.open_reviews("tmdb"))
+    assert reasons == ["no-match", "year-collision"]
+
+
+def test_commerce_films_with_tmdb_excludes_criterion(repo):
+    d = date(2026, 8, 24)
+    a = repo.upsert_film(Film("Trio", 1950, None, "u1"))
+    repo.record_listing(a, "criterion", "u1", d)
+    repo.set_external_id(a, "tmdb", "11", d)
+    b = repo.upsert_film(Film("Stop Making Sense", 2023, None, "u2"))
+    repo.set_external_id(b, "tmdb", "606", d)
+    assert repo.commerce_films_with_tmdb() == [(b, "Stop Making Sense", 2023, "606")]
+    assert repo.film_id_for_external("tmdb", "606") == b
+    assert repo.film_id_for_external("tmdb", "999") is None

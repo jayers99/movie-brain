@@ -38,7 +38,8 @@ def tmdb_step(
     matched = missed = refreshed = 0
     consecutive = 0
     aborted = False
-    for film_id, title, year in repo.films_needing_tmdb_match():
+    for target in repo.films_needing_tmdb_match():
+        film_id, title, year = target.film_id, target.title, target.year
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
             log("TMDB searches failing repeatedly — stopping; next run resumes.")
             aborted = True
