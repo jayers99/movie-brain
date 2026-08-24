@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import requests
 
 from movie_brain.domain.matching import norm_title, split_annotations
@@ -10,6 +12,13 @@ TMDB_API = "https://api.themoviedb.org/3"
 
 class AuthError(Exception):
     pass
+
+
+class TmdbTitles(NamedTuple):
+    title: str
+    original: str
+    year: int | None
+    alternatives: tuple[str, ...]
 
 
 def watch_link(tmdb_id: int) -> str:
@@ -56,11 +65,15 @@ class TmdbClient:
         d = self._get(f"/movie/{tmdb_id}").json().get("release_date") or ""
         return int(d[:4]) if len(d) >= 4 and d[:4].isdigit() else None
 
-    def movie_titles(self, tmdb_id: int) -> tuple[str, str, int | None]:
-        d = self._get(f"/movie/{tmdb_id}").json()
+    def movie_titles(self, tmdb_id: int) -> TmdbTitles:
+        """Title, original title, year, and every alternative title — one API call."""
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="alternative_titles").json()
         rd = d.get("release_date") or ""
         year = int(rd[:4]) if len(rd) >= 4 and rd[:4].isdigit() else None
-        return d.get("title") or "", d.get("original_title") or "", year
+        alts = tuple(
+            str(t["title"]) for t in (d.get("alternative_titles") or {}).get("titles") or [] if t.get("title")
+        )
+        return TmdbTitles(d.get("title") or "", d.get("original_title") or "", year, alts)
 
 
 class TmdbArbiter:

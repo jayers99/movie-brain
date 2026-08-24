@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from movie_brain.application.repair import DupesReport, YearsReport
+from movie_brain.application.repair import DupesReport, LinksReport, YearsReport
 from movie_brain.application.sync import SyncResult
 from movie_brain.cli import app
 
@@ -166,6 +166,30 @@ def test_repair_dupes_dry_run_never_confirms(monkeypatch):
 def test_repair_links_requires_token(config_dir):
     r = runner.invoke(app, ["repair", "links"])
     assert r.exit_code == 2 and "TMDB" in r.output
+
+
+def test_repair_links_film_option(monkeypatch):
+    calls = {}
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, film_id=None, apply, log):
+        calls.update(film_id=film_id, apply=apply)
+        return LinksReport(0, 1, 1, 1)
+
+    monkeypatch.setattr("movie_brain.cli.repair_links", fake)
+    r = runner.invoke(app, ["repair", "links", "--film", "1689", "--apply"])
+    assert r.exit_code == 0 and calls == {"film_id": 1689, "apply": True}
+
+
+def test_repair_links_film_without_link_exits_1(monkeypatch):
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, film_id=None, apply, log):
+        raise LookupError("film 1689 holds no TMDB link")
+
+    monkeypatch.setattr("movie_brain.cli.repair_links", fake)
+    r = runner.invoke(app, ["repair", "links", "--film", "1689"])
+    assert r.exit_code == 1 and "no TMDB link" in r.output
 
 
 def test_repair_years_args_pair(monkeypatch):

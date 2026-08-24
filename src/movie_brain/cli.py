@@ -232,15 +232,22 @@ def repair_dupes_cmd(
 
 @repair_app.command("links")
 def repair_links_cmd(
+    film: Annotated[
+        int | None, typer.Option("--film", help="Audit/clear just this film's link (suspect regardless of title).")
+    ] = None,
     apply: Annotated[bool, typer.Option("--apply", help="Clear every suspect link (default: dry-run).")] = False,
 ) -> None:
-    """Re-validate every TMDB link by title; suspects are listed, --apply clears them for rematch."""
+    """Re-validate TMDB links by title (incl. alternative titles); suspects are listed, --apply clears them."""
     cfg = load_config()
     token = load_tmdb_token(cfg)
     if not token:
         err.print(f"no TMDB token: set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}")
         raise typer.Exit(2)
-    report = repair_links(_repo(), TmdbClient(token), date.today(), apply=apply, log=err.print)
+    try:
+        report = repair_links(_repo(), TmdbClient(token), date.today(), film_id=film, apply=apply, log=err.print)
+    except LookupError as exc:
+        err.print(str(exc))
+        raise typer.Exit(1) from exc
     console.print(f"checked: {report.checked} · suspects: {report.suspects} · cleared: {report.cleared}")
     raise typer.Exit(report.exit_code)
 

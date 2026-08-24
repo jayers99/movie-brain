@@ -23,7 +23,7 @@ uv run movie-brain status
 uv run movie-brain rematch                            # one-shot repair: rematch TMDB misses, reconcile non-Criterion years (needs TMDB token; idempotent)
 
 uv run movie-brain repair dupes [--apply] [--yes]     # audit norm-title + id-conflict dup groups; --apply merges TWIN groups only (--yes skips the per-group prompt)
-uv run movie-brain repair links [--apply]             # re-validate every stored TMDB link against TMDB's title/original_title; --apply clears confirmed-wrong links
+uv run movie-brain repair links [--film ID] [--apply]  # re-validate stored TMDB links against TMDB's title/original_title/alternative titles (one call each); --film audits/clears one link unconditionally; --apply clears suspects
 uv run movie-brain repair years [FILM_ID YEAR] [--apply]  # year worklist: open year-collisions + stale OMDb payloads; --apply marks stale rows for OMDb refetch; with FILM_ID YEAR, corrects one film's year
 uv run movie-brain review list [--authority A] [--reason R]   # open match_review rows (filterable)
 uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, or dismiss
@@ -123,7 +123,9 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   survivor (survivor wins every conflict; when a one-row table's loser value is dropped it's
   recorded in the disposition note — full row for `my_ratings`/`watchlist`/`owned`, just the
   loser's `film_id` for `omdb`/`tmdb` since those payloads are large), resolves the loser's open
-  `match_review` rows, and KEEPS the loser's `films` row —
+  `match_review` rows PLUS the survivor's open rows whose `value` names the loser (the
+  `id-conflict`/`year-collision` counterpart — unrelated survivor rows stay open), and KEEPS the
+  loser's `films` row —
   collectors never delete. A retired key stays retired: `update_film_year` renames a loser's key
   to `key || ' #' || id` only when that loser's OWN survivor adopts the year, and if the survivor
   later moves year again the freed key is simply left unowned (harmless; re-claiming it is a

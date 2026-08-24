@@ -164,35 +164,50 @@ def _same_title(ours: str, theirs: str) -> bool:
 
 
 def audit_links(
-    repo: Repository, client: TmdbClient, *, log: Callable[[str], None] = _stderr
+    repo: Repository, client: TmdbClient, *, film_id: int | None = None, log: Callable[[str], None] = _stderr
 ) -> tuple[list[LinkSuspect], int, bool]:
-    """Every TMDB link whose title AND original_title both disagree with ours (Rambo/Vahşi Kan class)."""
+    """Every TMDB link whose title, original_title AND alternative titles all disagree with ours
+    (Rambo/Vahşi Kan class). With ``film_id`` the audit is that one film, and it is a suspect
+    unconditionally — the human is asserting the link is wrong."""
     suspects: list[LinkSuspect] = []
     checked = consecutive = 0
-    for film_id, title, year, value in repo.films_with_tmdb():
+    linked = repo.films_with_tmdb()
+    if film_id is not None:
+        linked = [row for row in linked if row[0] == film_id]
+        if not linked:
+            raise LookupError(f"film {film_id} holds no TMDB link (or is unknown / disposed)")
+    for fid, title, year, value in linked:
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
             log("TMDB failing repeatedly — stopping; repair links is safe to re-run.")
             return suspects, checked, True
         try:
-            t_title, t_orig, t_year = client.movie_titles(int(value))
+            t = client.movie_titles(int(value))
         except AuthError as exc:
             log(f"TMDB rejected the token: {exc}")
             return suspects, checked, True
         except (requests.RequestException, ValueError) as exc:
-            log(f"TMDB details failed for film {film_id}: {exc}")
+            log(f"TMDB details failed for film {fid}: {exc}")
             consecutive += 1
             continue
         consecutive = 0
         checked += 1
-        if not (_same_title(title, t_title) or _same_title(title, t_orig)):
-            suspects.append(LinkSuspect(film_id, title, year, value, t_title, t_orig, t_year))
+        known = (t.title, t.original, *t.alternatives)
+        if film_id is not None or not any(_same_title(title, k) for k in known):
+            suspects.append(LinkSuspect(fid, title, year, value, t.title, t.original, t.year))
     return suspects, checked, False
 
 
 def repair_links(
-    repo: Repository, client: TmdbClient, today: date, *, apply: bool, log: Callable[[str], None] = _stderr
+    repo: Repository,
+    client: TmdbClient,
+    today: date,
+    *,
+    film_id: int | None = None,
+    apply: bool,
+    log: Callable[[str], None] = _stderr,
 ) -> LinksReport:
-    suspects, checked, tripwired = audit_links(repo, client, log=log)
+    """Audit every link (or one film with ``film_id``); --apply clears the suspects for rematch."""
+    suspects, checked, tripwired = audit_links(repo, client, film_id=film_id, log=log)
     for s in suspects:
         log(
             f"#{s.film_id:<5} {s.title!r} ({s.year}) → tmdb {s.tmdb_id} "

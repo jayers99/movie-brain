@@ -803,6 +803,26 @@ def test_merge_moves_every_fk_and_records_disposition(repo):
         assert c.execute("SELECT COUNT(*) FROM films").fetchone()[0] == 2  # loser row kept
 
 
+def test_merge_resolves_survivor_reviews_that_name_the_loser(repo):
+    a, b = _two_films(repo)
+    repo.append_reviews(
+        "tmdb",
+        [
+            ReviewEntry("id-conflict", film_id=a, value=str(b)),  # names the loser → resolved
+            ReviewEntry("no-match", film_id=a, value=None),  # unrelated → stays open
+        ],
+        D,
+    )
+
+    report = repo.merge_film(b, a, D)
+
+    assert report.reviews_resolved == 1
+    assert [(r["film_id"], r["reason"]) for r in repo.open_reviews("tmdb")] == [(a, "no-match")]
+    with sqlite3.connect(repo.db_path) as c:
+        detail = c.execute("SELECT detail FROM match_review WHERE reason = 'id-conflict'").fetchone()[0]
+    assert f"counterpart film {b} merged into this film" in detail
+
+
 def test_merge_keeps_survivor_rows_on_conflict_and_notes_dropped(repo):
     a, b = _two_films(repo)
     repo.set_external_id(a, "tmdb", "1", D)
