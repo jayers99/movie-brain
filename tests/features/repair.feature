@@ -63,3 +63,11 @@ Feature: Dispositioned films stay out of every collector's way
     And "Alpha (1951)" has an open id-conflict review claiming tmdb id "5"
     When I apply dupes declining every group
     Then nothing was merged
+
+  Scenario: An id-conflict pair inside a larger norm-title bucket doesn't spawn a spurious second group
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1951)" has an open id-conflict review claiming tmdb id "5"
+    And the repository also has film "Alpha (1990)"
+    When I audit dupes
+    Then exactly 1 group is keyed "alpha"
+    And the group "alpha" is a twin with survivor "Alpha (1950)" from source "id-conflict"

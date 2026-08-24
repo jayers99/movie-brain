@@ -40,6 +40,10 @@ def _rank(f: RepairFilm) -> tuple[int, ...]:
     return (f.criterion, f.rated, f.owned, f.watchlisted, f.omdb_found, -f.id)
 
 
+def _group_key(title: str) -> str:
+    return norm_title(split_annotations(title)[0])
+
+
 def _classify(key: str, films: tuple[RepairFilm, ...], source: str) -> DupGroup:
     ids = {f.tmdb for f in films}
     if len(films) >= 2 and len(ids) == 1 and None not in ids:
@@ -67,19 +71,22 @@ def audit_dupes(repo: Repository) -> list[DupGroup]:
         pairs.append((int(r["film_id"]), holder))
     by_key: dict[str, list[RepairFilm]] = defaultdict(list)
     for f in films.values():
-        by_key[norm_title(split_annotations(f.title)[0])].append(f)
+        by_key[_group_key(f.title)].append(f)
     groups: list[DupGroup] = []
     paired: set[int] = set()
     for loser, holder in pairs:
         lent = films[loser]._replace(tmdb=claimed[loser])
-        groups.append(_classify(norm_title(films[holder].title), (films[holder], lent), "id-conflict"))
+        groups.append(_classify(_group_key(films[holder].title), (films[holder], lent), "id-conflict"))
         paired.update((loser, holder))
     for key, members in sorted(by_key.items()):
-        if len(members) < 2 or all(m.id in paired for m in members):
+        # Filter out members already covered by an id-conflict pair above, per-member —
+        # not all-or-nothing — so a bucket of e.g. [A, B, C] where {A, B} were already
+        # paired off doesn't spuriously reclassify the whole trio (with the paired films'
+        # real tmdb ids re-attached) as a second, undecided/distinct group.
+        rest = [m for m in members if m.id not in paired]
+        if len(rest) < 2:
             continue
-        groups.append(
-            _classify(key, tuple(m._replace(tmdb=claimed.get(m.id, m.tmdb)) for m in members), "norm-title")
-        )
+        groups.append(_classify(key, tuple(m._replace(tmdb=claimed.get(m.id, m.tmdb)) for m in rest), "norm-title"))
     return groups
 
 
