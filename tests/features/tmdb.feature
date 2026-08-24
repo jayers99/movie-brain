@@ -91,3 +91,16 @@ Feature: TMDB availability
     When I sync with a TMDB token
     Then the exit code is 0
     And the provider refresh stamp is unset
+
+  Scenario: A film's first provider check is baseline, not an arrival
+    Given TMDB knows "Trio (1950)" as id 11
+    And TMDB streams id 11 on providers 1899 and 258
+    When I sync with a TMDB token
+    Then no availability transition is recorded
+
+  Scenario: A service appearing on a later check is an arrival
+    Given TMDB knows "Trio (1950)" as id 11
+    When I sync with a TMDB token
+    Given TMDB streams id 11 on providers 1899 and 258
+    When I sync with a TMDB token 8 days later
+    Then an availability transition for "max" is recorded

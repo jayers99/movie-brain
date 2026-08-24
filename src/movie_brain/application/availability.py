@@ -103,7 +103,7 @@ def tmdb_step(
 def _refresh_pass(
     repo: Repository,
     client: TmdbClient,
-    films: list[tuple[int, str]],
+    films: list[tuple[int, str, bool]],
     pmap: dict[int, str],
     today: date,
     log: Callable[[str], None],
@@ -111,7 +111,7 @@ def _refresh_pass(
     """Fetch + write providers for films; returns (refreshed, aborted)."""
     refreshed = 0
     consecutive = 0
-    for film_id, tmdb_id in films:
+    for film_id, tmdb_id, first_check in films:
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
             log("TMDB provider lookups failing repeatedly — stopping; next run resumes.")
             return refreshed, True
@@ -135,7 +135,12 @@ def _refresh_pass(
             slugs.add(pmap[STORE_PROVIDER_ID])
         url = providers.link or watch_link(numeric_tmdb_id)
         for slug in sorted(slugs):
-            repo.record_listing_with_transition(film_id, slug, url, today)
+            if first_check:
+                # First-ever observation of this film's providers: baseline, not a
+                # transition — you can't detect an *arrival* without a prior look.
+                repo.record_listing(film_id, slug, url, today)
+            else:
+                repo.record_listing_with_transition(film_id, slug, url, today)
         repo.record_tmdb_providers(film_id, today, providers.payload)
         refreshed += 1
     return refreshed, False

@@ -288,3 +288,21 @@ def listing_survives(ctx, title, year, slug):
 @then("the provider refresh stamp is unset")
 def stamp_unset(ctx):
     assert ctx["repo"].get_meta(META_REFRESHED_AT) is None
+
+
+@then("no availability transition is recorded")
+def no_transitions(ctx):
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        # criterion catalog inserts are an untouched, separate concern (Task 5 only
+        # changes TMDB-sourced writes) — scope to non-criterion sources.
+        count = c.execute(
+            "SELECT COUNT(*) FROM availability_transitions WHERE source != 'criterion'"
+        ).fetchone()[0]
+    assert count == 0
+
+
+@then(parsers.parse('an availability transition for "{slug}" is recorded'))
+def transition_for_slug(ctx, slug):
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        rows = c.execute("SELECT 1 FROM availability_transitions WHERE source = ?", (slug,)).fetchall()
+    assert rows
