@@ -64,7 +64,8 @@
   function applyFilters() {
     state.filtered = state.films.filter(rowMatches).sort(compare);
     tbody.dataset.count = state.filtered.length;
-    $('#count-showing').textContent = `Showing ${state.filtered.length} of ${state.films.length}`;
+    const scoped = state.scope === 'criterion' ? state.films.filter((f) => f.criterion).length : state.films.length;
+    $('#count-showing').textContent = `Showing ${state.filtered.length} of ${scoped}`;
     renderRows();
     syncUrl();
   }

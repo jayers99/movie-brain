@@ -2,7 +2,7 @@ import csv
 from datetime import date
 
 from movie_brain.application.export import write_csv
-from movie_brain.domain.models import Film, OmdbRating
+from movie_brain.domain.models import Film, McTitle, OmdbRating
 
 D = date(2026, 8, 19)
 
@@ -50,3 +50,16 @@ def test_csv_columns_order_and_status(repo, tmp_path):
     assert rows[2]["metacritic"] == "" and rows[2]["rt"] == "70"
     assert rows[3]["leaving"] == "August 31" and rows[3]["rt"] == "" and rows[3]["imdb"] == "9.0"
     assert rows[4]["status"] == "unmatched" and rows[5]["status"] == "pending"
+
+
+def test_csv_includes_discovery_films_with_empty_url(repo, tmp_path):
+    # Discovery: no criterion listing, scraped metascore only — ratifies that export
+    # covers the full source-agnostic view, not just criterion listings.
+    gid = repo.create_film(Film("Golf", 2020, None, ""))
+    repo.set_external_id(gid, "metacritic", "golf-2020", D)
+    repo.upsert_mc_titles([McTitle("golf-2020", "Golf", 2020, 88, 1, 1)], D)
+    out = tmp_path / "w.csv"
+    assert write_csv(repo, out) == 1
+    rows = list(csv.DictReader(out.open()))
+    assert rows[0]["title"] == "Golf" and rows[0]["metacritic"] == "88"
+    assert rows[0]["url"] == ""
