@@ -187,3 +187,8 @@ def conflict_resolved(ctx):
 @then("nothing was merged")
 def nothing_merged(ctx):
     assert ctx["dupes"].merged == 0 and ctx["repo"].disposed_film_ids() == set()
+
+
+@then(parsers.parse('exactly {n:d} group is keyed "{key}"'))
+def exactly_n_groups_keyed(ctx, n, key):
+    assert sum(1 for g in ctx["groups"] if g.key == key) == n
