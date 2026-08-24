@@ -4,7 +4,7 @@
   const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
   const DEFAULT_LANG = 'English';
   const state = {
-    films: [], cfg: null, chips: new Set(),
+    films: [], cfg: null, chips: new Set(), scope: 'criterion',
     cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null },
     sort: null,            // {col, dir} or null = default
     filtered: [], openFilm: null,
@@ -31,6 +31,7 @@
   // ---- filtering / sorting ----
   const inRange = (v, lo, hi) => v != null && (lo == null || v >= lo) && (hi == null || v <= hi);
   function rowMatches(f) {
+    if (state.scope === 'criterion' && !f.criterion) return false;
     for (const c of state.chips) if (!CHIP_PREDICATES[c](f)) return false;
     const k = state.cols;
     if (k.title && !f.title.toLowerCase().includes(k.title)) return false;
@@ -70,7 +71,7 @@
 
   // ---- summary (mirrors Repository.summary) ----
   function renderCounts() {
-    const f = state.films;
+    const f = state.films.filter((x) => x.criterion);
     const n = (p) => f.filter(p).length;
     $('#count-films').textContent = f.length;
     $('#count-rated').textContent = n((x) => x.found === true);
@@ -79,6 +80,7 @@
     $('#count-leaving').textContent = n((x) => x.leaving_date != null);
     $('#count-mine').textContent = n((x) => x.my_rating != null);
     $('#count-departed').textContent = n((x) => x.departed);
+    $('#count-discovery').textContent = state.films.length - f.length;
   }
 
   // ---- virtual-scrolled rows ----
@@ -114,6 +116,7 @@
   function syncUrl(push = false) {
     const p = new URLSearchParams();
     if (state.chips.size) p.set('chips', [...state.chips].join(','));
+    if (state.scope !== 'criterion') p.set('scope', 'all');
     const k = state.cols;
     if (k.title) p.set('title', k.title);
     if (k.director) p.set('director', k.director);
@@ -130,6 +133,7 @@
   function readUrl() {
     const p = new URLSearchParams(location.search);
     state.chips = new Set((p.get('chips') || '').split(',').filter((c) => c in CHIP_PREDICATES));
+    state.scope = p.get('scope') === 'all' ? 'all' : 'criterion';
     const k = state.cols;
     k.title = (p.get('title') || '').toLowerCase();
     k.director = (p.get('director') || '').toLowerCase();
@@ -143,6 +147,7 @@
     state.openFilm = film ? +film : null;
   }
   function writeControlsFromState() {
+    $('#scope-toggle').classList.toggle('active', state.scope === 'all');
     document.querySelectorAll('.chip[data-chip]').forEach((b) => b.classList.toggle('active', state.chips.has(b.dataset.chip)));
     const k = state.cols;
     $('#f-title').value = k.title; $('#f-director').value = k.director;
@@ -160,7 +165,8 @@
   // ---- controls ----
   $('#chips').addEventListener('click', (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
-    if (b.id === 'chips-clear') state.chips.clear();
+    if (b.id === 'scope-toggle') state.scope = state.scope === 'all' ? 'criterion' : 'all';
+    else if (b.id === 'chips-clear') state.chips.clear();
     else if (state.chips.has(b.dataset.chip)) state.chips.delete(b.dataset.chip); else state.chips.add(b.dataset.chip);
     writeControlsFromState(); applyFilters();
   });

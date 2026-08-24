@@ -9,7 +9,7 @@ from datetime import date
 import pytest
 from playwright.sync_api import Page
 
-from movie_brain.domain.models import Film, OmdbRating
+from movie_brain.domain.models import Film, McTitle, OmdbRating
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
 
@@ -76,6 +76,10 @@ def seed(repo: Repository) -> None:
     repo.record_listing_with_transition(ids["alpha (1950)"], "apple-tv-store", "https://tmdb/w/1", TODAY)
     # Bravo is the one seeded watchlist film (Charlie stays free for the toggle test).
     repo.toggle_watchlist(ids["bravo (1960)"], TODAY)
+    # Golf: the one Mode-B discovery film — no Criterion listing, scraped metascore only.
+    gid = repo.create_film(Film("Golf", 2020, None, ""))
+    repo.set_external_id(gid, "metacritic", "golf-2020", TODAY)
+    repo.upsert_mc_titles([McTitle("golf-2020", "Golf", 2020, 88, 1, 1)], TODAY)
 
 
 @pytest.fixture(scope="session")
