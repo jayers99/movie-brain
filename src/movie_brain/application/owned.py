@@ -69,7 +69,12 @@ def import_owned(
         # dead code for this caller.
         rerelease_hint = bool(split_annotations(t.title)[1])
         result = match_owned(
-            cleaned, year, index, embedded_year=embedded_year is not None, rerelease_hint=rerelease_hint
+            cleaned,
+            year,
+            index,
+            embedded_year=embedded_year is not None,
+            rerelease_hint=rerelease_hint,
+            runtime_min=t.runtime_min,
         )
         if result.tied:
             detail = f"films {sorted(result.tied)} tie for {t.title!r} ({year})"

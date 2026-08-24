@@ -16,15 +16,17 @@ from movie_brain.domain.models import OwnedTitle
 
 _SCRIPT = """
 tell application "TV"
-    -- Batch-read names and years as two separate evaluations; AppleScript
+    -- Batch-read names, years, and durations as separate evaluations; AppleScript
     -- doesn't guarantee identical ordering, so we guard against count mismatch.
     set ns to name of (every track of library playlist 1 whose media kind is movie)
     set ys to year of (every track of library playlist 1 whose media kind is movie)
+    set ds to duration of (every track of library playlist 1 whose media kind is movie)
     if (count of ns) is not (count of ys) then error "name/year count mismatch"
+    if (count of ns) is not (count of ds) then error "name/duration count mismatch"
 end tell
 set out to ""
 repeat with i from 1 to count of ns
-    set out to out & item i of ns & tab & item i of ys & linefeed
+    set out to out & item i of ns & tab & item i of ys & tab & item i of ds & linefeed
 end repeat
 return out
 """
@@ -53,12 +55,28 @@ def parse_export(text: str) -> list[OwnedTitle]:
     for line in text.splitlines():
         if "\t" not in line:
             continue
-        raw_title, _, raw_year = line.partition("\t")
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        raw_title = parts[0]
+        raw_year = parts[1]
         title = raw_title.strip()
         if not title:
             continue
         year = int(raw_year) if raw_year.strip().isdigit() and int(raw_year) > 0 else None
-        titles.append(OwnedTitle(title, year))
+
+        # Handle runtime from third column (v2 format)
+        runtime_min: int | None = None
+        if len(parts) >= 3:
+            raw_duration = parts[2].strip()
+            if raw_duration and raw_duration != "missing value":
+                try:
+                    seconds = float(raw_duration)
+                    runtime_min = round(seconds / 60)
+                except ValueError:
+                    runtime_min = None
+
+        titles.append(OwnedTitle(title, year, runtime_min))
     return titles
 
 

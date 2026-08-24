@@ -75,6 +75,7 @@ class OwnedTitle:
 
     title: str
     year: int | None
+    runtime_min: int | None = None
 
 
 @dataclass(frozen=True)
