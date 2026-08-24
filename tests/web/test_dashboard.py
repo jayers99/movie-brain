@@ -113,13 +113,14 @@ def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Pa
     # follows, then the unrated Charlie/Delta by title.
     assert first_titles(dash, 6) == ["Alpha", "Echo", "Bravo", "Foxtrot", "Charlie", "Delta"]
     expect(dash.locator("#count-films")).to_have_text("6")
-    expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 6")
+    expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 7")  # +1 for the discovery-only Golf
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
 
 
 def test_chip_labels_and_order(dash: Page):
     labels = [t.strip() for t in dash.locator("#chips .chip").all_inner_texts()]
     assert labels == [
+        "All films",
         "Top Ratings",
         "Unrated by me",
         "My ratings",
@@ -400,6 +401,16 @@ def test_drawer_shows_new_on_line(dash):
     dash.locator("#films tbody tr", has_text="Alpha").first.click()
     dash.wait_for_selector("#drawer:not([hidden])")
     assert "New on" in dash.locator("#drawer-body").inner_text()
+
+
+def test_default_scope_hides_discovery(dash):
+    assert dash.locator("tr[data-id]", has_text="Golf").count() == 0
+
+
+def test_all_scope_reveals_discovery(page, server):
+    page.goto(f"{server}/?scope=all&lang=any")
+    page.wait_for_selector("#films tbody[data-count]")
+    assert page.locator("tr[data-id]", has_text="Golf").count() == 1
 
 
 def test_drawer_star_toggles_watchlist(dash):

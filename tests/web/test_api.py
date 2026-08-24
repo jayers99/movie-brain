@@ -173,3 +173,12 @@ def test_config_carries_new_arrival_days_and_chips(client):
     cfg = client.get("/api/config").get_json()
     assert cfg["canned_thresholds"]["new_arrival_days"] == 14
     assert "new_arrivals" in cfg["chips"] and "watchlist" in cfg["chips"]
+
+
+def test_films_include_discovery_with_null_url(seeded_repo):
+    app = create_app(seeded_repo, today=lambda: D)
+    app.testing = True
+    films = {f["title"]: f for f in app.test_client().get("/api/films").get_json()}
+    golf = films["Golf"]
+    assert golf["criterion"] is False and golf["url"] is None and golf["metacritic"] == 88
+    assert films["Alpha"]["criterion"] is True
