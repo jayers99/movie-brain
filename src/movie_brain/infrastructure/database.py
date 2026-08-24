@@ -53,7 +53,9 @@ def _backup_pre_migration(conn: sqlite3.Connection, db_path: Path, current_versi
 
 
 _VIEW_SQL = """
-SELECT f.id, f.title, f.year, f.director, l.url, o.language, o.imdb, o.rt,
+SELECT f.id, f.title, f.year,
+       COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director,
+       l.url, o.language, o.imdb, o.rt,
        COALESCE(mc.score, o.metacritic) AS metacritic, x.value AS mc_slug, o.found,
        (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
        COALESCE(l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source), 0) AS departed,

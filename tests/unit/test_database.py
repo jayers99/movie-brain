@@ -699,3 +699,22 @@ def test_list_views_includes_discovery_films_and_keeps_criterion_parity(repo):
 
     s = repo.summary("criterion")
     assert s["films"] == 2 and s["discovery"] == 1
+
+
+def test_director_falls_back_to_omdb_payload(repo):
+    day = date(2026, 8, 19)
+    # Criterion's director always wins over OMDb's, even when both are present.
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha")], day)
+    aid = repo.film_id_by_key("alpha (1950)")
+    repo.upsert_omdb(aid, OmdbRating(8.0, 90, True, "English", '{"Director":"Somebody Else"}'), day)
+    # Discovery films have no collected director; the OMDb payload fills the view.
+    gid = repo.create_film(Film("Golf", 2020, None, ""))
+    repo.upsert_omdb(gid, OmdbRating(7.0, None, True, "English", '{"Director":"Alfred Hitchcock"}'), day)
+    # OMDb's "N/A" placeholder must stay blank, not display literally.
+    hid = repo.create_film(Film("Hotel", 2021, None, ""))
+    repo.upsert_omdb(hid, OmdbRating(None, None, True, "English", '{"Director":"N/A"}'), day)
+
+    views = {v.title: v for v in repo.list_views("criterion", day)}
+    assert views["Alpha"].director == "Ann"
+    assert views["Golf"].director == "Alfred Hitchcock"
+    assert views["Hotel"].director is None
