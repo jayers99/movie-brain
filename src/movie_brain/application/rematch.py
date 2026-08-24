@@ -81,25 +81,18 @@ def rematch(
         winner_year = next((c.year for c in candidates if c.tmdb_id == winner), None)
         # record_tmdb_match does its own commerce year write-back on a match (spec
         # principle 5) — a large database-vs-TMDB gap adopts (or collides) right here,
-        # before pass B ever sees this film. Attribute that outcome to the same
-        # years_adopted/collisions_queued counters pass B uses, via the review-queue
-        # delta, so a single rematch() call reports every year fix it made, not just
-        # the ones pass B happened to re-discover.
-        would_write_back = target.commerce and winner_year is not None and winner_year != target.year
-        before_collisions = {r["id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] == "year-collision"}
+        # before pass B ever sees this film. Its widened return contract tells us
+        # directly which happened, so a single rematch() call reports every year fix
+        # it made, not just the ones pass B happened to re-discover.
         outcome = record_tmdb_match(repo, target, winner, winner_year, today, log)
-        if outcome == "matched":
-            rematched += 1
-            if would_write_back:
-                after_collisions = {
-                    r["id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] == "year-collision"
-                }
-                if after_collisions - before_collisions:
-                    collisions_queued += 1
-                else:
-                    years_adopted += 1
-        else:
+        if outcome == "id-conflict":
             id_conflicts += 1
+        else:
+            rematched += 1
+            if outcome == "adopted":
+                years_adopted += 1
+            elif outcome == "collision":
+                collisions_queued += 1
 
     for film_id, title, year, tmdb_value in repo.commerce_films_with_tmdb():
         if consecutive >= MAX_CONSECUTIVE_FAILURES:
@@ -107,7 +100,20 @@ def rematch(
             break
         try:
             tmdb_year = client.movie_year(int(tmdb_value))
-        except (AuthError, requests.RequestException) as exc:
+        except AuthError as exc:
+            log(f"TMDB rejected the token: {exc}")
+            return RematchReport(
+                2,
+                len(misses),
+                rematched,
+                still_missed,
+                id_conflicts,
+                checked,
+                years_adopted,
+                collisions_queued,
+                uncorrected,
+            )
+        except requests.RequestException as exc:
             log(f"TMDB details failed for film {film_id}: {exc}")
             consecutive += 1
             uncorrected += 1

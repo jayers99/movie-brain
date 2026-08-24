@@ -57,7 +57,10 @@ def record_tmdb_match(
 
     Commerce-created films adopt TMDB's original year (spec principle 5) — a key
     collision is a detected twin and queues year-collision instead of overwriting.
-    Returns "matched" or "id-conflict".
+    Returns "matched" (id claimed, no write-back needed), "adopted" (id claimed and
+    the year write-back succeeded), "collision" (id claimed but the write-back
+    collided — year-collision queued), or "id-conflict" (the id itself was already
+    claimed by another film).
     """
     try:
         repo.set_external_id(target.film_id, TMDB_AUTHORITY, str(winner_id), today)
@@ -93,8 +96,9 @@ def record_tmdb_match(
                 ),
                 today,
             )
-        else:
-            log(f"adopted TMDB year {winner_year} for {target.title!r} (was {target.year})")
+            return "collision"
+        log(f"adopted TMDB year {winner_year} for {target.title!r} (was {target.year})")
+        return "adopted"
     return "matched"
 
 
@@ -138,7 +142,7 @@ def tmdb_step(
             missed += 1
         else:
             winner_year = next((c.year for c in candidates if c.tmdb_id == winner), None)
-            if record_tmdb_match(repo, target, winner, winner_year, today, log) == "matched":
+            if record_tmdb_match(repo, target, winner, winner_year, today, log) != "id-conflict":
                 matched += 1
             else:
                 missed += 1
