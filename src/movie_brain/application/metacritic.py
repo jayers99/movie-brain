@@ -131,6 +131,12 @@ def match_archive(
     # consistent with the staging upsert's last-wins semantics.
     deduped_titles = list({t.slug: t for t in titles}.values())
 
+    # A slug already claimed by a film can never be promoted (promote_top_n checks
+    # claimed BEFORE the anomalous-review skip), so a year-gap entry for an already-claimed
+    # slug is pure noise that replace_unresolved_reviews would re-add every sync. Only
+    # unclaimed slugs — the ones promotion could actually twin — need the review.
+    claimed = repo.claimed_values(AUTHORITY)
+
     reviews: list[ReviewEntry] = []
     slugs_by_film: dict[int, list[str]] = defaultdict(list)
     for t in deduped_titles:
@@ -143,7 +149,7 @@ def match_archive(
             reviews.append(ReviewEntry("ambiguous-title", value=t.slug, detail=detail))
         elif result.winner is not None:
             slugs_by_film[result.winner].append(t.slug)
-        elif result.reason is not None:
+        elif result.reason is not None and t.slug not in claimed:
             # A non-tie review verdict (e.g. year-gap): must land in match_review so
             # promote_top_n's anomalous-slug skip prevents a twin being created for
             # this review-band title (Tokyo Story class).

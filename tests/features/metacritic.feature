@@ -65,6 +65,13 @@ Feature: Metacritic archive
     Then the review queue has a "slug-conflict" entry
     And "Twin (1950)" has no metacritic slug
 
+  Scenario: A year-gap slug already claimed by its film does not requeue for review
+    Given the film "Tokyo Story (1953)" already claims metacritic slug "tokyo-story"
+    And the archive holds "Tokyo Story" (1972) scored 90 as "tokyo-story"
+    When I match
+    Then the review queue has 0 open entries
+    And "Tokyo Story (1953)" has metacritic slug "tokyo-story"
+
   Scenario: A film with an OMDb metascore above the floor that matched nothing is flagged
     Given the repository holds the film "Obscure (1950)" with OMDb metascore 85
     And the archive holds "Unrelated" (2000) scored 80 as "unrelated-2000"
