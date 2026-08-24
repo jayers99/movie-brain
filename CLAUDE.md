@@ -93,7 +93,11 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   planned upgrade (roadmap parallel track). Exception: a TMDB match on a commerce-created film
   (no Criterion listing) canonicalizes `films.year` to TMDB's original year and recomputes
   `key` (`record_tmdb_match`) — write-back never overwrites on a key collision, it queues a
-  durable `year-collision` row in `match_review` as a merge candidate instead.
+  durable `year-collision` row in `match_review` as a merge candidate instead. A MERGED-away
+  film is not a live collision: `update_film_year` ignores it and retires its dead key in
+  place (`key || ' #' || id`, since `films.key` is UNIQUE) so the survivor can adopt the year
+  its loser was holding. A TOMBSTONED holder still blocks — `tombstoned_keys()` is the guard
+  that stops the ingesters re-creating it, and that guard IS the key.
 - Matching is one evidence-scored core: `domain/matching.py`'s `match_candidates` (three-level
   candidate index, source-aware year policy, director/runtime/popularity evidence, `Arbiter`
   hook) is the only matcher; `match_film` (Metacritic), `match_owned` (Apple), and

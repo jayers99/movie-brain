@@ -74,6 +74,10 @@ _TMDB_TARGET_SELECT = (
 # tombstoned films are hidden outright, merged losers are aliased onto their survivor
 # (films_for_matching) rather than surfaced under their own id.
 _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
+# A merged loser was folded into its survivor: its key is dead and the survivor may take
+# it. A TOMBSTONED film is different — tombstoned_keys() is the guard that stops collectors
+# re-creating it, and that guard IS the key, so a tombstone still blocks.
+_NOT_MERGED_AWAY = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id AND d.kind = 'merged')"
 
 
 def init_db(db_path: Path) -> None:
@@ -673,18 +677,30 @@ class Repository:
     def update_film_year(self, film_id: int, year: int) -> int | None:
         """Adopt an authority year: rewrite films.year and recompute key.
 
-        Returns the id of a film already holding the recomputed key — the
+        Returns the id of a LIVE film already holding the recomputed key — the
         detected-twin case; the caller queues a year-collision review and this
         film stays untouched (never overwrite, collectors never delete).
+
+        A merged-away loser does NOT block: it was folded into its survivor, so
+        its key is retired in place (suffixed with its own id, which is unique)
+        and the survivor takes the key it is entitled to. Without this a merge
+        would permanently block its own survivor from adopting the loser's year,
+        because the loser's films row is deliberately never deleted.
         """
         with self._conn() as c:
             row = c.execute("SELECT title FROM films WHERE id = ?", (film_id,)).fetchone()
             if row is None:
                 raise LookupError(f"unknown film {film_id}")
             new_key = film_key(str(row["title"]), year)
-            clash = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            # films.key is UNIQUE, so at most one other film can hold new_key.
+            clash = c.execute(
+                "SELECT f.id FROM films f WHERE f.key = ? AND f.id != ? AND " + _NOT_MERGED_AWAY,
+                (new_key, film_id),
+            ).fetchone()
             if clash is not None:
                 return int(clash["id"])
+            # Any remaining holder is a merged loser: retire its key so UNIQUE lets the survivor in.
+            c.execute("UPDATE films SET key = key || ' #' || id WHERE key = ? AND id != ?", (new_key, film_id))
             c.execute("UPDATE films SET year = ?, key = ? WHERE id = ?", (year, new_key, film_id))
             return None
 

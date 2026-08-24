@@ -131,27 +131,35 @@ wrong films (#341→World War Z, #2939→House by the River, #4257→US Tour, #4
 user's worklist instead. All **23 metacritic `year-gap` remake-suspected rows** resolved
 `--create` (films 4673–4695); the sync that followed OMDb-looked-up 174 films and
 TMDB-matched all 23, adopting 7 original years off the Metacritic re-release years.
-`rematch`: 383 misses → 11 rematched / 369 still missed, 1,445 years re-checked, **0
-adopted** with **5 year-collisions queued**, **audit = 0** uncorrected non-Criterion year
-mismatches outside the merge queue. Those 5 are the run's one genuine finding: pass B tried
-to correct the five merge survivors that kept an Apple remaster year (Woodstock 2014→1970,
-Monty Python 1999→1975, The Last Picture Show 2014→1971, Dog Day Afternoon 2014→1975,
-Ben-Hur 2001→1959) and was blocked because `update_film_year`'s collision probe does not
-exclude `film_disposition`-covered rows — the colliding film is in every case that
-survivor's own merged-away loser, whose `films` row (correctly) still exists and still holds
-the key. Follow-up filed in the handoff: the probe should ignore disposed identities.
-Done criteria: **owned-on-disposed = 0** (owned marks all sit on canonical rows);
+`rematch` run 1: 383 misses → 11 rematched / 369 still missed, 1,445 years re-checked, **0
+adopted** with **5 year-collisions queued**, **audit = 0**. Those 5 exposed the run's one
+genuine defect: pass B tried to correct the five merge survivors that kept an Apple remaster
+year (Woodstock 2014→1970, Monty Python 1999→1975, The Last Picture Show 2014→1971, Dog
+Day Afternoon 2014→1975, Ben-Hur 2001→1959) and was blocked every time by that survivor's
+*own merged-away loser* — `update_film_year`'s collision probe treated any key-holder as a
+live identity, and a merged loser's `films` row is deliberately never deleted, so it kept
+the key its survivor was entitled to. **Fixed in this milestone**: the probe now ignores
+merged-away holders (`_NOT_MERGED_AWAY`) and retires the dead key in place (`key || ' #' ||
+id`) so the UNIQUE constraint lets the survivor take it. A *tombstoned* holder still blocks
+by design — `tombstoned_keys()` is the guard that stops collectors re-creating a tombstoned
+film and that guard IS the key, so handing it away would silently disarm it. `rematch` run 2
+after the fix: **adopted 5, collisions queued 0, audit 0** — all five survivor years are now
+canonical. Done criteria: **owned-on-disposed = 0** (owned marks all sit on canonical rows);
 a second `repair dupes` dry-run reports **twins: 0** (42 distinct, 20 undecided — the 20
 need a TMDB backfill before they can be classified, the 42 grew from 24 as the created
-remakes legitimately joined their originals' title groups); open reviews **544 → 510**,
-every one decidable by `review list`/`review resolve` rather than accumulating.
+remakes legitimately joined their originals' title groups); open reviews **544 → 494**,
+every one decidable by `review list`/`review resolve` rather than accumulating. Queue
+hygiene closed both merge-artifact classes outright: the 5 now-satisfied `year-collision`
+rows and the 11 stale `id-conflict` rows (each naming a counterpart already merged into that
+same film — they survived because `merge_film` resolves only the *loser's* reviews and these
+were filed against the film that became the *survivor*) were dismissed, leaving **zero open
+`tmdb/id-conflict` and zero `tmdb/year-collision`**.
 Benchmark: ground truth **26/26 pass, 0 wrong-match** (baseline 14/26, 2 wrong-match)
 including the newly banked `metropolis-rerelease-same-year-twin` case, `--assert-dominance`
-exit 0 (mc review 3.0%, apple review 4.4%); suite, ruff, and mypy green. Residual for the
-user, not blockers: 11 stale `id-conflict` rows whose counterpart is already merged (they
-were filed against the film that became the *survivor*, and `merge_film` only resolves the
-*loser's* reviews — follow-up), 7 apple-tv `year-drift`, 372 tmdb `no-match`, the 134 link
-suspects, and the 20 undecided dup groups. **Backlog item 9 (needs-revisit drawer flag)
+exit 0 (mc review 3.1%, apple review 4.8%); 436 tests, ruff, and mypy green. Residual for
+the user, not blockers: 7 apple-tv `year-drift`, 372 tmdb `no-match`, the 134 link suspects,
+and the 20 undecided dup groups. Riding note: `merge_film` still resolves only the loser's
+reviews, so a future merge can leave the same stale-review-on-survivor artifact. **Backlog item 9 (needs-revisit drawer flag)
 shipped inside M3.**
 
 ## Out of scope (tracked, not here)
