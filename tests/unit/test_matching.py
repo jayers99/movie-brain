@@ -9,6 +9,7 @@ from movie_brain.domain.matching import (
     norm_title,
     parse_apple_title,
     pick_tmdb_match,
+    split_annotations,
 )
 from movie_brain.domain.models import TmdbCandidate
 
@@ -25,8 +26,32 @@ def test_clean_title_strips_annotations():
 def test_norm_title_is_punctuation_and_case_insensitive():
     assert norm_title("Forbidden Lie$") == norm_title("Forbidden Lies")
     assert norm_title("PlayTime") == norm_title("playtime")
-    assert norm_title("Léon") == "léon"  # unicode letters survive; only punctuation/space drop
+    assert norm_title("Léon") == "leon"  # diacritics fold; only punctuation/space drop
     assert norm_title("W.R.: Mysteries of the Organism") == norm_title("WR Mysteries of the Organism")
+
+
+def test_norm_title_folds_diacritics():
+    assert norm_title("Tête") == "tete"
+    assert norm_title("Léon") == "leon"
+
+
+def test_norm_title_ampersand_and_volume():
+    assert norm_title("Willy Wonka & the Chocolate Factory") == norm_title("Willy Wonka and the Chocolate Factory")
+    assert norm_title("Kill Bill: Vol. 1") == norm_title("Kill Bill: Volume 1")
+    assert norm_title("Kill Bill Vol 2") == norm_title("Kill Bill Volume 2")
+    assert norm_title("Volcano") == "volcano"  # \bvol\b must not fire inside words
+
+
+def test_split_annotations_grammar():
+    assert split_annotations("The Red Shoes [re-release]") == ("The Red Shoes", ("re-release",))
+    assert split_annotations("The Leopard (Restored Version)") == ("The Leopard", ("restored version",))
+    assert split_annotations("Star Trek: The Motion Picture – The Director's Edition") == (
+        "Star Trek: The Motion Picture",
+        ("director's edition",),
+    )
+    assert split_annotations("Blade Runner (Director's Cut) (4K)") == ("Blade Runner", ("4k", "director's cut"))
+    assert split_annotations("Fanny (Part One)") == ("Fanny (Part One)", ())  # unknown parenthetical survives
+    assert split_annotations("(Unrated)") == ("(Unrated)", ())  # never strip to empty
 
 
 def test_match_exact_year_wins():
@@ -91,7 +116,7 @@ class TestPickTmdbMatch:
         assert pick_tmdb_match("Missing Film", 1960, cands) is None
 
     def test_yearless_film_matches_exact_title_only_by_popularity(self):
-        # norm_title keeps unicode letters ("Sanshō" != "Sansho"), so use identical titles here.
+        # Uses identical titles for both candidates; year is what distinguishes them here.
         cands = [c(8, "Sansho the Bailiff", 1954, pop=3.0), c(9, "Sansho the Bailiff", 1980, pop=1.0)]
         assert pick_tmdb_match("Sansho the Bailiff", None, cands) == 8
         assert pick_tmdb_match("Nothing Like It", None, cands) is None
