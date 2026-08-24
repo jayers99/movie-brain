@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import subprocess
 from datetime import date
+from unittest.mock import patch
 
 import pytest
 
@@ -39,3 +41,12 @@ def test_fetch_owned_runner_failure_raises_and_archives_nothing(config_dir):
 def test_fetch_owned_empty_library_is_an_error(config_dir):
     with pytest.raises(AppleTvError):
         fetch_owned(config_dir, runner=lambda: "", today=TODAY)
+
+
+def test_run_osascript_timeout_becomes_appletv_error():
+    from movie_brain.infrastructure.appletv import _run_osascript
+
+    with patch("subprocess.run") as mock_run:
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="osascript", timeout=300)
+        with pytest.raises(AppleTvError, match="osascript timed out after 300s"):
+            _run_osascript()
