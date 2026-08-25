@@ -133,6 +133,7 @@ def test_chip_labels_and_order(dash: Page):
         "Owned",
         "Not owned",
         "Needs revisit",
+        "Suspect",
         "Clear",
     ]
 
@@ -158,6 +159,7 @@ def test_each_chip_alone(dash: Page):
         "top_ratings": 1,  # only Alpha (92 / 95% / 8.5) clears any threshold
         "recent": 1,
         "departed": 1,
+        "suspect": 1,
     }
     for chip, n in expected.items():
         dash.click(f".chip[data-chip={chip}]")

@@ -29,6 +29,7 @@
     owned: (f) => f.owned,
     not_owned: (f) => !f.owned,
     needs_revisit: (f) => f.needs_revisit,
+    suspect: (f) => f.audit != null,
   };
 
   // ---- scope ----
