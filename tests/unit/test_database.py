@@ -391,7 +391,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 9
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 10
     finally:
         conn.close()
 
@@ -998,3 +998,24 @@ def test_stale_omdb_years_excludes_non_numeric_payload_year(repo):
     ids = {row[0] for row in repo.stale_omdb_years()}
     assert na not in ids
     assert stale in ids
+
+
+def test_tmdb_facts_needed_and_upsert(repo):
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.database import TmdbFactsRow
+
+    d = date(2026, 8, 24)
+    a = repo.create_film(Film("Alpha", 1950, None, ""))
+    b = repo.create_film(Film("Bravo", 1960, None, ""))
+    repo.set_external_id(a, "tmdb", "11", d)
+    repo.set_external_id(b, "tmdb", "12", d)
+    assert repo.tmdb_facts_needed() == [(a, 11), (b, 12)]
+
+    repo.upsert_tmdb_facts(a, TmdbFactsRow(11, "tt0000011", "Alpha", "Alpha", ("Alfa",), 1950, 90), d)
+    assert repo.tmdb_facts_needed() == [(b, 12)]
+
+    # link changed → stale row must be refetched
+    repo.set_external_id(a, "tmdb", "99", d)
+    assert repo.tmdb_facts_needed() == [(a, 99), (b, 12)]
