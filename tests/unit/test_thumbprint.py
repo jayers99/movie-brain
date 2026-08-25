@@ -124,3 +124,16 @@ def test_ranked_carries_top_three():
 
 def test_no_candidates():
     assert resolve(make_query("Nothing", 2000, "criterion"), []).reason == "no candidates"
+
+
+def test_review_detail_serializes_top_three_with_letters():
+    import json
+
+    from movie_brain.application.thumbprint import review_detail
+
+    q = make_query("Passenger", 2005, "criterion")
+    v = resolve(q, [cand(f"tt{i}", "Passenger", 2005, votes=i) for i in range(5)])
+    d = json.loads(review_detail(v))
+    assert d["reason"] == "ambiguous"
+    assert [c["letter"] for c in d["candidates"]] == ["A", "B", "C"]
+    assert all(c["why_not"] for c in d["candidates"])

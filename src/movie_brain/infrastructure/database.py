@@ -73,6 +73,17 @@ class ClaimRow(NamedTuple):
     first_seen: str
 
 
+class TwinFilm(NamedTuple):
+    """One undisposed film's twin-audit evidence (repair twins)."""
+
+    id: int
+    title: str
+    year: int | None
+    omdb_imdb: str | None  # OMDb payload imdbID (by-title stub or by-id record)
+    tmdb_imdb: str | None  # external_ids imdb, else tmdb_facts.imdb_id
+    tmdb_id: str | None
+
+
 class RepairFilm(NamedTuple):
     """One non-dispositioned film's repair-audit evidence."""
 
@@ -343,9 +354,7 @@ class Repository:
         sources). A row strictly older than it was displayed as departed, so going
         current again is a transition; None (fresh DB) means only true inserts fire.
         """
-        row = c.execute(
-            "SELECT last_seen FROM listings WHERE film_id = ? AND source = ?", (film_id, source)
-        ).fetchone()
+        row = c.execute("SELECT last_seen FROM listings WHERE film_id = ? AND source = ?", (film_id, source)).fetchone()
         is_transition = row is None or (frontier is not None and row["last_seen"] < frontier)
         c.execute(
             "INSERT INTO listings (film_id, source, url, first_seen, last_seen) VALUES (?, ?, ?, ?, ?) "
@@ -448,9 +457,7 @@ class Repository:
         sql = (
             "SELECT f.id, f.title, f.year, f.director, l.url FROM films f JOIN listings l ON l.film_id = f.id "
             "WHERE l.source = ? AND l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
-            "AND " + _NOT_DISPOSED + " "
-            + extra_where
-            + " ORDER BY f.id"
+            "AND " + _NOT_DISPOSED + " " + extra_where + " ORDER BY f.id"
         )
         return c.execute(sql, (source, source, *params)).fetchall()
 
@@ -654,9 +661,7 @@ class Repository:
     def films_for_matching(self) -> list[FilmRow]:
         with self._conn() as c:
             disposition_rows = c.execute("SELECT film_id, kind, survivor_id FROM film_disposition").fetchall()
-            raw_survivor = {
-                int(r["film_id"]): int(r["survivor_id"]) for r in disposition_rows if r["kind"] == "merged"
-            }
+            raw_survivor = {int(r["film_id"]): int(r["survivor_id"]) for r in disposition_rows if r["kind"] == "merged"}
             tombstoned = {int(r["film_id"]) for r in disposition_rows if r["kind"] == "tombstoned"}
             # Resolve every merged loser straight to its ULTIMATE survivor (chain-walk once,
             # in memory, from the single film_disposition read above) — record_catalog and
@@ -900,9 +905,7 @@ class Repository:
             holder = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
             if holder is not None:
                 held_by = int(holder["id"])
-                disposed = c.execute(
-                    "SELECT 1 FROM film_disposition WHERE film_id = ?", (held_by,)
-                ).fetchone()
+                disposed = c.execute("SELECT 1 FROM film_disposition WHERE film_id = ?", (held_by,)).fetchone()
                 if disposed is None:
                     return held_by  # a live film owns that key
                 canonical = self._canonical_in(c, held_by)
@@ -1138,8 +1141,7 @@ class Repository:
     def mark_owned(self, film_id: int, today: date, source: str = "apple-tv") -> bool:
         with self._conn() as c:
             cur = c.execute(
-                "INSERT INTO owned (film_id, source, first_imported) VALUES (?, ?, ?) "
-                "ON CONFLICT(film_id) DO NOTHING",
+                "INSERT INTO owned (film_id, source, first_imported) VALUES (?, ?, ?) ON CONFLICT(film_id) DO NOTHING",
                 (film_id, source, today.isoformat()),
             )
             return cur.rowcount > 0
@@ -1194,6 +1196,72 @@ class Repository:
                 f"SELECT f.id, f.title FROM films f WHERE f.title_norm IS NULL AND {_NOT_DISPOSED} ORDER BY f.id"
             ).fetchall()
             return [(int(r["id"]), str(r["title"])) for r in rows]
+
+    def criterion_listing_rows(self) -> list[tuple[int, str, str, str, int | None]]:
+        """(film_id, url, title, first_seen, year) for every undisposed film's Criterion listing."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, l.url, f.title, l.first_seen, f.year FROM listings l JOIN films f ON f.id = l.film_id "
+                f"WHERE l.source = 'criterion' AND {_NOT_DISPOSED} ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["url"]), str(r["title"]), str(r["first_seen"]), r["year"]) for r in rows]
+
+    def metacritic_claim_rows(self) -> list[tuple[int, str, str, int | None, str]]:
+        """(film_id, slug, mc_title, mc_year, first_seen) via external_ids authority 'metacritic'."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT e.film_id, e.value, m.title, m.year, e.first_seen FROM external_ids e "
+                "JOIN metacritic m ON m.slug = e.value JOIN films f ON f.id = e.film_id "
+                f"WHERE e.authority = 'metacritic' AND {_NOT_DISPOSED} ORDER BY e.film_id"
+            ).fetchall()
+            return [
+                (int(r["film_id"]), str(r["value"]), str(r["title"]), r["year"], str(r["first_seen"])) for r in rows
+            ]
+
+    def owned_rows(self) -> list[tuple[int, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT o.film_id, o.first_imported FROM owned o JOIN films f ON f.id = o.film_id "
+                f"WHERE {_NOT_DISPOSED}"
+            ).fetchall()
+            return [(int(r["film_id"]), str(r["first_imported"])) for r in rows]
+
+    def films_for_twins(self) -> list[TwinFilm]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, json_extract(o.payload, '$.imdbID') AS o_imdb, "
+                "COALESCE((SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb'), "
+                "         (SELECT imdb_id FROM tmdb_facts t WHERE t.film_id = f.id)) AS t_imdb, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'tmdb') AS t_id "
+                f"FROM films f LEFT JOIN omdb o ON o.film_id = f.id WHERE {_NOT_DISPOSED} ORDER BY f.id"
+            ).fetchall()
+            return [
+                TwinFilm(int(r["id"]), str(r["title"]), r["year"], r["o_imdb"], r["t_imdb"], r["t_id"]) for r in rows
+            ]
+
+    def key_film_directly(self, film_id: int, *, new_title: str, imdb_id: str, today: date) -> bool:
+        """Retitle a raw `Title (YYYY)` film to its parsed title and record its IMDb id
+        (repair twins NO-TWIN case). False, nothing written, when the recomputed key or the
+        imdb value is already held by another film."""
+        with self._conn() as c:
+            row = c.execute("SELECT year FROM films WHERE id = ?", (film_id,)).fetchone()
+            if row is None:
+                raise LookupError(f"unknown film {film_id}")
+            new_key = film_key(new_title, row["year"])
+            holder = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            other = c.execute(
+                "SELECT film_id FROM external_ids WHERE authority = 'imdb' AND value = ? AND film_id != ?",
+                (imdb_id, film_id),
+            ).fetchone()
+            if holder is not None or other is not None:
+                return False
+            c.execute("UPDATE films SET title = ?, key = ? WHERE id = ?", (new_title, new_key, film_id))
+            c.execute(
+                "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'imdb', ?, ?) "
+                "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                (film_id, imdb_id, today.isoformat()),
+            )
+            return True
 
     # dispositions -----------------------------------------------------
     def disposition_of(self, film_id: int) -> tuple[str, int | None] | None:
@@ -1423,9 +1491,7 @@ class Repository:
     def get_view(self, film_id: int, today: date | None = None) -> FilmView | None:
         cutoff = ((today or date.today()) - timedelta(days=NEW_ARRIVAL_DAYS)).isoformat()
         with self._conn() as c:
-            row = c.execute(
-                _VIEW_SQL + "WHERE f.id = ? AND " + _NOT_DISPOSED, ("criterion", film_id)
-            ).fetchone()
+            row = c.execute(_VIEW_SQL + "WHERE f.id = ? AND " + _NOT_DISPOSED, ("criterion", film_id)).fetchone()
             if row is None:
                 return None
             rv = _revisit_by_film(c)

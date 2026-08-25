@@ -29,6 +29,8 @@ uv run movie-brain review list [--authority A] [--reason R]   # open match_revie
 uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, or dismiss
 uv run movie-brain review revisits                    # films the user flagged "needs revisit" in the drawer
 
+uv run movie-brain repair twins [--apply] [--yes] [--limit N]  # retire raw `Title (YYYY)` films into their same-year twin (contract-checked); --limit = batch size
+uv run movie-brain thumbprint backfill [--apply]      # copy owned/criterion/metacritic evidence into `claim` rows (pure copy, idempotent)
 uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
 uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)
 
@@ -37,6 +39,7 @@ uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py
 uv run ruff check . && uv run mypy                   # lint + types (mypy also runs as a pre-commit hook)
 uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regression gate: ground truth + archive replays
+uv run python scripts/thumbprint_benchmark.py --assert  # thumbprint resolver gate (offline fixture): 0 wrong + auto ≥ 90%
 ```
 
 ## Architecture (hexagonal — dependencies point inward)
@@ -53,7 +56,7 @@ Six-step contract (cheap check → merge_yearless → record_catalog → Mode-B 
 
 ## Rules
 
-Path-scoped contracts in `.claude/rules/`: `matching.md` (the one evidence-scored matcher, wrappers, benchmark gate, rerelease/yearless rules), `audit.md` (audit_flags / tmdb_facts / audit_verdict). They load when you touch the files they name — read them before changing matching or audit code.
+Path-scoped contracts in `.claude/rules/`: `matching.md` (the one evidence-scored matcher, wrappers, benchmark gate, rerelease/yearless rules), `audit.md` (audit_flags / tmdb_facts / audit_verdict), `thumbprint.md` (the work-identity resolver — DARK until the ingester switch — its offline gate, the `claim` table). They load when you touch the files they name — read them before changing matching or audit code.
 
 - Film identity = `films.guid` (generated UUIDv4, immutable once assigned); the integer `id`
   is an internal join key that must never leak as identity. `film_key(title, year)` is a
