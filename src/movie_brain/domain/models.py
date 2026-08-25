@@ -137,6 +137,7 @@ class FilmView:
     revisit_note: str | None = None
     audit: dict[str, object] | None = None  # {score, reasons:[{code, detail}]} from audit_flags; None = not a suspect
     verdict: dict[str, object] | None = None  # latest audit_verdict row; the dashboard endpoint is its only writer
+    # verdict["reasons"] is a comma-joined sorted string (asymmetric with audit["reasons"] above, a list of dicts)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
