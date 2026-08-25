@@ -21,7 +21,15 @@
 > Deviations from the plan text: twin rule allows ±1 year ONLY with IMDb key agreement (Pink
 > Panther 1963/1964); backfill writes no placeholder claim for an owned twin whose archive line
 > belongs to its raw row; `key_film_directly` retires the film's own merged loser's dead key
-> (Doctor Strange). Tasks 9–10 (LIVE) not started — announce → approve → diff.
+> (Doctor Strange).
+> **LIVE (2026-08-25, done):** Task 9 — migration 011 applied (backup
+> `backups/movie-brain-v10-2026-08-25.db`), backfill 5,419 claims / 4,638 title_norms, second
+> apply 0. Task 10 — 8 batches (10,10,10,10,10,10,10,15), each dry-run shown → owner yes →
+> `--apply --yes --limit N`: 74 merges + 11 direct keys, 0 conflict, 0 csv-mismatch, 0 declined.
+> End state: raw `(YYYY)` 85 → 0 · open no-match 299 → 225 · dispositions 28 → 102 · owned
+> 935 → 861 (74 loser rows dropped on already-owned survivors, recorded in disposition notes) ·
+> 858 apple claims, none doubled · director-less undisposed 60 → 59. Eval CSV unchanged (every
+> merged raw id was already a group-B row).
 
 ## Global Constraints
 
