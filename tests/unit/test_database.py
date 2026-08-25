@@ -1080,3 +1080,28 @@ def test_audit_flags_replace_and_verdicts_append(repo):
     with pytest.raises(ValueError):
         repo.add_verdict(a, "meh", [], None, d)
     assert repo.add_verdict(999, "fine", [], None, d) is None
+
+
+def test_view_carries_audit_and_fine_suppresses_only_the_same_reason_set(repo):
+    from datetime import date
+
+    from movie_brain.domain.audit import AuditFlag
+    from movie_brain.domain.models import Film
+
+    d = date(2026, 8, 24)
+    a = repo.create_film(Film("Alpha", 1950, None, ""))
+    repo.replace_audit_flags({a: [AuditFlag("stub", "no director and no rating", 1), AuditFlag("imdb-id", "tt1 vs tt2", 3)]}, d)
+    v = repo.get_view(a, d)
+    assert v.audit == {"score": 4, "reasons": [{"code": "imdb-id", "detail": "tt1 vs tt2"}, {"code": "stub", "detail": "no director and no rating"}]}
+    assert v.verdict is None
+
+    repo.add_verdict(a, "omdb-wrong", ["imdb-id", "stub"], None, d)
+    v = repo.get_view(a, d)
+    assert v.audit is not None and v.verdict["verdict"] == "omdb-wrong"
+
+    repo.add_verdict(a, "fine", ["imdb-id", "stub"], "checked", d)
+    assert repo.get_view(a, d).audit is None
+    assert [x.audit for x in repo.list_views("criterion", d) if x.id == a] == [None]
+
+    repo.replace_audit_flags({a: [AuditFlag("stub", "x", 1), AuditFlag("imdb-id", "y", 3), AuditFlag("year", "z", 1)]}, d)
+    assert repo.get_view(a, d).audit["score"] == 5  # new reason → re-flagged
