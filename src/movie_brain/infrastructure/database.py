@@ -130,20 +130,22 @@ LEFT JOIN metacritic mc ON mc.slug = x.value
 
 
 _SERVICES_SQL = f"""
-SELECT l.film_id, s.name, s.subscribed FROM listings l
+SELECT l.film_id, s.name, s.subscribed, s.kind FROM listings l
 JOIN movie_service s ON s.slug = l.source
-WHERE s.kind = 'svod' AND l.source != 'criterion'
+WHERE l.source != 'criterion'
   AND l.last_seen >= COALESCE(
       (SELECT value FROM meta WHERE key = '{TMDB_REFRESH_STAMP}'),
       (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = l.source))
-ORDER BY l.film_id, s.subscribed DESC, s.name
+ORDER BY l.film_id, s.subscribed DESC, s.kind DESC, s.name
 """
 
 
 def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
     out: dict[int, list[dict[str, object]]] = {}
     for r in c.execute(_SERVICES_SQL):
-        out.setdefault(int(r["film_id"]), []).append({"name": str(r["name"]), "subscribed": bool(r["subscribed"])})
+        out.setdefault(int(r["film_id"]), []).append(
+            {"name": str(r["name"]), "subscribed": bool(r["subscribed"]), "kind": str(r["kind"])}
+        )
     return out
 
 

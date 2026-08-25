@@ -135,8 +135,12 @@ def test_services_in_payloads(repo):
     app = create_app(repo, today=lambda: D)
     app.testing = True
     tc = app.test_client()
-    expected = [{"name": "HBO Max", "subscribed": True}, {"name": "MUBI", "subscribed": False}]
-    assert tc.get(f"/api/films/{fid}").get_json()["services"] == expected  # store row hidden
+    expected = [
+        {"name": "HBO Max", "subscribed": True, "kind": "svod"},
+        {"name": "Apple TV Store (iTunes)", "subscribed": True, "kind": "store"},
+        {"name": "MUBI", "subscribed": False, "kind": "svod"},
+    ]
+    assert tc.get(f"/api/films/{fid}").get_json()["services"] == expected  # store rows surfaced with their kind
     assert tc.get("/api/films").get_json()[0]["services"] == expected
 
 
@@ -149,7 +153,7 @@ def test_stale_service_listing_is_not_current(repo):
     app = create_app(repo, today=lambda: D)
     app.testing = True
     body = {v["title"]: v["services"] for v in app.test_client().get("/api/films").get_json()}
-    assert body["Trio"] == [] and body["Quartet"] == [{"name": "HBO Max", "subscribed": True}]
+    assert body["Trio"] == [] and body["Quartet"] == [{"name": "HBO Max", "subscribed": True, "kind": "svod"}]
 
 
 def test_watchlist_toggle_round_trip(client):

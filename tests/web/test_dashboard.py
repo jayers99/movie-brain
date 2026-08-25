@@ -51,7 +51,7 @@ def test_language_filter_defaults_to_english(dash: Page):
     assert count(dash) == 1
     clear_lang(dash)
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
-    assert count(dash) == 6
+    assert count(dash) == 7  # + buyable discovery film Hotel
     assert "lang=any" in dash.url
 
 
@@ -63,7 +63,7 @@ def test_english_heads_the_list_then_any_language(dash: Page):
     assert labels[2:] == sorted(labels[2:]) and "English" not in labels[2:]
     expect(dash.locator("#f-lang-any")).not_to_be_checked()  # English is the default selection
     dash.locator("#f-lang-any").check()  # picking Any clears every language
-    assert count(dash) == 6
+    assert count(dash) == 7
     dash.click("header h1")  # close the panel so the input shows the selection again
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
     dash.click("#f-lang-input")  # reopen
@@ -107,20 +107,20 @@ def test_rating_columns_show_metacritic_then_rt_then_imdb(dash: Page):
 
 def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Page):
     clear_lang(dash)
-    assert count(dash) == 6
+    assert count(dash) == 7
     # mc desc: Alpha 92, then the Echo/Bravo mc-70 tie breaks on rt (60 vs 50, against title
     # order); missing values sort after present ones at each level, so imdb-only Foxtrot
     # follows, then the unrated Charlie/Delta by title.
     assert first_titles(dash, 6) == ["Alpha", "Echo", "Bravo", "Foxtrot", "Charlie", "Delta"]
     expect(dash.locator("#count-films")).to_have_text("6")
-    expect(dash.locator("#count-showing")).to_have_text("Showing 6 of 6")  # default scope excludes discovery-only Golf
+    expect(dash.locator("#count-showing")).to_have_text("Showing 7 of 7")  # reachable: 6 Criterion + buyable Hotel; Golf excluded
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
 
 
 def test_chip_labels_and_order(dash: Page):
     labels = [t.strip() for t in dash.locator("#chips .chip").all_inner_texts()]
     assert labels == [
-        "All films",
+        "Reachable",
         "Top Ratings",
         "Unrated by me",
         "My ratings",
@@ -140,19 +140,19 @@ def test_chip_labels_and_order(dash: Page):
 def test_chips_stack_with_and(dash: Page):
     clear_lang(dash)
     dash.click(".chip[data-chip=unrated]")
-    assert count(dash) == 3  # Bravo, Charlie, Delta
+    assert count(dash) == 4  # Bravo, Charlie, Delta, Hotel
     dash.click(".chip[data-chip=pending]")
     assert count(dash) == 2  # Charlie (unmatched), Delta (pending)
     expect(dash.locator(".chip[data-chip=unrated]")).to_have_class(re.compile("active"))
     dash.click("#chips-clear")
-    assert count(dash) == 6
+    assert count(dash) == 7
 
 
 def test_each_chip_alone(dash: Page):
     clear_lang(dash)
     expected = {
         "leaving": 1,
-        "unrated": 3,
+        "unrated": 4,  # Bravo, Charlie, Delta, Hotel
         "mine": 2,
         "pending": 2,
         "top_ratings": 1,  # only Alpha (92 / 95% / 8.5) clears any threshold
@@ -239,7 +239,9 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     expect(drawer).to_be_visible()
     expect(drawer.locator("h2")).to_have_text("Alpha ☆⚐")  # star + flag buttons: Alpha isn't watchlisted/flagged
     expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
-    expect(drawer.locator("a.criterion:not(.owned-link)")).to_have_attribute("href", "https://c/alpha")
+    expect(drawer.locator("a.criterion:not(.owned-link):not(.cheapcharts-link)")).to_have_attribute(
+        "href", "https://c/alpha"
+    )
     expect(drawer.locator("div.meta")).not_to_contain_text("Leaving")  # moved to the bottom
     expect(drawer.locator("#drawer-body > :last-child")).to_have_text("Leaving August 31")
     assert "film=" in dash.url
@@ -406,14 +408,56 @@ def test_drawer_shows_new_on_line(dash):
     assert "New on" in dash.locator("#drawer-body").inner_text()
 
 
-def test_default_scope_hides_discovery(dash):
-    assert dash.locator("tr[data-id]", has_text="Golf").count() == 0
+def test_default_scope_is_reachable_hides_unreachable_discovery(dash):
+    clear_lang(dash)  # Hotel is Hungarian
+    assert dash.locator("tr[data-id]", has_text="Golf").count() == 0  # no listing, unowned, unrated
+    assert dash.locator("tr[data-id]", has_text="Hotel").count() == 1  # buyable on the Apple TV store
+    expect(dash.locator("#scope-toggle")).to_have_text("Reachable")
+
+
+def test_criterion_scope_hides_buyable_discovery(page, server):
+    page.goto(f"{server}/?scope=criterion&lang=any")
+    page.wait_for_selector("#films tbody[data-count]")
+    assert page.locator("tr[data-id]", has_text="Hotel").count() == 0
+    expect(page.locator("#scope-toggle")).to_have_text("Criterion only")
 
 
 def test_all_scope_reveals_discovery(page, server):
     page.goto(f"{server}/?scope=all&lang=any")
     page.wait_for_selector("#films tbody[data-count]")
     assert page.locator("tr[data-id]", has_text="Golf").count() == 1
+    expect(page.locator("#scope-toggle")).to_have_text("All films")
+
+
+def test_scope_toggle_cycles_reachable_criterion_all(dash):
+    toggle = dash.locator("#scope-toggle")
+    toggle.click()
+    expect(toggle).to_have_text("Criterion only")
+    assert "scope=criterion" in dash.url
+    toggle.click()
+    expect(toggle).to_have_text("All films")
+    assert "scope=all" in dash.url
+    toggle.click()
+    expect(toggle).to_have_text("Reachable")
+    assert "scope=" not in dash.url
+
+
+def test_drawer_shows_buy_on_and_cheapcharts_link(dash):
+    clear_lang(dash)  # Hotel is Hungarian
+    dash.locator("tbody tr", has_text="Hotel").first.click()
+    body = dash.locator("#drawer-body")
+    expect(body).to_contain_text("Buy on: Apple TV Store (iTunes)")
+    expect(body).not_to_contain_text("Also streaming on")
+    expect(body.locator("a.cheapcharts-link")).to_have_attribute(
+        "href", "https://www.cheapcharts.com/us/search?q=Hotel"
+    )
+
+
+def test_drawer_without_store_listing_has_no_cheapcharts_link(dash):
+    clear_lang(dash)
+    dash.locator("tbody tr", has_text="Bravo").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    assert dash.locator("#drawer-body a.cheapcharts-link").count() == 0
 
 
 def test_drawer_star_toggles_watchlist(dash):
