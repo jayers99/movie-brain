@@ -60,6 +60,19 @@ class MergeReport(NamedTuple):
     reviews_resolved: int
 
 
+class ClaimRow(NamedTuple):
+    id: int
+    film_id: int
+    authority: str
+    value: str
+    title_ingested: str
+    year_claimed: int | None
+    edition_label: str | None
+    edition_year: int | None
+    runtime_min: int | None
+    first_seen: str
+
+
 class RepairFilm(NamedTuple):
     """One non-dispositioned film's repair-audit evidence."""
 
@@ -1135,6 +1148,53 @@ class Repository:
         with self._conn() as c:
             return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM owned")}
 
+    # claims (thumbprint step 0) ---------------------------------------
+    def add_claim(
+        self,
+        film_id: int,
+        authority: str,
+        value: str,
+        title_ingested: str,
+        *,
+        year_claimed: int | None = None,
+        edition_label: str | None = None,
+        runtime_min: int | None = None,
+        first_seen: str,
+    ) -> bool:
+        """INSERT OR IGNORE on UNIQUE(authority, value); False when the claim already exists."""
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT OR IGNORE INTO claim (film_id, authority, value, title_ingested, year_claimed, "
+                "edition_label, runtime_min, first_seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (film_id, authority, value, title_ingested, year_claimed, edition_label, runtime_min, first_seen),
+            )
+            return cur.rowcount > 0
+
+    def claims_for_film(self, film_id: int) -> list[ClaimRow]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT id, film_id, authority, value, title_ingested, year_claimed, edition_label, edition_year, "
+                "runtime_min, first_seen FROM claim WHERE film_id = ? ORDER BY id",
+                (film_id,),
+            ).fetchall()
+            return [ClaimRow(*r) for r in rows]
+
+    def claim_counts(self) -> dict[str, int]:
+        with self._conn() as c:
+            rows = c.execute("SELECT authority, COUNT(*) AS n FROM claim GROUP BY authority").fetchall()
+            return {str(r["authority"]): int(r["n"]) for r in rows}
+
+    def set_title_norm(self, film_id: int, title_norm: str) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE films SET title_norm = ? WHERE id = ?", (title_norm, film_id))
+
+    def films_missing_title_norm(self) -> list[tuple[int, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                f"SELECT f.id, f.title FROM films f WHERE f.title_norm IS NULL AND {_NOT_DISPOSED} ORDER BY f.id"
+            ).fetchall()
+            return [(int(r["id"]), str(r["title"])) for r in rows]
+
     # dispositions -----------------------------------------------------
     def disposition_of(self, film_id: int) -> tuple[str, int | None] | None:
         with self._conn() as c:
@@ -1278,6 +1338,9 @@ class Repository:
                     )
                     c.execute("DELETE FROM listings WHERE film_id = ? AND source = ?", (loser_id, row["source"]))
                     dropped["listings"] = dropped.get("listings", 0) + 1
+            n_claims = c.execute("UPDATE claim SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)).rowcount
+            if n_claims:
+                moved["claim"] = n_claims
             for row in c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (loser_id,)).fetchall():
                 held = c.execute(
                     "SELECT 1 FROM external_ids WHERE film_id = ? AND authority = ?", (survivor_id, row["authority"])

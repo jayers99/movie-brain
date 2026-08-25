@@ -1105,3 +1105,35 @@ def test_view_carries_audit_and_fine_suppresses_only_the_same_reason_set(repo):
 
     repo.replace_audit_flags({a: [AuditFlag("stub", "x", 1), AuditFlag("imdb-id", "y", 3), AuditFlag("year", "z", 1)]}, d)
     assert repo.get_view(a, d).audit["score"] == 5  # new reason → re-flagged
+
+
+def test_migration_011_claims_and_film_columns(tmp_path):
+    repo = Repository(tmp_path / "t.db")
+    fid = repo.create_film(Film("Blade Runner", 1982, "Ridley Scott", ""))
+    assert fid is not None
+    assert repo.add_claim(
+        fid, "apple-tv", "Blade Runner (The Final Cut)", "Blade Runner (The Final Cut)",
+        year_claimed=2007, edition_label="the final cut", runtime_min=117, first_seen="2026-08-23",
+    )
+    assert not repo.add_claim(fid, "apple-tv", "Blade Runner (The Final Cut)", "x", first_seen="2026-08-24")
+    (c,) = repo.claims_for_film(fid)
+    assert (c.authority, c.edition_label, c.edition_year, c.runtime_min, c.year_claimed) == ("apple-tv", "the final cut", None, 117, 2007)
+    assert repo.claim_counts() == {"apple-tv": 1}
+    assert repo.films_missing_title_norm() == [(fid, "Blade Runner")]
+    repo.set_title_norm(fid, "bladerunner")
+    assert repo.films_missing_title_norm() == []
+    with sqlite3.connect(tmp_path / "t.db") as c:
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 11
+        assert c.execute("SELECT kind FROM films WHERE id = ?", (fid,)).fetchone()[0] == "movie"
+
+
+def test_merge_film_moves_claims_to_survivor(tmp_path):
+    repo = Repository(tmp_path / "t.db")
+    loser = repo.create_film(Film("Rear Window (1954)", 1954, None, ""))
+    survivor = repo.create_film(Film("Rear Window", 1954, "Alfred Hitchcock", ""))
+    assert loser and survivor
+    repo.add_claim(loser, "apple-tv", "Rear Window (1954)", "Rear Window (1954)", first_seen="2026-08-23")
+    report = repo.merge_film(loser, survivor, date(2026, 8, 25))
+    assert report.moved.get("claim") == 1
+    assert [c.film_id for c in repo.claims_for_film(survivor)] == [survivor]
+    assert repo.claims_for_film(loser) == []
