@@ -1,499 +1,528 @@
-group,film_id,source,title_ingested,year_ingested,expected_tt,expected_tmdb,verified_by,note,status
-A-agreed-criterion,585,criterion,Bad Press,2023,tt24076780,1058636,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1584,criterion,Savage/Love,1981,tt0253646,353894,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2391,criterion,The Circus,1928,tt0018773,28978,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2431,criterion,Son of Godzilla,1967,tt0061856,18627,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,3011,criterion,Brief Encounter,1945,tt0037558,851,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,505,criterion,Excursion to Vueltabajo,1965,tt35664769,1405154,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1131,criterion,Urbanissimo,1966,tt0178085,266526,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2817,criterion,Pigs and Battleships,1962,tt0054709,31104,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2902,criterion,Stray Dog,1949,tt0041699,30368,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2629,criterion,Floating Clouds,1955,tt0048757,77285,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2034,criterion,The Eagle Shooting Heroes,1993,tt0108074,55157,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2697,criterion,Carnival in Flanders,1935,tt0026564,32543,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2588,criterion,Danger Stalks Near,1957,tt0050421,216356,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2339,criterion,Apostasy,1948,tt0040413,152811,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2756,criterion,A King in New York,1957,tt0050598,28973,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2123,criterion,Why Worry?,1923,tt0014611,41348,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1207,criterion,Flowers of Shanghai,1998,tt0156587,45935,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,11,criterion,Sugar Glass Bottle,2022,tt22855748,852229,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2871,criterion,Story of a Prostitute,1965,tt0059715,39506,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,386,criterion,Maine-Océan Express,1986,tt0091461,63663,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,544,criterion,Perfect Love,1996,tt0117296,64584,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1441,criterion,She Don’t Fade,1991,tt0180997,370043,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,485,criterion,Burning an Illusion,1981,tt0082117,166393,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2160,criterion,Rabindranath Tagore,1961,tt0055351,159213,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,52,criterion,Pom Pom and Hot Hot,1992,tt0105384,181110,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2337,criterion,Fireworks Over the Sea,1951,tt0044163,216809,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1558,criterion,Tomboy,2011,tt1847731,65229,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1067,criterion,Hôtel du Nord,1938,tt0030252,48369,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1932,criterion,The Marriage of Maria Braun,1978,tt0079095,661,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1264,criterion,The Dumb Girl of Portici,1916,tt0006614,137946,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1715,criterion,After the Rehearsal,1984,tt0087193,42090,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1755,criterion,Visions of Eight,,tt0070884,73319,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1842,criterion,A Brighter Summer Day,1991,tt0101985,15804,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2438,criterion,Rodeo,1969,tt2041455,162549,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2971,criterion,La ronde,1950,tt0042906,50030,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,365,criterion,Golden Balls,1993,tt0107165,47707,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1680,criterion,"One Sings, the Other Doesn’t",1977,tt0076855,63318,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,432,criterion,Dutchman,1966,tt0060358,66770,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2633,criterion,The Trial of Joan of Arc,1962,tt0059616,48764,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2544,criterion,Mister Johnson,1990,tt0102458,123772,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1464,criterion,The Young Master,1980,tt0081499,11563,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1443,criterion,An Untitled Portrait,1993,tt0181105,433271,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2197,criterion,The Neighbor’s Wife and Mine,1931,tt0022105,138772,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,707,criterion,My Little Loves,1974,tt0071833,64296,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,3002,criterion,Pandora’s Box,1929,tt0018737,905,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2719,criterion,The Makioka Sisters,1983,tt0086242,42116,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1535,criterion,Zatoichi the Outlaw,,tt0062518,54278,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,109,criterion,We Will Never Be Alone Again,2012,tt2273772,295056,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1811,criterion,The Fabulous Baron Munchausen,1962,tt0054665,41213,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1787,criterion,Last Hurrah for Chivalry,1979,tt0077655,13514,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2212,criterion,Gonza the Spearman,1986,tt0091136,102146,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2041,criterion,Intimate Relations,1996,tt0116643,68545,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,441,criterion,Lost Book Found,1996,tt0230468,167922,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1938,criterion,Great Expectations,1946,tt0038574,14320,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2753,criterion,The Idle Class,1921,tt0012304,42510,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2621,criterion,Yearning,1964,tt0058349,111398,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2373,criterion,An Enemy of the People,1989,tt0097409,197562,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,572,criterion,Out,1957,tt2342245,432827,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2054,criterion,Pathfinder,1987,tt0093668,2172,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2408,criterion,Knife in the Water,1962,tt0056291,11502,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2814,criterion,The Private Life of Henry VIII,1933,tt0024473,43122,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2340,criterion,Valerie and Her Week of Wonders,1970,tt0066516,46315,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1935,criterion,The Most Dangerous Game,1932,tt0023238,1994,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2487,criterion,Faces of November,1964,tt1727578,322400,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1304,criterion,Day of Wrath,1943,tt0036506,41391,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2032,criterion,Chinese Odyssey 2002,2002,tt0311913,45379,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2662,criterion,Green Grow the Rushes,1951,tt0043601,136260,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2288,criterion,Spring Dreams,1960,tt0053892,219238,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2436,criterion,Godzilla Raids Again,1955,tt0048127,1679,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2457,criterion,Shrimp Stories,1964,tt1441288,163146,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,111,criterion,Land of My Dreams,2012,tt2319100,295039,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2710,criterion,Summer with Monika,1953,tt0046345,47735,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1138,criterion,The Emperor's Naked Army Marches On,1987,tt0092963,51929,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,636,criterion,Del mero corazón,1979,tt0079038,260005,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,226,criterion,The Past,2007,tt0765469,66461,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2482,criterion,The Lonely Passion of Judith Hearne,1987,tt0093431,35841,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2905,criterion,A Canterbury Tale,1944,tt0036695,15696,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2070,criterion,Lone Wolf and Cub: Baby Cart at the River Styx,1972,tt0068816,17810,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2250,criterion,Gate of Hell,1953,tt0045935,43349,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,713,criterion,An Autumn’s Tale,1987,tt0093426,64015,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2300,criterion,The Long Day Closes,1992,tt0104753,49956,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1156,criterion,Sunlight,1957,tt0215221,532899,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,601,criterion,My One and Only Love,1957,tt0126354,476351,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2924,criterion,Jubilee,1978,tt0076240,41426,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2195,criterion,An Innocent Witch,1965,tt0059554,211708,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2247,criterion,La main du diable,1943,tt0035017,54288,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2579,criterion,"Shozo, a Cat, and Two Women",1956,tt0274686,219236,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1262,criterion,The House Is Black,1963,tt0336693,44065,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2642,criterion,Princess Yang Kwei-fei,1955,tt0048820,91426,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1952,criterion,La Pointe Courte,1956,tt0048499,54436,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1530,criterion,Zatoichi Goes to the Fire Festival,,tt0164982,54283,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2590,criterion,Army,1944,tt0037227,168994,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,3010,criterion,Fires on the Plain,1959,tt0053121,31427,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2387,criterion,The White Angel,1955,tt0047832,66893,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2287,criterion,"Sing, Young People!",1963,tt0057632,126860,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,2087,criterion,Il bidone,1955,tt0047876,36102,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1032,criterion,An Actor’s Revenge,1963,tt0057710,27197,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1473,criterion,Betty Tells Her Story,1972,tt1715747,339764,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,1351,criterion,Xiao Wu,1997,tt0144020,52103,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-criterion,38,criterion,Vulcanizadora,2024,tt28226888,1130188,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3115,metacritic,A Streetcar Named Desire,1951,tt0044081,702,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3248,metacritic,No Country for Old Men,2007,tt0477348,6977,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3811,metacritic,West Side Story,2021,tt3581652,511809,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4354,metacritic,Magnolia,1999,tt0175880,334,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3748,metacritic,Traffic,2000,tt0181865,1900,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4634,metacritic,The Fly,1986,tt0091064,9426,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3595,metacritic,One False Move,1992,tt0102592,21128,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4076,metacritic,Shaun of the Dead,2004,tt0365748,747,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3667,metacritic,The Tillman Story,2010,tt1568334,43924,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4522,metacritic,8 Mile,2002,tt0298203,65,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3630,metacritic,Brokeback Mountain,2005,tt0388795,142,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3484,metacritic,Paddington 2,2018,tt4468740,346648,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4502,metacritic,"All Light, Everywhere",2021,tt13622074,574086,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3306,metacritic,EX LIBRIS: The New York Public Library,2017,tt6209282,446173,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3372,metacritic,Sugarcane,2024,tt30319854,1158874,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3851,metacritic,Yes,2026,tt36667493,1149614,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3625,metacritic,Fateless,2006,tt0367082,41508,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3605,metacritic,About Endlessness,2021,tt6817944,348672,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3653,metacritic,Rushmore,1998,tt0128445,11545,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3948,metacritic,Sands of Iwo Jima,1950,tt0041841,18712,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4156,metacritic,The Guns of Navarone,1961,tt0054953,10911,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3638,metacritic,Particle Fever,2014,tt1385956,202141,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4093,metacritic,Straight Outta Compton,2015,tt1398426,277216,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3567,metacritic,American Doctor,2026,tt39149951,1596332,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3705,metacritic,King of the Hill,1993,tt0107322,34024,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3819,metacritic,Birds of Passage,2019,tt6386748,438146,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4450,metacritic,Skyfall,2012,tt1074638,37724,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3116,metacritic,The Maltese Falcon,1941,tt0033870,963,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4171,metacritic,Aliens,1986,tt0090605,679,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3408,metacritic,Fat City,1972,tt0068575,16993,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3437,metacritic,Uncertain,2017,tt1568908,658541,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3594,metacritic,Robot Dreams,2023,tt13429870,838240,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4473,metacritic,Adaptation.,2002,tt0268126,2757,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4111,metacritic,Forbidden Planet,1956,tt0049223,830,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3191,metacritic,The Gunfighter,1950,tt0042531,17409,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3571,metacritic,Pain and Glory,2019,tt8291806,519010,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3847,metacritic,Knocked Up,2007,tt0478311,4964,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3876,metacritic,Neil Young: Heart of Gold,2006,tt0473692,15675,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4010,metacritic,Best in Show,2000,tt0218839,13785,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3657,metacritic,A Tale of Two Cities,1935,tt0027075,17831,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3371,metacritic,Sound of Falling,2026,tt28690468,1221061,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3589,metacritic,Fire at Sea,2016,tt3652526,377151,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4509,metacritic,Freaks,1932,tt0022913,136,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3286,metacritic,Atanarjuat: The Fast Runner,2002,tt0285441,13245,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3558,metacritic,Can You Ever Forgive Me?,2018,tt4595882,401847,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4208,metacritic,"Hail, Caesar!",2016,tt0475290,270487,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3889,metacritic,Kaili Blues,2016,tt4613272,362178,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3618,metacritic,Hereditary,2018,tt7784604,493922,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4583,metacritic,Moonrise Kingdom,2012,tt1748122,83666,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3154,metacritic,Amour,2012,tt1602620,86837,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3804,metacritic,The Salesman,2017,tt5186714,375315,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3379,metacritic,Oppenheimer,2023,tt15398776,872585,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4423,metacritic,Pumping Iron,1977,tt0076578,5205,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3639,metacritic,Tarnation,2004,tt0390538,1435,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3496,metacritic,"Three Billboards Outside Ebbing, Missouri",2017,tt5027774,359940,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3189,metacritic,The Apartment,1960,tt0053604,284,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3300,metacritic,Soundtrack to a Coup d'Etat,2024,tt14452174,1214539,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3909,metacritic,Decision to Leave,2022,tt12477480,705996,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4268,metacritic,The Salt of the Earth,2015,tt3674140,265297,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3542,metacritic,Rose,,tt25399154,1176962,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3244,metacritic,The Diving Bell and the Butterfly,2007,tt0401383,2013,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3586,metacritic,Can You Bring It: Bill T. Jones and D-Man in the Waters,2021,tt14551164,745147,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4639,metacritic,A Man for All Seasons,1966,tt0060665,874,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3096,metacritic,Intolerance,1916,tt0006864,3059,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3185,metacritic,My Undesirable Friends: Part I - Last Air in Moscow,2025,tt33075192,1326015,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3081,metacritic,Rear Window,1954,tt0047396,567,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3588,metacritic,Mulholland Dr.,2001,tt0166924,1018,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3729,metacritic,Maidan,2014,tt3675486,270926,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3693,metacritic,Rebecca,1940,tt0032976,223,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4178,metacritic,Guardians of the Galaxy,2014,tt2015381,118340,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3176,metacritic,Mr. Turner,2014,tt2473794,245700,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3761,metacritic,Springtime in a Small Town,2004,tt0332831,61485,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4032,metacritic,Everything Everywhere All at Once,2022,tt6710474,545611,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3305,metacritic,All Quiet on the Western Front,1930,tt0020629,143,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3359,metacritic,Phantom Thread,2017,tt5776858,400617,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3217,metacritic,No Other Land,2024,tt30953759,1232493,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3772,metacritic,Baby Driver,2017,tt3890160,339403,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3128,metacritic,Nashville,1975,tt0073440,3121,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3913,metacritic,One in a Million,,tt38983842,1596295,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4526,metacritic,Casino Royale,2006,tt0381061,36557,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3381,metacritic,Cold War,2018,tt6543652,440298,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3825,metacritic,The Endurance,2001,tt0264578,32567,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3919,metacritic,Restrepo,2010,tt1559549,39312,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3790,metacritic,A Real Pain,2024,tt21823606,1013850,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3481,metacritic,Crime + Punishment,2018,tt7689908,489983,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3254,metacritic,The Florida Project,2017,tt5649144,394117,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3087,metacritic,Citizen Kane,1941,tt0033467,15,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3433,metacritic,Barry Lyndon,1975,tt0072684,3175,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3820,metacritic,Ilo Ilo,2014,tt2901736,188598,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3732,metacritic,The Odd Couple,1968,tt0063374,11356,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3723,metacritic,Bonnie and Clyde,1967,tt0061418,475,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3953,metacritic,The Love Witch,2016,tt3908142,374052,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,4297,metacritic,The Last Man on the Moon,2016,tt3219604,276537,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3632,metacritic,Mutiny on the Bounty,1935,tt0026752,12311,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3848,metacritic,The Quiet Man,1952,tt0045061,3109,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3880,metacritic,My Life as a Zucchini,2017,tt2321405,393559,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3233,metacritic,The Decline of Western Civilization,1981,tt0082252,21137,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3692,metacritic,Dawson City: Frozen Time,2017,tt5215486,413580,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3332,metacritic,Before Sunset,2004,tt0381681,80,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-metacritic,3612,metacritic,The Diary of a Teenage Girl,2015,tt3172532,250124,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4513,apple,The Cobbler,2015,tt3203616,238215,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4064,apple,Happy Gilmore,1996,tt0116483,9614,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4523,apple,Pootie Tang,2001,tt0258038,10615,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4618,apple,Irezumi,2021,tt0084153,216471,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4432,apple,The Sound of Music,1965,tt0059742,15121,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4221,apple,Wagon Master,1950,tt0043117,37327,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4012,apple,For Your Consideration,2006,tt0470765,14799,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4346,apple,Death Race 2000,1975,tt0072856,13282,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4584,apple,Bottle Rocket,1996,tt0115734,13685,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4084,apple,The Bridge,2006,tt0799954,1666,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4066,apple,You Don't Mess With the Zohan (Unrated),2008,tt0960144,10661,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4512,apple,Apollo: Missions to the Moon,2019,tt9782756,613341,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4230,apple,For Your Eyes Only,1981,tt0082398,699,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4433,apple,Star Trek: The Motion Picture,1979,tt0079945,152,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4342,apple,Laura,2005,tt0037008,1939,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4310,apple,Logan's Run,1976,tt0074812,10803,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4075,apple,Scott Pilgrim vs. The World,2010,tt0446029,22538,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4447,apple,iSteve,2013,tt2782834,186606,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4135,apple,The Man With the Golden Gun,1974,tt0071807,682,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4294,apple,Quantum of Solace,2008,tt0830515,10764,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3936,apple,Last Year at Marienbad,1962,tt0054632,4024,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4038,apple,Neat: The Story of Bourbon,2018,tt7109844,506730,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4643,apple,Big Game (2014),2015,tt2088003,230179,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4001,apple,American Anarchist,2017,tt6032170,413049,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3979,apple,Trail of the Pink Panther,1982,tt0084814,9699,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4271,apple,Point Break,1991,tt0102685,1089,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4564,apple,Village of the Damned,1995,tt0114852,12122,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4278,apple,The Matrix Resurrections,2021,tt10838180,624860,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3955,apple,Turbo Kid,2020,tt3672742,310135,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4622,apple,The Picture of Dorian Gray (1945),1945,tt0037988,16559,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4438,apple,Tomorrow Never Dies,1997,tt0120347,714,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4401,apple,The Boston Strangler,2004,tt0062755,26690,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4250,apple,Malibu's Most Wanted,2003,tt0328099,13411,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4605,apple,How to Steal a Million,1966,tt0060522,3001,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4229,apple,Licence to Kill,1989,tt0097742,709,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4377,apple,The Bad Guys 2,2025,tt30017619,1175942,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4248,apple,Bad Day At Black Rock,1955,tt0047849,14554,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4053,apple,Kung Fury,2015,tt3472226,251516,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4426,apple,Once Upon a Time In Mexico,2003,tt0285823,1428,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4390,apple,Grindhouse: Death Proof,2007,tt1028528,1991,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4499,apple,Monty Python's the Meaning of Life,1983,tt0085959,4543,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4542,apple,Star Trek VIII: First Contact,1996,tt0117731,199,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4099,apple,The Outsiders: Complete Novel,2021,tt0086066,227,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4081,apple,The Ugly Stepsister,2025,tt29344903,1284120,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4514,apple,Rosencrantz and Guildenstern Are Dead,1991,tt0100519,18971,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4635,apple,Machete (2010),2010,tt0985694,23631,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4143,apple,Spring Breakers,2013,tt2101441,122081,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4365,apple,On Her Majesty's Secret Service,1969,tt0064757,668,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4545,apple,Star Trek X: Nemesis,2002,tt0253754,201,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4260,apple,Oblivion,2013,tt1483013,75612,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4384,apple,Jackie Brown,1997,tt0119396,184,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4668,apple,Dracula (1931),1931,tt0021814,138,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4181,apple,V for Vendetta,2006,tt0434409,752,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3994,apple,John Wick,2014,tt2911666,245891,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4480,apple,Eyes Wide Shut,1999,tt0120663,345,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4326,apple,Deuce Bigalow: Male Gigolo,1999,tt0205000,10402,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3963,apple,Zoolander,2001,tt0196229,9398,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4633,apple,Alice In Wonderland (1951),1951,tt0043274,12092,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4104,apple,Arsenic and Old Lace,1944,tt0036613,212,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3976,apple,Return of the Pink Panther,1975,tt0072081,11843,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4472,apple,Long Day's Journey Into Night,1962,tt0056196,43004,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3977,apple,The Pink Panther Strikes Again,1976,tt0075066,12268,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4378,apple,The Bad Guys,2022,tt8115900,629542,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4123,apple,Mad Max 3: Beyond Thunderdome,1985,tt0089530,9355,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4411,apple,Welcome to Macintosh,2008,tt1247703,14981,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,3943,apple,Sweet Smell of Success,1957,tt0051036,976,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4063,apple,Joe Dirt,2001,tt0245686,10956,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4457,apple,Better Off Dead,1985,tt0088794,13667,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4161,apple,It Came from Outer Space,1953,tt0045920,19483,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4442,apple,Samsara,2012,tt0770802,89708,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4067,apple,Clash of the Titans,1981,tt0082186,10323,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4086,apple,Ninotchka,1939,tt0031725,1859,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4120,apple,Mad Max: The Road Warrior,1982,tt0082694,8810,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4628,apple,The Pink Panther (1964),1964,tt0057413,936,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4209,apple,The Lost Boys,1987,tt0093437,1547,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4356,apple,Robocop,1987,tt0093870,5548,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4460,apple,Daddy's Home,2015,tt1528854,274167,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4345,apple,Ski Bum: The Warren Miller Story,2020,tt9454068,576222,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4005,apple,The Secret Life of Pets 2,2019,tt5113040,412117,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4305,apple,Score: A Film Music Documentary,2017,tt4207112,426410,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4649,apple,Cleopatra (1963),1963,tt0056937,8095,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4533,apple,Mission: Impossible III,2006,tt0317919,956,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4270,apple,Star Trek Beyond,2016,tt2660888,188927,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4105,apple,The Wedding Singer,1998,tt0120888,11003,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4201,apple,The Big Lebowski,1998,tt0118715,115,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4389,apple,Inglourious Basterds,2009,tt0361748,16869,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4597,apple,The Tingler,1959,tt0053363,26857,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4524,apple,White Christmas,1954,tt0047673,13368,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4220,apple,The Lost Patrol,1934,tt0025423,46910,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4391,apple,Grease,1978,tt0077631,621,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4106,apple,The Waterboy,1998,tt0120484,10663,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4603,apple,The Big Country,1958,tt0051411,12501,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4446,apple,Highlander,1986,tt0091203,8009,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4408,apple,Prometheus,2012,tt1446714,70981,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4370,apple,Tommy Boy,1999,tt0114694,11381,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4051,apple,Dune,1985,tt0087182,841,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4453,apple,Army of Darkness,1993,tt0106308,766,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4452,apple,Convoy,1978,tt0077369,9584,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4210,apple,Batman Forever,1995,tt0112462,414,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-A-agreed-apple,4029,apple,A Raisin In the Sun,1961,tt0055353,29478,key-agreement (OMDb imdbID == TMDB imdb_id),,believed
-B-apple-year-title,3934,apple,Ran (1985),1985,tt0089881,11645,OMDb-by-id key == same-year twin's TMDB key,twin 3107,verified
-B-apple-year-title,3938,apple,The Picture of Dorian Gray (1945),1945,tt0037988,16559,OMDb-by-id key == same-year twin's TMDB key,twin 4622,verified
-B-apple-year-title,3945,apple,Rear Window (1954),2013,tt0047396,567,same-year twin's TMDB key,twin 3081,believed
-B-apple-year-title,3946,apple,Vertigo (1958),1958,tt0052357,426,OMDb-by-id key == same-year twin's TMDB key,twin 3090,verified
-B-apple-year-title,3950,apple,House of Wax (1953),1953,tt0045888,18573,OMDb-by-id key == same-year twin's TMDB key,twin 4623,verified
-B-apple-year-title,3954,apple,Frida (2002),2002,tt0120679,1360,OMDb-by-id key == same-year twin's TMDB key,twin 4624,verified
-B-apple-year-title,3961,apple,Phantom of the Opera (1943),1943,tt0036261,15855,OMDb-by-id key == same-year twin's TMDB key,twin 4625,verified
-B-apple-year-title,3971,apple,Sunset Boulevard (1950),1950,tt0043014,599,OMDb-by-id key == same-year twin's TMDB key,twin 3188,verified
-B-apple-year-title,3972,apple,Sabrina (1954),1954,tt0047437,6620,OMDb-by-id key == same-year twin's TMDB key,twin 4626,verified
-B-apple-year-title,3973,apple,The Lost Weekend (1945),1945,tt0037884,28580,OMDb-by-id key == same-year twin's TMDB key,twin 4627,verified
-B-apple-year-title,3975,apple,The Pink Panther (1964),1964,tt0057413,936,OMDb-by-id key == same-year twin's TMDB key,twin 4628,verified
-B-apple-year-title,3989,apple,The War of the Worlds (1953),1953,tt0046534,8974,OMDb-by-id key == same-year twin's TMDB key,twin 4629,verified
-B-apple-year-title,3993,apple,The Ten Commandments (1956),1956,tt0049833,6844,OMDb-by-id key == same-year twin's TMDB key,twin 4630,verified
-B-apple-year-title,4011,apple,The Big Picture (1989),1989,tt0096926,45225,OMDb-by-id key == same-year twin's TMDB key,twin 4631,verified
-B-apple-year-title,4021,apple,Sudden Impact (1983),1983,tt0086383,10650,OMDb-by-id key == same-year twin's TMDB key,twin 4632,verified
-B-apple-year-title,4024,apple,Sleeping Beauty (1959),1959,tt0053285,10882,OMDb-by-id key == same-year twin's TMDB key,twin 3842,verified
-B-apple-year-title,4025,apple,Alice In Wonderland (1951),1951,tt0043274,12092,OMDb-by-id key == same-year twin's TMDB key,twin 4633,verified
-B-apple-year-title,4040,apple,The Fly (1986),1986,tt0091064,9426,OMDb-by-id key == same-year twin's TMDB key,twin 4634,verified
-B-apple-year-title,4046,apple,Snow White and the Seven Dwarfs (1937),1937,tt0029583,408,OMDb-by-id key == same-year twin's TMDB key,twin 3134,verified
-B-apple-year-title,4050,apple,The Elephant Man (1980),1980,tt0080678,1955,OMDb-by-id key == same-year twin's TMDB key,twin 1804,verified
-B-apple-year-title,4071,apple,Invasion of the Body Snatchers (1956),1956,tt0049366,11549,OMDb-by-id key == same-year twin's TMDB key,twin 3245,verified
-B-apple-year-title,4080,apple,Baby Doll (1956),1956,tt0048973,40478,OMDb-by-id key == same-year twin's TMDB key,twin 1185,verified
-B-apple-year-title,4090,apple,Machete (2010),2010,tt0985694,23631,OMDb-by-id key == same-year twin's TMDB key,twin 4635,verified
-B-apple-year-title,4101,apple,The Conversation (1974),1974,tt0071360,592,OMDb-by-id key == same-year twin's TMDB key,twin 3469,verified
-B-apple-year-title,4107,apple,Little Shop of Horrors (1986),1986,tt0091419,10776,OMDb-by-id key == same-year twin's TMDB key,twin 4637,verified
-B-apple-year-title,4112,apple,A Man for All Seasons (1966),1966,tt0060665,874,OMDb-by-id key == same-year twin's TMDB key,twin 4639,verified
-B-apple-year-title,4113,apple,Oklahoma! (1955),1956,tt0048445,13936,OMDb-by-id key == same-year twin's TMDB key,twin 4640,verified
-B-apple-year-title,4117,apple,The Odd Couple (1968),1968,tt0063374,11356,OMDb-by-id key == same-year twin's TMDB key,twin 3732,verified
-B-apple-year-title,4118,apple,A Star Is Born (1954),1955,tt0047522,3111,OMDb-by-id key == same-year twin's TMDB key,twin 3440,verified
-B-apple-year-title,4125,apple,Giant (1956),1956,tt0049261,1712,OMDb-by-id key == same-year twin's TMDB key,twin 4641,verified
-B-apple-year-title,4151,apple,The Big Sleep (1946),1946,tt0038355,910,OMDb-by-id key == same-year twin's TMDB key,twin 3704,verified
-B-apple-year-title,4160,apple,Creature from the Black Lagoon (1954),1954,tt0046876,10973,OMDb-by-id key == same-year twin's TMDB key,twin 4642,verified
-B-apple-year-title,4166,apple,Out of the Past (1947),1947,tt0039689,678,OMDb-by-id key == same-year twin's TMDB key,twin 3831,verified
-B-apple-year-title,4169,apple,Big Game (2014),2015,tt2088003,230179,OMDb-by-id key == same-year twin's TMDB key,twin 4643,verified
-B-apple-year-title,4182,apple,The Piano (1993),1993,tt0107822,713,OMDb-by-id key == same-year twin's TMDB key,twin 3455,verified
-B-apple-year-title,4200,apple,Anna Karenina (2012),2012,tt1781769,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Anna Karenina (2012) Joe Wright,believed
-B-apple-year-title,4203,apple,Fargo (1996),1996,tt0116282,275,OMDb-by-id key == same-year twin's TMDB key,twin 3520,verified
-B-apple-year-title,4215,apple,Point Blank (1967),1967,tt0062138,26039,OMDb-by-id key == same-year twin's TMDB key,twin 3663,verified
-B-apple-year-title,4231,apple,King Kong (1976),1976,tt0074751,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: King Kong (1976) John Guillermin,believed
-B-apple-year-title,4234,apple,The Maltese Falcon (1941),1941,tt0033870,963,OMDb-by-id key == same-year twin's TMDB key,twin 3116,verified
-B-apple-year-title,4243,apple,Red Dawn (1984),1984,tt0087985,1880,OMDb-by-id key == same-year twin's TMDB key,twin 4644,verified
-B-apple-year-title,4244,apple,New Life (2023),2024,tt18973958,1148027,OMDb-by-id key == same-year twin's TMDB key,twin 4645,verified
-B-apple-year-title,4249,apple,Hairspray (1988),1988,tt0095270,11054,OMDb-by-id key == same-year twin's TMDB key,twin 4646,verified
-B-apple-year-title,4254,apple,Under the Skin (2014),2014,tt1441395,97370,OMDb-by-id key == same-year twin's TMDB key,twin 4647,verified
-B-apple-year-title,4263,apple,Cleopatra (1963),1963,tt0056937,8095,OMDb-by-id key == same-year twin's TMDB key,twin 4649,verified
-B-apple-year-title,4273,apple,Hamlet (1996),1996,tt0116477,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Hamlet (1996) Kenneth Branagh,believed
-B-apple-year-title,4276,apple,The Fly (1958),1958,tt0051622,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: The Fly (1958) Kurt Neumann,believed
-B-apple-year-title,4284,apple,Coco (2017),2017,tt2380307,354912,OMDb-by-id key == same-year twin's TMDB key,twin 4650,verified
-B-apple-year-title,4298,apple,The Little Prince (2015),2015,tt1754656,309809,OMDb-by-id key == same-year twin's TMDB key,twin 4651,verified
-B-apple-year-title,4302,apple,Gangs of New York (2002),2002,tt0217505,3131,OMDb-by-id key == same-year twin's TMDB key,twin 4652,verified
-B-apple-year-title,4308,apple,King Kong (1933),1933,tt0024216,244,OMDb-by-id key == same-year twin's TMDB key,twin 3253,verified
-B-apple-year-title,4311,apple,The Breaking Point (1950),1950,tt0042281,37954,OMDb-by-id key == same-year twin's TMDB key,twin 4653,verified
-B-apple-year-title,4323,apple,Flash Gordon (1980),1980,tt0080745,3604,OMDb-by-id key == same-year twin's TMDB key,twin 4654,verified
-B-apple-year-title,4336,apple,The Man Who Fell to Earth (1976),1976,tt0074851,991,OMDb-by-id key == same-year twin's TMDB key,twin 1703,verified
-B-apple-year-title,4337,apple,Pretty Poison (1968),1968,tt0063456,32969,OMDb-by-id key == same-year twin's TMDB key,twin 4655,verified
-B-apple-year-title,4340,apple,Rollerball (1975),1975,tt0073631,11484,OMDb-by-id key == same-year twin's TMDB key,twin 4656,verified
-B-apple-year-title,4359,apple,Inside Out (2015),2015,tt2096673,150540,OMDb-by-id key == same-year twin's TMDB key,twin 3184,verified
-B-apple-year-title,4360,apple,Soul (2020),2020,tt2948372,508442,OMDb-by-id key == same-year twin's TMDB key,twin 4657,verified
-B-apple-year-title,4397,apple,Cat On a Hot Tin Roof (1958),1958,tt0051459,261,OMDb-by-id key == same-year twin's TMDB key,twin 4658,verified
-B-apple-year-title,4422,apple,Nosferatu (2024),2024,tt5040012,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Nosferatu (2024) Robert Eggers,believed
-B-apple-year-title,4430,apple,The Killers (1946),1946,tt0038669,14638,OMDb-by-id key == same-year twin's TMDB key,twin 4659,verified
-B-apple-year-title,4435,apple,The Day the Earth Stood Still (1951),1951,tt0043456,828,OMDb-by-id key == same-year twin's TMDB key,twin 4660,verified
-B-apple-year-title,4436,apple,Used Cars (1980),1980,tt0081698,14475,OMDb-by-id key == same-year twin's TMDB key,twin 4661,verified
-B-apple-year-title,4444,apple,Road House (1989),1989,tt0098206,10135,OMDb-by-id key == same-year twin's TMDB key,twin 4662,verified
-B-apple-year-title,4458,metacritic,Doctor Strange,2016,tt1211837,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Doctor Strange (2016) Scott Derrickson,believed
-B-apple-year-title,4461,apple,Friday the 13th (1980),1980,tt0080761,4488,OMDb-by-id key == same-year twin's TMDB key,twin 4664,verified
-B-apple-year-title,4470,apple,12 Angry Men (1957),1957,tt0050083,389,OMDb-by-id key == same-year twin's TMDB key,twin 3118,verified
-B-apple-year-title,4477,apple,Lolita (1962),1962,tt0056193,802,OMDb-by-id key == same-year twin's TMDB key,twin 4665,verified
-B-apple-year-title,4483,apple,Carrie (1976),1976,tt0074285,7340,OMDb-by-id key == same-year twin's TMDB key,twin 17,verified
-B-apple-year-title,4491,apple,The Postman Always Rings Twice (1946),1946,tt0038854,25736,OMDb-by-id key == same-year twin's TMDB key,twin 4666,verified
-B-apple-year-title,4498,apple,Brazil (1985),1985,tt0088846,68,OMDb-by-id key == same-year twin's TMDB key,twin 4667,verified
-B-apple-year-title,4510,apple,Apollo 11 (2019),2019,tt8760684,549559,OMDb-by-id key == same-year twin's TMDB key,twin 3545,verified
-B-apple-year-title,4529,apple,Frankenstein (1931),1931,tt0021884,3035,OMDb-by-id key == same-year twin's TMDB key,twin 3296,verified
-B-apple-year-title,4530,apple,Psycho (1960),1960,tt0054215,539,OMDb-by-id key == same-year twin's TMDB key,twin 3112,verified
-B-apple-year-title,4534,apple,The Mummy (1932),1932,tt0023245,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: The Mummy (1932) Karl Freund,believed
-B-apple-year-title,4540,apple,Scarface (1983),1983,tt0086250,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Scarface (1983) Brian De Palma,believed
-B-apple-year-title,4548,apple,Dracula (1931),1931,tt0021814,138,OMDb-by-id key == same-year twin's TMDB key,twin 4668,verified
-B-apple-year-title,4556,apple,Catch-22 (1970),1970,tt0065528,10364,OMDb-by-id key == same-year twin's TMDB key,twin 4670,verified
-B-apple-year-title,4563,apple,Scarface (1932),1932,tt0023427,877,OMDb-by-id key == same-year twin's TMDB key,twin 3382,verified
-B-apple-year-title,4593,apple,Cinderella (1950),1950,tt0042332,11224,OMDb-by-id key == same-year twin's TMDB key,twin 3899,verified
-B-apple-year-title,4600,apple,The Adventures of Robin Hood (1938),1938,tt0029843,10907,OMDb-by-id key == same-year twin's TMDB key,twin 4671,verified
-B-apple-year-title,4604,apple,The Best Years of Our Lives (1946),1946,tt0036868,887,OMDb-by-id key == same-year twin's TMDB key,twin 3221,verified
-C-edition,1909,criterion,SCENES FROM A MARRIAGE: Theatrical Version,1973,tt6725014,133919,TMDB exact normalized title at original year,work='Scenes from a Marriage' 1974; edition=['theatrical version']; films.year=1973,verified
-C-edition,2416,criterion,FANNY AND ALEXANDER: Theatrical Version,1982,tt0083922,5961,TMDB exact normalized title at original year,work='Fanny and Alexander' 1982; edition=['theatrical version']; films.year=1982,verified
-C-edition,3393,metacritic,Eyes Without a Face [re-release],2003,tt0053459,31417,TMDB exact normalized title at original year,work='Eyes Without a Face' 1960; edition=['re-release']; films.year=2003,verified
-C-edition,3414,metacritic,Investigation of a Citizen Above Suspicion [re-release],2003,tt0065889,26451,TMDB exact normalized title at original year,work='Investigation of a Citizen Above Suspicion' 1970; edition=['re-release']; films.year=1970,verified
-C-edition,3459,metacritic,Piccadilly [re-release],2004,tt0020269,51079,TMDB exact normalized title at original year,work='Piccadilly' 1929; edition=['re-release']; films.year=2004,verified
-C-edition,3461,metacritic,Quai des Orfèvres [re-release],2002,tt0039739,49842,TMDB exact normalized title at original year,work='Jenny Lamour' 1947; edition=['re-release']; films.year=2002,verified
-C-edition,3498,metacritic,Overlord [re-release],2006,tt0073502,55343,TMDB exact normalized title at original year,work='Overlord' 1975; edition=['re-release']; films.year=2006,verified
-C-edition,3508,metacritic,Mafioso [re-release],2007,tt0056210,34866,TMDB exact normalized title at original year,work='Mafioso' 1962; edition=['re-release']; films.year=2007,verified
-C-edition,3517,metacritic,Donnie Darko: The Director's Cut,2004,tt0246578,141,TMDB exact normalized title at original year,"work='Donnie Darko' 2001; edition=[""the director's cut""]; films.year=2004",verified
-C-edition,3582,metacritic,I Vitelloni [re-release],2003,tt0046521,12548,TMDB exact normalized title at original year,work='I Vitelloni' 1953; edition=['re-release']; films.year=2003,verified
-C-edition,3745,metacritic,The Umbrellas of Cherbourg (re-released),2004,tt0058450,5967,TMDB exact normalized title at original year,work='The Umbrellas of Cherbourg' 1964; edition=['re-released']; films.year=2004,verified
-C-edition,3999,apple,How the Grinch Stole Christmas: The Ultimate Edition,2015,tt0170016,8871,TMDB exact normalized title at original year,work='How the Grinch Stole Christmas' 2000; edition=['the ultimate edition']; films.year=2015,verified
-C-edition,4048,apple,Lawrence of Arabia (Restored Version),1989,tt0056172,947,TMDB exact normalized title at original year,work='Lawrence of Arabia' 1962; edition=['restored version']; films.year=1989,verified
-C-edition,4070,apple,Phantasm: Remastered,2016,tt0079714,9638,TMDB exact normalized title at original year,work='Phantasm' 1979; edition=['remastered']; films.year=2016,verified
-C-edition,4094,apple,Straight Outta Compton,2015,tt1398426,277216,TMDB exact normalized title at original year,"work='Straight Outta Compton' 2015; edition=[""unrated director's cut""]; films.year=2015",verified
-C-edition,4098,apple,Apocalypse Now (Final Cut),1979,tt0078788,28,TMDB exact normalized title at original year,work='Apocalypse Now' 1979; edition=['final cut']; films.year=1979,verified
-C-edition,4131,apple,Paul (Unrated) [2011],2011,tt1092026,39513,TMDB exact normalized title at original year (several),work='Paul' 2011; edition=['unrated']; films.year=2011,verified
-C-edition,4133,apple,My Man Godfrey (In Color & Restored),1936,tt0028010,13562,TMDB exact normalized title at original year,work='My Man Godfrey' 1936; edition=['in color & restored']; films.year=1936,verified
-C-edition,4293,apple,Ghost In the Shell (25th Anniversary Edition),1996,tt0113568,9323,TMDB exact normalized title at original year,work='Ghost in the Shell' 1995; edition=['25th anniversary edition']; films.year=1996,verified
-C-edition,4303,apple,Goodfellas (Remastered Feature),2015,tt0099685,769,TMDB exact normalized title at original year,work='GoodFellas' 1990; edition=['remastered feature']; films.year=2015,verified
-C-edition,4304,apple,American Psycho (Uncut Version),2000,tt0144084,1359,TMDB exact normalized title at original year,work='American Psycho' 2000; edition=['uncut version']; films.year=2000,verified
-C-edition,4404,apple,Donnie Darko: Anniversary Special Edition,2001,tt0246578,141,TMDB exact normalized title at original year,work='Donnie Darko' 2001; edition=['anniversary special edition']; films.year=2001,verified
-C-edition,4409,apple,Blade Runner (The Final Cut),2007,tt0083658,78,TMDB exact normalized title at original year,work='Blade Runner' 1982; edition=['the final cut']; films.year=2007,verified
-C-edition,4412,apple,Waiting (Unrated) [2005],2005,tt0348333,7553,TMDB exact normalized title at original year,work='Waiting...' 2005; edition=['unrated']; films.year=2005,verified
-C-edition,4503,apple,Moonwalk One (The Director's Cut),2009,,,unresolved,"NEEDS HUMAN; parsed='Moonwalk One' eds=[""the director's cut""]; cands=[('Moonwalk One', 1972), ('Creating the Time Capsule: The Making of Moonwalk One', None)]",proposed
-C-edition,4532,apple,National Lampoon's Van Wilder: The Unrated Version,2002,tt0283111,11452,TMDB exact normalized title at original year,work='National Lampoon's Van Wilder' 2002; edition=['the unrated version']; films.year=2002,verified
-C-edition,4557,apple,Funny People (Unrated) [2009],2009,tt1201167,20829,TMDB exact normalized title at original year,work='Funny People' 2009; edition=['unrated']; films.year=2009,verified
-C-edition,4599,apple,The Exorcist: Extended Director's Cut,2000,tt0070047,9552,TMDB exact normalized title at original year,"work='The Exorcist' 1973; edition=[""extended director's cut""]; films.year=2000",verified
-D-disagree,113,criterion,Intermission,2007,tt1058525,295051,Criterion director matches TMDB-side; OMDb record wrong,A=Intermission (2008) Alexander Pilon 7 min v=N/A tt1367377,verified
-D-disagree,134,criterion,Suspended,2009,tt1352846,,Criterion director matches OMDb-side; TMDB link wrong,B=Suspended (2008) Jonathan Garda N/A v=N/A tt1996394,verified
-D-disagree,140,criterion,Bound,1995,tt0112565,,Criterion director matches OMDb-side; TMDB link wrong,"B=Bound (1996) Lana Wachowski, Lilly Wachowski 109 min v=65,793 tt0115736",verified
-D-disagree,184,criterion,Resurrection,,,,PROPOSED ? (Claude film knowledge; Resurrection: which one does Criterion stream?) — ratify,"A=Resurrection (2022) Andrew Semans 103 min v=13,704 tt11540726 | B=Resurrection (2025) Bi Gan 160 min v=2,040 tt29002950",proposed
-D-disagree,187,criterion,"Muhammad Ali, the Greatest",1974,tt0219935,29211,Criterion director matches TMDB-side; OMDb record wrong,"A=Muhammad Ali, the Greatest (1974) N/A N/A v=N/A tt29102679",verified
-D-disagree,225,criterion,Dreams,2024,tt30810787,,Criterion director matches OMDb-side; TMDB link wrong,"B=Dreams (2025) Michel Franco 95 min v=1,167 tt31710990",verified
-D-disagree,253,criterion,Nest,2022,tt16965946,,Criterion director matches OMDb-side; TMDB link wrong,B=Nest (2021) James Hunter 9 min v=6 tt14023256,verified
-D-disagree,260,criterion,Twice as Nice,1989,tt0234932,440601,Criterion director matches TMDB-side; OMDb record wrong,A=Twice as Nice (1989) George Marsh N/A v=N/A tt0153348,verified
-D-disagree,276,criterion,Tiger,2025,tt34719395,1403451,"TMDB credits: directed by Loren Waters (13-min short, 2025)",corrected during Phase 3 (director-credit search),verified
-D-disagree,285,criterion,Rat Trap,1982,tt0082318,,Criterion director matches OMDb-side; TMDB link wrong,B=None (None) None None v=None tt39330338,verified
-D-disagree,294,criterion,Three Stories,1997,tt0120372,149937,Criterion director matches TMDB-side; OMDb record wrong,"A=Three Stories (1998) Robert R. Durbin, Pavel Vogler 23 min v=N/A tt0208512",verified
-D-disagree,319,criterion,Nostos,2024,tt27145248,1548553,"TMDB credits: directed by Sofia Camargo (14-min short, 2023); OMDb record has Director N/A",corrected during Phase 3 (director-credit search),verified
-D-disagree,338,criterion,Marrow,2016,NONE,,Criterion director matches neither authority record,expected verdict: no match / review,verified
-D-disagree,414,criterion,Red Card,2023,tt21349906,1155230,Criterion director matches TMDB-side; OMDb record wrong,A=The Red Card (2022) Filipp Romà Romanychev N/A v=N/A tt26673534,verified
-D-disagree,423,criterion,Grace,2024,tt23039638,1217197,Criterion director matches TMDB-side; OMDb record wrong,A=Grace (2024) Sara Hills 14 min v=N/A tt27440782,verified
-D-disagree,452,criterion,Counting,2015,tt4462082,,Criterion director matches OMDb-side; TMDB link wrong,B=Counting (2016) Dan Pal 10 min v=N/A tt6199250,verified
-D-disagree,519,criterion,It’s Not Me,,tt1163752,,PROPOSED A (Claude film knowledge; ) — ratify,"A=It's Not Me, I Swear! (2008) Philippe Falardeau 110 min v=2,414 tt1163752 | B=Já nejsem já (1986) Václav Vorlícek 90 min v=59 tt0175793",proposed
-D-disagree,539,criterion,God is Good,,tt34208918,,"PROPOSED B (Claude film knowledge; Criterion short, 21 min) — ratify",A=God Is Good (2025) Jeff Deverett 100 min v=79 tt33371430 | B=God Is Good (2024) C Prinz 21 min v=N/A tt34208918,proposed
-D-disagree,578,criterion,Ring,1998,tt0178868,2671,Criterion director matches TMDB-side; OMDb record wrong,A=King of the Ring (1998) Kevin Dunn 180 min v=491 tt0311996,verified
-D-disagree,587,criterion,Here,2023,tt26448954,,Criterion director matches OMDb-side; TMDB link wrong,"B=Here (2024) Robert Zemeckis 104 min v=27,345 tt18272208",verified
-D-disagree,606,criterion,Destiny,1997,tt0119629,,Criterion director matches OMDb-side; TMDB link wrong,B=None (None) None None v=None tt33363484,verified
-D-disagree,667,criterion,The Island,1974,tt0394617,405107,"Criterion director == candidate director; IMDb Type=episode (Die Insel, 25 min)",corrected during Phase 3 scoring,verified
-D-disagree,722,criterion,Theta,2022,tt26653472,1064638,Criterion director matches TMDB-side; OMDb record wrong,"A=We Rise, Delta Sigma Theta and the Path to Leadership (2021) Akisa Omulepu N/A v=N/A tt15781248",verified
-D-disagree,876,criterion,Kid,1984,tt0087549,,Criterion director matches OMDb-side; TMDB link wrong,"B=The Karate Kid (1984) John G. Avildsen 126 min v=269,111 tt0087538",verified
-D-disagree,909,criterion,Funeral,2018,tt9282948,594911,Criterion director matches TMDB-side; OMDb record wrong,A=Funeral (2018) Wu Qin 31 min v=N/A tt10084868,verified
-D-disagree,915,criterion,No Ordinary Man,2021,tt12786834,728875,Criterion director matches TMDB-side; OMDb record wrong,A=No Ordinary Man (2021) Raheeb Ray Ahmad N/A v=N/A tt13624940,verified
-D-disagree,932,criterion,aletheia,1992,tt27832863,,Criterion director matches OMDb-side; TMDB link wrong,B=Aletheia (2019) Thotti Cardoso 61 min v=N/A tt12257330,verified
-D-disagree,968,criterion,LYNCH (one),2007,,,"PROPOSED ? (Claude film knowledge; same doc, two OMDb entries) — ratify",BOTH WRONG? A=Lynch (One) (2008) Jason S. 85 min v=22 tt26740823 | B=Lynch (2007) Jason S. 84 min v=974 tt1032207,proposed
-D-disagree,995,criterion,Colors,1976,tt0075122,201650,Criterion director matches TMDB-side; OMDb record wrong,A=Racing Colors (1976) Stephen Iadereste 90 min v=N/A tt0256295,verified
-D-disagree,1013,criterion,Home Sweet Home,1982,tt0084082,307677,Criterion director matches TMDB-side; OMDb record wrong,A=Home Sweet Home (1981) Nettie Peña 85 min v=972 tt0082522,verified
-D-disagree,1018,criterion,The Cup,,tt0201840,,PROPOSED A (Claude film knowledge; Khyentse Norbu) — ratify,"A=The Cup (1999) Khyentse Norbu 93 min v=3,465 tt0201840 | B=The Cup (2011) Simon Wincer 99 min v=884 tt1650056",proposed
-D-disagree,1037,criterion,Take Out,2004,tt0391483,,Criterion director matches OMDb-side; TMDB link wrong,B=Take Out (2005) Seth Landau N/A v=70 tt0400871,verified
-D-disagree,1110,criterion,Goose,,tt0058092,,PROPOSED A (Claude film knowledge; ) — ratify,"A=Father Goose (1964) Ralph Nelson 118 min v=12,786 tt0058092 | B=Goose (2017) Arie Esiri, Chuko Esiri 9 min v=13 tt8637194",proposed
-D-disagree,1191,criterion,Alone,2017,tt6588242,441956,Criterion director matches TMDB-side; OMDb record wrong,"A=Alone (2017) Daniel Attrill, Louis Taylor 70 min v=26 tt4034112",verified
-D-disagree,1288,criterion,Rupture,2017,tt6991116,473403,Criterion director matches TMDB-side; OMDb record wrong,A=Rupture (2017) Igor Sukhikh 27 min v=N/A tt7997736,verified
-D-disagree,1307,criterion,La ronde,1964,tt0058533,63876,Criterion director matches TMDB-side; OMDb record wrong,A=Entrez dans la ronde (1965) François Chatel N/A v=N/A tt0457878,verified
-D-disagree,1344,criterion,Mutts,2019,tt11598898,656477,Criterion director matches TMDB-side; OMDb record wrong,A=Mutts (2019) Alex Zamm N/A v=N/A tt3260194,verified
-D-disagree,1458,criterion,Martha,1974,tt0070374,,Criterion director matches OMDb-side; TMDB link wrong,B=Martha (1974) Berend Boudewijn 57 min v=N/A tt1661406,verified
-D-disagree,1569,criterion,Visitation,2011,tt2044907,386763,Criterion director == candidate director (found via OMDb s=/TMDB; TMDB year 2013 vs Criterion 2011),corrected during Phase 3 scoring,verified
-D-disagree,1608,criterion,Fatherland,2017,tt7433560,578522,Criterion director matches TMDB-side; OMDb record wrong,A=Fatherland (2017) Ryan Surratt N/A v=N/A tt3878562,verified
-D-disagree,1625,criterion,The Fountain,2007,tt3950812,,Criterion director matches OMDb-side; TMDB link wrong,"B=The Fountain (2006) Darren Aronofsky 97 min v=255,646 tt0414993",verified
-D-disagree,1676,criterion,L'humanité,1999,tt0197569,65296,Criterion director matches TMDB-side; OMDb record wrong,A=Au nom de l'humanité - Le tribunal de la Haye (1999) Edina Ajrulovski 95 min v=N/A tt0300963,verified
-D-disagree,1698,criterion,Uncle,1959,tt0171789,346920,Criterion director matches TMDB-side; OMDb record wrong,A=Uncle Was a Vampire (1959) Steno 85 min v=369 tt0053340,verified
-D-disagree,1776,criterion,Youth of the World,,tt0247443,,PROPOSED B (Claude film knowledge; 1936 Olympic film) — ratify,"A=Youth of the World (2010) Samantha Khan N/A v=N/A tt15003304 | B=Jugend der Welt. Der Film von den IV. Olympischen Winterspielen in Garmisch-Partenkirchen (1936) Herbert Brieger, Carl Junghans 38 min v=160 tt0247443",proposed
-D-disagree,1794,criterion,Sisters,1973,tt0070698,22307,Criterion director matches TMDB-side; OMDb record wrong,A=Japan's Pleasure District: Three Sisters at a Turkish Bath (1973) Kôyû Ohara 67 min v=N/A tt0286847,verified
-D-disagree,1881,criterion,The Threepenny Opera,1931,tt0021818,,PROPOSED A (Claude film knowledge; German version; human should confirm) — ratify,"A=The Threepenny Opera (1931) Georg Wilhelm Pabst 104 min v=2,706 tt0021818 | B=The Threepenny Opera (1931) Georg Wilhelm Pabst 104 min v=235 tt0022235",proposed
-D-disagree,1941,criterion,Maîtresse,1976,tt0074883,46978,Criterion director matches TMDB-side; OMDb record wrong,A=Une vieille maîtresse (1975) Jacques Trébouta N/A v=8 tt0380785,verified
-D-disagree,1993,criterion,The Executioner,1963,tt0057643,,Criterion director matches OMDb-side; TMDB link wrong,B=None (None) None None v=None tt20077770,verified
-D-disagree,2174,criterion,The Curve,1999,tt0374560,,Criterion director matches OMDb-side; TMDB link wrong,"B=Dead Man's Curve (1998) Dan Rosen 91 min v=6,435 tt0123034",verified
-D-disagree,2333,criterion,Woman,1948,tt0040670,165129,Criterion director matches TMDB-side; OMDb record wrong,"A=Letter from an Unknown Woman (1948) Max Ophüls 87 min v=14,625 tt0040536",verified
-D-disagree,2389,criterion,An Ideal Husband,1947,tt0039485,,Criterion director matches OMDb-side; TMDB link wrong,B=Un marido ideal (1947) Luis Bayón Herrera N/A v=8 tt0180820,verified
-D-disagree,2476,criterion,Mirror,1974,tt0072443,1396,Criterion director matches TMDB-side; OMDb record wrong,A=Ghost of the Mirror (1974) Tsun-Shou Sung 92 min v=79 tt0071586,verified
-D-disagree,2522,criterion,Revenge,1989,tt0102497,,PROPOSED A (Claude film knowledge; Shinarbaev spelling) — ratify,"BOTH WRONG? A=Revenge (1989) Yermek Shinarbayev 100 min v=690 tt0102497 | B=Revenge (1990) Tony Scott 124 min v=22,284 tt0100485",proposed
-D-disagree,2592,criterion,Silence,1971,tt0067755,92670,Criterion director matches TMDB-side; OMDb record wrong,"A=Land of Silence and Darkness (1971) Werner Herzog 85 min v=3,276 tt0067324",verified
-D-disagree,2652,criterion,Socrates,1971,tt0210296,74778,Criterion director matches TMDB-side; OMDb record wrong,A=The Trial of Socrates (1971) Bernard Wilets 28 min v=N/A tt7913604,verified
-D-disagree,2897,criterion,Jigoku,1960,tt0154683,50173,Criterion director matches TMDB-side; OMDb record wrong,A=Nippatsume wa jigoku-iki daze (1960) Shigehiro Ozawa 90 min v=19 tt0201804,verified
-D-disagree,2949,criterion,Salesman,1968,tt0064921,27375,Criterion director matches TMDB-side; OMDb record wrong,A=Star Spangled Salesman (1968) Norman Maurer 18 min v=27 tt0061026,verified
-D-disagree,2990,criterion,Masculin féminin,1966,tt0060675,4710,PROPOSED B (A is derivative/junk shape) — ratify,"A=Bande-annonce de 'Masculin féminin' (1966) Jean-Luc Godard 2 min v=40 tt5235658 | B=Masculine Feminine (1966) Jean-Luc Godard 103 min v=18,464 tt0060675",proposed
-D-disagree,3027,criterion,Old Man,2012,tt2088849,,Criterion director matches OMDb-side; TMDB link wrong,B=Old Man (2025) Alex Helmer 28 min v=N/A tt34169288,verified
-D-disagree,3124,metacritic,"Summer of Soul (...Or, When the Revolution Could Not Be Televised)",2021,tt11422728,,PROPOSED A (votes dominate ≥20×) — ratify,"A=Summer of Soul (...Or, When the Revolution Could Not Be Televised) (2021) Questlove 118 min v=14,711 tt11422728 | B=Black Woodstock (1969) Hal Tulchin N/A v=43 tt7378922",proposed
-D-disagree,3148,metacritic,Kill Bill: The Whole Bloody Affair,2025,tt6019206,,PROPOSED A (votes dominate ≥20×) — ratify,"A=Kill Bill: The Whole Bloody Affair (2025) Quentin Tarantino 253 min v=36,729 tt6019206 | B=Yuki's Revenge (2025) Quentin Tarantino 10 min v=1,388 tt39075285",proposed
-D-disagree,3153,metacritic,Rocks,2021,tt9067182,,PROPOSED B (Claude film knowledge; Gavron) — ratify,"A=On the Rocks (2020) Sofia Coppola 96 min v=39,373 tt9606374 | B=Rocks (2019) Sarah Gavron 93 min v=5,688 tt9067182",proposed
-D-disagree,3201,metacritic,Carlos,2010,,,PROPOSED ? (Claude film knowledge; OMDb thin record for the known tt) — ratify,"A=Carlos (2010) Olivier Assayas 165 min v=N/A tt33398096 | B=Carlos (2010) N/A 2 min v=14,539 tt1321865",proposed
-D-disagree,3297,metacritic,Her,2013,tt1798709,152601,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Disappearance of Eleanor Rigby: Her (2013) Ned Benson 100 min v=9,849 tt3720788 | B=Her (2014) Spike Jonze 126 min v=725,639 tt1798709",proposed
-D-disagree,3342,metacritic,Seeds,2026,tt34963731,,PROPOSED B (Claude film knowledge; Brittany Shyne) — ratify,A=Seeds (2025) Yuliya Dorofeeva 5 min v=5 tt35669385 | B=Seeds (2025) Brittany Shyne 125 min v=N/A tt34963731,proposed
-D-disagree,3384,metacritic,Once,2007,tt0907657,5723,PROPOSED B (votes dominate ≥20×) — ratify,"A=Once (2007) Barbara Sternberg 5 min v=N/A tt9805526 | B=Once (2006) John Carney 86 min v=123,896 tt0907657",proposed
-D-disagree,3399,metacritic,The Passenger (re-release),2005,,,PROPOSED ? (Claude film knowledge; ) — ratify,A=The Passenger (2006) Chris Jones 7 min v=373 tt1200073 | B=The Passenger (2005) François Rotger 88 min v=68 tt0479259,proposed
-D-disagree,3493,metacritic,Hard Truths,2024,tt11891850,1013154,PROPOSED B (votes dominate ≥20×) — ratify,"A=Hard Truths (2023) Maya Ahmed N/A v=N/A tt27782302 | B=Hard Truths (2025) Mike Leigh 97 min v=9,106 tt11891850",proposed
-D-disagree,3505,metacritic,Time Out,2002,tt0279065,,PROPOSED A (votes dominate ≥20×) — ratify,"A=Time Out (2001) Laurent Cantet 134 min v=5,084 tt0279065 | B=Time Out (2003) Robbie Chafitz 8 min v=31 tt0415391",proposed
-D-disagree,3551,metacritic,Restless Creature: Wendy Whelan,2017,tt5119264,,PROPOSED A (Claude film knowledge; ) — ratify,"A=Restless Creature: Wendy Whelan (2016) Linda Saffire, Adam Schlesinger 90 min v=378 tt5119264 | B=Untitled Wendy Whelan Documentary (2015) Linda Saffire, Adam Schlesinger N/A v=N/A tt3551540",proposed
-D-disagree,3574,metacritic,The Farthest,2017,tt6223974,436305,PROPOSED B (A is derivative/junk shape) — ratify,"A=The Journey to Pluto, the Farthest World Ever Explored (2018) Eoin Duffy 6 min v=N/A tt14370918 | B=The Farthest (2017) Emer Reynolds 121 min v=4,706 tt6223974",proposed
-D-disagree,3661,metacritic,Diane,2019,tt6705860,510034,PROPOSED B (votes dominate ≥20×) — ratify,"A=Diane Keaton (2019) Georgia Michailidi 17 min v=N/A tt12750728 | B=Diane (2018) Kent Jones 95 min v=1,687 tt6705860",proposed
-D-disagree,3691,metacritic,Krisha,2016,tt4266638,323929,PROPOSED B (votes dominate ≥20×) — ratify,"A=Krisha Gautami (Nepal Bhasa) (2016) Ram Krishna Khadgi 135 min v=N/A tt18968928 | B=Krisha (2015) Trey Edward Shults 83 min v=10,533 tt4266638",proposed
-D-disagree,3744,metacritic,Our Daily Bread,2006,tt0765849,24565,PROPOSED B (votes dominate ≥20×) — ratify,"A=Our Daily Bread (2006) Khavn 5 min v=N/A tt20753556 | B=Our Daily Bread (2005) Nikolaus Geyrhalter 92 min v=2,675 tt0765849",proposed
-D-disagree,3773,metacritic,A Little Prayer,2025,tt22004186,,PROPOSED B (Claude film knowledge; ) — ratify,A=Say a Little Prayer (2024) Patrick Perez Vidauri N/A v=N/A tt22780118 | B=A Little Prayer (2023) Angus MacLachlan 91 min v=528 tt22004186,proposed
-D-disagree,3824,metacritic,The Treasure,2016,,,PROPOSED ? (Claude film knowledge; Porumboiu's Treasure likely absent) — ratify,"A=The Treasure (2017) Sherif Arafa 157 min v=2,189 tt6182954 | B=O thisavros (2017) Stratos Markidis N/A v=222 tt7688812",proposed
-D-disagree,3829,metacritic,The Rider,2018,tt6217608,453278,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Whiskey Man & The Rider (2018) Jimmie Romero 26 min v=N/A tt8742608 | B=The Rider (2017) Chloé Zhao 104 min v=21,587 tt6217608",proposed
-D-disagree,3882,metacritic,Atlantis,2021,tt10749786,618245,PROPOSED B (votes dominate ≥20×) — ratify,"A=Anonymous Vol. 1 - The Dreamland Adventures the Mysteries of Atlantis (2020) David Christians N/A v=10 tt12059646 | B=Atlantis (2019) Valentyn Vasyanovych 108 min v=2,718 tt10749786",proposed
-D-disagree,3940,apple,Birdman,2014,tt2562232,194662,official longer title 'Birdman or (The Unexpected Virtue of Ignorance)'; year+votes,corrected during Phase 3 scoring,verified
-D-disagree,3941,metacritic,The Revenant,2015,tt1663202,281957,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Revenant (2015) Nikolai Kurbatov N/A v=N/A tt27793995 | B=The Revenant (2016) Alejandro G. Iñárritu 156 min v=947,792 tt1663202",proposed
-D-disagree,3951,metacritic,Cow,2022,tt11548822,,PROPOSED B (Claude film knowledge; Andrea Arnold) — ratify,"A=The Cow Who Sang a Song Into the Future (2022) Francisca Alegria 98 min v=407 tt10360808 | B=Cow (2021) Andrea Arnold 94 min v=2,652 tt11548822",proposed
-D-disagree,4102,apple,Bram Stoker's Dracula,1992,tt0103874,6114,PROPOSED B (A is derivative/junk shape) — ratify,"A=Making 'Bram Stoker's Dracula' (1992) Francis Ford Coppola, Jeff Werner 29 min v=268 tt0263696 | B=Dracula (1992) Francis Ford Coppola 128 min v=267,072 tt0103874",proposed
-D-disagree,4137,apple,Snatch,2001,tt0208092,107,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Million Dollar Snatch (2000) Cash Markman 1 h 13 min v=N/A tt1345914 | B=Snatch (2001) Guy Ritchie 102 min v=976,126 tt0208092",proposed
-D-disagree,4170,apple,Rare Exports: A Christmas Tale,2010,tt1401143,48395,PROPOSED B (votes dominate ≥20×) — ratify,"A=Rare Exports: A Christmas Tale - (AMC) Brooks Financial & Entertainment Consultants (2010) Shon Brooks N/A v=N/A tt39284977 | B=Rare Exports (2010) Jalmari Helander 84 min v=35,136 tt1401143",proposed
-D-disagree,4295,metacritic,(500) Days of Summer,2009,tt1022603,19913,PROPOSED B (A is derivative/junk shape) — ratify,"A=Not a Love Story: Making (500) Days of Summer (2009) Charles de Lauzirika 30 min v=43 tt1572162 | B=500 Days of Summer (2009) Marc Webb 95 min v=613,237 tt1022603",proposed
-D-disagree,4315,metacritic,Woodstock,1970,tt0066580,9459,PROPOSED B (votes dominate ≥20×) — ratify,"A=Always Woodstock (2014) Rita Merson 97 min v=882 tt1995477 | B=Woodstock (1970) Michael Wadleigh 184 min v=18,818 tt0066580",proposed
-D-disagree,4317,metacritic,The Trip,2011,tt1740047,63578,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Trip Out (2011) Carl Roddam, Deon Eben van Der Merwe N/A v=N/A tt2040570 | B=The Trip (2010) Michael Winterbottom 112 min v=23,632 tt1740047",proposed
-D-disagree,4443,apple,Jet Li's Fearless,2006,tt0446059,7549,PROPOSED B (A is derivative/junk shape) — ratify,"A=A Fearless Journey: A Look at Jet Li's 'Fearless' (2006) Stanley J. Orzel 16 min v=27 tt0940808 | B=Fearless (2006) Ronny Yu 104 min v=81,053 tt0446059",proposed
+group,film_id,source,title_ingested,year_ingested,expected_tt,expected_tmdb,verified_by,note,status,director,runtime_min
+A-agreed-criterion,585,criterion,Bad Press,2023,tt24076780,1058636,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,"Rebecca Landsberry-Baker, Joe Peeler",
+A-agreed-criterion,1584,criterion,Savage/Love,1981,tt0253646,353894,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Shirley Clarke,
+A-agreed-criterion,2391,criterion,The Circus,1928,tt0018773,28978,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Charles Chaplin,
+A-agreed-criterion,2431,criterion,Son of Godzilla,1967,tt0061856,18627,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jun Fukuda,
+A-agreed-criterion,3011,criterion,Brief Encounter,1945,tt0037558,851,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,David Lean,
+A-agreed-criterion,505,criterion,Excursion to Vueltabajo,1965,tt35664769,1405154,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Sara Gómez,
+A-agreed-criterion,1131,criterion,Urbanissimo,1966,tt0178085,266526,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Faith Hubley and John Hubley,
+A-agreed-criterion,2817,criterion,Pigs and Battleships,1962,tt0054709,31104,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Shohei Imamura,
+A-agreed-criterion,2902,criterion,Stray Dog,1949,tt0041699,30368,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Akira Kurosawa,
+A-agreed-criterion,2629,criterion,Floating Clouds,1955,tt0048757,77285,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Mikio Naruse,
+A-agreed-criterion,2034,criterion,The Eagle Shooting Heroes,1993,tt0108074,55157,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jeffrey Lau,
+A-agreed-criterion,2697,criterion,Carnival in Flanders,1935,tt0026564,32543,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jacques Feyder,
+A-agreed-criterion,2588,criterion,Danger Stalks Near,1957,tt0050421,216356,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Keisuke Kinoshita,
+A-agreed-criterion,2339,criterion,Apostasy,1948,tt0040413,152811,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Keisuke Kinoshita,
+A-agreed-criterion,2756,criterion,A King in New York,1957,tt0050598,28973,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Charles Chaplin,
+A-agreed-criterion,2123,criterion,Why Worry?,1923,tt0014611,41348,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Fred Newmeyer and Sam Taylor,
+A-agreed-criterion,1207,criterion,Flowers of Shanghai,1998,tt0156587,45935,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Hou Hsiao-hsien,
+A-agreed-criterion,11,criterion,Sugar Glass Bottle,2022,tt22855748,852229,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Neo Sora,
+A-agreed-criterion,2871,criterion,Story of a Prostitute,1965,tt0059715,39506,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Seijun Suzuki,
+A-agreed-criterion,386,criterion,Maine-Océan Express,1986,tt0091461,63663,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jacques Rozier,
+A-agreed-criterion,544,criterion,Perfect Love,1996,tt0117296,64584,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Catherine Breillat,
+A-agreed-criterion,1441,criterion,She Don’t Fade,1991,tt0180997,370043,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Cheryl Dunye,
+A-agreed-criterion,485,criterion,Burning an Illusion,1981,tt0082117,166393,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Menelik Shabazz,
+A-agreed-criterion,2160,criterion,Rabindranath Tagore,1961,tt0055351,159213,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Satyajit Ray,
+A-agreed-criterion,52,criterion,Pom Pom and Hot Hot,1992,tt0105384,181110,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Joe Cheung Tung-cho,
+A-agreed-criterion,2337,criterion,Fireworks Over the Sea,1951,tt0044163,216809,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Keisuke Kinoshita,
+A-agreed-criterion,1558,criterion,Tomboy,2011,tt1847731,65229,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Céline Sciamma,
+A-agreed-criterion,1067,criterion,Hôtel du Nord,1938,tt0030252,48369,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Marcel Carné,
+A-agreed-criterion,1932,criterion,The Marriage of Maria Braun,1978,tt0079095,661,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Rainer Werner Fassbinder,
+A-agreed-criterion,1264,criterion,The Dumb Girl of Portici,1916,tt0006614,137946,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Lois Weber and Phillips Smalley,
+A-agreed-criterion,1715,criterion,After the Rehearsal,1984,tt0087193,42090,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Ingmar Bergman,
+A-agreed-criterion,1755,criterion,Visions of Eight,,tt0070884,73319,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-criterion,1842,criterion,A Brighter Summer Day,1991,tt0101985,15804,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Edward Yang,
+A-agreed-criterion,2438,criterion,Rodeo,1969,tt2041455,162549,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Carroll Ballard,
+A-agreed-criterion,2971,criterion,La ronde,1950,tt0042906,50030,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Max Ophuls,
+A-agreed-criterion,365,criterion,Golden Balls,1993,tt0107165,47707,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Bigas Luna,
+A-agreed-criterion,1680,criterion,"One Sings, the Other Doesn’t",1977,tt0076855,63318,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Agnès Varda,
+A-agreed-criterion,432,criterion,Dutchman,1966,tt0060358,66770,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Anthony Harvey,
+A-agreed-criterion,2633,criterion,The Trial of Joan of Arc,1962,tt0059616,48764,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Robert Bresson,
+A-agreed-criterion,2544,criterion,Mister Johnson,1990,tt0102458,123772,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Bruce Beresford,
+A-agreed-criterion,1464,criterion,The Young Master,1980,tt0081499,11563,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jackie Chan,
+A-agreed-criterion,1443,criterion,An Untitled Portrait,1993,tt0181105,433271,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Cheryl Dunye,
+A-agreed-criterion,2197,criterion,The Neighbor’s Wife and Mine,1931,tt0022105,138772,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Heinosuke Gosho,
+A-agreed-criterion,707,criterion,My Little Loves,1974,tt0071833,64296,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jean Eustache,
+A-agreed-criterion,3002,criterion,Pandora’s Box,1929,tt0018737,905,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,G. W. Pabst,
+A-agreed-criterion,2719,criterion,The Makioka Sisters,1983,tt0086242,42116,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Kon Ichikawa,
+A-agreed-criterion,1535,criterion,Zatoichi the Outlaw,,tt0062518,54278,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-criterion,109,criterion,We Will Never Be Alone Again,2012,tt2273772,295056,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Yann Gonzalez,
+A-agreed-criterion,1811,criterion,The Fabulous Baron Munchausen,1962,tt0054665,41213,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Karel Zeman,
+A-agreed-criterion,1787,criterion,Last Hurrah for Chivalry,1979,tt0077655,13514,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,John Woo,
+A-agreed-criterion,2212,criterion,Gonza the Spearman,1986,tt0091136,102146,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Masahiro Shinoda,
+A-agreed-criterion,2041,criterion,Intimate Relations,1996,tt0116643,68545,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Philip Goodhew,
+A-agreed-criterion,441,criterion,Lost Book Found,1996,tt0230468,167922,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jem Cohen,
+A-agreed-criterion,1938,criterion,Great Expectations,1946,tt0038574,14320,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,David Lean,
+A-agreed-criterion,2753,criterion,The Idle Class,1921,tt0012304,42510,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Charles Chaplin,
+A-agreed-criterion,2621,criterion,Yearning,1964,tt0058349,111398,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Mikio Naruse,
+A-agreed-criterion,2373,criterion,An Enemy of the People,1989,tt0097409,197562,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Satyajit Ray,
+A-agreed-criterion,572,criterion,Out,1957,tt2342245,432827,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Lionel Rogosin,
+A-agreed-criterion,2054,criterion,Pathfinder,1987,tt0093668,2172,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Nils Gaup,
+A-agreed-criterion,2408,criterion,Knife in the Water,1962,tt0056291,11502,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Roman Polanski,
+A-agreed-criterion,2814,criterion,The Private Life of Henry VIII,1933,tt0024473,43122,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Alexander Korda,
+A-agreed-criterion,2340,criterion,Valerie and Her Week of Wonders,1970,tt0066516,46315,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jaromil Jireš,
+A-agreed-criterion,1935,criterion,The Most Dangerous Game,1932,tt0023238,1994,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Ernest B. Schoedsack and Irving Pichel,
+A-agreed-criterion,2487,criterion,Faces of November,1964,tt1727578,322400,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Robert Drew,
+A-agreed-criterion,1304,criterion,Day of Wrath,1943,tt0036506,41391,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Carl Th. Dreyer,
+A-agreed-criterion,2032,criterion,Chinese Odyssey 2002,2002,tt0311913,45379,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jeffrey Lau,
+A-agreed-criterion,2662,criterion,Green Grow the Rushes,1951,tt0043601,136260,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Derek N. Twist,
+A-agreed-criterion,2288,criterion,Spring Dreams,1960,tt0053892,219238,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Keisuke Kinoshita,
+A-agreed-criterion,2436,criterion,Godzilla Raids Again,1955,tt0048127,1679,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Motoyoshi Oda,
+A-agreed-criterion,2457,criterion,Shrimp Stories,1964,tt1441288,163146,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jean Painlevé,
+A-agreed-criterion,111,criterion,Land of My Dreams,2012,tt2319100,295039,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Yann Gonzalez,
+A-agreed-criterion,2710,criterion,Summer with Monika,1953,tt0046345,47735,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Ingmar Bergman,
+A-agreed-criterion,1138,criterion,The Emperor's Naked Army Marches On,1987,tt0092963,51929,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Kazuo Hara,
+A-agreed-criterion,636,criterion,Del mero corazón,1979,tt0079038,260005,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,"Les Blank, Maureen Gosling, and Guillermo Hernandez",
+A-agreed-criterion,226,criterion,The Past,2007,tt0765469,66461,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Héctor Babenco,
+A-agreed-criterion,2482,criterion,The Lonely Passion of Judith Hearne,1987,tt0093431,35841,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jack Clayton,
+A-agreed-criterion,2905,criterion,A Canterbury Tale,1944,tt0036695,15696,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Michael Powell and Emeric Pressburger,
+A-agreed-criterion,2070,criterion,Lone Wolf and Cub: Baby Cart at the River Styx,1972,tt0068816,17810,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Kenji Misumi,
+A-agreed-criterion,2250,criterion,Gate of Hell,1953,tt0045935,43349,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Teinosuke Kinugasa,
+A-agreed-criterion,713,criterion,An Autumn’s Tale,1987,tt0093426,64015,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Mabel Cheung,
+A-agreed-criterion,2300,criterion,The Long Day Closes,1992,tt0104753,49956,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Terence Davies,
+A-agreed-criterion,1156,criterion,Sunlight,1957,tt0215221,532899,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Melvin Van Peebles,
+A-agreed-criterion,601,criterion,My One and Only Love,1957,tt0126354,476351,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Youssef Chahine,
+A-agreed-criterion,2924,criterion,Jubilee,1978,tt0076240,41426,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Derek Jarman,
+A-agreed-criterion,2195,criterion,An Innocent Witch,1965,tt0059554,211708,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Heinosuke Gosho,
+A-agreed-criterion,2247,criterion,La main du diable,1943,tt0035017,54288,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Maurice Tourneur,
+A-agreed-criterion,2579,criterion,"Shozo, a Cat, and Two Women",1956,tt0274686,219236,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Shiro Toyoda,
+A-agreed-criterion,1262,criterion,The House Is Black,1963,tt0336693,44065,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Forugh Farrokhzad,
+A-agreed-criterion,2642,criterion,Princess Yang Kwei-fei,1955,tt0048820,91426,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Kenji Mizoguchi,
+A-agreed-criterion,1952,criterion,La Pointe Courte,1956,tt0048499,54436,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Agnes Varda,
+A-agreed-criterion,1530,criterion,Zatoichi Goes to the Fire Festival,,tt0164982,54283,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-criterion,2590,criterion,Army,1944,tt0037227,168994,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Keisuke Kinoshita,
+A-agreed-criterion,3010,criterion,Fires on the Plain,1959,tt0053121,31427,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Kon Ichikawa,
+A-agreed-criterion,2387,criterion,The White Angel,1955,tt0047832,66893,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Raffaello Matarazzo,
+A-agreed-criterion,2287,criterion,"Sing, Young People!",1963,tt0057632,126860,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Keisuke Kinoshita,
+A-agreed-criterion,2087,criterion,Il bidone,1955,tt0047876,36102,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Federico Fellini,
+A-agreed-criterion,1032,criterion,An Actor’s Revenge,1963,tt0057710,27197,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Kon Ichikawa,
+A-agreed-criterion,1473,criterion,Betty Tells Her Story,1972,tt1715747,339764,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Liane Brandon,
+A-agreed-criterion,1351,criterion,Xiao Wu,1997,tt0144020,52103,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Jia Zhangke,
+A-agreed-criterion,38,criterion,Vulcanizadora,2024,tt28226888,1130188,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,Joel Potrykus,
+A-agreed-metacritic,3115,metacritic,A Streetcar Named Desire,1951,tt0044081,702,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3248,metacritic,No Country for Old Men,2007,tt0477348,6977,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3811,metacritic,West Side Story,2021,tt3581652,511809,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4354,metacritic,Magnolia,1999,tt0175880,334,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3748,metacritic,Traffic,2000,tt0181865,1900,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4634,metacritic,The Fly,1986,tt0091064,9426,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3595,metacritic,One False Move,1992,tt0102592,21128,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4076,metacritic,Shaun of the Dead,2004,tt0365748,747,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3667,metacritic,The Tillman Story,2010,tt1568334,43924,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4522,metacritic,8 Mile,2002,tt0298203,65,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3630,metacritic,Brokeback Mountain,2005,tt0388795,142,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3484,metacritic,Paddington 2,2018,tt4468740,346648,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4502,metacritic,"All Light, Everywhere",2021,tt13622074,574086,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3306,metacritic,EX LIBRIS: The New York Public Library,2017,tt6209282,446173,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3372,metacritic,Sugarcane,2024,tt30319854,1158874,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3851,metacritic,Yes,2026,tt36667493,1149614,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3625,metacritic,Fateless,2006,tt0367082,41508,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3605,metacritic,About Endlessness,2021,tt6817944,348672,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3653,metacritic,Rushmore,1998,tt0128445,11545,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3948,metacritic,Sands of Iwo Jima,1950,tt0041841,18712,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4156,metacritic,The Guns of Navarone,1961,tt0054953,10911,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3638,metacritic,Particle Fever,2014,tt1385956,202141,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4093,metacritic,Straight Outta Compton,2015,tt1398426,277216,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3567,metacritic,American Doctor,2026,tt39149951,1596332,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3705,metacritic,King of the Hill,1993,tt0107322,34024,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3819,metacritic,Birds of Passage,2019,tt6386748,438146,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4450,metacritic,Skyfall,2012,tt1074638,37724,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3116,metacritic,The Maltese Falcon,1941,tt0033870,963,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4171,metacritic,Aliens,1986,tt0090605,679,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3408,metacritic,Fat City,1972,tt0068575,16993,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3437,metacritic,Uncertain,2017,tt1568908,658541,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3594,metacritic,Robot Dreams,2023,tt13429870,838240,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4473,metacritic,Adaptation.,2002,tt0268126,2757,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4111,metacritic,Forbidden Planet,1956,tt0049223,830,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3191,metacritic,The Gunfighter,1950,tt0042531,17409,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3571,metacritic,Pain and Glory,2019,tt8291806,519010,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3847,metacritic,Knocked Up,2007,tt0478311,4964,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3876,metacritic,Neil Young: Heart of Gold,2006,tt0473692,15675,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4010,metacritic,Best in Show,2000,tt0218839,13785,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3657,metacritic,A Tale of Two Cities,1935,tt0027075,17831,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3371,metacritic,Sound of Falling,2026,tt28690468,1221061,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3589,metacritic,Fire at Sea,2016,tt3652526,377151,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4509,metacritic,Freaks,1932,tt0022913,136,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3286,metacritic,Atanarjuat: The Fast Runner,2002,tt0285441,13245,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3558,metacritic,Can You Ever Forgive Me?,2018,tt4595882,401847,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4208,metacritic,"Hail, Caesar!",2016,tt0475290,270487,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3889,metacritic,Kaili Blues,2016,tt4613272,362178,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3618,metacritic,Hereditary,2018,tt7784604,493922,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4583,metacritic,Moonrise Kingdom,2012,tt1748122,83666,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3154,metacritic,Amour,2012,tt1602620,86837,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3804,metacritic,The Salesman,2017,tt5186714,375315,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3379,metacritic,Oppenheimer,2023,tt15398776,872585,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4423,metacritic,Pumping Iron,1977,tt0076578,5205,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3639,metacritic,Tarnation,2004,tt0390538,1435,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3496,metacritic,"Three Billboards Outside Ebbing, Missouri",2017,tt5027774,359940,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3189,metacritic,The Apartment,1960,tt0053604,284,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3300,metacritic,Soundtrack to a Coup d'Etat,2024,tt14452174,1214539,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3909,metacritic,Decision to Leave,2022,tt12477480,705996,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4268,metacritic,The Salt of the Earth,2015,tt3674140,265297,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3542,metacritic,Rose,,tt25399154,1176962,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3244,metacritic,The Diving Bell and the Butterfly,2007,tt0401383,2013,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3586,metacritic,Can You Bring It: Bill T. Jones and D-Man in the Waters,2021,tt14551164,745147,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4639,metacritic,A Man for All Seasons,1966,tt0060665,874,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3096,metacritic,Intolerance,1916,tt0006864,3059,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3185,metacritic,My Undesirable Friends: Part I - Last Air in Moscow,2025,tt33075192,1326015,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3081,metacritic,Rear Window,1954,tt0047396,567,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3588,metacritic,Mulholland Dr.,2001,tt0166924,1018,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3729,metacritic,Maidan,2014,tt3675486,270926,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3693,metacritic,Rebecca,1940,tt0032976,223,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4178,metacritic,Guardians of the Galaxy,2014,tt2015381,118340,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3176,metacritic,Mr. Turner,2014,tt2473794,245700,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3761,metacritic,Springtime in a Small Town,2004,tt0332831,61485,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4032,metacritic,Everything Everywhere All at Once,2022,tt6710474,545611,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3305,metacritic,All Quiet on the Western Front,1930,tt0020629,143,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3359,metacritic,Phantom Thread,2017,tt5776858,400617,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3217,metacritic,No Other Land,2024,tt30953759,1232493,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3772,metacritic,Baby Driver,2017,tt3890160,339403,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3128,metacritic,Nashville,1975,tt0073440,3121,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3913,metacritic,One in a Million,,tt38983842,1596295,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4526,metacritic,Casino Royale,2006,tt0381061,36557,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3381,metacritic,Cold War,2018,tt6543652,440298,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3825,metacritic,The Endurance,2001,tt0264578,32567,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3919,metacritic,Restrepo,2010,tt1559549,39312,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3790,metacritic,A Real Pain,2024,tt21823606,1013850,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3481,metacritic,Crime + Punishment,2018,tt7689908,489983,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3254,metacritic,The Florida Project,2017,tt5649144,394117,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3087,metacritic,Citizen Kane,1941,tt0033467,15,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3433,metacritic,Barry Lyndon,1975,tt0072684,3175,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3820,metacritic,Ilo Ilo,2014,tt2901736,188598,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3732,metacritic,The Odd Couple,1968,tt0063374,11356,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3723,metacritic,Bonnie and Clyde,1967,tt0061418,475,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3953,metacritic,The Love Witch,2016,tt3908142,374052,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,4297,metacritic,The Last Man on the Moon,2016,tt3219604,276537,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3632,metacritic,Mutiny on the Bounty,1935,tt0026752,12311,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3848,metacritic,The Quiet Man,1952,tt0045061,3109,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3880,metacritic,My Life as a Zucchini,2017,tt2321405,393559,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3233,metacritic,The Decline of Western Civilization,1981,tt0082252,21137,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3692,metacritic,Dawson City: Frozen Time,2017,tt5215486,413580,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3332,metacritic,Before Sunset,2004,tt0381681,80,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-metacritic,3612,metacritic,The Diary of a Teenage Girl,2015,tt3172532,250124,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,
+A-agreed-apple,4513,apple,The Cobbler,2015,tt3203616,238215,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,98
+A-agreed-apple,4064,apple,Happy Gilmore,1996,tt0116483,9614,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,92
+A-agreed-apple,4523,apple,Pootie Tang,2001,tt0258038,10615,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,81
+A-agreed-apple,4618,apple,Irezumi,2021,tt0084153,216471,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,86
+A-agreed-apple,4432,apple,The Sound of Music,1965,tt0059742,15121,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,175
+A-agreed-apple,4221,apple,Wagon Master,1950,tt0043117,37327,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,86
+A-agreed-apple,4012,apple,For Your Consideration,2006,tt0470765,14799,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,86
+A-agreed-apple,4346,apple,Death Race 2000,1975,tt0072856,13282,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,80
+A-agreed-apple,4584,apple,Bottle Rocket,1996,tt0115734,13685,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,91
+A-agreed-apple,4084,apple,The Bridge,2006,tt0799954,1666,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,95
+A-agreed-apple,4066,apple,You Don't Mess With the Zohan (Unrated),2008,tt0960144,10661,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,117
+A-agreed-apple,4512,apple,Apollo: Missions to the Moon,2019,tt9782756,613341,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,94
+A-agreed-apple,4230,apple,For Your Eyes Only,1981,tt0082398,699,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,128
+A-agreed-apple,4433,apple,Star Trek: The Motion Picture,1979,tt0079945,152,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,132
+A-agreed-apple,4342,apple,Laura,2005,tt0037008,1939,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,88
+A-agreed-apple,4310,apple,Logan's Run,1976,tt0074812,10803,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,119
+A-agreed-apple,4075,apple,Scott Pilgrim vs. The World,2010,tt0446029,22538,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,112
+A-agreed-apple,4447,apple,iSteve,2013,tt2782834,186606,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,78
+A-agreed-apple,4135,apple,The Man With the Golden Gun,1974,tt0071807,682,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,125
+A-agreed-apple,4294,apple,Quantum of Solace,2008,tt0830515,10764,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,107
+A-agreed-apple,3936,apple,Last Year at Marienbad,1962,tt0054632,4024,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,95
+A-agreed-apple,4038,apple,Neat: The Story of Bourbon,2018,tt7109844,506730,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,76
+A-agreed-apple,4643,apple,Big Game (2014),2015,tt2088003,230179,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,87
+A-agreed-apple,4001,apple,American Anarchist,2017,tt6032170,413049,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,81
+A-agreed-apple,3979,apple,Trail of the Pink Panther,1982,tt0084814,9699,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,97
+A-agreed-apple,4271,apple,Point Break,1991,tt0102685,1089,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,122
+A-agreed-apple,4564,apple,Village of the Damned,1995,tt0114852,12122,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,98
+A-agreed-apple,4278,apple,The Matrix Resurrections,2021,tt10838180,624860,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,148
+A-agreed-apple,3955,apple,Turbo Kid,2020,tt3672742,310135,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,92
+A-agreed-apple,4622,apple,The Picture of Dorian Gray (1945),1945,tt0037988,16559,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,110
+A-agreed-apple,4438,apple,Tomorrow Never Dies,1997,tt0120347,714,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,119
+A-agreed-apple,4401,apple,The Boston Strangler,2004,tt0062755,26690,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,116
+A-agreed-apple,4250,apple,Malibu's Most Wanted,2003,tt0328099,13411,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,86
+A-agreed-apple,4605,apple,How to Steal a Million,1966,tt0060522,3001,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,123
+A-agreed-apple,4229,apple,Licence to Kill,1989,tt0097742,709,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,133
+A-agreed-apple,4377,apple,The Bad Guys 2,2025,tt30017619,1175942,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,104
+A-agreed-apple,4248,apple,Bad Day At Black Rock,1955,tt0047849,14554,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,82
+A-agreed-apple,4053,apple,Kung Fury,2015,tt3472226,251516,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,30
+A-agreed-apple,4426,apple,Once Upon a Time In Mexico,2003,tt0285823,1428,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,102
+A-agreed-apple,4390,apple,Grindhouse: Death Proof,2007,tt1028528,1991,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,114
+A-agreed-apple,4499,apple,Monty Python's the Meaning of Life,1983,tt0085959,4543,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,107
+A-agreed-apple,4542,apple,Star Trek VIII: First Contact,1996,tt0117731,199,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,111
+A-agreed-apple,4099,apple,The Outsiders: Complete Novel,2021,tt0086066,227,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,115
+A-agreed-apple,4081,apple,The Ugly Stepsister,2025,tt29344903,1284120,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,109
+A-agreed-apple,4514,apple,Rosencrantz and Guildenstern Are Dead,1991,tt0100519,18971,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,118
+A-agreed-apple,4635,apple,Machete (2010),2010,tt0985694,23631,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,105
+A-agreed-apple,4143,apple,Spring Breakers,2013,tt2101441,122081,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,94
+A-agreed-apple,4365,apple,On Her Majesty's Secret Service,1969,tt0064757,668,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,142
+A-agreed-apple,4545,apple,Star Trek X: Nemesis,2002,tt0253754,201,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,117
+A-agreed-apple,4260,apple,Oblivion,2013,tt1483013,75612,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,125
+A-agreed-apple,4384,apple,Jackie Brown,1997,tt0119396,184,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,155
+A-agreed-apple,4668,apple,Dracula (1931),1931,tt0021814,138,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,74
+A-agreed-apple,4181,apple,V for Vendetta,2006,tt0434409,752,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,133
+A-agreed-apple,3994,apple,John Wick,2014,tt2911666,245891,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,101
+A-agreed-apple,4480,apple,Eyes Wide Shut,1999,tt0120663,345,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,159
+A-agreed-apple,4326,apple,Deuce Bigalow: Male Gigolo,1999,tt0205000,10402,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,89
+A-agreed-apple,3963,apple,Zoolander,2001,tt0196229,9398,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,90
+A-agreed-apple,4633,apple,Alice In Wonderland (1951),1951,tt0043274,12092,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,76
+A-agreed-apple,4104,apple,Arsenic and Old Lace,1944,tt0036613,212,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,118
+A-agreed-apple,3976,apple,Return of the Pink Panther,1975,tt0072081,11843,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,113
+A-agreed-apple,4472,apple,Long Day's Journey Into Night,1962,tt0056196,43004,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,170
+A-agreed-apple,3977,apple,The Pink Panther Strikes Again,1976,tt0075066,12268,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,103
+A-agreed-apple,4378,apple,The Bad Guys,2022,tt8115900,629542,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,100
+A-agreed-apple,4123,apple,Mad Max 3: Beyond Thunderdome,1985,tt0089530,9355,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,107
+A-agreed-apple,4411,apple,Welcome to Macintosh,2008,tt1247703,14981,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,74
+A-agreed-apple,3943,apple,Sweet Smell of Success,1957,tt0051036,976,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,97
+A-agreed-apple,4063,apple,Joe Dirt,2001,tt0245686,10956,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,91
+A-agreed-apple,4457,apple,Better Off Dead,1985,tt0088794,13667,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,97
+A-agreed-apple,4161,apple,It Came from Outer Space,1953,tt0045920,19483,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,80
+A-agreed-apple,4442,apple,Samsara,2012,tt0770802,89708,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,102
+A-agreed-apple,4067,apple,Clash of the Titans,1981,tt0082186,10323,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,118
+A-agreed-apple,4086,apple,Ninotchka,1939,tt0031725,1859,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,110
+A-agreed-apple,4120,apple,Mad Max: The Road Warrior,1982,tt0082694,8810,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,95
+A-agreed-apple,4628,apple,The Pink Panther (1964),1964,tt0057413,936,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,115
+A-agreed-apple,4209,apple,The Lost Boys,1987,tt0093437,1547,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,97
+A-agreed-apple,4356,apple,Robocop,1987,tt0093870,5548,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,103
+A-agreed-apple,4460,apple,Daddy's Home,2015,tt1528854,274167,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,96
+A-agreed-apple,4345,apple,Ski Bum: The Warren Miller Story,2020,tt9454068,576222,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,94
+A-agreed-apple,4005,apple,The Secret Life of Pets 2,2019,tt5113040,412117,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,86
+A-agreed-apple,4305,apple,Score: A Film Music Documentary,2017,tt4207112,426410,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,93
+A-agreed-apple,4649,apple,Cleopatra (1963),1963,tt0056937,8095,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,251
+A-agreed-apple,4533,apple,Mission: Impossible III,2006,tt0317919,956,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,126
+A-agreed-apple,4270,apple,Star Trek Beyond,2016,tt2660888,188927,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,123
+A-agreed-apple,4105,apple,The Wedding Singer,1998,tt0120888,11003,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,97
+A-agreed-apple,4201,apple,The Big Lebowski,1998,tt0118715,115,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,117
+A-agreed-apple,4389,apple,Inglourious Basterds,2009,tt0361748,16869,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,153
+A-agreed-apple,4597,apple,The Tingler,1959,tt0053363,26857,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,82
+A-agreed-apple,4524,apple,White Christmas,1954,tt0047673,13368,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,120
+A-agreed-apple,4220,apple,The Lost Patrol,1934,tt0025423,46910,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,72
+A-agreed-apple,4391,apple,Grease,1978,tt0077631,621,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,111
+A-agreed-apple,4106,apple,The Waterboy,1998,tt0120484,10663,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,90
+A-agreed-apple,4603,apple,The Big Country,1958,tt0051411,12501,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,167
+A-agreed-apple,4446,apple,Highlander,1986,tt0091203,8009,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,117
+A-agreed-apple,4408,apple,Prometheus,2012,tt1446714,70981,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,124
+A-agreed-apple,4370,apple,Tommy Boy,1999,tt0114694,11381,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,97
+A-agreed-apple,4051,apple,Dune,1985,tt0087182,841,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,156
+A-agreed-apple,4453,apple,Army of Darkness,1993,tt0106308,766,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,81
+A-agreed-apple,4452,apple,Convoy,1978,tt0077369,9584,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,111
+A-agreed-apple,4210,apple,Batman Forever,1995,tt0112462,414,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,122
+A-agreed-apple,4029,apple,A Raisin In the Sun,1961,tt0055353,29478,key-agreement (OMDb imdbID == TMDB imdb_id),,believed,,128
+B-apple-year-title,3934,apple,Ran (1985),1985,tt0089881,11645,OMDb-by-id key == same-year twin's TMDB key,twin 3107,verified,,161
+B-apple-year-title,3938,apple,The Picture of Dorian Gray (1945),1945,tt0037988,16559,OMDb-by-id key == same-year twin's TMDB key,twin 4622,verified,,110
+B-apple-year-title,3945,apple,Rear Window (1954),2013,tt0047396,567,same-year twin's TMDB key,twin 3081,believed,,113
+B-apple-year-title,3946,apple,Vertigo (1958),1958,tt0052357,426,OMDb-by-id key == same-year twin's TMDB key,twin 3090,verified,,129
+B-apple-year-title,3950,apple,House of Wax (1953),1953,tt0045888,18573,OMDb-by-id key == same-year twin's TMDB key,twin 4623,verified,,88
+B-apple-year-title,3954,apple,Frida (2002),2002,tt0120679,1360,OMDb-by-id key == same-year twin's TMDB key,twin 4624,verified,,123
+B-apple-year-title,3961,apple,Phantom of the Opera (1943),1943,tt0036261,15855,OMDb-by-id key == same-year twin's TMDB key,twin 4625,verified,,93
+B-apple-year-title,3971,apple,Sunset Boulevard (1950),1950,tt0043014,599,OMDb-by-id key == same-year twin's TMDB key,twin 3188,verified,,110
+B-apple-year-title,3972,apple,Sabrina (1954),1954,tt0047437,6620,OMDb-by-id key == same-year twin's TMDB key,twin 4626,verified,,114
+B-apple-year-title,3973,apple,The Lost Weekend (1945),1945,tt0037884,28580,OMDb-by-id key == same-year twin's TMDB key,twin 4627,verified,,101
+B-apple-year-title,3975,apple,The Pink Panther (1964),1964,tt0057413,936,OMDb-by-id key == same-year twin's TMDB key,twin 4628,verified,,115
+B-apple-year-title,3989,apple,The War of the Worlds (1953),1953,tt0046534,8974,OMDb-by-id key == same-year twin's TMDB key,twin 4629,verified,,86
+B-apple-year-title,3993,apple,The Ten Commandments (1956),1956,tt0049833,6844,OMDb-by-id key == same-year twin's TMDB key,twin 4630,verified,,232
+B-apple-year-title,4011,apple,The Big Picture (1989),1989,tt0096926,45225,OMDb-by-id key == same-year twin's TMDB key,twin 4631,verified,,101
+B-apple-year-title,4021,apple,Sudden Impact (1983),1983,tt0086383,10650,OMDb-by-id key == same-year twin's TMDB key,twin 4632,verified,,117
+B-apple-year-title,4024,apple,Sleeping Beauty (1959),1959,tt0053285,10882,OMDb-by-id key == same-year twin's TMDB key,twin 3842,verified,,75
+B-apple-year-title,4025,apple,Alice In Wonderland (1951),1951,tt0043274,12092,OMDb-by-id key == same-year twin's TMDB key,twin 4633,verified,,76
+B-apple-year-title,4040,apple,The Fly (1986),1986,tt0091064,9426,OMDb-by-id key == same-year twin's TMDB key,twin 4634,verified,,96
+B-apple-year-title,4046,apple,Snow White and the Seven Dwarfs (1937),1937,tt0029583,408,OMDb-by-id key == same-year twin's TMDB key,twin 3134,verified,,84
+B-apple-year-title,4050,apple,The Elephant Man (1980),1980,tt0080678,1955,OMDb-by-id key == same-year twin's TMDB key,twin 1804,verified,,123
+B-apple-year-title,4071,apple,Invasion of the Body Snatchers (1956),1956,tt0049366,11549,OMDb-by-id key == same-year twin's TMDB key,twin 3245,verified,,81
+B-apple-year-title,4080,apple,Baby Doll (1956),1956,tt0048973,40478,OMDb-by-id key == same-year twin's TMDB key,twin 1185,verified,,115
+B-apple-year-title,4090,apple,Machete (2010),2010,tt0985694,23631,OMDb-by-id key == same-year twin's TMDB key,twin 4635,verified,,105
+B-apple-year-title,4101,apple,The Conversation (1974),1974,tt0071360,592,OMDb-by-id key == same-year twin's TMDB key,twin 3469,verified,,114
+B-apple-year-title,4107,apple,Little Shop of Horrors (1986),1986,tt0091419,10776,OMDb-by-id key == same-year twin's TMDB key,twin 4637,verified,,94
+B-apple-year-title,4112,apple,A Man for All Seasons (1966),1966,tt0060665,874,OMDb-by-id key == same-year twin's TMDB key,twin 4639,verified,,120
+B-apple-year-title,4113,apple,Oklahoma! (1955),1956,tt0048445,13936,OMDb-by-id key == same-year twin's TMDB key,twin 4640,verified,,148
+B-apple-year-title,4117,apple,The Odd Couple (1968),1968,tt0063374,11356,OMDb-by-id key == same-year twin's TMDB key,twin 3732,verified,,106
+B-apple-year-title,4118,apple,A Star Is Born (1954),1955,tt0047522,3111,OMDb-by-id key == same-year twin's TMDB key,twin 3440,verified,,176
+B-apple-year-title,4125,apple,Giant (1956),1956,tt0049261,1712,OMDb-by-id key == same-year twin's TMDB key,twin 4641,verified,,201
+B-apple-year-title,4151,apple,The Big Sleep (1946),1946,tt0038355,910,OMDb-by-id key == same-year twin's TMDB key,twin 3704,verified,,114
+B-apple-year-title,4160,apple,Creature from the Black Lagoon (1954),1954,tt0046876,10973,OMDb-by-id key == same-year twin's TMDB key,twin 4642,verified,,79
+B-apple-year-title,4166,apple,Out of the Past (1947),1947,tt0039689,678,OMDb-by-id key == same-year twin's TMDB key,twin 3831,verified,,97
+B-apple-year-title,4169,apple,Big Game (2014),2015,tt2088003,230179,OMDb-by-id key == same-year twin's TMDB key,twin 4643,verified,,87
+B-apple-year-title,4182,apple,The Piano (1993),1993,tt0107822,713,OMDb-by-id key == same-year twin's TMDB key,twin 3455,verified,,121
+B-apple-year-title,4200,apple,Anna Karenina (2012),2012,tt1781769,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Anna Karenina (2012) Joe Wright,believed,,130
+B-apple-year-title,4203,apple,Fargo (1996),1996,tt0116282,275,OMDb-by-id key == same-year twin's TMDB key,twin 3520,verified,,98
+B-apple-year-title,4215,apple,Point Blank (1967),1967,tt0062138,26039,OMDb-by-id key == same-year twin's TMDB key,twin 3663,verified,,92
+B-apple-year-title,4231,apple,King Kong (1976),1976,tt0074751,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: King Kong (1976) John Guillermin,believed,,135
+B-apple-year-title,4234,apple,The Maltese Falcon (1941),1941,tt0033870,963,OMDb-by-id key == same-year twin's TMDB key,twin 3116,verified,,101
+B-apple-year-title,4243,apple,Red Dawn (1984),1984,tt0087985,1880,OMDb-by-id key == same-year twin's TMDB key,twin 4644,verified,,114
+B-apple-year-title,4244,apple,New Life (2023),2024,tt18973958,1148027,OMDb-by-id key == same-year twin's TMDB key,twin 4645,verified,,84
+B-apple-year-title,4249,apple,Hairspray (1988),1988,tt0095270,11054,OMDb-by-id key == same-year twin's TMDB key,twin 4646,verified,,92
+B-apple-year-title,4254,apple,Under the Skin (2014),2014,tt1441395,97370,OMDb-by-id key == same-year twin's TMDB key,twin 4647,verified,,108
+B-apple-year-title,4263,apple,Cleopatra (1963),1963,tt0056937,8095,OMDb-by-id key == same-year twin's TMDB key,twin 4649,verified,,251
+B-apple-year-title,4273,apple,Hamlet (1996),1996,tt0116477,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Hamlet (1996) Kenneth Branagh,believed,,243
+B-apple-year-title,4276,apple,The Fly (1958),1958,tt0051622,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: The Fly (1958) Kurt Neumann,believed,,94
+B-apple-year-title,4284,apple,Coco (2017),2017,tt2380307,354912,OMDb-by-id key == same-year twin's TMDB key,twin 4650,verified,,106
+B-apple-year-title,4298,apple,The Little Prince (2015),2015,tt1754656,309809,OMDb-by-id key == same-year twin's TMDB key,twin 4651,verified,,107
+B-apple-year-title,4302,apple,Gangs of New York (2002),2002,tt0217505,3131,OMDb-by-id key == same-year twin's TMDB key,twin 4652,verified,,167
+B-apple-year-title,4308,apple,King Kong (1933),1933,tt0024216,244,OMDb-by-id key == same-year twin's TMDB key,twin 3253,verified,,104
+B-apple-year-title,4311,apple,The Breaking Point (1950),1950,tt0042281,37954,OMDb-by-id key == same-year twin's TMDB key,twin 4653,verified,,97
+B-apple-year-title,4323,apple,Flash Gordon (1980),1980,tt0080745,3604,OMDb-by-id key == same-year twin's TMDB key,twin 4654,verified,,111
+B-apple-year-title,4336,apple,The Man Who Fell to Earth (1976),1976,tt0074851,991,OMDb-by-id key == same-year twin's TMDB key,twin 1703,verified,,139
+B-apple-year-title,4337,apple,Pretty Poison (1968),1968,tt0063456,32969,OMDb-by-id key == same-year twin's TMDB key,twin 4655,verified,,89
+B-apple-year-title,4340,apple,Rollerball (1975),1975,tt0073631,11484,OMDb-by-id key == same-year twin's TMDB key,twin 4656,verified,,125
+B-apple-year-title,4359,apple,Inside Out (2015),2015,tt2096673,150540,OMDb-by-id key == same-year twin's TMDB key,twin 3184,verified,,95
+B-apple-year-title,4360,apple,Soul (2020),2020,tt2948372,508442,OMDb-by-id key == same-year twin's TMDB key,twin 4657,verified,,101
+B-apple-year-title,4397,apple,Cat On a Hot Tin Roof (1958),1958,tt0051459,261,OMDb-by-id key == same-year twin's TMDB key,twin 4658,verified,,108
+B-apple-year-title,4422,apple,Nosferatu (2024),2024,tt5040012,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Nosferatu (2024) Robert Eggers,believed,,133
+B-apple-year-title,4430,apple,The Killers (1946),1946,tt0038669,14638,OMDb-by-id key == same-year twin's TMDB key,twin 4659,verified,,102
+B-apple-year-title,4435,apple,The Day the Earth Stood Still (1951),1951,tt0043456,828,OMDb-by-id key == same-year twin's TMDB key,twin 4660,verified,,92
+B-apple-year-title,4436,apple,Used Cars (1980),1980,tt0081698,14475,OMDb-by-id key == same-year twin's TMDB key,twin 4661,verified,,113
+B-apple-year-title,4444,apple,Road House (1989),1989,tt0098206,10135,OMDb-by-id key == same-year twin's TMDB key,twin 4662,verified,,114
+B-apple-year-title,4458,metacritic,Doctor Strange,2016,tt1211837,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Doctor Strange (2016) Scott Derrickson,believed,,
+B-apple-year-title,4461,apple,Friday the 13th (1980),1980,tt0080761,4488,OMDb-by-id key == same-year twin's TMDB key,twin 4664,verified,,95
+B-apple-year-title,4470,apple,12 Angry Men (1957),1957,tt0050083,389,OMDb-by-id key == same-year twin's TMDB key,twin 3118,verified,,96
+B-apple-year-title,4477,apple,Lolita (1962),1962,tt0056193,802,OMDb-by-id key == same-year twin's TMDB key,twin 4665,verified,,154
+B-apple-year-title,4483,apple,Carrie (1976),1976,tt0074285,7340,OMDb-by-id key == same-year twin's TMDB key,twin 17,verified,,98
+B-apple-year-title,4491,apple,The Postman Always Rings Twice (1946),1946,tt0038854,25736,OMDb-by-id key == same-year twin's TMDB key,twin 4666,verified,,113
+B-apple-year-title,4498,apple,Brazil (1985),1985,tt0088846,68,OMDb-by-id key == same-year twin's TMDB key,twin 4667,verified,,132
+B-apple-year-title,4510,apple,Apollo 11 (2019),2019,tt8760684,549559,OMDb-by-id key == same-year twin's TMDB key,twin 3545,verified,,93
+B-apple-year-title,4529,apple,Frankenstein (1931),1931,tt0021884,3035,OMDb-by-id key == same-year twin's TMDB key,twin 3296,verified,,70
+B-apple-year-title,4530,apple,Psycho (1960),1960,tt0054215,539,OMDb-by-id key == same-year twin's TMDB key,twin 3112,verified,,109
+B-apple-year-title,4534,apple,The Mummy (1932),1932,tt0023245,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: The Mummy (1932) Karl Freund,believed,,73
+B-apple-year-title,4540,apple,Scarface (1983),1983,tt0086250,,imdb external_id from 08-24 session (believed; OMDb-by-id record shown),OMDb: Scarface (1983) Brian De Palma,believed,,170
+B-apple-year-title,4548,apple,Dracula (1931),1931,tt0021814,138,OMDb-by-id key == same-year twin's TMDB key,twin 4668,verified,,74
+B-apple-year-title,4556,apple,Catch-22 (1970),1970,tt0065528,10364,OMDb-by-id key == same-year twin's TMDB key,twin 4670,verified,,122
+B-apple-year-title,4563,apple,Scarface (1932),1932,tt0023427,877,OMDb-by-id key == same-year twin's TMDB key,twin 3382,verified,,94
+B-apple-year-title,4593,apple,Cinderella (1950),1950,tt0042332,11224,OMDb-by-id key == same-year twin's TMDB key,twin 3899,verified,,75
+B-apple-year-title,4600,apple,The Adventures of Robin Hood (1938),1938,tt0029843,10907,OMDb-by-id key == same-year twin's TMDB key,twin 4671,verified,,102
+B-apple-year-title,4604,apple,The Best Years of Our Lives (1946),1946,tt0036868,887,OMDb-by-id key == same-year twin's TMDB key,twin 3221,verified,,170
+C-edition,1909,criterion,SCENES FROM A MARRIAGE: Theatrical Version,1973,tt6725014,133919,TMDB exact normalized title at original year,work='Scenes from a Marriage' 1974; edition=['theatrical version']; films.year=1973,verified,Ingmar Bergman,
+C-edition,2416,criterion,FANNY AND ALEXANDER: Theatrical Version,1982,tt0083922,5961,TMDB exact normalized title at original year,work='Fanny and Alexander' 1982; edition=['theatrical version']; films.year=1982,verified,Ingmar Bergman,
+C-edition,3393,metacritic,Eyes Without a Face [re-release],2003,tt0053459,31417,TMDB exact normalized title at original year,work='Eyes Without a Face' 1960; edition=['re-release']; films.year=2003,verified,,
+C-edition,3414,metacritic,Investigation of a Citizen Above Suspicion [re-release],2003,tt0065889,26451,TMDB exact normalized title at original year,work='Investigation of a Citizen Above Suspicion' 1970; edition=['re-release']; films.year=1970,verified,,
+C-edition,3459,metacritic,Piccadilly [re-release],2004,tt0020269,51079,TMDB exact normalized title at original year,work='Piccadilly' 1929; edition=['re-release']; films.year=2004,verified,,
+C-edition,3461,metacritic,Quai des Orfèvres [re-release],2002,tt0039739,49842,TMDB exact normalized title at original year,work='Jenny Lamour' 1947; edition=['re-release']; films.year=2002,verified,,
+C-edition,3498,metacritic,Overlord [re-release],2006,tt0073502,55343,TMDB exact normalized title at original year,work='Overlord' 1975; edition=['re-release']; films.year=2006,verified,,
+C-edition,3508,metacritic,Mafioso [re-release],2007,tt0056210,34866,TMDB exact normalized title at original year,work='Mafioso' 1962; edition=['re-release']; films.year=2007,verified,,
+C-edition,3517,metacritic,Donnie Darko: The Director's Cut,2004,tt0246578,141,TMDB exact normalized title at original year,"work='Donnie Darko' 2001; edition=[""the director's cut""]; films.year=2004",verified,,
+C-edition,3582,metacritic,I Vitelloni [re-release],2003,tt0046521,12548,TMDB exact normalized title at original year,work='I Vitelloni' 1953; edition=['re-release']; films.year=2003,verified,,
+C-edition,3745,metacritic,The Umbrellas of Cherbourg (re-released),2004,tt0058450,5967,TMDB exact normalized title at original year,work='The Umbrellas of Cherbourg' 1964; edition=['re-released']; films.year=2004,verified,,
+C-edition,3999,apple,How the Grinch Stole Christmas: The Ultimate Edition,2015,tt0170016,8871,TMDB exact normalized title at original year,work='How the Grinch Stole Christmas' 2000; edition=['the ultimate edition']; films.year=2015,verified,,75
+C-edition,4048,apple,Lawrence of Arabia (Restored Version),1989,tt0056172,947,TMDB exact normalized title at original year,work='Lawrence of Arabia' 1962; edition=['restored version']; films.year=1989,verified,,227
+C-edition,4070,apple,Phantasm: Remastered,2016,tt0079714,9638,TMDB exact normalized title at original year,work='Phantasm' 1979; edition=['remastered']; films.year=2016,verified,,89
+C-edition,4094,apple,Straight Outta Compton,2015,tt1398426,277216,TMDB exact normalized title at original year,"work='Straight Outta Compton' 2015; edition=[""unrated director's cut""]; films.year=2015",verified,,147
+C-edition,4098,apple,Apocalypse Now (Final Cut),1979,tt0078788,28,TMDB exact normalized title at original year,work='Apocalypse Now' 1979; edition=['final cut']; films.year=1979,verified,,182
+C-edition,4131,apple,Paul (Unrated) [2011],2011,tt1092026,39513,TMDB exact normalized title at original year (several),work='Paul' 2011; edition=['unrated']; films.year=2011,verified,,109
+C-edition,4133,apple,My Man Godfrey (In Color & Restored),1936,tt0028010,13562,TMDB exact normalized title at original year,work='My Man Godfrey' 1936; edition=['in color & restored']; films.year=1936,verified,,93
+C-edition,4293,apple,Ghost In the Shell (25th Anniversary Edition),1996,tt0113568,9323,TMDB exact normalized title at original year,work='Ghost in the Shell' 1995; edition=['25th anniversary edition']; films.year=1996,verified,,83
+C-edition,4303,apple,Goodfellas (Remastered Feature),2015,tt0099685,769,TMDB exact normalized title at original year,work='GoodFellas' 1990; edition=['remastered feature']; films.year=2015,verified,,145
+C-edition,4304,apple,American Psycho (Uncut Version),2000,tt0144084,1359,TMDB exact normalized title at original year,work='American Psycho' 2000; edition=['uncut version']; films.year=2000,verified,,102
+C-edition,4404,apple,Donnie Darko: Anniversary Special Edition,2001,tt0246578,141,TMDB exact normalized title at original year,work='Donnie Darko' 2001; edition=['anniversary special edition']; films.year=2001,verified,,113
+C-edition,4409,apple,Blade Runner (The Final Cut),2007,tt0083658,78,TMDB exact normalized title at original year,work='Blade Runner' 1982; edition=['the final cut']; films.year=2007,verified,,117
+C-edition,4412,apple,Waiting (Unrated) [2005],2005,tt0348333,7553,TMDB exact normalized title at original year,work='Waiting...' 2005; edition=['unrated']; films.year=2005,verified,,94
+C-edition,4503,apple,Moonwalk One (The Director's Cut),2009,,,unresolved,"NEEDS HUMAN; parsed='Moonwalk One' eds=[""the director's cut""]; cands=[('Moonwalk One', 1972), ('Creating the Time Capsule: The Making of Moonwalk One', None)]",proposed,,108
+C-edition,4532,apple,National Lampoon's Van Wilder: The Unrated Version,2002,tt0283111,11452,TMDB exact normalized title at original year,work='National Lampoon's Van Wilder' 2002; edition=['the unrated version']; films.year=2002,verified,,94
+C-edition,4557,apple,Funny People (Unrated) [2009],2009,tt1201167,20829,TMDB exact normalized title at original year,work='Funny People' 2009; edition=['unrated']; films.year=2009,verified,,153
+C-edition,4599,apple,The Exorcist: Extended Director's Cut,2000,tt0070047,9552,TMDB exact normalized title at original year,"work='The Exorcist' 1973; edition=[""extended director's cut""]; films.year=2000",verified,,132
+D-disagree,113,criterion,Intermission,2007,tt1058525,295051,Criterion director matches TMDB-side; OMDb record wrong,A=Intermission (2008) Alexander Pilon 7 min v=N/A tt1367377,verified,Yann Gonzalez,
+D-disagree,134,criterion,Suspended,2009,tt1352846,,Criterion director matches OMDb-side; TMDB link wrong,B=Suspended (2008) Jonathan Garda N/A v=N/A tt1996394,verified,Kimi Takesue,
+D-disagree,140,criterion,Bound,1995,tt0112565,,Criterion director matches OMDb-side; TMDB link wrong,"B=Bound (1996) Lana Wachowski, Lilly Wachowski 109 min v=65,793 tt0115736",verified,Kimi Takesue,
+D-disagree,184,criterion,Resurrection,,,,PROPOSED ? (Claude film knowledge; Resurrection: which one does Criterion stream?) — ratify,"A=Resurrection (2022) Andrew Semans 103 min v=13,704 tt11540726 | B=Resurrection (2025) Bi Gan 160 min v=2,040 tt29002950",proposed,,
+D-disagree,187,criterion,"Muhammad Ali, the Greatest",1974,tt0219935,29211,Criterion director matches TMDB-side; OMDb record wrong,"A=Muhammad Ali, the Greatest (1974) N/A N/A v=N/A tt29102679",verified,William Klein,
+D-disagree,225,criterion,Dreams,2024,tt30810787,,Criterion director matches OMDb-side; TMDB link wrong,"B=Dreams (2025) Michel Franco 95 min v=1,167 tt31710990",verified,Dag Johan Haugerud,
+D-disagree,253,criterion,Nest,2022,tt16965946,,Criterion director matches OMDb-side; TMDB link wrong,B=Nest (2021) James Hunter 9 min v=6 tt14023256,verified,Hlynur Pálmason,
+D-disagree,260,criterion,Twice as Nice,1989,tt0234932,440601,Criterion director matches TMDB-side; OMDb record wrong,A=Twice as Nice (1989) George Marsh N/A v=N/A tt0153348,verified,Jessie Maple,
+D-disagree,276,criterion,Tiger,2025,tt34719395,1403451,"TMDB credits: directed by Loren Waters (13-min short, 2025)",corrected during Phase 3 (director-credit search),verified,Loren Waters,
+D-disagree,285,criterion,Rat Trap,1982,tt0082318,,Criterion director matches OMDb-side; TMDB link wrong,B=None (None) None None v=None tt39330338,verified,Adoor Gopalakrishnan,
+D-disagree,294,criterion,Three Stories,1997,tt0120372,149937,Criterion director matches TMDB-side; OMDb record wrong,"A=Three Stories (1998) Robert R. Durbin, Pavel Vogler 23 min v=N/A tt0208512",verified,Kira Muratova,
+D-disagree,319,criterion,Nostos,2024,tt27145248,1548553,"TMDB credits: directed by Sofia Camargo (14-min short, 2023); OMDb record has Director N/A",corrected during Phase 3 (director-credit search),verified,Sofía Camargo,
+D-disagree,338,criterion,Marrow,2016,NONE,,Criterion director matches neither authority record,expected verdict: no match / review,verified,Anohni,
+D-disagree,414,criterion,Red Card,2023,tt21349906,1155230,Criterion director matches TMDB-side; OMDb record wrong,A=The Red Card (2022) Filipp Romà Romanychev N/A v=N/A tt26673534,verified,Ougie Pak,
+D-disagree,423,criterion,Grace,2024,tt23039638,1217197,Criterion director matches TMDB-side; OMDb record wrong,A=Grace (2024) Sara Hills 14 min v=N/A tt27440782,verified,Natalie Jasmine Harris,
+D-disagree,452,criterion,Counting,2015,tt4462082,,Criterion director matches OMDb-side; TMDB link wrong,B=Counting (2016) Dan Pal 10 min v=N/A tt6199250,verified,Jem Cohen,
+D-disagree,519,criterion,It’s Not Me,,tt1163752,,PROPOSED A (Claude film knowledge; ) — ratify,"A=It's Not Me, I Swear! (2008) Philippe Falardeau 110 min v=2,414 tt1163752 | B=Já nejsem já (1986) Václav Vorlícek 90 min v=59 tt0175793",proposed,,
+D-disagree,539,criterion,God is Good,,tt34208918,,"PROPOSED B (Claude film knowledge; Criterion short, 21 min) — ratify",A=God Is Good (2025) Jeff Deverett 100 min v=79 tt33371430 | B=God Is Good (2024) C Prinz 21 min v=N/A tt34208918,proposed,,
+D-disagree,578,criterion,Ring,1998,tt0178868,2671,Criterion director matches TMDB-side; OMDb record wrong,A=King of the Ring (1998) Kevin Dunn 180 min v=491 tt0311996,verified,Hideo Nakata,
+D-disagree,587,criterion,Here,2023,tt26448954,,Criterion director matches OMDb-side; TMDB link wrong,"B=Here (2024) Robert Zemeckis 104 min v=27,345 tt18272208",verified,Bas Devos,
+D-disagree,606,criterion,Destiny,1997,tt0119629,,Criterion director matches OMDb-side; TMDB link wrong,B=None (None) None None v=None tt33363484,verified,Youssef Chahine,
+D-disagree,667,criterion,The Island,1974,tt0394617,405107,"Criterion director == candidate director; IMDb Type=episode (Die Insel, 25 min)",corrected during Phase 3 scoring,verified,Wim Wenders,
+D-disagree,722,criterion,Theta,2022,tt26653472,1064638,Criterion director matches TMDB-side; OMDb record wrong,"A=We Rise, Delta Sigma Theta and the Path to Leadership (2021) Akisa Omulepu N/A v=N/A tt15781248",verified,Lawrence Lek,
+D-disagree,876,criterion,Kid,1984,tt0087549,,Criterion director matches OMDb-side; TMDB link wrong,"B=The Karate Kid (1984) John G. Avildsen 126 min v=269,111 tt0087538",verified,Hal Hartley,
+D-disagree,909,criterion,Funeral,2018,tt9282948,594911,Criterion director matches TMDB-side; OMDb record wrong,A=Funeral (2018) Wu Qin 31 min v=N/A tt10084868,verified,Leah Shore,
+D-disagree,915,criterion,No Ordinary Man,2021,tt12786834,728875,Criterion director matches TMDB-side; OMDb record wrong,A=No Ordinary Man (2021) Raheeb Ray Ahmad N/A v=N/A tt13624940,verified,Aisling Chin-Yee,
+D-disagree,932,criterion,aletheia,1992,tt27832863,,Criterion director matches OMDb-side; TMDB link wrong,B=Aletheia (2019) Thotti Cardoso 61 min v=N/A tt12257330,verified,"Tran, T. Kim-Trang",
+D-disagree,968,criterion,LYNCH (one),2007,,,"PROPOSED ? (Claude film knowledge; same doc, two OMDb entries) — ratify",BOTH WRONG? A=Lynch (One) (2008) Jason S. 85 min v=22 tt26740823 | B=Lynch (2007) Jason S. 84 min v=974 tt1032207,proposed,blackANDwhite,
+D-disagree,995,criterion,Colors,1976,tt0075122,201650,Criterion director matches TMDB-side; OMDb record wrong,A=Racing Colors (1976) Stephen Iadereste 90 min v=N/A tt0256295,verified,Abbas Kiarostami,
+D-disagree,1013,criterion,Home Sweet Home,1982,tt0084082,307677,Criterion director matches TMDB-side; OMDb record wrong,A=Home Sweet Home (1981) Nettie Peña 85 min v=972 tt0082522,verified,Mike Leigh,
+D-disagree,1018,criterion,The Cup,,tt0201840,,PROPOSED A (Claude film knowledge; Khyentse Norbu) — ratify,"A=The Cup (1999) Khyentse Norbu 93 min v=3,465 tt0201840 | B=The Cup (2011) Simon Wincer 99 min v=884 tt1650056",proposed,,
+D-disagree,1037,criterion,Take Out,2004,tt0391483,,Criterion director matches OMDb-side; TMDB link wrong,B=Take Out (2005) Seth Landau N/A v=70 tt0400871,verified,Sean Baker and Shih-Ching Tsou,
+D-disagree,1110,criterion,Goose,,tt0058092,,PROPOSED A (Claude film knowledge; ) — ratify,"A=Father Goose (1964) Ralph Nelson 118 min v=12,786 tt0058092 | B=Goose (2017) Arie Esiri, Chuko Esiri 9 min v=13 tt8637194",proposed,,
+D-disagree,1191,criterion,Alone,2017,tt6588242,441956,Criterion director matches TMDB-side; OMDb record wrong,"A=Alone (2017) Daniel Attrill, Louis Taylor 70 min v=26 tt4034112",verified,Garrett Bradley,
+D-disagree,1288,criterion,Rupture,2017,tt6991116,473403,Criterion director matches TMDB-side; OMDb record wrong,A=Rupture (2017) Igor Sukhikh 27 min v=N/A tt7997736,verified,Yassmina Karajah,
+D-disagree,1307,criterion,La ronde,1964,tt0058533,63876,Criterion director matches TMDB-side; OMDb record wrong,A=Entrez dans la ronde (1965) François Chatel N/A v=N/A tt0457878,verified,Roger Vadim,
+D-disagree,1344,criterion,Mutts,2019,tt11598898,656477,Criterion director matches TMDB-side; OMDb record wrong,A=Mutts (2019) Alex Zamm N/A v=N/A tt3260194,verified,Halima Ouardiri,
+D-disagree,1458,criterion,Martha,1974,tt0070374,,Criterion director matches OMDb-side; TMDB link wrong,B=Martha (1974) Berend Boudewijn 57 min v=N/A tt1661406,verified,Rainer Werner Fassbinder,
+D-disagree,1569,criterion,Visitation,2011,tt2044907,386763,Criterion director == candidate director (found via OMDb s=/TMDB; TMDB year 2013 vs Criterion 2011),corrected during Phase 3 scoring,verified,Suzan Pitt,
+D-disagree,1608,criterion,Fatherland,2017,tt7433560,578522,Criterion director matches TMDB-side; OMDb record wrong,A=Fatherland (2017) Ryan Surratt N/A v=N/A tt3878562,verified,George Sikharulidze,
+D-disagree,1625,criterion,The Fountain,2007,tt3950812,,Criterion director matches OMDb-side; TMDB link wrong,"B=The Fountain (2006) Darren Aronofsky 97 min v=255,646 tt0414993",verified,Lena Dunham,
+D-disagree,1676,criterion,L'humanité,1999,tt0197569,65296,Criterion director matches TMDB-side; OMDb record wrong,A=Au nom de l'humanité - Le tribunal de la Haye (1999) Edina Ajrulovski 95 min v=N/A tt0300963,verified,Bruno Dumont,
+D-disagree,1698,criterion,Uncle,1959,tt0171789,346920,Criterion director matches TMDB-side; OMDb record wrong,A=Uncle Was a Vampire (1959) Steno 85 min v=369 tt0053340,verified,Jaromil Jireš,
+D-disagree,1776,criterion,Youth of the World,,tt0247443,,PROPOSED B (Claude film knowledge; 1936 Olympic film) — ratify,"A=Youth of the World (2010) Samantha Khan N/A v=N/A tt15003304 | B=Jugend der Welt. Der Film von den IV. Olympischen Winterspielen in Garmisch-Partenkirchen (1936) Herbert Brieger, Carl Junghans 38 min v=160 tt0247443",proposed,,
+D-disagree,1794,criterion,Sisters,1973,tt0070698,22307,Criterion director matches TMDB-side; OMDb record wrong,A=Japan's Pleasure District: Three Sisters at a Turkish Bath (1973) Kôyû Ohara 67 min v=N/A tt0286847,verified,Brian De Palma,
+D-disagree,1881,criterion,The Threepenny Opera,1931,tt0021818,,PROPOSED A (Claude film knowledge; German version; human should confirm) — ratify,"A=The Threepenny Opera (1931) Georg Wilhelm Pabst 104 min v=2,706 tt0021818 | B=The Threepenny Opera (1931) Georg Wilhelm Pabst 104 min v=235 tt0022235",proposed,G.W. Pabst,
+D-disagree,1941,criterion,Maîtresse,1976,tt0074883,46978,Criterion director matches TMDB-side; OMDb record wrong,A=Une vieille maîtresse (1975) Jacques Trébouta N/A v=8 tt0380785,verified,Barbet Schroeder,
+D-disagree,1993,criterion,The Executioner,1963,tt0057643,,Criterion director matches OMDb-side; TMDB link wrong,B=None (None) None None v=None tt20077770,verified,Luis García Berlanga,
+D-disagree,2174,criterion,The Curve,1999,tt0374560,,Criterion director matches OMDb-side; TMDB link wrong,"B=Dead Man's Curve (1998) Dan Rosen 91 min v=6,435 tt0123034",verified,Edwige Shaki,
+D-disagree,2333,criterion,Woman,1948,tt0040670,165129,Criterion director matches TMDB-side; OMDb record wrong,"A=Letter from an Unknown Woman (1948) Max Ophüls 87 min v=14,625 tt0040536",verified,Keisuke Kinoshita,
+D-disagree,2389,criterion,An Ideal Husband,1947,tt0039485,,Criterion director matches OMDb-side; TMDB link wrong,B=Un marido ideal (1947) Luis Bayón Herrera N/A v=8 tt0180820,verified,Alexander Korda,
+D-disagree,2476,criterion,Mirror,1974,tt0072443,1396,Criterion director matches TMDB-side; OMDb record wrong,A=Ghost of the Mirror (1974) Tsun-Shou Sung 92 min v=79 tt0071586,verified,Andrei Tarkovsky,
+D-disagree,2522,criterion,Revenge,1989,tt0102497,,PROPOSED A (Claude film knowledge; Shinarbaev spelling) — ratify,"BOTH WRONG? A=Revenge (1989) Yermek Shinarbayev 100 min v=690 tt0102497 | B=Revenge (1990) Tony Scott 124 min v=22,284 tt0100485",proposed,Ermek Shinarbaev,
+D-disagree,2592,criterion,Silence,1971,tt0067755,92670,Criterion director matches TMDB-side; OMDb record wrong,"A=Land of Silence and Darkness (1971) Werner Herzog 85 min v=3,276 tt0067324",verified,Masahiro Shinoda,
+D-disagree,2652,criterion,Socrates,1971,tt0210296,74778,Criterion director matches TMDB-side; OMDb record wrong,A=The Trial of Socrates (1971) Bernard Wilets 28 min v=N/A tt7913604,verified,Roberto Rossellini,
+D-disagree,2897,criterion,Jigoku,1960,tt0154683,50173,Criterion director matches TMDB-side; OMDb record wrong,A=Nippatsume wa jigoku-iki daze (1960) Shigehiro Ozawa 90 min v=19 tt0201804,verified,Nobuo Nakagawa,
+D-disagree,2949,criterion,Salesman,1968,tt0064921,27375,Criterion director matches TMDB-side; OMDb record wrong,A=Star Spangled Salesman (1968) Norman Maurer 18 min v=27 tt0061026,verified,"Albert Maysles, David Maysles, and Charlotte Zwerin",
+D-disagree,2990,criterion,Masculin féminin,1966,tt0060675,4710,PROPOSED B (A is derivative/junk shape) — ratify,"A=Bande-annonce de 'Masculin féminin' (1966) Jean-Luc Godard 2 min v=40 tt5235658 | B=Masculine Feminine (1966) Jean-Luc Godard 103 min v=18,464 tt0060675",proposed,Jean-Luc Godard,
+D-disagree,3027,criterion,Old Man,2012,tt2088849,,Criterion director matches OMDb-side; TMDB link wrong,B=Old Man (2025) Alex Helmer 28 min v=N/A tt34169288,verified,Leah Shore,
+D-disagree,3124,metacritic,"Summer of Soul (...Or, When the Revolution Could Not Be Televised)",2021,tt11422728,,PROPOSED A (votes dominate ≥20×) — ratify,"A=Summer of Soul (...Or, When the Revolution Could Not Be Televised) (2021) Questlove 118 min v=14,711 tt11422728 | B=Black Woodstock (1969) Hal Tulchin N/A v=43 tt7378922",proposed,,
+D-disagree,3148,metacritic,Kill Bill: The Whole Bloody Affair,2025,tt6019206,,PROPOSED A (votes dominate ≥20×) — ratify,"A=Kill Bill: The Whole Bloody Affair (2025) Quentin Tarantino 253 min v=36,729 tt6019206 | B=Yuki's Revenge (2025) Quentin Tarantino 10 min v=1,388 tt39075285",proposed,,
+D-disagree,3153,metacritic,Rocks,2021,tt9067182,,PROPOSED B (Claude film knowledge; Gavron) — ratify,"A=On the Rocks (2020) Sofia Coppola 96 min v=39,373 tt9606374 | B=Rocks (2019) Sarah Gavron 93 min v=5,688 tt9067182",proposed,,
+D-disagree,3201,metacritic,Carlos,2010,,,PROPOSED ? (Claude film knowledge; OMDb thin record for the known tt) — ratify,"A=Carlos (2010) Olivier Assayas 165 min v=N/A tt33398096 | B=Carlos (2010) N/A 2 min v=14,539 tt1321865",proposed,,
+D-disagree,3297,metacritic,Her,2013,tt1798709,152601,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Disappearance of Eleanor Rigby: Her (2013) Ned Benson 100 min v=9,849 tt3720788 | B=Her (2014) Spike Jonze 126 min v=725,639 tt1798709",proposed,,
+D-disagree,3342,metacritic,Seeds,2026,tt34963731,,PROPOSED B (Claude film knowledge; Brittany Shyne) — ratify,A=Seeds (2025) Yuliya Dorofeeva 5 min v=5 tt35669385 | B=Seeds (2025) Brittany Shyne 125 min v=N/A tt34963731,proposed,,
+D-disagree,3384,metacritic,Once,2007,tt0907657,5723,PROPOSED B (votes dominate ≥20×) — ratify,"A=Once (2007) Barbara Sternberg 5 min v=N/A tt9805526 | B=Once (2006) John Carney 86 min v=123,896 tt0907657",proposed,,
+D-disagree,3399,metacritic,The Passenger (re-release),2005,,,PROPOSED ? (Claude film knowledge; ) — ratify,A=The Passenger (2006) Chris Jones 7 min v=373 tt1200073 | B=The Passenger (2005) François Rotger 88 min v=68 tt0479259,proposed,,
+D-disagree,3493,metacritic,Hard Truths,2024,tt11891850,1013154,PROPOSED B (votes dominate ≥20×) — ratify,"A=Hard Truths (2023) Maya Ahmed N/A v=N/A tt27782302 | B=Hard Truths (2025) Mike Leigh 97 min v=9,106 tt11891850",proposed,,
+D-disagree,3505,metacritic,Time Out,2002,tt0279065,,PROPOSED A (votes dominate ≥20×) — ratify,"A=Time Out (2001) Laurent Cantet 134 min v=5,084 tt0279065 | B=Time Out (2003) Robbie Chafitz 8 min v=31 tt0415391",proposed,,
+D-disagree,3551,metacritic,Restless Creature: Wendy Whelan,2017,tt5119264,,PROPOSED A (Claude film knowledge; ) — ratify,"A=Restless Creature: Wendy Whelan (2016) Linda Saffire, Adam Schlesinger 90 min v=378 tt5119264 | B=Untitled Wendy Whelan Documentary (2015) Linda Saffire, Adam Schlesinger N/A v=N/A tt3551540",proposed,,
+D-disagree,3574,metacritic,The Farthest,2017,tt6223974,436305,PROPOSED B (A is derivative/junk shape) — ratify,"A=The Journey to Pluto, the Farthest World Ever Explored (2018) Eoin Duffy 6 min v=N/A tt14370918 | B=The Farthest (2017) Emer Reynolds 121 min v=4,706 tt6223974",proposed,,
+D-disagree,3661,metacritic,Diane,2019,tt6705860,510034,PROPOSED B (votes dominate ≥20×) — ratify,"A=Diane Keaton (2019) Georgia Michailidi 17 min v=N/A tt12750728 | B=Diane (2018) Kent Jones 95 min v=1,687 tt6705860",proposed,,
+D-disagree,3691,metacritic,Krisha,2016,tt4266638,323929,PROPOSED B (votes dominate ≥20×) — ratify,"A=Krisha Gautami (Nepal Bhasa) (2016) Ram Krishna Khadgi 135 min v=N/A tt18968928 | B=Krisha (2015) Trey Edward Shults 83 min v=10,533 tt4266638",proposed,,
+D-disagree,3744,metacritic,Our Daily Bread,2006,tt0765849,24565,PROPOSED B (votes dominate ≥20×) — ratify,"A=Our Daily Bread (2006) Khavn 5 min v=N/A tt20753556 | B=Our Daily Bread (2005) Nikolaus Geyrhalter 92 min v=2,675 tt0765849",proposed,,
+D-disagree,3773,metacritic,A Little Prayer,2025,tt22004186,,PROPOSED B (Claude film knowledge; ) — ratify,A=Say a Little Prayer (2024) Patrick Perez Vidauri N/A v=N/A tt22780118 | B=A Little Prayer (2023) Angus MacLachlan 91 min v=528 tt22004186,proposed,,
+D-disagree,3824,metacritic,The Treasure,2016,,,PROPOSED ? (Claude film knowledge; Porumboiu's Treasure likely absent) — ratify,"A=The Treasure (2017) Sherif Arafa 157 min v=2,189 tt6182954 | B=O thisavros (2017) Stratos Markidis N/A v=222 tt7688812",proposed,,
+D-disagree,3829,metacritic,The Rider,2018,tt6217608,453278,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Whiskey Man & The Rider (2018) Jimmie Romero 26 min v=N/A tt8742608 | B=The Rider (2017) Chloé Zhao 104 min v=21,587 tt6217608",proposed,,
+D-disagree,3882,metacritic,Atlantis,2021,tt10749786,618245,PROPOSED B (votes dominate ≥20×) — ratify,"A=Anonymous Vol. 1 - The Dreamland Adventures the Mysteries of Atlantis (2020) David Christians N/A v=10 tt12059646 | B=Atlantis (2019) Valentyn Vasyanovych 108 min v=2,718 tt10749786",proposed,,
+D-disagree,3940,apple,Birdman,2014,tt2562232,194662,official longer title 'Birdman or (The Unexpected Virtue of Ignorance)'; year+votes,corrected during Phase 3 scoring,verified,,120
+D-disagree,3941,metacritic,The Revenant,2015,tt1663202,281957,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Revenant (2015) Nikolai Kurbatov N/A v=N/A tt27793995 | B=The Revenant (2016) Alejandro G. Iñárritu 156 min v=947,792 tt1663202",proposed,,
+D-disagree,3951,metacritic,Cow,2022,tt11548822,,PROPOSED B (Claude film knowledge; Andrea Arnold) — ratify,"A=The Cow Who Sang a Song Into the Future (2022) Francisca Alegria 98 min v=407 tt10360808 | B=Cow (2021) Andrea Arnold 94 min v=2,652 tt11548822",proposed,,
+D-disagree,4102,apple,Bram Stoker's Dracula,1992,tt0103874,6114,PROPOSED B (A is derivative/junk shape) — ratify,"A=Making 'Bram Stoker's Dracula' (1992) Francis Ford Coppola, Jeff Werner 29 min v=268 tt0263696 | B=Dracula (1992) Francis Ford Coppola 128 min v=267,072 tt0103874",proposed,,127
+D-disagree,4137,apple,Snatch,2001,tt0208092,107,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Million Dollar Snatch (2000) Cash Markman 1 h 13 min v=N/A tt1345914 | B=Snatch (2001) Guy Ritchie 102 min v=976,126 tt0208092",proposed,,103
+D-disagree,4170,apple,Rare Exports: A Christmas Tale,2010,tt1401143,48395,PROPOSED B (votes dominate ≥20×) — ratify,"A=Rare Exports: A Christmas Tale - (AMC) Brooks Financial & Entertainment Consultants (2010) Shon Brooks N/A v=N/A tt39284977 | B=Rare Exports (2010) Jalmari Helander 84 min v=35,136 tt1401143",proposed,,83
+D-disagree,4295,metacritic,(500) Days of Summer,2009,tt1022603,19913,PROPOSED B (A is derivative/junk shape) — ratify,"A=Not a Love Story: Making (500) Days of Summer (2009) Charles de Lauzirika 30 min v=43 tt1572162 | B=500 Days of Summer (2009) Marc Webb 95 min v=613,237 tt1022603",proposed,,
+D-disagree,4315,metacritic,Woodstock,1970,tt0066580,9459,PROPOSED B (votes dominate ≥20×) — ratify,"A=Always Woodstock (2014) Rita Merson 97 min v=882 tt1995477 | B=Woodstock (1970) Michael Wadleigh 184 min v=18,818 tt0066580",proposed,,
+D-disagree,4317,metacritic,The Trip,2011,tt1740047,63578,PROPOSED B (votes dominate ≥20×) — ratify,"A=The Trip Out (2011) Carl Roddam, Deon Eben van Der Merwe N/A v=N/A tt2040570 | B=The Trip (2010) Michael Winterbottom 112 min v=23,632 tt1740047",proposed,,
+D-disagree,4443,apple,Jet Li's Fearless,2006,tt0446059,7549,PROPOSED B (A is derivative/junk shape) — ratify,"A=A Fearless Journey: A Look at Jet Li's 'Fearless' (2006) Stanley J. Orzel 16 min v=27 tt0940808 | B=Fearless (2006) Ronny Yu 104 min v=81,053 tt0446059",proposed,,103
+D-disagree,4636,apple,Romeo & Juliet (1968),1968,tt0063518,6003,PROPOSED B (votes dominate ≥20×) — ratify,"A=Romeo Juliet Kathawak (1969) G.D.L. Perera N/A v=N/A tt6566818 | B=Romeo and Juliet (1968) Franco Zeffirelli 138 min v=36,409 tt0063518",proposed,,138
+D-disagree,4647,metacritic,Under the Skin,2014,tt1441395,97370,PROPOSED B (votes dominate ≥20×) — ratify,"A=Under the Skin (2014) Josh Bird 12 min v=N/A tt12736824 | B=Under the Skin (2013) Jonathan Glazer 108 min v=165,354 tt1441395",proposed,,
+D-disagree,4674,metacritic,Western,2018,tt5157326,,PROPOSED B (Claude film knowledge; Grisebach) — ratify,"A=Western Ghats (2018) Leninbharati 122 min v=1,938 tt7794052 | B=Western (2017) Valeska Grisebach 121 min v=4,392 tt5157326",proposed,,
+D-disagree,4688,metacritic,Point Blank,2011,tt1545759,61404,PROPOSED B (votes dominate ≥20×) — ratify,"A=Point Blank (2011) K.D. Pascall N/A v=N/A tt9121626 | B=Point Blank (2010) Fred Cavayé 84 min v=14,780 tt1545759",proposed,,
+D-disagree,4689,metacritic,Lucky,2021,,,PROPOSED ? (Claude film knowledge; ) — ratify,A=Lucky (2021) John Crenshaw 5 min v=N/A tt15824384 | B=Lucky (2020) Olivier Van Hoofstadt 90 min v=430 tt10966156,proposed,,
+D-disagree,4690,metacritic,Atonement,2026,tt9314852,,PROPOSED B (Claude film knowledge; ) — ratify,"A=Atonement (2026) Reed Van Dyk 118 min v=26 tt36789083 | B=Atonement (2025) Ronald Cheng, Mark Wu 96 min v=52 tt9314852",proposed,,
+E-benchmark,,benchmark,Lawrence of Arabia,1962,tt0056172,947,TMDB exact title at known year,Lawrence of Arabia,verified,,
+E-benchmark,,benchmark,Vertigo,1958,tt0052357,426,TMDB exact title at known year,Vertigo,verified,,
+E-benchmark,,benchmark,Rear Window,1954,tt0047396,567,TMDB exact title at known year,Rear Window,verified,,
+E-benchmark,,benchmark,Kill Bill: Vol. 1,2003,tt0266697,24,TMDB exact title at known year,Kill Bill: Vol. 1,verified,,
+E-benchmark,,benchmark,Kill Bill: Vol. 2,2004,tt0378194,393,TMDB exact title at known year,Kill Bill: Vol. 2,verified,,
+E-benchmark,,benchmark,Stop Making Sense,1984,tt0088178,24128,TMDB exact title at known year,Stop Making Sense,verified,,
+E-benchmark,,benchmark,Nosferatu,1922,tt0013442,653,TMDB exact title at known year,Nosferatu,verified,,
+E-benchmark,,benchmark,A Star Is Born,1937,tt0029606,22692,TMDB exact title at known year,A Star Is Born,verified,,
+E-benchmark,,benchmark,Invasion of the Body Snatchers,1956,tt0049366,11549,TMDB exact title at known year,Invasion of the Body Snatchers,verified,,
+E-benchmark,,benchmark,Solaris,1972,tt0069293,593,TMDB exact title at known year,Solaris,verified,,
+E-benchmark,,benchmark,Metropolis,1927,tt0017136,19,TMDB exact title at known year,Metropolis,verified,,
+E-benchmark,,benchmark,Hearts of Darkness: A Filmmaker's Apocalypse,1991,tt0102015,4539,TMDB exact title at known year,Hearts of Darkness: A Filmmaker's Apocalypse,verified,,
+E-benchmark,,benchmark,The Red Shoes,1948,tt0040725,19542,TMDB exact title at known year,The Red Shoes,verified,,
+E-benchmark,,benchmark,The Leopard,1963,tt0057091,1040,TMDB exact title at known year,The Leopard,verified,,
+E-benchmark,,benchmark,Star Trek: The Motion Picture,1979,tt0079945,152,TMDB exact title at known year,Star Trek: The Motion Picture,verified,,
+E-benchmark,,benchmark,Willy Wonka & the Chocolate Factory,1971,tt0067992,252,TMDB exact title at known year,Willy Wonka & the Chocolate Factory,verified,,
+E-benchmark,,benchmark,The Deer Hunter,1978,tt0077416,11778,TMDB exact title at known year,The Deer Hunter,verified,,
+E-benchmark,,benchmark,Schindler's List,1993,tt0108052,424,TMDB exact title at known year,Schindler's List,verified,,
+E-benchmark,,benchmark,Army of Shadows,1969,tt0064040,15383,TMDB exact title at known year,Army of Shadows,verified,,
+E-benchmark,,benchmark,300,2006,tt0416449,1271,TMDB exact title at known year,300,verified,,
+E-benchmark,,benchmark,"Muhammad Ali, the Greatest",1974,tt0219935,29211,TMDB exact title at known year,"Muhammad Ali, the Greatest",verified,,
+E-benchmark,,benchmark,Dr. Strangelove,1964,tt0057012,935,hand-supplied TMDB id (official longer title),,verified,,
+E-benchmark,,benchmark,Intolerance,1916,tt0006864,3059,hand-supplied TMDB id (official longer title),,verified,,

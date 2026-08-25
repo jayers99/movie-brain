@@ -196,3 +196,17 @@ def test_movie_facts_tolerates_missing_fields(rs):
     rs.get(f"{TMDB_API}/movie/5", json={"title": "X", "original_title": "X"})
     f = TmdbClient("tok").movie_facts(5)
     assert (f.imdb_id, f.year, f.runtime_min, f.alternatives) == (None, None, None, ())
+
+
+def test_thumbprint_raw_methods_hit_the_right_endpoints(rs):
+    rs.get(f"{TMDB_API}/search/movie", json={"results": [{"id": 1}]})
+    rs.get(f"{TMDB_API}/search/person", json={"results": [{"id": 7}, {"id": 8}, {"id": 9}]})
+    rs.get(f"{TMDB_API}/person/7/movie_credits", json={"crew": [{"job": "Director", "id": 1}]})
+    rs.get(f"{TMDB_API}/movie/1", json={"id": 1, "external_ids": {"imdb_id": "tt1"}})
+    c = TmdbClient("tok")
+    assert c.search_raw("x", 1999, any_release_year=True) == [{"id": 1}]
+    assert parse_qs(urlparse(rs.calls[0].request.url).query)["year"] == ["1999"]
+    assert [p["id"] for p in c.search_person("n")] == [7, 8]
+    assert c.person_movie_credits(7)[0]["job"] == "Director"
+    assert c.movie_detail(1)["external_ids"]["imdb_id"] == "tt1"
+    assert "append_to_response" in rs.calls[-1].request.url
