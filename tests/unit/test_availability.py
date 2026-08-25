@@ -1,7 +1,7 @@
 from datetime import date
 
 from movie_brain.application.availability import queue_review_once, record_tmdb_match
-from movie_brain.domain.models import Film, ReviewEntry
+from movie_brain.domain.models import Film, OmdbRating, ReviewEntry
 from movie_brain.infrastructure.database import TmdbMatchTarget
 
 TODAY = date(2026, 8, 19)
@@ -59,3 +59,19 @@ def test_record_tmdb_match_replay_does_not_double_queue_year_collision(repo):
     assert outcome2 == "collision"
     reviews = [r for r in repo.open_reviews("tmdb") if r["reason"] == "year-collision" and r["film_id"] == fid]
     assert len(reviews) == 1
+
+
+def test_record_tmdb_match_year_adoption_requeues_stale_omdb_miss(repo):
+    """Army of Shadows: promoted under Metacritic's 2006 re-release year, OMDb missed
+    under 2006, then TMDB canonicalized 1969. The miss must not sit for the 30-day
+    retry window — adopting a new year is new evidence, so the OMDb row is flagged
+    for refetch exactly as `repair years --apply` does."""
+    fid = repo.upsert_film(Film("Army of Shadows", 2006, None, "https://mc/army-of-shadows"))
+    repo.upsert_omdb(fid, OmdbRating(None, None, False), TODAY)
+    target = TmdbMatchTarget(fid, "Army of Shadows", 2006, True)
+
+    outcome = record_tmdb_match(repo, target, 15383, 1969, TODAY, lambda msg: None)
+
+    assert outcome == "adopted"
+    queued = {i for i, _ in repo.films_needing_lookup_discovery("criterion", TODAY)}
+    assert fid in queued
