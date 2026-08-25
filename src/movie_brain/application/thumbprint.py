@@ -28,6 +28,7 @@ class BackfillReport:
     metacritic: int
     apple: int
     apple_unrecovered: int
+    apple_twin_covered: int  # owned twins of a recovered raw `Title (YYYY)` line: no placeholder written
     title_norms: int
     editions: int
 
@@ -83,20 +84,28 @@ def backfill_claims(
         owned_by_norm.setdefault(title_norm(titles.get(oid, "")), []).append(oid)
     recovered: dict[int, tuple[int, str, str, str, int | None, int | None, str]] = {}
     for raw, day, year, runtime in _apple_archive_lines(config_dir):
-        cleaned, embedded = parse_apple_title(raw)
-        fid: int | None = repo.film_id_by_key(film_key(cleaned, embedded if embedded is not None else year))
-        if fid is not None:
-            fid = repo.canonical_film_id(fid)
+        # 1. a raw `Title (YYYY)` / edition line that created a film under its own raw title
+        exact = [oid for oid in owned if titles.get(oid) == raw]
+        fid: int | None = exact[0] if len(exact) == 1 else None
+        if fid is None:
+            # 2. the key the import computed (title + embedded/field year), or its survivor
+            cleaned, embedded = parse_apple_title(raw)
+            fid = repo.film_id_by_key(film_key(cleaned, embedded if embedded is not None else year))
+            if fid is not None:
+                fid = repo.canonical_film_id(fid)
         if fid is None or fid not in owned:
-            # the import matched edition/re-release lines by title with a year gap, not by key
+            # 3. the import matched by title with a year gap (re-release), not by key
             same = owned_by_norm.get(title_norm(raw), [])
             fid = same[0] if len(same) == 1 else None
         if fid is not None:
             recovered[fid] = (fid, "apple-tv", raw, raw, year, runtime, day)
-    unrecovered = 0
+    unrecovered = twin_covered = 0
+    recovered_norms = {title_norm(r[2]) for r in recovered.values()}
     for oid, first_imported in owned.items():
         if oid in recovered:
             rows.append(recovered[oid])
+        elif title_norm(titles.get(oid, "")) in recovered_norms:
+            twin_covered += 1  # the archive line belongs to its raw twin; the merge carries it over
         else:
             unrecovered += 1
             t = titles.get(oid, str(oid))
@@ -104,14 +113,15 @@ def backfill_claims(
     n_apple = len(owned)
     editions = [r for r in rows if _edition_label(r[3])]
 
+    unrecovered_rows = {id(r) for r in rows[n_crit + n_mc :] if r[4] is None and r[5] is None}
     shown: dict[str, int] = {}
     for r in rows:
-        if shown.get(r[1], 0) < 20 or r in editions:
+        if shown.get(r[1], 0) < 20 or r in editions or id(r) in unrecovered_rows:
             log(f"  {r[1]:10} #{r[0]:<5} {r[2]!r} title={r[3]!r} year={r[4]} rt={r[5]} ed={_edition_label(r[3])!r}")
             shown[r[1]] = shown.get(r[1], 0) + 1
     log(
         f"claims: criterion {n_crit} · metacritic {n_mc} · apple {n_apple} "
-        f"(unrecovered {unrecovered}) · editions {len(editions)}"
+        f"(unrecovered {unrecovered}, twin-covered {twin_covered}) · editions {len(editions)}"
     )
     written = 0
     norms = 0
@@ -132,7 +142,7 @@ def backfill_claims(
             repo.set_title_norm(film_id, title_norm(title))
             norms += 1
         log(f"applied: {written} new claim rows · {norms} title_norms filled")
-    return BackfillReport(n_crit, n_mc, n_apple, unrecovered, norms, len(editions))
+    return BackfillReport(n_crit, n_mc, n_apple, unrecovered, twin_covered, norms, len(editions))
 
 
 def review_detail(verdict: Verdict) -> str:

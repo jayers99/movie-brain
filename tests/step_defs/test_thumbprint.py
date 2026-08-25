@@ -187,3 +187,20 @@ def keyed(ctx, title, tt):
     assert _q(ctx, "SELECT title FROM films WHERE id = ?", ctx["raw"])[0][0] == title
     assert ctx["repo"].external_ids_for(ctx["raw"]) == {"imdb": tt}
     assert ctx["repo"].disposition_of(ctx["raw"]) is None
+
+
+@given(parsers.parse('an archive line "{line}"'))
+def archive_line(ctx, line):
+    p = ctx["config_dir"] / "appletv" / "owned-2026-08-24.txt"
+    p.write_text((p.read_text() if p.exists() else "") + line + "\n")
+
+
+@then("the raw film is merged into the clean film")
+def merged_plain(ctx):
+    assert ctx["repo"].disposition_of(ctx["raw"]) == ("merged", ctx["twin"])
+
+
+@then(parsers.parse('the apple claim "{value}" belongs to the film titled "{title}" with runtime_min {rt:d}'))
+def claim_owner(ctx, value, title, rt):
+    rows = _q(ctx, "SELECT f.title, c.runtime_min FROM claim c JOIN films f ON f.id = c.film_id WHERE c.value = ?", value)
+    assert rows == [(title, rt)]

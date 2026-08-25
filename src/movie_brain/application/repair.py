@@ -350,6 +350,14 @@ def audit_twins(repo: Repository, expected: dict[int, int]) -> list[TwinGroup]:
             continue
         year_fix = p.embedded_year if f.year != p.embedded_year else None
         twins = [t for t in by_norm_year[(norm_title(p.base), p.embedded_year)] if t.id != f.id]
+        if not twins and f.omdb_imdb:
+            # ±1 year (TMDB original year vs Apple's embedded year) only with IMDb key agreement
+            twins = [
+                t
+                for dy in (-1, 1)
+                for t in by_norm_year[(norm_title(p.base), p.embedded_year + dy)]
+                if t.id != f.id and t.tmdb_imdb == f.omdb_imdb
+            ]
         if not twins:
             verdict, twin, detail = "no-twin", None, f"no undisposed film {p.base!r} ({p.embedded_year})"
             if not f.omdb_imdb:
