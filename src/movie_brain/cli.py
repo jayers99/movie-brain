@@ -58,6 +58,11 @@ err = Console(stderr=True)
 LEGACY_DEFAULT = Path.home() / ".local" / "share" / "criterion-ratings"
 
 
+def _plain(msg: str) -> None:
+    """stderr log without Rich markup: `[twin]` is a verdict tag, not a style."""
+    err.print(msg, markup=False, highlight=False)
+
+
 def _repo() -> Repository:
     cfg = load_config()
     cfg.config_dir.mkdir(parents=True, exist_ok=True)
@@ -295,7 +300,7 @@ def repair_twins_cmd(
         expected=expected,
         on_applied=ratify,
         limit=limit,
-        log=err.print,
+        log=_plain,
     )
     console.print(
         f"groups: {report.groups} · twin: {report.twins} · no-twin: {report.no_twin} · conflict: {report.conflict} · "
@@ -311,10 +316,10 @@ def thumbprint_backfill_cmd(
 ) -> None:
     """Copy owned / Criterion / Metacritic evidence into `claim` rows (pure copy, idempotent)."""
     cfg = load_config()
-    r = backfill_claims(_repo(), cfg.config_dir, apply=apply, log=err.print)
+    r = backfill_claims(_repo(), cfg.config_dir, apply=apply, log=_plain)
     console.print(
         f"criterion: {r.criterion} · metacritic: {r.metacritic} · apple: {r.apple} "
-        f"(unrecovered {r.apple_unrecovered}) · "
+        f"(unrecovered {r.apple_unrecovered}, twin-covered {r.apple_twin_covered}) · "
         f"editions: {r.editions} · title_norms filled: {r.title_norms}"
     )
 

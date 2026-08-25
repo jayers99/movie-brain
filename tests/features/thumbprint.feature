@@ -45,3 +45,22 @@ Feature: Thumbprint T1 — claims backfill and Title (YYYY) twins
     Given a raw film "Doctor Strange (2016)" year 2016 with OMDb imdbID "tt1211837" and an owned row
     When I run repair twins --apply answering yes
     Then the raw film is titled "Doctor Strange" with imdb "tt1211837" and has no disposition
+
+  Scenario: a twin one year off is accepted only when the IMDb keys agree
+    Given a raw film "The Pink Panther (1964)" year 1964 with OMDb imdbID "tt0057413" and an owned row
+    And a clean film "The Pink Panther" (1963) with TMDB imdb "tt0057413"
+    When I run repair twins --apply answering yes
+    Then the raw film is merged into the clean film
+
+  Scenario: a twin one year off without key agreement is no-twin, not guessed
+    Given a raw film "The Pink Panther (1964)" year 1964 with OMDb imdbID "tt0057413" and an owned row
+    And a clean film "The Pink Panther" (1963) with TMDB imdb "tt0000002"
+    When I run repair twins --apply answering yes
+    Then the raw film is titled "The Pink Panther" with imdb "tt0057413" and has no disposition
+
+  Scenario: backfill recovers a raw Title (YYYY) owned film under its own raw title
+    Given an owned film "Vertigo (1958)" (1958) with no archive line
+    And an owned film "Vertigo" (1958) with no archive line
+    And an archive line "Vertigo (1958)	1958	7680"
+    When I run the claims backfill with --apply
+    Then the apple claim "Vertigo (1958)" belongs to the film titled "Vertigo (1958)" with runtime_min 128

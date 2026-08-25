@@ -1137,3 +1137,25 @@ def test_merge_film_moves_claims_to_survivor(tmp_path):
     assert report.moved.get("claim") == 1
     assert [c.film_id for c in repo.claims_for_film(survivor)] == [survivor]
     assert repo.claims_for_film(loser) == []
+
+
+def test_key_film_directly_retires_own_losers_dead_key(tmp_path):
+    repo = Repository(tmp_path / "t.db")
+    raw = repo.create_film(Film("Doctor Strange (2016)", 2016, None, ""))
+    clean = repo.create_film(Film("Doctor Strange", 2016, "Scott Derrickson", ""))
+    assert raw and clean
+    repo.merge_film(clean, raw, date(2026, 8, 24))  # the clean row was merged INTO the raw one
+    assert repo.key_film_directly(raw, new_title="Doctor Strange", imdb_id="tt1211837", today=date(2026, 8, 25))
+    with sqlite3.connect(tmp_path / "t.db") as c:
+        keys = dict(c.execute("SELECT id, key FROM films").fetchall())
+    assert keys[raw] == "doctor strange (2016)" and keys[clean] == f"doctor strange (2016) #{clean}"
+    assert repo.external_ids_for(raw) == {"imdb": "tt1211837"}
+
+
+def test_key_film_directly_blocks_on_a_foreign_key_holder(tmp_path):
+    repo = Repository(tmp_path / "t.db")
+    raw = repo.create_film(Film("Vertigo (1958)", 1958, None, ""))
+    repo.create_film(Film("Vertigo", 1958, "Alfred Hitchcock", ""))
+    assert raw
+    assert not repo.key_film_directly(raw, new_title="Vertigo", imdb_id="tt0052357", today=date(2026, 8, 25))
+    assert repo.external_ids_for(raw) == {}

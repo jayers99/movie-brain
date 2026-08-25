@@ -1249,6 +1249,11 @@ class Repository:
                 raise LookupError(f"unknown film {film_id}")
             new_key = film_key(new_title, row["year"])
             holder = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            if holder is not None and self._canonical_in(c, int(holder["id"])) == film_id:
+                # this film's OWN merged-away loser holds the clean key: dead key, retire it in
+                # place (same rule as update_film_year) so the survivor can take its title back
+                c.execute("UPDATE films SET key = key || ' #' || id WHERE id = ?", (holder["id"],))
+                holder = None
             other = c.execute(
                 "SELECT film_id FROM external_ids WHERE authority = 'imdb' AND value = ? AND film_id != ?",
                 (imdb_id, film_id),
