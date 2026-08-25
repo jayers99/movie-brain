@@ -47,18 +47,13 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
 - `web/` — Flask `create_app(repo)`, one template; ALL filter/sort logic is client-side vanilla JS in `static/app.js` (virtual-scrolled table, state encoded in the URL).
 - `cli.py` — Typer entry point wiring config → `Repository` → use cases.
 
-### Sync flow (`application/sync.py`)
+### Sync flow
 
-1. Fetch browse-page token, then the cheap check: reuse the stored catalog if the last full walk is ≤7 days old, the API `total` equals the `films_raw_total` meta, and every page-1 key matches; otherwise full walk.
-2. A full walk runs `merge_yearless()` first — Criterion publishes duplicate year-less pages (`…/film-title-1`) that must fold into their titled twin, or dupes resurrect every walk.
-3. `record_catalog` upserts films (generating a `guid` for new ones), records each film's
-   `criterion` external id, and bumps listings `last_seen`; `set_leaving` maps
-   "Leaving <date>" categories.
-4. Offline Mode-B promotion (`promote_top_n`, meta `mc_top_n` — default 100): `match_archive` runs first as the dedup guard (staged Metacritic titles claimed by an existing film are skipped), then the remaining top-N staged titles become real films (generated guid, `clean_title`, MC year, director `NULL`); key-conflict and slug-conflict anomalies queue to `match_review` (never overwrite); archive shortfall (fewer staged titles than N) is logged with a crawl-more-pages hint; own tripwire — never affects exit code or later steps; no scraping (archive-only, offline). When a TMDB token is present, sync passes a shared `TmdbArbiter` into `promote_top_n` → `match_archive` → `match_film`, so a commerce-year gap (e.g. a US re-release year) auto-resolves against the original film instead of queueing `year-gap`; the arbiter talks only to the TMDB API (never metacritic.com) and any TMDB failure degrades to the old year-gap review — promotion never breaks on TMDB weather. The offline `metacritic match` CLI verb never gets an arbiter.
-5. OMDb loop over `films_needing_lookup` plus `films_needing_lookup_discovery` (Mode-B films with no Criterion listing, queued after criterion-current films; their `Film.url` is the Metacritic movie URL). Tripwires: a catalog failure leaves the DB untouched; OMDb quota exhaustion or 5 consecutive failures stops lookups but keeps progress (paid OMDb plan — quota exhaustion is a safety net, not an expected path).
-6. TMDB step (token at `<config_dir>/tmdb-read-token.txt`, else skipped): one-shot match of new films via the shared matcher (`pick_tmdb_match`) with per-film policy — a film with no Criterion listing (`TmdbMatchTarget.commerce`) gets the looser COMMERCE year band plus a `TmdbArbiter` (one cached TMDB search per title, seeded from the step's own search so it adds no extra API calls, tri-state — unavailable degrades to a year-gap miss/review); misses → `match_review` reason `no-match`, never retried by sync. A successful commerce match adopts TMDB's original year onto the film (`films.year` + recomputed `key`); a key collision never overwrites — it queues a durable `year-collision` `match_review` row (dedup-guarded); a TMDB id already claimed by another film queues a durable `id-conflict` row instead. The per-run no-match rebuild is reason-scoped so these durable rows survive it, and films holding one are excluded from the rebuild so they aren't double-queued. Then a nightly watchlist provider pass (~50 films, every sync, never touches the weekly stamp), then a nightly first-check pass (up to `FIRST_CHECK_BATCH`=500 matched films with `providers_checked_at IS NULL` — a film matched after the weekly refresh must not wait a week with no listings; baseline semantics, no transitions; the full refresh skips anything checked today), then a weekly full US watch-providers refresh writing `listings` rows per service (never `criterion`), skipping films already checked that day, stamp written only on completion; own tripwires — TMDB failures never affect exit code or other steps. Listing writes (both the Criterion walk and TMDB provider passes) record `availability_transitions` against the pre-batch currency frontier — an insert or a stale-row reappearance fires an event, a current-row re-upsert stays quiet; a film's first-ever TMDB provider check writes listings WITHOUT a transition event (baseline, not arrival) — later checks fire transitions as normal; store-kind sources never fire "New on"/notifications (`_NEW_ON_SQL` is svod-only) but ARE surfaced in `FilmView.services` with `kind: store` (drawer "Buy on:" line + CheapCharts link — matrix-param URL `/us/search;q=<title>;t=all`; the site ignores a `?q=` query string). If ≥1 watchlist film transitioned today, one summary macOS notification fires at the end of sync (`infrastructure/notify.py`, injected as `notifier`; failures never affect exit code).
+Six-step contract (cheap check → merge_yearless → record_catalog → Mode-B promotion → OMDb → TMDB/providers/notifications) lives in `.claude/rules/sync-flow.md`, loaded when you work in `application/sync.py`, `availability.py`, or `metacritic.py`.
 
 ## Rules
+
+Path-scoped contracts in `.claude/rules/`: `matching.md` (the one evidence-scored matcher, wrappers, benchmark gate, rerelease/yearless rules), `audit.md` (audit_flags / tmdb_facts / audit_verdict). They load when you touch the files they name — read them before changing matching or audit code.
 
 - Film identity = `films.guid` (generated UUIDv4, immutable once assigned); the integer `id`
   is an internal join key that must never leak as identity. `film_key(title, year)` is a
@@ -103,27 +98,6 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   a loser merged into some *other* survivor reports that survivor, so the review names the live
   identity a human must reconcile. A TOMBSTONED holder blocks as itself: `tombstoned_keys()` is
   the guard that stops the ingesters re-creating it, and that guard IS the key.
-- Matching is one evidence-scored core: `domain/matching.py`'s `match_candidates` (three-level
-  candidate index, source-aware year policy, director/runtime/popularity evidence, `Arbiter`
-  hook) is the only matcher; `match_film` (Metacritic), `match_owned` (Apple), and
-  `pick_tmdb_match` (TMDB) are thin per-source policy wrappers over it — never re-implement
-  matching logic in a wrapper. `scripts/matching_benchmark.py` (ground truth + Metacritic/Apple
-  archive replays, `--assert-dominance` gate) is the regression check before touching matching.
-  `movie-brain rematch` is the one-shot, idempotent repair verb: re-matches every TMDB miss and
-  fresh-checks TMDB's release year for every non-Criterion matched film, adopting disagreements
-  through the same write-back path as sync. A rerelease-annotated commerce year (a `*-re-release`
-  / restoration-slug year) is NOT year evidence: when the winning candidate sits exactly at that
-  annotated year AND any other surviving candidate carries a year gap, the matcher refuses and
-  queues a `rerelease-ambiguous` review rather than guess between a re-release of the gapped film
-  and a genuinely same-titled film at the claimed year (the Metropolis case; benchmark ground
-  truth). The gapped candidate need not be the older one — any surviving gap arms the rule.
-  A DATELESS candidate that survives only because every dated same-title rival was
-  year-disqualified is a `yearless-among-dated` review, never a match (the Intolerance case: a
-  dateless 4-minute short inherited the 1916 feature's link by elimination); a lone dateless
-  candidate with no disqualified rivals still matches (the yearless-Criterion-page case).
-  `TmdbClient.search(title, year)` retries with `primary_release_year` when nothing on the
-  popularity-ranked title page lands within ±1 of a TRUSTED year (one extra call, only then) —
-  callers pass the year only for non-commerce films, since a commerce year may be a re-release.
 - Dispositions: `film_disposition` is the identity ledger written ONLY by the repair verbs.
   `merged` aliases a losing identity to its survivor — `films_for_matching` returns the loser's
   title under the ultimate survivor's id (multi-hop chains resolve to the final survivor), so an
@@ -154,16 +128,6 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   when it is tombstoned. `review revisits` prints the flagged worklist.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
-- Data audit (`docs/superpowers/specs/2026-08-24-data-audit-design.md`): `audit_flags` is a derived
-  report replaced by every `audit run`; `tmdb_facts` is a one-call-per-film cache refetched only when
-  the film's `tmdb` link changes; `audit_verdict` is append-only user-response data — the drawer's
-  verdict endpoint is its ONLY writer, sync/repair/review never touch it, and a `fine` verdict
-  suppresses the Suspect chip only while the film's reason set is unchanged. Checks live in
-  `domain/audit.py` (weights are named constants); the verb never fixes anything. The first
-  `audit run` fetches one TMDB call per linked film (~4.3k films ≈ 18 min at the polite delay),
-  logs progress every 100 films, and is resumable — each film's facts commit as fetched, so
-  Ctrl-C keeps progress and a re-run continues.
-
 ## Data
 
 DB: `~/.config/movie-brain/movie-brain.db` (`MOVIE_BRAIN_CONFIG_DIR` overrides the directory). OMDb key: `OMDB_API_KEY` or `<config_dir>/omdb-api-key.txt`. TMDB token: `MOVIE_BRAIN_TMDB_TOKEN` or `<config_dir>/tmdb-read-token.txt`. Sync log: `<config_dir>/sync.log`. Daily 3 AM launchd job: `scripts/install-launch-agent.sh`.
