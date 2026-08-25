@@ -29,6 +29,9 @@ uv run movie-brain review list [--authority A] [--reason R]   # open match_revie
 uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, or dismiss
 uv run movie-brain review revisits                    # films the user flagged "needs revisit" in the drawer
 
+uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
+uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)
+
 uv run pytest                                        # whole suite (~5s)
 uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by keyword
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py
@@ -151,6 +154,12 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   when it is tombstoned. `review revisits` prints the flagged worklist.
 - Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
+- Data audit (`docs/superpowers/specs/2026-08-24-data-audit-design.md`): `audit_flags` is a derived
+  report replaced by every `audit run`; `tmdb_facts` is a one-call-per-film cache refetched only when
+  the film's `tmdb` link changes; `audit_verdict` is append-only user-response data — the drawer's
+  verdict endpoint is its ONLY writer, sync/repair/review never touch it, and a `fine` verdict
+  suppresses the Suspect chip only while the film's reason set is unchanged. Checks live in
+  `domain/audit.py` (weights are named constants); the verb never fixes anything.
 
 ## Data
 
