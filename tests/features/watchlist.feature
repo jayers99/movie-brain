@@ -13,6 +13,7 @@ Feature: Watchlist films are refreshed nightly and arrivals are detected
     And the provider refresh ran 2 days ago
     And "Alpha (1950)" is on the watchlist
     And TMDB already checked "Alpha (1950)" as id 11 once
+    And TMDB already checked "Bravo (1960)" as id 22 once
     When I sync with a TMDB token
     Then TMDB providers were called exactly 1 times
     And the sync refreshed 1 watchlist films
@@ -54,3 +55,21 @@ Feature: Watchlist films are refreshed nightly and arrivals are detected
     And TMDB streams id 11 on providers 1899 and 11
     When I sync with a TMDB token and a notifier
     Then no notification was sent
+
+  Scenario: Newly matched films get their first provider check even inside the weekly gate
+    Given TMDB knows "Alpha (1950)" as id 11
+    And TMDB knows "Bravo (1960)" as id 22
+    And TMDB streams id 11 on providers 1899 and 11
+    And the provider refresh ran 2 days ago
+    When I sync with a TMDB token
+    Then TMDB providers were called exactly 2 times
+    And the sync first-checked 2 films
+    And "Alpha (1950)" is listed on "max"
+    And no availability transition is recorded for "max"
+
+  Scenario: A full-refresh night does not fetch first-check films twice
+    Given TMDB knows "Alpha (1950)" as id 11
+    And TMDB knows "Bravo (1960)" as id 22
+    When I sync with a TMDB token
+    Then TMDB providers were called exactly 2 times
+    And the sync first-checked 2 films

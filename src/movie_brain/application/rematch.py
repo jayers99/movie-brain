@@ -58,7 +58,7 @@ def rematch(
             log("TMDB failing repeatedly — stopping; rematch is safe to re-run.")
             return RematchReport(1, len(misses), rematched, still_missed, id_conflicts, 0, 0, 0, 0)
         try:
-            candidates = client.search(target.title)
+            candidates = client.search(target.title, None if target.commerce else target.year)
         except AuthError as exc:
             log(f"TMDB rejected the token: {exc}")
             return RematchReport(2, len(misses), rematched, still_missed, id_conflicts, 0, 0, 0, 0)

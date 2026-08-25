@@ -260,3 +260,21 @@ def mentions(ctx, a, b):
 def not_mentions(ctx, a):
     (_, notification_body) = ctx["sent"][0]
     assert a not in notification_body
+
+
+@then(parsers.parse("the sync first-checked {n:d} films"))
+def first_checked(ctx, n):
+    assert ctx["result"].tmdb_first_checked == n
+
+
+@then(parsers.parse('"{title} ({year:d})" is listed on "{slug}"'))
+def listed_on(ctx, title, year, slug):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        assert c.execute("SELECT 1 FROM listings WHERE film_id = ? AND source = ?", (fid, slug)).fetchone()
+
+
+@then(parsers.parse('no availability transition is recorded for "{slug}"'))
+def no_transition_for(ctx, slug):
+    with sqlite3.connect(ctx["repo"].db_path) as c:
+        assert not c.execute("SELECT 1 FROM availability_transitions WHERE source = ?", (slug,)).fetchall()

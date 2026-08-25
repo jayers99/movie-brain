@@ -37,8 +37,23 @@ class TmdbClient:
         resp.raise_for_status()
         return resp
 
-    def search(self, title: str) -> list[TmdbCandidate]:
-        results = self._get("/search/movie", query=title, include_adult="false").json().get("results", [])
+    def search(self, title: str, year: int | None = None) -> list[TmdbCandidate]:
+        """Top-10 title search. With a trusted ``year`` (an original release year, never a
+        commerce/re-release year), retry with ``primary_release_year`` when nothing on the
+        title page lands within ±1 of it — TMDB ranks by popularity, so an old feature can sit
+        behind a page of later same-titled films (Intolerance 1916). One extra call, only then."""
+        out = self._search_page(query=title, include_adult="false")
+        if year is not None and not any(c.year is not None and abs(c.year - year) <= 1 for c in out):
+            seen = {c.tmdb_id for c in out}
+            out += [
+                c
+                for c in self._search_page(query=title, include_adult="false", primary_release_year=str(year))
+                if c.tmdb_id not in seen
+            ]
+        return out
+
+    def _search_page(self, **params: str) -> list[TmdbCandidate]:
+        results = self._get("/search/movie", **params).json().get("results", [])
         out = []
         for r in results[:10]:
             d = r.get("release_date") or ""

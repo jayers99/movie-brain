@@ -23,7 +23,8 @@ Feature: TMDB availability
     Then the tmdb review queue holds 1 entries
     And the exit code is 0
     When I sync with a TMDB token again the next day
-    Then TMDB search was called exactly 1 times
+    # 2 = the title search plus its year retry on day one; day two searches nothing
+    Then TMDB search was called exactly 2 times
 
   Scenario: Provider refresh writes listings but never the criterion source
     Given TMDB knows "Trio (1950)" as id 11
@@ -43,6 +44,7 @@ Feature: TMDB availability
     Given TMDB knows "Trio (1950)" as id 11
     And TMDB streams id 11 on providers 1899 and 258
     And the provider refresh ran 2 days ago
+    And TMDB already checked "Trio (1950)" as id 11 once
     When I sync with a TMDB token
     Then TMDB providers were called exactly 0 times
 
@@ -111,7 +113,9 @@ Feature: TMDB availability
     When I sync with a TMDB token
     Then "Stop Making Sense (1984)" has external id "606" for authority "tmdb"
     And the film "Stop Making Sense" has year 1984 and key "stop making sense (1984)"
-    And TMDB search was called exactly 2 times
+    # 3 = Trio's title search + its year retry (Criterion year is trusted) + one search for
+    # the commerce film: a commerce year may be a re-release, so it never gets the retry
+    And TMDB search was called exactly 3 times
 
   Scenario: Year write-back that collides with an existing key queues year-collision
     Given a commerce film "Nosferatu" from 2024

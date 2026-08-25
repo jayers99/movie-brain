@@ -357,3 +357,17 @@ def transition_for_slug(ctx, slug):
     with sqlite3.connect(ctx["repo"].db_path) as c:
         rows = c.execute("SELECT 1 FROM availability_transitions WHERE source = ?", (slug,)).fetchall()
     assert rows
+
+
+@given(parsers.parse('TMDB already checked "{title} ({year:d})" as id {tid:d} once'))
+def already_checked(ctx, title, year, tid):
+    # Pre-match and pre-check (dated well before TODAY) so the sync under test is neither the
+    # film's TMDB match nor its first-ever provider check.
+    prior = date(2026, 1, 1)
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    if fid is None:  # the Background only declares the catalog; the film is recorded by sync
+        ctx["repo"].record_catalog(SOURCE, parse_titles(f'"{title} ({year})"'), prior)
+        fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    ctx["repo"].set_external_id(fid, "tmdb", str(tid), prior)
+    ctx["repo"].upsert_tmdb(fid, found=True, looked_up=prior)
+    ctx["repo"].record_tmdb_providers(fid, prior, "{}")
