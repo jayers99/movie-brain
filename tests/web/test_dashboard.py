@@ -449,7 +449,7 @@ def test_drawer_shows_buy_on_and_cheapcharts_link(dash):
     expect(body).to_contain_text("Buy on: Apple TV Store (iTunes)")
     expect(body).not_to_contain_text("Also streaming on")
     expect(body.locator("a.cheapcharts-link")).to_have_attribute(
-        "href", "https://www.cheapcharts.com/us/search?q=Hotel"
+        "href", "https://www.cheapcharts.com/us/search;q=Hotel;t=all"  # matrix params — `?q=` is ignored by the site
     )
 
 
