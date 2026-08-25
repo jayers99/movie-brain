@@ -210,21 +210,29 @@ GROUND_TRUTHS: list[Case] = [
     Case(
         # Live 2026-08-24: Criterion's "Intolerance" (1916) was linked to 1216137, a dateless
         # 4-minute short — every dated same-title result failed the 1916 band and the one
-        # dateless survivor inherited the match by elimination. Two fixes: the search retries
-        # with the year so the feature is even a candidate, and its original_title (the bare
-        # "Intolerance") indexes exact + year-exact → it wins outright. Without the feature in
-        # the set, a dateless candidate among year-disqualified twins is a review, never a link.
+        # dateless survivor inherited the match by elimination. A dateless candidate among
+        # year-disqualified twins is a review, never a link. The feature itself (found only via
+        # the search year retry) carries the full subtitled string as BOTH title and
+        # original_title, and a one-word colon prefix never indexes (banked rule) → an honest
+        # miss for the review queue, resolved by hand with --tmdb-id 3059.
         name="intolerance-dateless-short",
         source="tmdb",
         title="Intolerance",
         year=1916,
         pool=(),
-        expect="match:3059",
+        expect="none",
         tmdb=(
             TmdbCand(48684, "Intolerance", "Intolerance", 2000, 0.56),
             TmdbCand(879617, "Intolerance", "Intolerance", 2020, 1.25),
-            TmdbCand(1216137, "Intolerance", "Intolerance", None, 0.6),
-            TmdbCand(3059, "Intolerance: Love's Struggle Throughout the Ages", "Intolerance", 1916, 3.46),
+            TmdbCand(1216137, "Intolerance", "Intolerance", None, 1.08),
+            TmdbCand(732929, "Intolerance", "Intolerance", None, 0.4),
+            TmdbCand(
+                3059,
+                "Intolerance: Love's Struggle Throughout the Ages",
+                "Intolerance: Love's Struggle Throughout the Ages",
+                1916,
+                3.46,
+            ),
         ),
     ),
     Case(
