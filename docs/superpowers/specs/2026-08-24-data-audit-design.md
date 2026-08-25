@@ -78,7 +78,7 @@ CREATE TABLE tmdb_facts (
 Input: one `AuditSubject` dataclass per film, assembled by the repository read model:
 film title/year/director, Criterion director, Metacritic score, OMDb payload fields
 (`Title`, `Year`, `Director`, `Runtime`, `imdbID`, `Type`, `imdbRating`, `Metascore`),
-Apple-owned runtime, `tmdb_facts` row, and the set of other film ids sharing its OMDb
+`tmdb_facts` row, and the set of other film ids sharing its OMDb
 `imdbID`. Output: `list[AuditFlag(code, detail, score)]`.
 
 | code | fires when | wt |
@@ -88,7 +88,7 @@ Apple-owned runtime, `tmdb_facts` row, and the set of other film ids sharing its
 | `tmdb-title` | normalized film title matches none of TMDB title / original_title / alt_titles | 3 |
 | `omdb-title` | normalized film title ≠ normalized OMDb `Title` | 2 |
 | `director` | Criterion director and OMDb `Director` both present, no surname in common | 2 |
-| `runtime` | Apple-owned runtime vs OMDb `Runtime` (or TMDB runtime) differ by > 10 min | 2 |
+| `runtime` | OMDb `Runtime` vs `tmdb_facts.runtime_min` differ by > 10 min (Apple runtime is not stored in the DB — deferred) | 2 |
 | `shared-imdb` | ≥ 1 other non-disposed film holds the same OMDb `imdbID` | 2 |
 | `year` | OMDb `Year` vs `films.year` gap > 1 | 1 |
 | `stub` | OMDb `Type` ≠ `movie`, or `Director` and `imdbRating` both `N/A` | 1 |
