@@ -127,6 +127,9 @@ def record_tmdb_match(
                 today,
             )
             return "collision"
+        # A new year is new evidence: a stale OMDb miss under the old year must not
+        # wait out MISS_RETRY_DAYS (director/ratings come from OMDb for Mode-B films).
+        repo.mark_omdb_refresh(target.film_id)
         log(f"adopted TMDB year {winner_year} for {target.title!r} (was {target.year})")
         return "adopted"
     return "matched"
