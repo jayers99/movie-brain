@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
 
@@ -462,6 +463,113 @@ class Repository:
                     fetched_on.isoformat(),
                 ),
             )
+
+    # audit --------------------------------------------------------------
+    def audit_subjects(self) -> list[AuditSubject]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, f.director, mc.score AS mc_score, o.found, "
+                "json_extract(o.payload, '$.Title') AS o_title, json_extract(o.payload, '$.Year') AS o_year, "
+                "json_extract(o.payload, '$.Director') AS o_dir, json_extract(o.payload, '$.Runtime') AS o_rt, "
+                "json_extract(o.payload, '$.imdbID') AS o_imdb, json_extract(o.payload, '$.Type') AS o_type, "
+                "json_extract(o.payload, '$.imdbRating') AS o_rating, json_extract(o.payload, '$.Metascore') AS o_ms, "
+                "t.imdb_id AS t_imdb, t.title AS t_title, t.original_title AS t_orig, t.alt_titles AS t_alts, "
+                "t.runtime_min AS t_rt "
+                "FROM films f "
+                "LEFT JOIN omdb o ON o.film_id = f.id AND o.found = 1 AND o.payload IS NOT NULL "
+                "LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic' "
+                "LEFT JOIN metacritic mc ON mc.slug = x.value "
+                "LEFT JOIN tmdb_facts t ON t.film_id = f.id "
+                "WHERE " + _NOT_DISPOSED + " ORDER BY f.id"
+            ).fetchall()
+            by_imdb: dict[str, list[int]] = {}
+            for r in rows:
+                if r["o_imdb"]:
+                    by_imdb.setdefault(str(r["o_imdb"]), []).append(int(r["id"]))
+            out: list[AuditSubject] = []
+            for r in rows:
+                fid = int(r["id"])
+                o_year = str(r["o_year"] or "")[:4]
+                rt_m = _RUNTIME_MIN.match(str(r["o_rt"])) if r["o_rt"] else None
+                ms = r["o_ms"]
+                out.append(
+                    AuditSubject(
+                        film_id=fid,
+                        title=str(r["title"]),
+                        year=r["year"],
+                        criterion_director=r["director"],
+                        mc_score=r["mc_score"],
+                        omdb_title=r["o_title"],
+                        omdb_year=int(o_year) if o_year.isdigit() else None,
+                        omdb_director=r["o_dir"],
+                        omdb_runtime_min=int(rt_m.group(1)) if rt_m else None,
+                        omdb_imdb_id=r["o_imdb"],
+                        omdb_type=r["o_type"],
+                        omdb_imdb_rating=r["o_rating"],
+                        omdb_metascore=int(ms) if isinstance(ms, str) and ms.isdigit() else None,
+                        tmdb_imdb_id=r["t_imdb"],
+                        tmdb_title=r["t_title"],
+                        tmdb_original_title=r["t_orig"],
+                        tmdb_alt_titles=tuple(json.loads(r["t_alts"])) if r["t_alts"] else (),
+                        tmdb_runtime_min=r["t_rt"],
+                        shared_imdb_film_ids=tuple(i for i in by_imdb.get(str(r["o_imdb"] or ""), []) if i != fid),
+                    )
+                )
+            return out
+
+    def replace_audit_flags(self, flags: dict[int, list[AuditFlag]], run_on: date) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM audit_flags")
+            c.executemany(
+                "INSERT INTO audit_flags (film_id, reason, detail, score, run_on) VALUES (?, ?, ?, ?, ?)",
+                [(fid, f.code, f.detail, f.score, run_on.isoformat()) for fid, fl in flags.items() for f in fl],
+            )
+
+    def current_reasons(self, film_id: int) -> list[str]:
+        with self._conn() as c:
+            rows = c.execute("SELECT reason FROM audit_flags WHERE film_id = ? ORDER BY reason", (film_id,)).fetchall()
+            return [str(r["reason"]) for r in rows]
+
+    def add_verdict(
+        self, film_id: int, verdict: str, reasons: list[str], note: str | None, today: date
+    ) -> dict[str, object] | None:
+        if verdict not in VERDICTS:
+            raise ValueError(f"unknown verdict {verdict!r}; expected one of {', '.join(VERDICTS)}")
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films f WHERE f.id = ? AND " + _NOT_DISPOSED, (film_id,)).fetchone() is None:
+                return None
+            joined = ",".join(sorted(reasons))
+            c.execute(
+                "INSERT INTO audit_verdict (film_id, verdict, reasons, note, marked_on) VALUES (?, ?, ?, ?, ?)",
+                (film_id, verdict, joined, note, today.isoformat()),
+            )
+            return {"verdict": verdict, "reasons": joined, "note": note, "marked_on": today.isoformat()}
+
+    def verdict_history(
+        self, verdict: str | None = None
+    ) -> list[tuple[int, str, int | None, str, str, str | None, str]]:
+        with self._conn() as c:
+            sql = (
+                "SELECT v.film_id, f.title, f.year, v.verdict, v.reasons, v.note, v.marked_on "
+                "FROM audit_verdict v JOIN films f ON f.id = v.film_id "
+            )
+            params: tuple[object, ...] = ()
+            if verdict is not None:
+                sql += "WHERE v.verdict = ? "
+                params = (verdict,)
+            rows = c.execute(sql + "ORDER BY v.id", params).fetchall()
+            return [
+                (
+                    int(r["film_id"]),
+                    str(r["title"]),
+                    r["year"],
+                    str(r["verdict"]),
+                    str(r["reasons"]),
+                    r["note"],
+                    str(r["marked_on"]),
+                )
+                for r in rows
+            ]
 
     def services(self) -> list[dict[str, object]]:
         with self._conn() as c:

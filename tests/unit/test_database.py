@@ -1019,3 +1019,64 @@ def test_tmdb_facts_needed_and_upsert(repo):
     # link changed → stale row must be refetched
     repo.set_external_id(a, "tmdb", "99", d)
     assert repo.tmdb_facts_needed() == [(a, 99), (b, 12)]
+
+
+def test_audit_subjects_assemble_all_sources(repo):
+    from datetime import date
+
+    from movie_brain.domain.models import Film, McTitle, OmdbRating
+    from movie_brain.infrastructure.database import TmdbFactsRow
+
+    d = date(2026, 8, 24)
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann Author", "https://c/alpha")], d)
+    a = repo.film_id_by_key("alpha (1950)")
+    repo.upsert_omdb(
+        a,
+        OmdbRating(7.0, 80, True, "English",
+                   '{"Title":"Alpha Beta","Year":"1952","Director":"Bob Builder","Runtime":"100 min",'
+                   '"imdbID":"tt1","Type":"movie","imdbRating":"7.0","Metascore":"61"}', metacritic=61),
+        d,
+    )
+    repo.set_external_id(a, "tmdb", "11", d)
+    repo.upsert_tmdb_facts(a, TmdbFactsRow(11, "tt2", "Alpha", "Alpha", ("Alfa",), 1950, 90), d)
+    repo.upsert_mc_titles([McTitle("alpha", "Alpha", 1950, 95, 1, 1)], d)
+    repo.set_external_id(a, "metacritic", "alpha", d)
+    b = repo.create_film(Film("Beta", 1960, None, ""))
+    repo.upsert_omdb(b, OmdbRating(None, None, True, None, '{"Title":"Beta","imdbID":"tt1"}'), d)
+
+    subjects = {s.film_id: s for s in repo.audit_subjects()}
+    s = subjects[a]
+    assert (s.title, s.year, s.criterion_director) == ("Alpha", 1950, "Ann Author")
+    assert (s.omdb_title, s.omdb_year, s.omdb_director, s.omdb_runtime_min) == ("Alpha Beta", 1952, "Bob Builder", 100)
+    assert (s.omdb_imdb_id, s.omdb_type, s.omdb_imdb_rating, s.omdb_metascore) == ("tt1", "movie", "7.0", 61)
+    assert (s.tmdb_imdb_id, s.tmdb_title, s.tmdb_alt_titles, s.tmdb_runtime_min) == ("tt2", "Alpha", ("Alfa",), 90)
+    assert s.mc_score == 95
+    assert s.shared_imdb_film_ids == (b,)
+    assert subjects[b].tmdb_title is None and subjects[b].shared_imdb_film_ids == (a,)
+
+
+def test_audit_flags_replace_and_verdicts_append(repo):
+    from datetime import date
+
+    import pytest
+
+    from movie_brain.domain.audit import AuditFlag
+    from movie_brain.domain.models import Film
+
+    d = date(2026, 8, 24)
+    a = repo.create_film(Film("Alpha", 1950, None, ""))
+    repo.replace_audit_flags({a: [AuditFlag("year", "OMDb year 1952 vs film year 1950", 1)]}, d)
+    assert repo.current_reasons(a) == ["year"]
+    repo.replace_audit_flags({a: [AuditFlag("stub", "x", 1), AuditFlag("imdb-id", "y", 3)]}, d)
+    assert repo.current_reasons(a) == ["imdb-id", "stub"]
+    repo.replace_audit_flags({}, d)
+    assert repo.current_reasons(a) == []
+
+    v = repo.add_verdict(a, "omdb-wrong", ["imdb-id", "stub"], "doc, not the feature", d)
+    assert v == {"verdict": "omdb-wrong", "reasons": "imdb-id,stub", "note": "doc, not the feature", "marked_on": "2026-08-24"}
+    repo.add_verdict(a, "fine", [], None, d)
+    assert [r[3] for r in repo.verdict_history()] == ["omdb-wrong", "fine"]
+    assert [r[3] for r in repo.verdict_history("fine")] == ["fine"]
+    with pytest.raises(ValueError):
+        repo.add_verdict(a, "meh", [], None, d)
+    assert repo.add_verdict(999, "fine", [], None, d) is None
