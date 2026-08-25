@@ -31,21 +31,28 @@ class OmdbClient:
                 return rating
         return rating
 
+    def lookup_by_imdb(self, imdb_id: str) -> OmdbRating:
+        """Exact lookup by IMDb id — immune to OMDb's US-release-year and title quirks."""
+        return self._fetch({"i": imdb_id, "apikey": self.api_key})
+
     def _query(self, title: str, year: int | None) -> OmdbRating:
         params: dict[str, str] = {"t": title, "type": "movie", "apikey": self.api_key}
         if year:
             params["y"] = str(year)
+        return self._fetch(params)
+
+    def _fetch(self, params: dict[str, str]) -> OmdbRating:
         resp = self.session.get(OMDB_URL, params=params, timeout=30)
         if resp.status_code == 401:
             error = resp.json().get("Error") or ""
             if "limit" in error.lower():
-                raise QuotaExceeded(title)
+                raise QuotaExceeded(params.get("t") or params.get("i") or "")
             raise AuthError(error or "invalid API key")
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
         if data.get("Response") != "True":
             if "limit" in (data.get("Error") or "").lower():
-                raise QuotaExceeded(title)
+                raise QuotaExceeded(params.get("t") or params.get("i") or "")
             return OmdbRating(None, None, False)
         imdb = float(data["imdbRating"]) if data.get("imdbRating") and data["imdbRating"] != "N/A" else None
         rt = None

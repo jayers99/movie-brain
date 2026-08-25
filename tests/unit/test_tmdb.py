@@ -156,3 +156,13 @@ def test_search_skips_the_year_retry_when_a_near_year_result_exists():
     responses.get(f"{TMDB_API}/search/movie", json={"results": [_hit(947, "Lawrence of Arabia", "1962-12-11")]})
     assert [c.tmdb_id for c in TmdbClient("t").search("Lawrence of Arabia", 1962)] == [947]
     assert len(responses.calls) == 1
+
+
+def test_imdb_id_reads_external_ids(rs):
+    rs.get(f"{TMDB_API}/movie/11/external_ids", json={"id": 11, "imdb_id": "tt0037800"})
+    assert TmdbClient("tok").imdb_id(11) == "tt0037800"
+
+
+def test_imdb_id_missing_is_none(rs):
+    rs.get(f"{TMDB_API}/movie/11/external_ids", json={"id": 11, "imdb_id": None})
+    assert TmdbClient("tok").imdb_id(11) is None

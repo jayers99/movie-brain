@@ -371,3 +371,51 @@ def already_checked(ctx, title, year, tid):
     ctx["repo"].set_external_id(fid, "tmdb", str(tid), prior)
     ctx["repo"].upsert_tmdb(fid, found=True, looked_up=prior)
     ctx["repo"].record_tmdb_providers(fid, prior, "{}")
+
+
+@given("OMDb answers only lookups by IMDb id")
+def omdb_by_id_only(ctx):
+    ctx["rs"].remove(responses.GET, OMDB_URL)
+
+    def cb(request):
+        q = parse_qs(urlparse(request.url).query)
+        if "i" in q:
+            return (200, {}, json.dumps(FOUND))
+        return (200, {}, json.dumps({"Response": "False", "Error": "Movie not found!"}))
+
+    ctx["rs"].add_callback(responses.GET, OMDB_URL, callback=cb)
+
+
+@given(parsers.parse('TMDB reports id {tid:d} as IMDb "{imdb}"'))
+def tmdb_imdb(ctx, tmdb, tid, imdb):
+    ctx["rs"].get(f"{TMDB_API}/movie/{tid}/external_ids", json={"id": tid, "imdb_id": imdb})
+
+
+@given(parsers.parse("TMDB reports id {tid:d} as having no IMDb id"))
+def tmdb_no_imdb(ctx, tmdb, tid):
+    ctx["rs"].get(f"{TMDB_API}/movie/{tid}/external_ids", json={"id": tid, "imdb_id": None})
+
+
+def _omdb_found(ctx, title, year):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    assert fid is not None
+    conn = sqlite3.connect(ctx["repo"].db_path)
+    row = conn.execute("SELECT found FROM omdb WHERE film_id = ?", (fid,)).fetchone()
+    conn.close()
+    return row is not None and row[0] == 1
+
+
+@then(parsers.parse('"{title} ({year:d})" has an OMDb rating'))
+def has_omdb(ctx, title, year):
+    assert _omdb_found(ctx, title, year)
+
+
+@then(parsers.parse('"{title} ({year:d})" has no OMDb rating'))
+def has_no_omdb(ctx, title, year):
+    assert not _omdb_found(ctx, title, year)
+
+
+@then(parsers.parse('"{title} ({year:d})" has no external id for authority "{authority}"'))
+def no_external_id(ctx, title, year, authority):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    assert authority not in ctx["repo"].external_ids_for(fid)

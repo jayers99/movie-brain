@@ -731,6 +731,11 @@ class Repository:
         with self._conn() as c:
             c.execute("UPDATE omdb SET needs_refresh = 1 WHERE film_id = ?", (film_id,))
 
+    def mark_omdb_refresh_if_missed(self, film_id: int) -> None:
+        """Re-queue only a stale OMDb miss — a found row is left alone."""
+        with self._conn() as c:
+            c.execute("UPDATE omdb SET needs_refresh = 1 WHERE film_id = ? AND found = 0", (film_id,))
+
     def film_id_for_external(self, authority: str, value: str) -> int | None:
         with self._conn() as c:
             row = c.execute(
