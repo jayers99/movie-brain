@@ -71,3 +71,13 @@ def test_auth_error_on_401_without_limit():
     responses.get(OMDB_URL, json={"Response": "False", "Error": "Invalid API key!"}, status=401)
     with pytest.raises(AuthError):
         OmdbClient("k").lookup("X", None)
+
+
+@responses.activate
+def test_lookup_by_imdb_queries_by_id_and_parses():
+    responses.get(OMDB_URL, json=FOUND)
+    r = OmdbClient("k").lookup_by_imdb("tt0037800")
+    assert (r.imdb, r.rt, r.found) == (8.6, 100, True)
+    params = responses.calls[0].request.params
+    assert params["i"] == "tt0037800"
+    assert "t" not in params and "y" not in params

@@ -80,6 +80,11 @@ class TmdbClient:
         d = self._get(f"/movie/{tmdb_id}").json().get("release_date") or ""
         return int(d[:4]) if len(d) >= 4 and d[:4].isdigit() else None
 
+    def imdb_id(self, tmdb_id: int) -> str | None:
+        """IMDb id for a TMDB movie (one call) — the exact key OMDb answers to."""
+        v = self._get(f"/movie/{tmdb_id}/external_ids").json().get("imdb_id")
+        return str(v) if v else None
+
     def movie_titles(self, tmdb_id: int) -> TmdbTitles:
         """Title, original title, year, and every alternative title — one API call."""
         d = self._get(f"/movie/{tmdb_id}", append_to_response="alternative_titles").json()

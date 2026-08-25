@@ -139,3 +139,20 @@ Feature: TMDB availability
     And TMDB knows "Trio" as id 11 released 1950
     When I sync with a TMDB token
     Then the tmdb review queue holds a "id-conflict" entry
+
+  Scenario: A TMDB-linked film that OMDb cannot find by title is found by IMDb id
+    Given OMDb answers only lookups by IMDb id
+    And TMDB knows "Trio (1950)" as id 11
+    And TMDB reports id 11 as IMDb "tt0037800"
+    When I sync with a TMDB token
+    Then "Trio (1950)" has no OMDb rating
+    When I sync with a TMDB token again the next day
+    Then "Trio (1950)" has an OMDb rating
+    And "Trio (1950)" has external id "tt0037800" for authority "imdb"
+
+  Scenario: A TMDB-linked film with no IMDb id falls back to the title lookup
+    Given TMDB knows "Trio (1950)" as id 11
+    And TMDB reports id 11 as having no IMDb id
+    When I sync with a TMDB token
+    Then "Trio (1950)" has an OMDb rating
+    And "Trio (1950)" has no external id for authority "imdb"

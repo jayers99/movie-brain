@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from movie_brain.infrastructure.criterion import CatalogError, fetch_films, fetc
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE
 from movie_brain.infrastructure.omdb import AuthError, OmdbClient, QuotaExceeded
+from movie_brain.infrastructure.tmdb import AuthError as TmdbAuthError
 from movie_brain.infrastructure.tmdb import TmdbArbiter, TmdbClient
 
 SOURCE = "criterion"
@@ -39,6 +41,32 @@ class SyncResult:
     tmdb_watchlist_refreshed: int = 0
     mc_promoted: int = 0
     tmdb_first_checked: int = 0
+
+
+def _resolve_imdb_id(
+    repo: Repository, tmdb: TmdbClient | None, film_id: int, today: date, log: Callable[[str], None]
+) -> str | None:
+    """IMDb id for a film: stored `imdb` external id, else resolved once via its TMDB link
+    and stored. None (no link, TMDB has none, or TMDB weather) → caller uses the title path."""
+    ids = repo.external_ids_for(film_id)
+    if "imdb" in ids:
+        return ids["imdb"]
+    if tmdb is None or "tmdb" not in ids:
+        return None
+    try:
+        imdb_id = tmdb.imdb_id(int(ids["tmdb"]))
+    except (requests.RequestException, TmdbAuthError) as exc:
+        log(f"imdb id lookup failed for film {film_id}: {exc}")
+        return None
+    if imdb_id is None:
+        return None
+    try:
+        repo.set_external_id(film_id, "imdb", imdb_id, today)
+    except sqlite3.IntegrityError:
+        holder = repo.film_id_for_external("imdb", imdb_id)
+        log(f"imdb id {imdb_id} already claimed by film {holder}; film {film_id} falls back to title lookup")
+        return None
+    return imdb_id
 
 
 def sync(
@@ -122,7 +150,8 @@ def sync(
         if quota_hit or consecutive >= MAX_CONSECUTIVE_FAILURES:
             break
         try:
-            rating = client.lookup(film.title, film.year)
+            imdb_id = _resolve_imdb_id(repo, tmdb_client, film_id, today, log)
+            rating = client.lookup_by_imdb(imdb_id) if imdb_id else client.lookup(film.title, film.year)
         except QuotaExceeded:
             quota_hit = True
             continue
