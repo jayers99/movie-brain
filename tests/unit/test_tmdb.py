@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 import pytest
 import requests
 import responses
@@ -185,7 +187,9 @@ def test_movie_facts_is_one_call_with_alts_and_external_ids(rs):
     assert (f.title, f.original_title, f.year, f.runtime_min) == ("Schindler's List", "Schindler's List", 1993, 195)
     assert f.alternatives == ("La liste de Schindler",)
     assert len(rs.calls) == 1
-    assert "alternative_titles,external_ids" in rs.calls[0].request.url
+    assert parse_qs(urlparse(rs.calls[0].request.url).query)["append_to_response"] == [
+        "alternative_titles,external_ids"
+    ]
 
 
 def test_movie_facts_tolerates_missing_fields(rs):
