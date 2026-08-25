@@ -494,3 +494,19 @@ def test_not_owned_chip_hides_owned_films(dash: Page):
     dash.wait_for_selector("#films tbody[data-count]")
     assert dash.locator("tr[data-id]", has_text="Alpha").count() == 0  # Alpha is the owned seed
     dash.click('[data-chip="not_owned"]')
+
+
+def test_drawer_shows_audit_reasons_and_records_a_verdict(dash: Page):
+    clear_lang(dash)
+    dash.click(".chip[data-chip=suspect]")
+    assert count(dash) == 1  # Bravo
+    dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo").click()
+    block = dash.locator(".audit-block")
+    expect(block.locator("li[data-code=omdb-title]")).to_contain_text("Bravo Two")
+    expect(block.locator(".audit-verdict")).to_have_text("")
+    block.locator("input.verdict-note").fill("wrong record")
+    block.locator("button.verdict-btn[data-verdict=omdb-wrong]").click()
+    expect(block.locator(".audit-verdict")).to_contain_text("omdb-wrong")
+    assert count(dash) == 1  # a non-fine verdict keeps the film a suspect
+    block.locator("button.verdict-btn[data-verdict=fine]").click()
+    expect(dash.locator("#films tbody")).to_have_attribute("data-count", "0")  # fine on the same reason set hides it
