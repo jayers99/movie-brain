@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import NamedTuple
+from urllib.parse import urlencode
 
 import requests
 
@@ -21,6 +22,15 @@ class TmdbTitles(NamedTuple):
     alternatives: tuple[str, ...]
 
 
+class TmdbFacts(NamedTuple):
+    imdb_id: str | None
+    title: str
+    original_title: str
+    alternatives: tuple[str, ...]
+    year: int | None
+    runtime_min: int | None
+
+
 def watch_link(tmdb_id: int) -> str:
     return f"https://www.themoviedb.org/movie/{tmdb_id}/watch?locale=US"
 
@@ -31,7 +41,13 @@ class TmdbClient:
         self.headers = {"Authorization": f"Bearer {token}"}
 
     def _get(self, path: str, **params: str) -> requests.Response:
-        resp = self.session.get(f"{TMDB_API}{path}", params=params, headers=self.headers, timeout=30)
+        url = f"{TMDB_API}{path}"
+        if params:
+            # urlencode(..., safe=",") so a multi-value append_to_response (e.g.
+            # "alternative_titles,external_ids") stays comma-separated rather than %2C-escaped;
+            # otherwise identical to requests' own params= encoding.
+            url = f"{url}?{urlencode(params, safe=',')}"
+        resp = self.session.get(url, headers=self.headers, timeout=30)
         if resp.status_code == 401:
             raise AuthError(resp.json().get("status_message") or "invalid bearer token")
         resp.raise_for_status()
@@ -94,6 +110,25 @@ class TmdbClient:
             str(t["title"]) for t in (d.get("alternative_titles") or {}).get("titles") or [] if t.get("title")
         )
         return TmdbTitles(d.get("title") or "", d.get("original_title") or "", year, alts)
+
+    def movie_facts(self, tmdb_id: int) -> TmdbFacts:
+        """Everything the audit compares against, in ONE call (alt titles + external ids appended)."""
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="alternative_titles,external_ids").json()
+        rd = d.get("release_date") or ""
+        year = int(rd[:4]) if len(rd) >= 4 and rd[:4].isdigit() else None
+        alts = tuple(
+            str(t["title"]) for t in (d.get("alternative_titles") or {}).get("titles") or [] if t.get("title")
+        )
+        runtime = d.get("runtime")
+        imdb = (d.get("external_ids") or {}).get("imdb_id")
+        return TmdbFacts(
+            imdb_id=str(imdb) if imdb else None,
+            title=d.get("title") or "",
+            original_title=d.get("original_title") or "",
+            alternatives=alts,
+            year=year,
+            runtime_min=int(runtime) if isinstance(runtime, int) and runtime > 0 else None,
+        )
 
 
 class TmdbArbiter:

@@ -166,3 +166,29 @@ def test_imdb_id_reads_external_ids(rs):
 def test_imdb_id_missing_is_none(rs):
     rs.get(f"{TMDB_API}/movie/11/external_ids", json={"id": 11, "imdb_id": None})
     assert TmdbClient("tok").imdb_id(11) is None
+
+
+def test_movie_facts_is_one_call_with_alts_and_external_ids(rs):
+    rs.get(
+        f"{TMDB_API}/movie/424",
+        json={
+            "title": "Schindler's List",
+            "original_title": "Schindler's List",
+            "release_date": "1993-12-15",
+            "runtime": 195,
+            "alternative_titles": {"titles": [{"title": "La liste de Schindler"}, {"title": ""}]},
+            "external_ids": {"imdb_id": "tt0108052"},
+        },
+    )
+    f = TmdbClient("tok").movie_facts(424)
+    assert f.imdb_id == "tt0108052"
+    assert (f.title, f.original_title, f.year, f.runtime_min) == ("Schindler's List", "Schindler's List", 1993, 195)
+    assert f.alternatives == ("La liste de Schindler",)
+    assert len(rs.calls) == 1
+    assert "alternative_titles,external_ids" in rs.calls[0].request.url
+
+
+def test_movie_facts_tolerates_missing_fields(rs):
+    rs.get(f"{TMDB_API}/movie/5", json={"title": "X", "original_title": "X"})
+    f = TmdbClient("tok").movie_facts(5)
+    assert (f.imdb_id, f.year, f.runtime_min, f.alternatives) == (None, None, None, ())
