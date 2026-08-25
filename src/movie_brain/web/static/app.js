@@ -63,6 +63,10 @@
   const byTitle = (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
   function compare(a, b) {
     if (!state.sort) {  // default hierarchy: metacritic, ties → rt, ties → imdb (each desc, missing after present), then title
+      if (state.chips.has('suspect')) {  // suspect chip active: audit score desc leads, then the usual hierarchy
+        const c = (b.audit?.score ?? 0) - (a.audit?.score ?? 0);
+        if (c !== 0) return c;
+      }
       for (const key of ['metacritic', 'rt', 'imdb']) {
         if ((a[key] == null) !== (b[key] == null)) return a[key] == null ? 1 : -1;
         if (a[key] != null && a[key] !== b[key]) return b[key] - a[key];

@@ -76,10 +76,23 @@ def seed(repo: Repository) -> None:
     repo.record_listing_with_transition(ids["alpha (1950)"], "apple-tv-store", "https://tmdb/w/1", TODAY)
     # Bravo is the one seeded watchlist film (Charlie stays free for the toggle test).
     repo.toggle_watchlist(ids["bravo (1960)"], TODAY)
-    # Bravo is also the one seeded audit suspect (an OMDb title disagreement) for the Suspect chip + drawer verdict tests.
+    # Two seeded audit suspects for the Suspect chip + drawer verdict + score-sort tests. Bravo
+    # carries the higher score (4: imdb-id 3 + year 1) while Echo carries the moved omdb-title
+    # flag (score 2) — under the OLD metacritic/rt/imdb hierarchy Echo would already sort before
+    # Bravo (mc tie 70, rt 60 vs 50), so putting the higher score on Bravo is the only seed that
+    # proves the suspect chip's score-desc sort is real rather than an artifact of that hierarchy.
     from movie_brain.domain.audit import AuditFlag
 
-    repo.replace_audit_flags({ids["bravo (1960)"]: [AuditFlag("omdb-title", "OMDb title 'Bravo Two' vs 'Bravo'", 2)]}, TODAY)
+    repo.replace_audit_flags(
+        {
+            ids["bravo (1960)"]: [
+                AuditFlag("imdb-id", "OMDb imdbID tt1 vs TMDB tt2", 3),
+                AuditFlag("year", "OMDb year 1993 vs film year 1990", 1),
+            ],
+            ids["echo (1990)"]: [AuditFlag("omdb-title", "OMDb title 'Bravo Two' vs 'Bravo'", 2)],
+        },
+        TODAY,
+    )
     # Golf: the one Mode-B discovery film — no Criterion listing, scraped metascore only.
     gid = repo.create_film(Film("Golf", 2020, None, ""))
     repo.set_external_id(gid, "metacritic", "golf-2020", TODAY)

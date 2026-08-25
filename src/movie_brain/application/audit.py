@@ -31,7 +31,7 @@ class AuditReport:
     suspects: int = 0
     by_reason: dict[str, int] = field(default_factory=dict)
     top: list[tuple[int, str, int, list[str]]] = field(default_factory=list)  # (film_id, title, score, codes)
-    exit_code: int = 0
+    exit_code: int = 0  # reserved: non-zero only if the checks themselves fail (spec §3); the facts fill never sets it
 
 
 def _fill_facts(
@@ -42,7 +42,9 @@ def _fill_facts(
     log: Callable[[str], None],
     report: AuditReport,
 ) -> None:
-    for film_id, tmdb_id in repo.tmdb_facts_needed():
+    needed = repo.tmdb_facts_needed()
+    total = len(needed)
+    for n, (film_id, tmdb_id) in enumerate(needed, start=1):
         try:
             f = tmdb.movie_facts(tmdb_id)
         except AuthError as exc:
@@ -51,15 +53,19 @@ def _fill_facts(
         except (requests.RequestException, ValueError) as exc:
             log(f"tmdb facts failed for film {film_id} (id {tmdb_id}): {exc}")
             report.facts_failed += 1
-            continue
-        repo.upsert_tmdb_facts(
-            film_id,
-            TmdbFactsRow(tmdb_id, f.imdb_id, f.title, f.original_title, f.alternatives, f.year, f.runtime_min),
-            today,
-        )
-        report.facts_fetched += 1
+        else:
+            repo.upsert_tmdb_facts(
+                film_id,
+                TmdbFactsRow(tmdb_id, f.imdb_id, f.title, f.original_title, f.alternatives, f.year, f.runtime_min),
+                today,
+            )
+            report.facts_fetched += 1
+        # Throttle after BOTH success and a per-film failure (not just success) — a bad API
+        # response must not let the loop hammer TMDB at full speed.
         if delay_s:
             time.sleep(delay_s)
+        if n % 100 == 0:
+            log(f"tmdb facts {n}/{total}")
 
 
 def run_audit(
