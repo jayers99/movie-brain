@@ -159,7 +159,7 @@ def test_each_chip_alone(dash: Page):
         "top_ratings": 1,  # only Alpha (92 / 95% / 8.5) clears any threshold
         "recent": 1,
         "departed": 1,
-        "suspect": 1,
+        "suspect": 2,  # Bravo, Echo
     }
     for chip, n in expected.items():
         dash.click(f".chip[data-chip={chip}]")
@@ -496,17 +496,26 @@ def test_not_owned_chip_hides_owned_films(dash: Page):
     dash.click('[data-chip="not_owned"]')
 
 
+def test_suspect_chip_sorts_by_score_desc(dash: Page):
+    # Bravo (score 4: imdb-id 3 + year 1) outranks Echo (score 2: omdb-title) — even though
+    # under the old metacritic/rt/imdb hierarchy Echo (rt 60) would sort before Bravo (rt 50).
+    clear_lang(dash)
+    dash.click(".chip[data-chip=suspect]")
+    assert first_titles(dash, 2) == ["Bravo", "Echo"]
+    dash.click(".chip[data-chip=suspect]")
+
+
 def test_drawer_shows_audit_reasons_and_records_a_verdict(dash: Page):
     clear_lang(dash)
     dash.click(".chip[data-chip=suspect]")
-    assert count(dash) == 1  # Bravo
-    dash.locator("#films tbody tr[data-id]").filter(has_text="Bravo").click()
+    assert count(dash) == 2  # Bravo, Echo
+    dash.locator("#films tbody tr[data-id]").filter(has_text="Echo").click()
     block = dash.locator(".audit-block")
     expect(block.locator("li[data-code=omdb-title]")).to_contain_text("Bravo Two")
     expect(block.locator(".audit-verdict")).to_have_text("")
     block.locator("input.verdict-note").fill("wrong record")
     block.locator("button.verdict-btn[data-verdict=omdb-wrong]").click()
     expect(block.locator(".audit-verdict")).to_contain_text("omdb-wrong")
-    assert count(dash) == 1  # a non-fine verdict keeps the film a suspect
+    assert count(dash) == 2  # a non-fine verdict keeps the film a suspect
     block.locator("button.verdict-btn[data-verdict=fine]").click()
-    expect(dash.locator("#films tbody")).to_have_attribute("data-count", "0")  # fine on the same reason set hides it
+    expect(dash.locator("#films tbody")).to_have_attribute("data-count", "1")  # fine hides Echo; Bravo remains
