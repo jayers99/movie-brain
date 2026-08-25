@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import csv
+import re
 import sys
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 
 import requests
 
 from movie_brain.application.availability import MAX_CONSECUTIVE_FAILURES, TMDB_AUTHORITY, queue_review_once
 from movie_brain.domain.matching import norm_title, split_annotations
 from movie_brain.domain.models import ReviewEntry
-from movie_brain.infrastructure.database import RepairFilm, Repository
+from movie_brain.domain.thumbprint import parse_title, title_norm
+from movie_brain.infrastructure.database import RepairFilm, Repository, TwinFilm
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 
@@ -268,12 +272,10 @@ def repair_years(
             return YearsReport(len(audit.collisions), len(audit.stale), 0)
         clash = repo.update_film_year(film_id, year)
         if clash is not None:
-            detail = (
-                f"{view.title!r}: setting {year} over {view.year} "
-                f"collides with film {clash} — merge candidate"
-            )
+            detail = f"{view.title!r}: setting {year} over {view.year} collides with film {clash} — merge candidate"
             queue_review_once(
-                repo, TMDB_AUTHORITY,
+                repo,
+                TMDB_AUTHORITY,
                 ReviewEntry("year-collision", film_id=film_id, value=str(clash), detail=detail),
                 today,
             )
@@ -295,3 +297,134 @@ def repair_years(
             repo.mark_omdb_refresh(fid)
             marked += 1
     return YearsReport(len(audit.collisions), len(audit.stale), marked)
+
+
+# --- twins: raw `Title (YYYY)` films → their same-year clean twin (thumbprint step 1) ---------
+
+
+@dataclass(frozen=True)
+class TwinGroup:
+    raw_id: int
+    raw_title: str
+    embedded_year: int
+    verdict: str  # "twin" | "no-twin" | "conflict" | "csv-mismatch"
+    twin_id: int | None
+    detail: str
+    year_fix: int | None  # embedded year when films.year disagrees (Rear Window 2013 → 1954)
+    imdb_id: str | None  # the raw row's OMDb imdbID (no-twin keys with it)
+
+
+@dataclass(frozen=True)
+class TwinsReport:
+    groups: int
+    twins: int
+    no_twin: int
+    conflict: int
+    csv_mismatch: int
+    applied: int
+    declined: int
+
+
+def load_expected_twins(csv_path: Path) -> dict[int, int]:
+    """{raw film_id: twin film_id} from the eval contract's group-B `twin NNNN` notes."""
+    out: dict[int, int] = {}
+    if not csv_path.exists():
+        return out
+    with csv_path.open(encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            m = re.fullmatch(r"twin (\d+)", (r.get("note") or "").strip())
+            if m and r.get("film_id", "").isdigit():
+                out[int(r["film_id"])] = int(m.group(1))
+    return out
+
+
+def audit_twins(repo: Repository, expected: dict[int, int]) -> list[TwinGroup]:
+    films = repo.films_for_twins()
+    by_norm_year: dict[tuple[str, int | None], list[TwinFilm]] = defaultdict(list)
+    for f in films:
+        by_norm_year[(title_norm(f.title), f.year)].append(f)
+    groups: list[TwinGroup] = []
+    for f in films:
+        p = parse_title(f.title)
+        if p.embedded_year is None:
+            continue
+        year_fix = p.embedded_year if f.year != p.embedded_year else None
+        twins = [t for t in by_norm_year[(norm_title(p.base), p.embedded_year)] if t.id != f.id]
+        if not twins:
+            verdict, twin, detail = "no-twin", None, f"no undisposed film {p.base!r} ({p.embedded_year})"
+            if not f.omdb_imdb:
+                verdict, detail = "conflict", "no twin and no OMDb imdbID to key with"
+        elif len(twins) > 1:
+            verdict, twin, detail = "conflict", None, f"several twins {[t.id for t in twins]}"
+        else:
+            t = twins[0]
+            if f.omdb_imdb and t.tmdb_imdb and f.omdb_imdb != t.tmdb_imdb:
+                verdict, twin, detail = (
+                    "conflict",
+                    None,
+                    f"keys disagree: raw OMDb {f.omdb_imdb} vs twin #{t.id} {t.tmdb_imdb}",
+                )
+            else:
+                verdict, twin, detail = (
+                    "twin",
+                    t.id,
+                    f"twin #{t.id} {t.title!r} ({t.year}) keys {f.omdb_imdb or '-'}/{t.tmdb_imdb or '-'}",
+                )
+        if f.id in expected and expected[f.id] != twin:
+            verdict, detail = "csv-mismatch", f"contract expects twin #{expected[f.id]}, computed {twin} — {detail}"
+        groups.append(TwinGroup(f.id, f.title, p.embedded_year, verdict, twin, detail, year_fix, f.omdb_imdb))
+    return groups
+
+
+def format_twin(g: TwinGroup) -> str:
+    fix = f" year {g.year_fix} (was wrong)" if g.year_fix else ""
+    return f"[{g.verdict}] #{g.raw_id} {g.raw_title!r}{fix}: {g.detail}"
+
+
+def repair_twins(
+    repo: Repository,
+    today: date,
+    *,
+    apply: bool,
+    confirm: Callable[[TwinGroup], bool],
+    expected: dict[int, int],
+    on_applied: Callable[[TwinGroup], None] = lambda g: None,
+    limit: int | None = None,
+    log: Callable[[str], None] = _stderr,
+) -> TwinsReport:
+    """Dry-run lists every group; --apply merges each confirmed `twin` group into its twin
+    and keys each confirmed `no-twin` directly. `conflict` / `csv-mismatch` are never touched."""
+    groups = audit_twins(repo, expected)
+    if limit is not None:
+        groups = groups[:limit]
+    applied = declined = 0
+    for g in groups:
+        log(format_twin(g))
+        if not apply or g.verdict not in ("twin", "no-twin"):
+            continue
+        if not confirm(g):
+            declined += 1
+            continue
+        if g.year_fix is not None:
+            clash = repo.update_film_year(g.raw_id, g.year_fix)
+            if clash is not None and clash != g.twin_id:
+                log(f"  year fix blocked: key held by #{clash}; skipped")
+                continue
+        if g.verdict == "twin" and g.twin_id is not None:
+            report = repo.merge_film(g.raw_id, g.twin_id, today, note=f"repair twins {g.raw_title!r}")
+            log(
+                f"  merged #{g.raw_id} → #{g.twin_id}: moved {report.moved} dropped {report.dropped} "
+                f"reviews {report.reviews_resolved}"
+            )
+        else:
+            base = parse_title(g.raw_title).base
+            if not repo.key_film_directly(g.raw_id, new_title=base, imdb_id=g.imdb_id or "", today=today):
+                log("  direct key blocked (key/imdb held elsewhere); skipped")
+                continue
+            log(f"  keyed #{g.raw_id} as {base!r} imdb {g.imdb_id}")
+        on_applied(g)
+        applied += 1
+    counts = {v: sum(1 for g in groups if g.verdict == v) for v in ("twin", "no-twin", "conflict", "csv-mismatch")}
+    return TwinsReport(
+        len(groups), counts["twin"], counts["no-twin"], counts["conflict"], counts["csv-mismatch"], applied, declined
+    )

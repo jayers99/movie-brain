@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from datetime import date
 from pathlib import Path
 from typing import Annotated
@@ -14,9 +15,18 @@ from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, crawl_archive, match_archive
 from movie_brain.application.owned import import_owned
 from movie_brain.application.rematch import rematch
-from movie_brain.application.repair import DupGroup, repair_dupes, repair_links, repair_years
+from movie_brain.application.repair import (
+    DupGroup,
+    TwinGroup,
+    load_expected_twins,
+    repair_dupes,
+    repair_links,
+    repair_twins,
+    repair_years,
+)
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
+from movie_brain.application.thumbprint import backfill_claims
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
@@ -36,6 +46,10 @@ repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong
 app.add_typer(repair_app, name="repair")
 review_app = typer.Typer(help="Resolve match_review anomalies: match to a film, create, or dismiss.")
 app.add_typer(review_app, name="review")
+thumbprint_app = typer.Typer(
+    help="Thumbprint identity: claims backfill (T1); the resolver stays dark until the ingester switch."
+)
+app.add_typer(thumbprint_app, name="thumbprint")
 audit_app = typer.Typer(help="Data audit: read-only consistency checks; the human records verdicts in the dashboard.")
 app.add_typer(audit_app, name="audit")
 console = Console()
@@ -233,6 +247,78 @@ def repair_dupes_cmd(
     )
 
 
+@repair_app.command("twins")
+def repair_twins_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Merge/key confirmed groups (default: dry-run).")] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="With --apply: confirm every group without prompting.")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Only the first N groups (batch size).")] = None,
+) -> None:
+    """Retire raw `Title (YYYY)` films into their same-year twin (contract-checked, one group at a time)."""
+    from pathlib import Path
+
+    eval_csv = Path(__file__).resolve().parents[2] / "scripts" / "eval" / "thumbprint_eval_v1.csv"
+    expected = load_expected_twins(eval_csv)
+
+    def confirm(g: TwinGroup) -> bool:
+        target = f"→ #{g.twin_id}" if g.verdict == "twin" else f"key directly as imdb {g.imdb_id}"
+        return yes or typer.confirm(f"#{g.raw_id} {g.raw_title!r} {target}?", default=False)
+
+    def ratify(g: TwinGroup) -> None:
+        if not eval_csv.exists() or g.verdict != "twin":
+            return
+        with eval_csv.open(encoding="utf-8") as f:
+            if any(r["film_id"] == str(g.raw_id) and r["source"] == "apple" for r in csv.DictReader(f)):
+                return
+        with eval_csv.open("a", encoding="utf-8", newline="") as f:
+            csv.writer(f, lineterminator="\n").writerow(
+                [
+                    "B-apple-year-title",
+                    g.raw_id,
+                    "apple",
+                    g.raw_title,
+                    g.embedded_year,
+                    g.imdb_id or "",
+                    "",
+                    "human",
+                    f"twin {g.twin_id}",
+                    "verified",
+                    "",
+                    "",
+                ]
+            )
+
+    report = repair_twins(
+        _repo(),
+        date.today(),
+        apply=apply,
+        confirm=confirm,
+        expected=expected,
+        on_applied=ratify,
+        limit=limit,
+        log=err.print,
+    )
+    console.print(
+        f"groups: {report.groups} · twin: {report.twins} · no-twin: {report.no_twin} · conflict: {report.conflict} · "
+        f"csv-mismatch: {report.csv_mismatch} · applied: {report.applied} · declined: {report.declined}"
+    )
+
+
+@thumbprint_app.command("backfill")
+def thumbprint_backfill_cmd(
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Write the claim rows and title_norms (default: dry-run).")
+    ] = False,
+) -> None:
+    """Copy owned / Criterion / Metacritic evidence into `claim` rows (pure copy, idempotent)."""
+    cfg = load_config()
+    r = backfill_claims(_repo(), cfg.config_dir, apply=apply, log=err.print)
+    console.print(
+        f"criterion: {r.criterion} · metacritic: {r.metacritic} · apple: {r.apple} "
+        f"(unrecovered {r.apple_unrecovered}) · "
+        f"editions: {r.editions} · title_norms filled: {r.title_norms}"
+    )
+
+
 @repair_app.command("links")
 def repair_links_cmd(
     film: Annotated[
@@ -318,8 +404,15 @@ def review_resolve(
     client = TmdbClient(token) if token else None
     try:
         outcome = resolve_review(
-            _repo(), review_id, today=date.today(), film_id=film, tmdb_id=tmdb_id, create=create,
-            dismiss=dismiss, client=client, note=note,
+            _repo(),
+            review_id,
+            today=date.today(),
+            film_id=film,
+            tmdb_id=tmdb_id,
+            create=create,
+            dismiss=dismiss,
+            client=client,
+            note=note,
         )
     except ValueError as exc:
         err.print(str(exc))
