@@ -7,6 +7,7 @@ import sys
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -30,6 +31,17 @@ class FilmRow(NamedTuple):
     director: str | None
     runtime_min: int | None
     omdb_mc: int | None
+
+
+@dataclass(frozen=True)
+class TmdbFactsRow:
+    tmdb_id: int
+    imdb_id: str | None
+    title: str
+    original_title: str
+    alt_titles: tuple[str, ...]
+    release_year: int | None
+    runtime_min: int | None
 
 
 class TmdbMatchTarget(NamedTuple):
@@ -418,6 +430,38 @@ class Repository:
         with self._conn() as c:
             rows = c.execute("SELECT value FROM external_ids WHERE authority = ?", (authority,)).fetchall()
             return {str(r["value"]) for r in rows}
+
+    def tmdb_facts_needed(self) -> list[tuple[int, int]]:
+        """Linked films with no tmdb_facts row, or a row fetched for a different tmdb id."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT x.film_id, x.value FROM external_ids x JOIN films f ON f.id = x.film_id "
+                "LEFT JOIN tmdb_facts t ON t.film_id = x.film_id "
+                "WHERE x.authority = 'tmdb' AND (t.film_id IS NULL OR t.tmdb_id != CAST(x.value AS INTEGER)) "
+                "AND " + _NOT_DISPOSED + " ORDER BY x.film_id"
+            ).fetchall()
+            return [(int(r["film_id"]), int(r["value"])) for r in rows]
+
+    def upsert_tmdb_facts(self, film_id: int, facts: TmdbFactsRow, fetched_on: date) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO tmdb_facts (film_id, tmdb_id, imdb_id, title, original_title, alt_titles, "
+                "release_year, runtime_min, fetched_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET tmdb_id=excluded.tmdb_id, imdb_id=excluded.imdb_id, "
+                "title=excluded.title, original_title=excluded.original_title, alt_titles=excluded.alt_titles, "
+                "release_year=excluded.release_year, runtime_min=excluded.runtime_min, fetched_on=excluded.fetched_on",
+                (
+                    film_id,
+                    facts.tmdb_id,
+                    facts.imdb_id,
+                    facts.title,
+                    facts.original_title,
+                    json.dumps(list(facts.alt_titles)),
+                    facts.release_year,
+                    facts.runtime_min,
+                    fetched_on.isoformat(),
+                ),
+            )
 
     def services(self) -> list[dict[str, object]]:
         with self._conn() as c:
