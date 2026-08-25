@@ -13,7 +13,15 @@
 > **Status 2026-08-25:** Tasks 1–4 DONE on `feature/T1-thumbprint-resolver` (gate baseline
 > `n=482 WRONG=0 auto=457 (94.8%) review=25 (5.2%)`, 0 fixture misses). The prototypes were
 > deleted in Task 4 (they were never lint-clean); Task 8 keeps only the docs/rules work.
-> Tasks 5–10 await owner approval of the spec's `claim` table shape (spec §3).
+> **Update (same day):** owner approved §3; Tasks 5–8 DONE (migration 011, `thumbprint backfill`,
+> `repair twins`, rules). Rehearsed end-to-end on a scratch copy of the live DB: backfill =
+> criterion 3,050 / metacritic 1,511 / apple 935 (0 unrecovered, 77 twin-covered) / 70 edition
+> labels, idempotent; twins = 85 groups → 74 twin + 11 no-twin, 0 conflict, 0 csv-mismatch;
+> after apply: raw `(YYYY)` 82 → 0, open no-match 299 → 225, dispositions 28 → 102.
+> Deviations from the plan text: twin rule allows ±1 year ONLY with IMDb key agreement (Pink
+> Panther 1963/1964); backfill writes no placeholder claim for an owned twin whose archive line
+> belongs to its raw row; `key_film_directly` retires the film's own merged loser's dead key
+> (Doctor Strange). Tasks 9–10 (LIVE) not started — announce → approve → diff.
 
 ## Global Constraints
 
