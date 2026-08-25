@@ -10,6 +10,11 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-25-thumbprint-resolver-design.md` (this plan) ← `docs/superpowers/research/2026-08-25-thumbprint-design.md` (binding memo).
 
+> **Status 2026-08-25:** Tasks 1–4 DONE on `feature/T1-thumbprint-resolver` (gate baseline
+> `n=482 WRONG=0 auto=457 (94.8%) review=25 (5.2%)`, 0 fixture misses). The prototypes were
+> deleted in Task 4 (they were never lint-clean); Task 8 keeps only the docs/rules work.
+> Tasks 5–10 await owner approval of the spec's `claim` table shape (spec §3).
+
 ## Global Constraints
 
 - No live-DB write except through Tasks 9–10's announce → approve → diff loop; every other task uses test DBs / read-only queries only.

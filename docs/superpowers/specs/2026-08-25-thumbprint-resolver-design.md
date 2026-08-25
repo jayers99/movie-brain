@@ -24,12 +24,11 @@ edition badges. The resolver ships *dark* in T1: callable, benchmarked, unused b
 ## 1. Benchmark gate (`scripts/thumbprint_benchmark.py`)
 
 ### 1.1 Contract file
-`scripts/eval/thumbprint_eval_v1.csv` is the contract. **Current state (verified today):
-498 rows, not the memo's 533** — 300 A `believed`, 82 B (73 `verified`/9 `believed`),
-28 C (27/1 `proposed`), 88 D (50 `verified`/38 `proposed`). A prior-session scratch copy holds
-6 further `proposed` D rows (Romeo & Juliet, Under the Skin, Western, Point Blank, …); T1
-appends them (they are `proposed`, so the gate ignores them either way). One row's
-`expected_tt` is `NONE`.
+`scripts/eval/thumbprint_eval_v1.csv` is the contract. **State after T1 Task 1 (done):
+527 rows** = the 498 that were checked in ∪ the research session's scratch set (which held
+group E's 23 benchmark rows and 6 more `proposed` D rows the check-in had lost). Scored
+population 482 (`verified`+`believed` with an expected key); 38 `proposed`; 7 unresolved
+(empty `expected_tt`); one `NONE`.
 
 Two columns are added, both derived once, read-only, from the live DB:
 - `director` — `films.director` at eval-build time (152/498 non-empty). The prototype read
@@ -53,10 +52,10 @@ uv run python scripts/thumbprint_benchmark.py [--assert] [--status verified|beli
 - **Wrong = 0** on the scored population, then **auto ≥ 90%** (`--assert` exits 1 otherwise).
   A match on an `expected_tt = NONE` row is wrong.
 - Prints the memo's scoreboard shape (n / WRONG / auto-correct % / review %), per-group
-  breakdown, review reasons, and every WRONG row. Baseline to reproduce before any resolver
-  change: **0 wrong / ≥ 93.0% auto** on today's contract (ALG3 numbers; 526 in the memo were
-  scored on the scratch set — T1 re-baselines on the checked-in file and records the number
-  in the plan).
+  breakdown, review reasons, and every WRONG row. **Baseline (T1, reproduced offline):
+  n=482, WRONG=0, auto 457 (94.8%), review 25 (5.2%), 0 fixture misses; proposed rows: 26
+  agree / 0 disagree / 12 review.** The lift over the memo's 93.0% comes from alt-title forms
+  and group E.
 - `scripts/matching_benchmark.py` is untouched and still gates `domain/matching.py`.
 - A pytest (`tests/unit/test_thumbprint_benchmark.py`) runs the gate on a 20-row slice of
   the fixture so `uv run pytest` catches resolver regressions without the full 498.
@@ -76,11 +75,13 @@ class ParsedTitle:
 
 def parse_title(raw: str) -> ParsedTitle
 ```
-Behaviour = memo §2, lifted from `scripts/eval/eval_lib.parse` plus alt-title capture:
+Behaviour = memo §2, lifted from the prototype's `eval_lib.parse` plus alt-title capture:
 trailing-only, bracket-aware, iterated; leading parens are title; never strip to empty.
-Vocabulary is the `VOCAB` regex in `eval_lib.py` (single source; `eval_lib.py` is deleted
-once the domain module exists and the gate imports the domain). `films.title_norm` =
-`norm_title(parse_title(title).title)`.
+`title` keeps a trailing non-vocabulary parenthetical (`Caché (Hidden)`) because that is the
+search form the fixture was fetched with; `base` drops it (`Caché`); `forms()` = title, base
+and the alt itself, and an exact hit on any form is title level 3. `films.title_norm` =
+`norm_title(parse_title(title).base)`. The prototypes are deleted (done in T1); the domain
+module is the single source of the vocabulary.
 
 ### 2.2 Query and candidates
 ```python

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import requests
 
@@ -74,6 +74,32 @@ class TmdbClient:
                 )
             )
         return out
+
+    # --- thumbprint resolver (raw payloads; the resolver unifies on IMDb id) ---------------
+    def search_raw(
+        self, title: str, year: int | None = None, *, any_release_year: bool = False
+    ) -> list[dict[str, Any]]:
+        """Top-10 raw search results. ``year`` filters by ``primary_release_year``; with
+        ``any_release_year`` it uses TMDB's ``year`` (any release date) instead."""
+        params: dict[str, str] = {"query": title, "include_adult": "false"}
+        if year is not None:
+            params["year" if any_release_year else "primary_release_year"] = str(year)
+        results: list[dict[str, Any]] = self._get("/search/movie", **params).json().get("results", [])
+        return results[:10]
+
+    def search_person(self, name: str) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = self._get("/search/person", query=name).json().get("results", [])
+        return results[:2]
+
+    def person_movie_credits(self, person_id: int) -> list[dict[str, Any]]:
+        crew: list[dict[str, Any]] = self._get(f"/person/{person_id}/movie_credits").json().get("crew", [])
+        return crew
+
+    def movie_detail(self, tmdb_id: int) -> dict[str, Any]:
+        detail: dict[str, Any] = self._get(
+            f"/movie/{tmdb_id}", append_to_response="external_ids,credits,alternative_titles"
+        ).json()
+        return detail
 
     def watch_providers(self, tmdb_id: int) -> TmdbProviders:
         resp = self._get(f"/movie/{tmdb_id}/watch/providers")

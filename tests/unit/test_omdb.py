@@ -81,3 +81,22 @@ def test_lookup_by_imdb_queries_by_id_and_parses():
     params = responses.calls[0].request.params
     assert params["i"] == "tt0037800"
     assert "t" not in params and "y" not in params
+
+
+def test_thumbprint_search_and_by_id_never_use_t():
+    from urllib.parse import parse_qs, urlparse
+
+    import responses
+
+    from movie_brain.infrastructure.omdb import OMDB_URL, OmdbClient
+
+    with responses.RequestsMock() as rs:
+        rs.get(OMDB_URL, json={"Response": "True", "Search": [{"imdbID": "tt1"}]})
+        rs.get(OMDB_URL, json={"Response": "True", "imdbID": "tt1", "Title": "X"})
+        rs.get(OMDB_URL, json={"Response": "False", "Error": "Incorrect IMDb ID."})
+        c = OmdbClient("k")
+        assert c.search("x", 1999) == [{"imdbID": "tt1"}]
+        assert c.by_id("tt1")["Title"] == "X"
+        assert c.by_id("tt0") == {}
+        for call in rs.calls:
+            assert "t" not in parse_qs(urlparse(call.request.url).query)

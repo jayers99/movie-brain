@@ -35,6 +35,33 @@ class OmdbClient:
         """Exact lookup by IMDb id — immune to OMDb's US-release-year and title quirks."""
         return self._fetch({"i": imdb_id, "apikey": self.api_key})
 
+    # --- thumbprint resolver: search (s=) and by-id (i=) raw payloads; never t= -----------
+    def search(self, title: str, year: int | None = None) -> list[dict[str, Any]]:
+        params = {"s": title, "apikey": self.api_key}
+        if year is not None:
+            params["y"] = str(year)
+        data = self._raw(params)
+        found: list[dict[str, Any]] = data.get("Search") or []
+        return found
+
+    def by_id(self, imdb_id: str) -> dict[str, Any]:
+        """Full record by IMDb id; ``{}`` when OMDb has no such id."""
+        data = self._raw({"i": imdb_id, "apikey": self.api_key})
+        return data if data.get("Response") == "True" else {}
+
+    def _raw(self, params: dict[str, str]) -> dict[str, Any]:
+        resp = self.session.get(OMDB_URL, params=params, timeout=30)
+        if resp.status_code == 401:
+            error = resp.json().get("Error") or ""
+            if "limit" in error.lower():
+                raise QuotaExceeded(params.get("s") or params.get("i") or "")
+            raise AuthError(error or "invalid API key")
+        resp.raise_for_status()
+        data: dict[str, Any] = resp.json()
+        if "limit" in (data.get("Error") or "").lower():
+            raise QuotaExceeded(params.get("s") or params.get("i") or "")
+        return data
+
     def _query(self, title: str, year: int | None) -> OmdbRating:
         params: dict[str, str] = {"t": title, "type": "movie", "apikey": self.api_key}
         if year:
