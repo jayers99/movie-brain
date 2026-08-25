@@ -4,7 +4,7 @@
   const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
   const DEFAULT_LANG = 'English';
   const state = {
-    films: [], cfg: null, chips: new Set(), scope: 'criterion',
+    films: [], cfg: null, chips: new Set(), scope: 'reachable',
     cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null },
     sort: null,            // {col, dir} or null = default
     filtered: [], openFilm: null,
@@ -31,10 +31,20 @@
     needs_revisit: (f) => f.needs_revisit,
   };
 
+  // ---- scope ----
+  // reachable = something I can act on today: a current listing on a service I pay for (svod or
+  // store, Criterion included), or a film I own, rated, or watchlisted. Discovery films with no
+  // listing (nothing to watch or buy) are hidden here, visible only under 'all'.
+  const SCOPES = ['reachable', 'criterion', 'all'];
+  const SCOPE_LABELS = { reachable: 'Reachable', criterion: 'Criterion only', all: 'All films' };
+  const reachable = (f) => (f.criterion && !f.departed) || (f.services || []).some((s) => s.subscribed)
+    || f.owned || f.watchlisted || f.my_rating != null;
+  const inScope = (f) => state.scope === 'all' || (state.scope === 'criterion' ? f.criterion : reachable(f));
+
   // ---- filtering / sorting ----
   const inRange = (v, lo, hi) => v != null && (lo == null || v >= lo) && (hi == null || v <= hi);
   function rowMatches(f) {
-    if (state.scope === 'criterion' && !f.criterion) return false;
+    if (!inScope(f)) return false;
     for (const c of state.chips) if (!CHIP_PREDICATES[c](f)) return false;
     const k = state.cols;
     if (k.title && !f.title.toLowerCase().includes(k.title)) return false;
@@ -67,7 +77,7 @@
   function applyFilters() {
     state.filtered = state.films.filter(rowMatches).sort(compare);
     tbody.dataset.count = state.filtered.length;
-    const scoped = state.scope === 'criterion' ? state.films.filter((f) => f.criterion).length : state.films.length;
+    const scoped = state.films.filter(inScope).length;
     $('#count-showing').textContent = `Showing ${state.filtered.length} of ${scoped}`;
     renderRows();
     syncUrl();
@@ -122,7 +132,7 @@
   function syncUrl(push = false) {
     const p = new URLSearchParams();
     if (state.chips.size) p.set('chips', [...state.chips].join(','));
-    if (state.scope !== 'criterion') p.set('scope', 'all');
+    if (state.scope !== 'reachable') p.set('scope', state.scope);
     const k = state.cols;
     if (k.title) p.set('title', k.title);
     if (k.director) p.set('director', k.director);
@@ -139,7 +149,7 @@
   function readUrl() {
     const p = new URLSearchParams(location.search);
     state.chips = new Set((p.get('chips') || '').split(',').filter((c) => c in CHIP_PREDICATES));
-    state.scope = p.get('scope') === 'all' ? 'all' : 'criterion';
+    state.scope = SCOPES.includes(p.get('scope')) ? p.get('scope') : 'reachable';
     const k = state.cols;
     k.title = (p.get('title') || '').toLowerCase();
     k.director = (p.get('director') || '').toLowerCase();
@@ -153,7 +163,8 @@
     state.openFilm = film ? +film : null;
   }
   function writeControlsFromState() {
-    $('#scope-toggle').classList.toggle('active', state.scope === 'all');
+    $('#scope-toggle').textContent = SCOPE_LABELS[state.scope];
+    $('#scope-toggle').classList.toggle('active', state.scope !== 'reachable');
     document.querySelectorAll('.chip[data-chip]').forEach((b) => b.classList.toggle('active', state.chips.has(b.dataset.chip)));
     const k = state.cols;
     $('#f-title').value = k.title; $('#f-director').value = k.director;
@@ -171,7 +182,7 @@
   // ---- controls ----
   $('#chips').addEventListener('click', (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
-    if (b.id === 'scope-toggle') state.scope = state.scope === 'all' ? 'criterion' : 'all';
+    if (b.id === 'scope-toggle') state.scope = SCOPES[(SCOPES.indexOf(state.scope) + 1) % SCOPES.length];
     else if (b.id === 'chips-clear') state.chips.clear();
     else if (state.chips.has(b.dataset.chip)) state.chips.delete(b.dataset.chip); else state.chips.add(b.dataset.chip);
     writeControlsFromState(); applyFilters();
@@ -306,8 +317,10 @@
     const fields = [['Genre', p.Genre], ['Runtime', p.Runtime], ['Rated', p.Rated], ['Country', p.Country], ['Language', d.language], ['Awards', p.Awards], ['Cast', p.Actors], ['Writer', p.Writer]]
       .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
     const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
-    const streaming = (d.services || [])
+    const svc = d.services || [];
+    const streaming = svc.filter((s) => s.kind !== 'store')
       .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`).join(', ');
+    const buyable = svc.filter((s) => s.kind === 'store').map((s) => esc(s.name)).join(', ');
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
@@ -318,9 +331,11 @@
       <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
         ${d.metacritic_url ? ` <a class="criterion" href="${esc(d.metacritic_url)}" target="_blank" rel="noopener">Open on Metacritic ↗</a>` : ''}
         ${d.owned ? ` <a class="criterion owned-link" href="https://tv.apple.com/search?term=${encodeURIComponent(d.title)}" target="_blank" rel="noopener">Owned on Apple TV ↗</a>` : ''}
+        ${buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search?q=${encodeURIComponent(d.title)}" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}
         &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
       ${streaming ? `<p class="meta">Also streaming on: ${streaming}</p>` : ''}
+      ${buyable ? `<p class="meta">Buy on: ${buyable}</p>` : ''}
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
   }

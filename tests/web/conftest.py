@@ -82,6 +82,12 @@ def seed(repo: Repository) -> None:
     repo.upsert_mc_titles([McTitle("golf-2020", "Golf", 2020, 88, 1, 1)], TODAY)
     # Alpha is the one owned film — English keeps it visible in the default view.
     repo.mark_owned(ids["alpha (1950)"], TODAY)
+    # Hotel: a discovery film with no Criterion listing but buyable on the Apple TV store —
+    # reachable (default scope) shows it, criterion scope hides it. Hungarian + no scores keep it
+    # out of the default-English counts and at the tail of the default sort.
+    hid = repo.create_film(Film("Hotel", 2021, None, ""))
+    repo.upsert_omdb(hid, OmdbRating(None, None, True, "Hungarian", '{"Title":"Hotel"}'), TODAY)
+    repo.record_listing_with_transition(hid, "apple-tv-store", "https://tmdb/w/2", TODAY)
 
 
 @pytest.fixture(scope="session")
