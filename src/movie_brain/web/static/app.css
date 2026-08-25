@@ -64,3 +64,5 @@ tbody tr.departed td { color:var(--muted); }
 .watch-toggle { background: none; border: none; font-size: 1.1em; cursor: pointer; vertical-align: middle; }
 .revisit-toggle { background: none; border: none; font-size: 1.1em; cursor: pointer; vertical-align: middle; }
 input.revisit-note { display:block; width:100%; max-width:320px; font:inherit; padding:2px 6px; margin:0 0 8px; border:1px solid var(--line); border-radius:4px; }
+.audit-block { margin-top:1rem; border-top:1px solid var(--line, #ccc); padding-top:.5rem; }
+.verdict-buttons button { margin-right:.25rem; }

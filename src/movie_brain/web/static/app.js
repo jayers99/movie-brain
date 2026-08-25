@@ -312,6 +312,20 @@
 
   // ---- drawer ----
   const drawer = $('#drawer'), backdrop = $('#drawer-backdrop'), body = $('#drawer-body');
+  const VERDICTS = ['fine', 'omdb-wrong', 'tmdb-wrong', 'film-wrong', 'twin'];
+  function renderAudit(d) {
+    if (!d.audit && !d.verdict) return '';
+    const reasons = d.audit ? d.audit.reasons.map((r) => `<li data-code="${esc(r.code)}"><b>${esc(r.code)}</b> — ${esc(r.detail)}</li>`).join('') : '';
+    const verdict = d.verdict ? `${esc(d.verdict.verdict)} (${esc(d.verdict.marked_on)})${d.verdict.note ? ' — ' + esc(d.verdict.note) : ''}` : '';
+    const buttons = VERDICTS.map((v) => `<button class="verdict-btn" data-id="${d.id}" data-verdict="${v}">${v}</button>`).join('');
+    return `<div class="audit-block" data-id="${d.id}">
+      <h3>Audit${d.audit ? ` · score ${d.audit.score}` : ''}</h3>
+      <ul class="audit-reasons">${reasons}</ul>
+      <div class="audit-verdict">${verdict}</div>
+      <input class="verdict-note" placeholder="note (optional)">
+      <div class="verdict-buttons">${buttons}</div>
+    </div>`;
+  }
   function detailHtml(d) {
     const p = d.payload || {};
     const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '';
@@ -325,6 +339,7 @@
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
+      ${renderAudit(d)}
       <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${p.Plot && p.Plot !== 'N/A' ? `<p>${poster}${esc(p.Plot)}</p>` : poster}
       <dl>${fields}</dl>
@@ -437,6 +452,19 @@
   }
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input.revisit-note')) e.target.blur(); });
   document.addEventListener('focusout', (e) => { if (e.target.matches('input.revisit-note')) commitRevisitNote(e.target); });
+  document.addEventListener('click', async (e) => {
+    const b = e.target.closest('.verdict-btn'); if (!b) return;
+    const id = Number(b.dataset.id);
+    const block = b.closest('.audit-block');
+    const note = block.querySelector('.verdict-note').value.trim();
+    const r = await fetch(`/api/films/${id}/verdict`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ verdict: b.dataset.verdict, note: note || null }) });
+    if (!r.ok) { toast('Could not record verdict'); return; }
+    const res = await r.json();
+    const film = state.films.find((f) => f.id === id);
+    if (film) { film.verdict = { verdict: res.verdict, reasons: res.reasons, note: res.note, marked_on: res.marked_on }; film.audit = res.audit; applyFilters(); }
+    block.querySelector('.audit-verdict').textContent = `${res.verdict} (${res.marked_on})${res.note ? ' — ' + res.note : ''}`;
+    if (!res.audit) block.querySelector('.audit-reasons').innerHTML = '';
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     if (!langPanel.hidden) { closeLangPanel(); return; }
