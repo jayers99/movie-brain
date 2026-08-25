@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import NamedTuple
-from urllib.parse import urlencode
 
 import requests
 
@@ -41,13 +40,7 @@ class TmdbClient:
         self.headers = {"Authorization": f"Bearer {token}"}
 
     def _get(self, path: str, **params: str) -> requests.Response:
-        url = f"{TMDB_API}{path}"
-        if params:
-            # urlencode(..., safe=",") so a multi-value append_to_response (e.g.
-            # "alternative_titles,external_ids") stays comma-separated rather than %2C-escaped;
-            # otherwise identical to requests' own params= encoding.
-            url = f"{url}?{urlencode(params, safe=',')}"
-        resp = self.session.get(url, headers=self.headers, timeout=30)
+        resp = self.session.get(f"{TMDB_API}{path}", params=params, headers=self.headers, timeout=30)
         if resp.status_code == 401:
             raise AuthError(resp.json().get("status_message") or "invalid bearer token")
         resp.raise_for_status()
