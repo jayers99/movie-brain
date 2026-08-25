@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from movie_brain.application.audit import run_audit
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, crawl_archive, match_archive
@@ -35,6 +36,8 @@ repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong
 app.add_typer(repair_app, name="repair")
 review_app = typer.Typer(help="Resolve match_review anomalies: match to a film, create, or dismiss.")
 app.add_typer(review_app, name="review")
+audit_app = typer.Typer(help="Data audit: read-only consistency checks; the human records verdicts in the dashboard.")
+app.add_typer(audit_app, name="audit")
 console = Console()
 err = Console(stderr=True)
 
@@ -322,3 +325,49 @@ def review_resolve(
         err.print(str(exc))
         raise typer.Exit(1) from exc
     console.print(f"review {review_id}: {outcome}")
+
+
+@audit_app.command("run")
+def audit_run(
+    no_tmdb: Annotated[bool, typer.Option("--no-tmdb", help="Skip the TMDB facts fill; offline checks only.")] = False,
+) -> None:
+    """Score every film against cross-source consistency checks and replace audit_flags."""
+    cfg = load_config()
+    token = None if no_tmdb else load_tmdb_token(cfg)
+    if not no_tmdb and not token:
+        err.print(
+            f"no TMDB token (set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}); running offline checks only"
+        )
+    client = TmdbClient(token) if token else None
+    report = run_audit(_repo(), date.today(), tmdb=client)
+    console.print(
+        f"films: {report.films} · suspects: {report.suspects} · "
+        f"tmdb facts fetched: {report.facts_fetched} · failed: {report.facts_failed}"
+    )
+    table = Table(title="flags by reason")
+    table.add_column("reason")
+    table.add_column("films", justify="right")
+    for code, n in sorted(report.by_reason.items(), key=lambda kv: -kv[1]):
+        table.add_row(code, str(n))
+    console.print(table)
+    top = Table(title=f"top {len(report.top)} suspects")
+    for col in ("film", "title", "score", "reasons"):
+        top.add_column(col)
+    for fid, title, score, codes in report.top:
+        top.add_row(f"#{fid}", title, str(score), ", ".join(codes))
+    console.print(top)
+    raise typer.Exit(report.exit_code)
+
+
+@audit_app.command("verdicts")
+def audit_verdicts(
+    verdict: Annotated[str | None, typer.Option("--verdict", help="Only this verdict.")] = None,
+) -> None:
+    """Verdict history — the pattern-analysis export (oldest first)."""
+    rows = _repo().verdict_history(verdict)
+    table = Table(title=f"verdicts ({len(rows)})")
+    for col in ("film", "title", "year", "verdict", "reasons", "note", "marked"):
+        table.add_column(col)
+    for fid, title, year, v, reasons, note, marked in rows:
+        table.add_row(f"#{fid}", title, str(year or ""), v, reasons, note or "", marked)
+    console.print(table)
