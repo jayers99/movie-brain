@@ -417,3 +417,33 @@ def test_rerelease_hint_with_same_year_twin_and_older_original_is_review():
     assert match_film("Metropolis", 2001, pool).winner == 2
     # Annotation but no same-year twin → hint excuses the gap, original matches (Lawrence class).
     assert match_film("Metropolis (re-release)", 2001, [Candidate(1, "Metropolis", 1927)]).winner == 1
+
+
+def test_pick_tmdb_dateless_candidate_cannot_win_among_year_disqualified_twins():
+    # Intolerance (1916): every dated same-title candidate fails the DATABASE band; the one
+    # dateless short must not inherit the match by default — it is a miss (review).
+    cands = [_tc(48684, "Intolerance", 2000), _tc(879617, "Intolerance", 2020), _tc(1216137, "Intolerance", None)]
+    assert pick_tmdb_match("Intolerance", 1916, cands) is None
+
+
+def test_match_candidates_reports_yearless_among_dated():
+    idx = CandidateIndex([C(1, "Intolerance", 2000), C(2, "Intolerance", None)])
+    verdict = match_candidates(MatchQuery(title="Intolerance", year=1916, year_kind=YearKind.DATABASE), idx)
+    assert verdict.kind == "review" and verdict.reason == "yearless-among-dated"
+
+
+def test_pick_tmdb_lone_dateless_candidate_still_matches():
+    # No dated rival was disqualified: a dateless entry is the only reading of the title.
+    assert pick_tmdb_match("Trio", 1950, [_tc(3, "Trio", None)]) == 3
+
+
+def test_pick_tmdb_feature_wins_via_original_title_over_the_dateless_short():
+    # The live candidate set once the year retry adds the Griffith feature: its display title
+    # carries a one-word colon prefix (never indexed — "Ran: Something" ≠ "Ran"), but its
+    # original_title is the bare "Intolerance": exact title + exact year beats the dateless short.
+    cands = [
+        _tc(48684, "Intolerance", 2000),
+        _tc(1216137, "Intolerance", None),
+        TmdbCandidate(3059, "Intolerance: Love's Struggle Throughout the Ages", "Intolerance", 1916, 3.5),
+    ]
+    assert pick_tmdb_match("Intolerance", 1916, cands) == 3059

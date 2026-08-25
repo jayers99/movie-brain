@@ -329,6 +329,12 @@ def match_candidates(
     if level == 2 and result.year_points == 0 and not result.corroborated:
         return MatchVerdict(kind="review", reason="weak-title")
 
+    if query.year is not None and winner.year is None and not result.corroborated and disqualifications:
+        # Same-titled dated films were all ruled out by year; the one survivor is dateless
+        # and earned nothing but its title. It inherited the match by elimination, not
+        # evidence (Intolerance 1916 → a dateless 4-minute short). Never link on that.
+        return MatchVerdict(kind="review", reason="yearless-among-dated")
+
     return MatchVerdict(kind="match", film_id=winner.id)
 
 

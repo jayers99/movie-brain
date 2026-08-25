@@ -765,6 +765,19 @@ class Repository:
             ).fetchall()
             return [(int(r["film_id"]), str(r["value"]), bool(r["first_check"])) for r in rows]
 
+    def films_for_first_check(self, limit: int) -> list[tuple[int, str, bool]]:
+        """Matched films whose providers have never been checked (first_check is always True)."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT t.film_id, x.value FROM tmdb t "
+                "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
+                "WHERE t.found = 1 AND t.providers_checked_at IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = t.film_id) "
+                "ORDER BY t.film_id LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [(int(r["film_id"]), str(r["value"]), True) for r in rows]
+
     def films_for_provider_refresh(self, skip_checked_on: date | None = None) -> list[tuple[int, str, bool]]:
         where = "" if skip_checked_on is None else "AND COALESCE(t.providers_checked_at, '') != ? "
         params: tuple[object, ...] = () if skip_checked_on is None else (skip_checked_on.isoformat(),)

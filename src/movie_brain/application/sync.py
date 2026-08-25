@@ -38,6 +38,7 @@ class SyncResult:
     tmdb_refreshed: int = 0
     tmdb_watchlist_refreshed: int = 0
     mc_promoted: int = 0
+    tmdb_first_checked: int = 0
 
 
 def sync(
@@ -179,4 +180,5 @@ def sync(
         tmdb.refreshed,
         tmdb.watchlist_refreshed,
         mc_promoted,
+        tmdb.first_checked,
     )

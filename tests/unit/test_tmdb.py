@@ -125,3 +125,34 @@ def test_movie_titles_folds_alternative_titles_into_the_same_call():
     assert titles.alternatives == ("Apur Sansar", "The World of Apu (Apu Trilogy 3)")
     assert len(responses.calls) == 1
     assert "append_to_response=alternative_titles" in responses.calls[0].request.url
+
+
+def _hit(tid, title, date, orig=None, pop=1.0):
+    return {"id": tid, "title": title, "original_title": orig or title, "release_date": date, "popularity": pop}
+
+
+@responses.activate
+def test_search_retries_with_year_when_no_result_is_near_the_known_year():
+    # Intolerance (1916): the title-only page is later same-titled films plus a dateless
+    # short; the Griffith feature only surfaces when the year is passed along.
+    plain = [_hit(48684, "Intolerance", "2000-01-01"), _hit(1216137, "Intolerance", "")]
+    dated = [_hit(3059, "Intolerance: Love's Struggle Throughout the Ages", "1916-09-05", "Intolerance", 3.0)]
+    q = responses.matchers.query_param_matcher
+    responses.get(
+        f"{TMDB_API}/search/movie", json={"results": plain}, match=[q({"query": "Intolerance", "include_adult": "false"})]
+    )
+    responses.get(
+        f"{TMDB_API}/search/movie",
+        json={"results": dated},
+        match=[q({"query": "Intolerance", "include_adult": "false", "primary_release_year": "1916"})],
+    )
+    ids = [c.tmdb_id for c in TmdbClient("t").search("Intolerance", 1916)]
+    assert ids == [48684, 1216137, 3059]
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_search_skips_the_year_retry_when_a_near_year_result_exists():
+    responses.get(f"{TMDB_API}/search/movie", json={"results": [_hit(947, "Lawrence of Arabia", "1962-12-11")]})
+    assert [c.tmdb_id for c in TmdbClient("t").search("Lawrence of Arabia", 1962)] == [947]
+    assert len(responses.calls) == 1
