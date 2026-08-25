@@ -8,6 +8,7 @@ from flask import Flask, Response, jsonify, render_template, request
 
 from movie_brain.application.ratings import rate_film
 from movie_brain.application.sync import SOURCE
+from movie_brain.domain.audit import VERDICTS
 from movie_brain.domain.filters import CHIPS, thresholds
 from movie_brain.infrastructure.database import Repository
 
@@ -61,6 +62,22 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
         if not repo.set_revisit_note(film_id, body["note"] or None):
             return jsonify({"error": "not flagged"}), 404
         return jsonify({"ok": True}), 200
+
+    @app.post("/api/films/<int:film_id>/verdict")
+    def post_verdict(film_id: int) -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or body.get("verdict") not in VERDICTS:
+            msg = f"body must be JSON {{\"verdict\": one of {', '.join(VERDICTS)}, \"note\"?: str}}"
+            return jsonify({"error": msg}), 400
+        note = body.get("note")
+        if note is not None and not isinstance(note, str):
+            return jsonify({"error": "note must be a string"}), 400
+        reasons = repo.current_reasons(film_id)
+        result = repo.add_verdict(film_id, body["verdict"], reasons, note or None, today())
+        if result is None:
+            return jsonify({"error": "not found"}), 404
+        view = repo.get_view(film_id, today())
+        return jsonify({**result, "audit": view.audit if view else None}), 200
 
     @app.put("/api/films/<int:film_id>/rating")
     def put_rating(film_id: int) -> tuple[Response, int]:

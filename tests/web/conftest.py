@@ -76,6 +76,10 @@ def seed(repo: Repository) -> None:
     repo.record_listing_with_transition(ids["alpha (1950)"], "apple-tv-store", "https://tmdb/w/1", TODAY)
     # Bravo is the one seeded watchlist film (Charlie stays free for the toggle test).
     repo.toggle_watchlist(ids["bravo (1960)"], TODAY)
+    # Bravo is also the one seeded audit suspect (an OMDb title disagreement) for the Suspect chip + drawer verdict tests.
+    from movie_brain.domain.audit import AuditFlag
+
+    repo.replace_audit_flags({ids["bravo (1960)"]: [AuditFlag("omdb-title", "OMDb title 'Bravo Two' vs 'Bravo'", 2)]}, TODAY)
     # Golf: the one Mode-B discovery film — no Criterion listing, scraped metascore only.
     gid = repo.create_film(Film("Golf", 2020, None, ""))
     repo.set_external_id(gid, "metacritic", "golf-2020", TODAY)

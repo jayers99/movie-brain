@@ -211,3 +211,27 @@ def test_revisit_toggle_and_note(client):
     assert client.put(f"/api/films/{fid}/revisit", json={"note": "too late"}).status_code == 404
     assert client.post("/api/films/999/revisit").status_code == 404
     assert "needs_revisit" in client.get("/api/config").get_json()["chips"]
+
+
+def test_suspect_chip_and_verdict_endpoint(client, repo):
+    from movie_brain.domain.audit import AuditFlag
+
+    fid = next(x["id"] for x in client.get("/api/films").get_json() if x["title"] == "Trio")
+    repo.replace_audit_flags({fid: [AuditFlag("omdb-title", "OMDb title 'Trio Redux' vs 'Trio'", 2)]}, D)
+    assert "suspect" in client.get("/api/config").get_json()["chips"]
+    trio = client.get(f"/api/films/{fid}").get_json()
+    assert trio["audit"] == {"score": 2, "reasons": [{"code": "omdb-title", "detail": "OMDb title 'Trio Redux' vs 'Trio'"}]}
+
+    r = client.post(f"/api/films/{fid}/verdict", json={"verdict": "omdb-wrong", "note": "wrong record"})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["verdict"] == "omdb-wrong" and body["reasons"] == "omdb-title" and body["audit"] is not None
+    assert client.get(f"/api/films/{fid}").get_json()["verdict"]["note"] == "wrong record"
+
+    r = client.post(f"/api/films/{fid}/verdict", json={"verdict": "fine"})
+    assert r.status_code == 200 and r.get_json()["audit"] is None
+
+    assert client.post(f"/api/films/{fid}/verdict", json={"verdict": "meh"}).status_code == 400
+    assert client.post(f"/api/films/{fid}/verdict", json={}).status_code == 400
+    assert client.post("/api/films/999/verdict", json={"verdict": "fine"}).status_code == 404
+    assert len(repo.verdict_history()) == 2  # append-only: nothing overwritten
