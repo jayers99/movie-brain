@@ -159,7 +159,10 @@ uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regr
   the film's `tmdb` link changes; `audit_verdict` is append-only user-response data — the drawer's
   verdict endpoint is its ONLY writer, sync/repair/review never touch it, and a `fine` verdict
   suppresses the Suspect chip only while the film's reason set is unchanged. Checks live in
-  `domain/audit.py` (weights are named constants); the verb never fixes anything.
+  `domain/audit.py` (weights are named constants); the verb never fixes anything. The first
+  `audit run` fetches one TMDB call per linked film (~4.3k films ≈ 18 min at the polite delay),
+  logs progress every 100 films, and is resumable — each film's facts commit as fetched, so
+  Ctrl-C keeps progress and a re-run continues.
 
 ## Data
 

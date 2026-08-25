@@ -77,6 +77,8 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
         if result is None:
             return jsonify({"error": "not found"}), 404
         view = repo.get_view(film_id, today())
+        # result["reasons"] is a comma-joined sorted string (audit_verdict storage format),
+        # asymmetric with view.audit["reasons"] which is a list of {code, detail} dicts.
         return jsonify({**result, "audit": view.audit if view else None}), 200
 
     @app.put("/api/films/<int:film_id>/rating")
