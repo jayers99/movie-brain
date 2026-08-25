@@ -135,6 +135,8 @@ class FilmView:
     owned: bool = False  # in my Apple TV library (owned table); import is the only writer
     needs_revisit: bool = False  # drawer-flagged as factually suspect; drawer toggle is the only writer
     revisit_note: str | None = None
+    audit: dict[str, object] | None = None  # {score, reasons:[{code, detail}]} from audit_flags; None = not a suspect
+    verdict: dict[str, object] | None = None  # latest audit_verdict row; the dashboard endpoint is its only writer
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

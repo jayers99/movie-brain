@@ -193,6 +193,37 @@ def _revisit_by_film(c: sqlite3.Connection) -> dict[int, str | None]:
     return {int(r["film_id"]): r["note"] for r in c.execute("SELECT film_id, note FROM needs_revisit")}
 
 
+def _audit_by_film(c: sqlite3.Connection) -> dict[int, tuple[dict[str, object] | None, dict[str, object] | None]]:
+    """(audit, verdict) per film. `fine` suppresses audit only for the identical reason set."""
+    flags: dict[int, list[dict[str, object]]] = {}
+    scores: dict[int, int] = {}
+    for r in c.execute("SELECT film_id, reason, detail, score FROM audit_flags ORDER BY film_id, reason"):
+        fid = int(r["film_id"])
+        flags.setdefault(fid, []).append({"code": str(r["reason"]), "detail": str(r["detail"])})
+        scores[fid] = scores.get(fid, 0) + int(r["score"])
+    latest: dict[int, dict[str, object]] = {}
+    for r in c.execute(
+        "SELECT v.film_id, v.verdict, v.reasons, v.note, v.marked_on FROM audit_verdict v "
+        "WHERE v.id = (SELECT MAX(id) FROM audit_verdict WHERE film_id = v.film_id)"
+    ):
+        latest[int(r["film_id"])] = {
+            "verdict": str(r["verdict"]),
+            "reasons": str(r["reasons"]),
+            "note": r["note"],
+            "marked_on": str(r["marked_on"]),
+        }
+    out: dict[int, tuple[dict[str, object] | None, dict[str, object] | None]] = {}
+    for fid in set(flags) | set(latest):
+        audit: dict[str, object] | None = None
+        if fid in flags:
+            codes = ",".join(str(f["code"]) for f in flags[fid])
+            v = latest.get(fid)
+            if not (v and v["verdict"] == "fine" and v["reasons"] == codes):
+                audit = {"score": scores[fid], "reasons": flags[fid]}
+        out[fid] = (audit, latest.get(fid))
+    return out
+
+
 def _row_to_view(
     row: sqlite3.Row,
     services: list[dict[str, object]] | None = None,
@@ -201,6 +232,7 @@ def _row_to_view(
     new_on: list[dict[str, object]] | None = None,
     owned: bool = False,
     revisit: tuple[bool, str | None] = (False, None),
+    audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
 ) -> FilmView:
     return FilmView(
         id=row["id"],
@@ -226,6 +258,8 @@ def _row_to_view(
         owned=owned,
         needs_revisit=revisit[0],
         revisit_note=revisit[1],
+        audit=audit[0],
+        verdict=audit[1],
     )
 
 
@@ -1309,6 +1343,7 @@ class Repository:
             wl = _watchlist_ids(c)
             ow = _owned_ids(c)
             rv = _revisit_by_film(c)
+            au = _audit_by_film(c)
             return [
                 _row_to_view(
                     r,
@@ -1317,6 +1352,7 @@ class Repository:
                     new_on=new_on.get(r["id"]),
                     owned=r["id"] in ow,
                     revisit=(r["id"] in rv, rv.get(r["id"])),
+                    audit=au.get(r["id"], (None, None)),
                 )
                 for r in rows
             ]
@@ -1330,6 +1366,7 @@ class Repository:
             if row is None:
                 return None
             rv = _revisit_by_film(c)
+            au = _audit_by_film(c)
             return _row_to_view(
                 row,
                 _services_by_film(c).get(row["id"]),
@@ -1337,6 +1374,7 @@ class Repository:
                 new_on=_new_on_by_film(c, cutoff).get(row["id"]),
                 owned=row["id"] in _owned_ids(c),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
+                audit=au.get(row["id"], (None, None)),
             )
 
     def get_payload(self, film_id: int) -> str | None:
