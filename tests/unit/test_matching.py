@@ -437,13 +437,14 @@ def test_pick_tmdb_lone_dateless_candidate_still_matches():
     assert pick_tmdb_match("Trio", 1950, [_tc(3, "Trio", None)]) == 3
 
 
-def test_pick_tmdb_feature_wins_via_original_title_over_the_dateless_short():
-    # The live candidate set once the year retry adds the Griffith feature: its display title
-    # carries a one-word colon prefix (never indexed — "Ran: Something" ≠ "Ran"), but its
-    # original_title is the bare "Intolerance": exact title + exact year beats the dateless short.
+def test_pick_tmdb_dateless_shorts_do_not_win_when_the_feature_is_unindexable():
+    # The live candidate set once the year retry adds the Griffith feature: both its title and
+    # original_title carry a one-word colon prefix (never indexed — "Ran: Something" ≠ "Ran"),
+    # so it is an honest miss; the two dateless shorts must not inherit the link either.
     cands = [
         _tc(48684, "Intolerance", 2000),
-        _tc(1216137, "Intolerance", None),
-        TmdbCandidate(3059, "Intolerance: Love's Struggle Throughout the Ages", "Intolerance", 1916, 3.5),
+        _tc(1216137, "Intolerance", None, 1.1),
+        _tc(732929, "Intolerance", None, 0.4),
+        _tc(3059, "Intolerance: Love's Struggle Throughout the Ages", 1916, 3.5),
     ]
-    assert pick_tmdb_match("Intolerance", 1916, cands) == 3059
+    assert pick_tmdb_match("Intolerance", 1916, cands) is None
