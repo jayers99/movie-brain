@@ -149,7 +149,8 @@ paths:
   a standing decision (so `--none` does not loop). Auto matches are never ratified into the
   eval CSV (the gate would score itself); human `--pick/--tt/--none` ratify as before, and
   `--pick` on an OMDb-only candidate now resolves the tmdb id via `find_by_imdb`. Candidates
-  come from `<config_dir>/nomatch-cache.json.gz` (seeded from the fixture, saved per run) —
+  come from `<config_dir>/nomatch-cache.json.gz` (seeded from the fixture, saved per run —
+  a dry run writes NOTHING to the DB but still saves this session cache) —
   the eval fixture is never written by the verb. A post-`record_tmdb_match` failure logs
   `[partial]` and raises (CLI exit 1). A WRONG auto match is undone with `review resolve --tt`
   on a fresh row or `repair links --film ID` followed by `review resolve --tt` BEFORE the next

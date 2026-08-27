@@ -106,7 +106,8 @@ then TMDB token + OMDb key → `TmdbClient` + `OmdbClient`; no clients → every
   (`durably_flagged` = any open non-`no-match` row); add RESOLVED `no-match-reviewed` rows to the
   `dismissed` set.
 - `review resolve` on it: `--pick/--tt/--none` (existing thumbprint path — authority tmdb,
-  film row) and `--dismiss`; `--tmdb-id` stays limited to `no-match`. Each `--pick/--tt/--none`
+  film row) and `--dismiss`; `--tmdb-id` is accepted on any tmdb film row (it keys through
+  `record_tmdb_match` and resolves the row). Each `--pick/--tt/--none`
   ratifies through `eval_log.ratify` as today (`F-human`).
 - `review list --reason no-match-reviewed` renders A/B/C (already generic on JSON details).
 

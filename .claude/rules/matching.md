@@ -6,6 +6,7 @@ paths:
   - src/movie_brain/application/availability.py
   - src/movie_brain/application/rematch.py
   - src/movie_brain/application/repair.py
+  - src/movie_brain/application/repair_keys.py
   - src/movie_brain/application/review.py
   - scripts/matching_benchmark.py
 ---
