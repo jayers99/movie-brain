@@ -138,6 +138,8 @@ def resolve_review(
                 result = record_tmdb_match(repo, target, chosen_tmdb, year, today, lambda _m: None)
                 if result == "id-conflict":
                     raise ValueError(f"tmdb id {chosen_tmdb} is already held by another film — merge instead")
+            if repo.omdb_imdb_id(rid) not in (None, chosen_tt):
+                repo.mark_omdb_refresh(rid)  # a found-but-WRONG stub must be refetched by the new id
             outcome = f"keyed imdb {chosen_tt} tmdb {chosen_tmdb or '-'}"
         else:
             outcome = "verified unkeyed"
