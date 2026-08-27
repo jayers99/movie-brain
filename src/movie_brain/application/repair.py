@@ -11,10 +11,16 @@ from pathlib import Path
 
 import requests
 
-from movie_brain.application.availability import MAX_CONSECUTIVE_FAILURES, TMDB_AUTHORITY, queue_review_once
+from movie_brain.application.availability import (
+    MAX_CONSECUTIVE_FAILURES,
+    TMDB_AUTHORITY,
+    queue_review_once,
+    record_tmdb_match,
+)
+from movie_brain.application.thumbprint import review_detail
 from movie_brain.domain.matching import norm_title, split_annotations
 from movie_brain.domain.models import ReviewEntry, film_key
-from movie_brain.domain.thumbprint import parse_title, title_norm
+from movie_brain.domain.thumbprint import Verdict, make_query, parse_title, resolve, title_norm
 from movie_brain.infrastructure.database import (
     ClaimRow,
     DisagreementFilm,
@@ -23,6 +29,7 @@ from movie_brain.infrastructure.database import (
     Repository,
     TwinFilm,
 )
+from movie_brain.infrastructure.thumbprint_fetch import CacheMiss, CandidateFetcher
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 
@@ -908,4 +915,107 @@ def format_disagreement(g: DisagreementGroup) -> str:
     return (
         f"[{g.verdict}] #{g.film_id} {g.title!r} ({g.year}) omdb {g.omdb_tt} / tmdb {g.tmdb_tt}"
         f"({g.tmdb_id or '-'}) → {exp}: {g.detail}"
+    )
+
+
+KEY_DISAGREEMENT = "key-disagreement"  # durable tmdb review reason
+
+
+def _disagreement_review(g: DisagreementGroup, fetcher: CandidateFetcher | None) -> ReviewEntry:
+    """The durable review row for a group the contract does not decide: the LIVE resolver's
+    ranking is the evidence (the CSV's own `A=…|B=…` note is never copied), the CSV's proposed
+    tt — if it has one — is the row's `value`."""
+    c = g.contract
+    assert c is not None
+    q = make_query(
+        c.title_ingested or g.title,
+        c.year_ingested if c.year_ingested else g.year,
+        c.source,
+        director=c.director,
+    )
+    if fetcher is None:
+        v = Verdict("review", None, "no candidates", ())
+    else:
+        try:
+            v = resolve(q, fetcher.fetch(q))
+        except CacheMiss as exc:  # no clients for a miss
+            v = Verdict("review", None, f"no candidates ({exc})", ())
+    value: str | None
+    if c.status != "verified":  # noqa: SIM108 - spelled out: the ternary form hides an `or` precedence trap
+        value = c.expected_tt or None  # proposed: the CSV's tt, or nothing to propose
+    else:
+        value = "NONE"  # verified NONE — the human's own "no such work" decision
+    return ReviewEntry(KEY_DISAGREEMENT, film_id=g.film_id, value=value, detail=review_detail(v, q))
+
+
+def repair_disagreements(
+    repo: Repository,
+    today: date,
+    *,
+    apply: bool,
+    confirm: Callable[[DisagreementGroup], bool],
+    contract: dict[int, DisagreementContract],
+    tmdb: TmdbClient | None,
+    fetcher: CandidateFetcher | None,
+    limit: int | None = None,
+    log: Callable[[str], None] = _stderr,
+) -> DisagreementsReport:
+    """Dry run lists every group; --apply acts per verdict (spec §3). A `refetch` film stays in
+    the worklist until the next sync refetches its OMDb record by the id written here — the
+    disagreement count drops after `sync`, not after `--apply`. `review` rows are queued on
+    --apply only and are durable + idempotent (`queue_review_once`)."""
+    groups = audit_disagreements(repo, contract)
+    if limit is not None:
+        groups = groups[:limit]
+    applied = declined = 0
+    for g in groups:
+        log(format_disagreement(g))
+        if not apply or g.verdict == "conflict":
+            continue
+        if not confirm(g):
+            declined += 1
+            continue
+        if g.verdict == "review":
+            if queue_review_once(repo, TMDB_AUTHORITY, _disagreement_review(g, fetcher), today):
+                log(f"  queued {KEY_DISAGREEMENT} review for #{g.film_id}")
+                applied += 1
+            else:
+                log("  review already open")
+            continue
+        if g.verdict in ("relink", "adopt") and tmdb is None:
+            log("  no TMDB client — skipped (needs the TMDB token)")
+            continue
+        tid: int | None
+        if g.verdict == "refetch":
+            tid = None
+        elif g.verdict == "relink":
+            assert tmdb is not None
+            tid = tmdb.find_by_imdb(g.expected_tt)
+        else:
+            tid = int(str(g.expected_tmdb))
+        repo.set_external_id(g.film_id, "imdb", g.expected_tt, today)
+        if g.verdict == "relink" and tid is None:
+            repo.clear_tmdb_link(g.film_id, today)
+            log(f"  unlinked tmdb (no TMDB record for {g.expected_tt}); imdb {g.expected_tt} keyed")
+        elif tid is not None:
+            assert tmdb is not None
+            target = repo.tmdb_target(g.film_id)
+            if target is None:
+                raise RuntimeError(f"[partial] #{g.film_id} vanished after its imdb id was written")
+            res = record_tmdb_match(repo, target, tid, tmdb.movie_year(tid), today, log)
+            if res not in ("matched", "adopted"):
+                partial = f"[partial] #{g.film_id} PARTIAL: imdb {g.expected_tt} written but tmdb {tid} {res}"
+                log(partial)
+                raise RuntimeError(partial)
+            log(f"  relinked tmdb {tid} ({res})")
+        if repo.omdb_imdb_id(g.film_id) != g.expected_tt:
+            repo.mark_omdb_refresh(g.film_id)
+            log(f"  omdb refresh queued (by id {g.expected_tt})")
+        applied += 1
+    counts = {
+        v: sum(1 for g in groups if g.verdict == v) for v in ("refetch", "relink", "adopt", "review", "conflict")
+    }
+    return DisagreementsReport(
+        len(groups), counts["refetch"], counts["relink"], counts["adopt"], counts["review"], counts["conflict"],
+        applied, declined,
     )
