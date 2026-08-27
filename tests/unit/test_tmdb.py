@@ -198,6 +198,18 @@ def test_movie_facts_tolerates_missing_fields(rs):
     assert (f.imdb_id, f.year, f.runtime_min, f.alternatives) == (None, None, None, ())
 
 
+@responses.activate
+def test_find_by_imdb_returns_first_movie_id():
+    responses.add(responses.GET, f"{TMDB_API}/find/tt0083658", json={"movie_results": [{"id": 78}], "tv_results": []})
+    assert TmdbClient("tok").find_by_imdb("tt0083658") == 78
+
+
+@responses.activate
+def test_find_by_imdb_none_when_empty():
+    responses.add(responses.GET, f"{TMDB_API}/find/tt1", json={"movie_results": [], "tv_results": []})
+    assert TmdbClient("tok").find_by_imdb("tt1") is None
+
+
 def test_thumbprint_raw_methods_hit_the_right_endpoints(rs):
     rs.get(f"{TMDB_API}/search/movie", json={"results": [{"id": 1}]})
     rs.get(f"{TMDB_API}/search/person", json={"results": [{"id": 7}, {"id": 8}, {"id": 9}]})
