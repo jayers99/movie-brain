@@ -15,7 +15,14 @@ from movie_brain.application.availability import MAX_CONSECUTIVE_FAILURES, TMDB_
 from movie_brain.domain.matching import norm_title, split_annotations
 from movie_brain.domain.models import ReviewEntry, film_key
 from movie_brain.domain.thumbprint import parse_title, title_norm
-from movie_brain.infrastructure.database import ClaimRow, EditionFilm, RepairFilm, Repository, TwinFilm
+from movie_brain.infrastructure.database import (
+    ClaimRow,
+    DisagreementFilm,
+    EditionFilm,
+    RepairFilm,
+    Repository,
+    TwinFilm,
+)
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 
@@ -785,4 +792,120 @@ def repair_editions(
     counts = {v: sum(1 for g in groups if g.verdict == v) for v in ("twin", "no-twin", "conflict", "csv-mismatch")}
     return EditionsReport(
         len(groups), counts["twin"], counts["no-twin"], counts["conflict"], counts["csv-mismatch"], applied, declined
+    )
+
+
+@dataclass(frozen=True)
+class DisagreementContract:
+    film_id: int
+    status: str
+    expected_tt: str
+    expected_tmdb: str | None
+    title_ingested: str
+    year_ingested: int | None
+    source: str
+    director: str | None
+
+
+def load_disagreement_contract(csv_path: Path) -> dict[int, DisagreementContract]:
+    """Every group-D row keyed by film id — `verified` rows are the contract, `proposed`
+    rows are rendered as reviews and never applied."""
+    out: dict[int, DisagreementContract] = {}
+    if not csv_path.exists():
+        return out
+    with csv_path.open(encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            if r["group"] != "D-disagree" or not r["film_id"].isdigit():
+                continue
+            fid = int(r["film_id"])
+            out[fid] = DisagreementContract(
+                fid,
+                r["status"],
+                r["expected_tt"],
+                r.get("expected_tmdb") or None,
+                r["title_ingested"],
+                int(r["year_ingested"]) if r["year_ingested"] else None,
+                r["source"],
+                r.get("director") or None,
+            )
+    return out
+
+
+@dataclass(frozen=True)
+class DisagreementGroup:
+    film_id: int
+    title: str
+    year: int | None
+    omdb_tt: str
+    tmdb_tt: str
+    tmdb_id: str | None
+    verdict: str  # "refetch" | "relink" | "adopt" | "review" | "conflict"
+    expected_tt: str
+    expected_tmdb: str | None
+    detail: str
+    contract: DisagreementContract | None
+
+
+@dataclass(frozen=True)
+class DisagreementsReport:
+    groups: int
+    refetch: int
+    relink: int
+    adopt: int
+    review: int
+    conflict: int
+    applied: int
+    declined: int
+
+
+def audit_disagreements(repo: Repository, contract: dict[int, DisagreementContract]) -> list[DisagreementGroup]:
+    """Live disagreements ∩ group D → one verdict each. Holders are read once, before any write,
+    over EVERY film (disposed included — the UNIQUE guard is blind to dispositions too)."""
+    tt_holders = repo.external_id_holders("imdb")
+    tmdb_holders = repo.external_id_holders("tmdb")
+    groups: list[DisagreementGroup] = []
+    for f in repo.key_disagreements():
+        c = contract.get(f.id)
+
+        def mk(
+            verdict: str, detail: str, f: DisagreementFilm = f, c: DisagreementContract | None = c
+        ) -> DisagreementGroup:
+            return DisagreementGroup(
+                f.id, f.title, f.year, f.omdb_tt, f.tmdb_tt, f.tmdb_id, verdict,
+                c.expected_tt if c else "", c.expected_tmdb if c else None, detail, c,
+            )
+
+        if c is None:
+            groups.append(mk("conflict", "no D-disagree row"))
+            continue
+        if c.status != "verified":
+            groups.append(mk("review", f"{c.status} {c.expected_tt or '?'} — A/B/C review"))
+            continue
+        if c.expected_tt == "NONE":
+            groups.append(mk("review", "verified NONE — human decides"))
+            continue
+        holder = tt_holders.get(c.expected_tt)
+        if holder is not None and holder != f.id:
+            groups.append(mk("conflict", f"{c.expected_tt} held by #{holder}"))
+            continue
+        th = tmdb_holders.get(c.expected_tmdb) if c.expected_tmdb else None
+        if th is not None and th != f.id:
+            groups.append(mk("conflict", f"tmdb {c.expected_tmdb} held by #{th}"))
+            continue
+        if c.expected_tt == f.tmdb_tt:
+            groups.append(mk("refetch", "OMDb stub is the wrong work — refetch by id"))
+        elif c.expected_tt == f.omdb_tt:
+            groups.append(mk("relink", "TMDB link is the wrong work — relink via find_by_imdb"))
+        elif c.expected_tmdb:
+            groups.append(mk("adopt", f"neither side — adopt {c.expected_tt}/{c.expected_tmdb}"))
+        else:
+            groups.append(mk("conflict", "adopt needs expected_tmdb"))
+    return groups
+
+
+def format_disagreement(g: DisagreementGroup) -> str:
+    exp = f"{g.expected_tt or '?'}/{g.expected_tmdb or '-'}"
+    return (
+        f"[{g.verdict}] #{g.film_id} {g.title!r} ({g.year}) omdb {g.omdb_tt} / tmdb {g.tmdb_tt}"
+        f"({g.tmdb_id or '-'}) → {exp}: {g.detail}"
     )
