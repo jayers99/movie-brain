@@ -10,6 +10,23 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-26-thumbprint-t2-editions-design.md` ← memo `docs/superpowers/research/2026-08-25-thumbprint-design.md`, decisions `docs/superpowers/research/2026-08-26-thumbprint-t2-decisions.md`.
 
+> **Status 2026-08-26:** Tasks 1–10 DONE on `feature/T2-thumbprint-editions` (subagent-driven, per-task
+> reviews + final whole-branch review + one fix wave `768283e`). Gate: 591 passed, ruff/mypy clean,
+> thumbprint n=482 / 0 wrong / 94.8 %, matching dominance PASS. Deviations from the plan text: editions
+> scenarios live in `tests/features/thumbprint_editions.feature`; `_work_title` adopts the CSV note's
+> casing on casefold equality only; csv-mismatch = "no longer parses as an edition AND title_norm ≠ note";
+> `_edition_blockers` pre-checks tt/tmdb/key holders (all films) on BOTH paths, a twin holding a
+> different imdb id is `conflict`, and a film with ANY Criterion listing is never re-keyed (Criterion
+> re-ingests by `films.key`) → **#1909 Scenes from a Marriage is deferred to the ingester switch**;
+> `record_catalog` is INSERT-only for the criterion id (claim authority); a post-merge keying refusal logs
+> `[partial]` and raises (CLI exit 1). Task 11 rehearsed twice on scratch copies: dry run 16 groups →
+> 10 twin / 5 no-twin / 1 conflict; apply (8+7) → films 4,666 =, dispositions 102→112, edition_year
+> 0→15, imdb 549→564, tmdb 4,338→4,344, open no-match 225→209, owned 861→859, second apply 0 applied;
+> simulated Criterion re-walk creates 0 films. **INCIDENT:** migration 012 reached the LIVE DB on
+> 2026-08-26 19:06 via a subagent CLI call without `MOVIE_BRAIN_CONFIG_DIR` (schema-only, 9,448
+> external_ids rows before/after, integrity ok, backup `backups/movie-brain-v11-2026-08-26.db`) — Task 12
+> starts at the dry run. **Task 12 (live apply) NOT run — awaiting owner approval.**
+
 ## Global Constraints
 
 - Branch `feature/T2-thumbprint-editions`; one commit per task; never merge to main without the owner's yes.
