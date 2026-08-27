@@ -15,6 +15,7 @@ from typing import Any, NamedTuple
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
+from movie_brain.domain.thumbprint import title_norm
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -71,6 +72,17 @@ class ClaimRow(NamedTuple):
     edition_year: int | None
     runtime_min: int | None
     first_seen: str
+
+
+class EditionFilm(NamedTuple):
+    """One undisposed film with its tmdb/imdb external ids, for the editions resolver."""
+
+    id: int
+    title: str
+    year: int | None
+    title_norm: str | None
+    tmdb_id: str | None
+    imdb_id: str | None
 
 
 class TwinFilm(NamedTuple):
@@ -1304,6 +1316,61 @@ class Repository:
                 "ON CONFLICT(film_id, authority, value) DO NOTHING",
                 (film_id, imdb_id, today.isoformat()),
             )
+            return True
+
+    def films_for_editions(self) -> list[EditionFilm]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, f.title_norm, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'tmdb') AS t_id, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb') AS i_id "
+                f"FROM films f WHERE {_NOT_DISPOSED} ORDER BY f.id"
+            ).fetchall()
+            return [
+                EditionFilm(int(r["id"]), str(r["title"]), r["year"], r["title_norm"], r["t_id"], r["i_id"])
+                for r in rows
+            ]
+
+    def set_claim_edition_year(self, claim_id: int, year: int | None) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE claim SET edition_year = ? WHERE id = ?", (year, claim_id))
+
+    def claim_for_film_authority(self, film_id: int, authority: str) -> ClaimRow | None:
+        """This film's claim from one authority — lowest id when several exist."""
+        rows = [r for r in self.claims_for_film(film_id) if r.authority == authority]
+        return rows[0] if rows else None
+
+    def key_work(self, film_id: int, *, title: str, year: int, tt: str, tmdb_id: str | None, today: date) -> bool:
+        """An edition row becomes its work (repair editions NO-TWIN): retitle, re-year, recompute
+        key + title_norm, record imdb (+ tmdb). False, nothing written, when the new key is held
+        by another live identity or tt / tmdb_id is held by another film. This film's own
+        merged-away loser holding the key is retired in place (update_film_year rule)."""
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                raise LookupError(f"unknown film {film_id}")
+            new_key = film_key(title, year)
+            holder = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            if holder is not None:
+                if self._canonical_in(c, int(holder["id"])) != film_id:
+                    return False
+                c.execute("UPDATE films SET key = key || ' #' || id WHERE id = ?", (holder["id"],))
+            for auth, val in (("imdb", tt), ("tmdb", tmdb_id)):
+                if val and c.execute(
+                    "SELECT 1 FROM external_ids WHERE authority = ? AND value = ? AND film_id != ?",
+                    (auth, val, film_id),
+                ).fetchone():
+                    return False
+            c.execute(
+                "UPDATE films SET title = ?, year = ?, key = ?, title_norm = ? WHERE id = ?",
+                (title, year, new_key, title_norm(title), film_id),
+            )
+            for auth, val in (("imdb", tt), ("tmdb", tmdb_id)):
+                if val:
+                    c.execute("DELETE FROM external_ids WHERE film_id = ? AND authority = ?", (film_id, auth))
+                    c.execute(
+                        "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?)",
+                        (film_id, auth, val, today.isoformat()),
+                    )
             return True
 
     # dispositions -----------------------------------------------------
