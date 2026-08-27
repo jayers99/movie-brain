@@ -101,6 +101,14 @@ Feature: Thumbprint T2 — edition-year films fold into their work
     Then both edition films are merged into the work film
     And the editions report says twin 2, no-twin 0, conflict 0, csv-mismatch 0, applied 2
 
+  Scenario: two same-year editions and no work row — the mutual twin pair breaks toward the lower id
+    Given an edition film "Apocalypse Now (Final Cut)" year 1979 from "apple-tv" slug "Apocalypse Now (Final Cut)"
+    And an edition film "Apocalypse Now (Redux)" year 1979 from "apple-tv" slug "Apocalypse Now (Redux)"
+    And the edition contract says the work is "Apocalypse Now" 1979 tt "tt0078788" tmdb "28" for both
+    When I run repair editions --apply answering yes
+    Then the higher-id edition film is merged into the lower-id one, now titled "Apocalypse Now" (1979) with tmdb "28"
+    And the editions report says twin 1, no-twin 0, conflict 0, csv-mismatch 0, applied 1
+
   Scenario: a same-year row whose title carries no edition marker already IS the work and is not listed
     Given an edition film "Donnie Darko" year 2001 from "apple-tv" slug "Donnie Darko"
     And the edition contract says the work is "Donnie Darko" 2001 tt "tt0246578" tmdb "141"

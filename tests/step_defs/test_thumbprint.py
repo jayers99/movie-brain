@@ -289,6 +289,22 @@ def both_editions_merged(ctx):
     assert [ctx["repo"].disposition_of(f) for f in ctx["editions"]] == [("merged", ctx["work"])] * 2
 
 
+@then(
+    parsers.parse(
+        'the higher-id edition film is merged into the lower-id one, now titled "{title}" ({year:d}) with tmdb "{tid}"'
+    )
+)
+def mutual_twins_break_low(ctx, title, year, tid):
+    # two editions that are each other's fellow-contract twin: the pair is broken deterministically
+    # toward the LOWER id, which survives and is re-keyed as the work
+    lo, hi = sorted(ctx["editions"])
+    repo = ctx["repo"]
+    assert repo.disposition_of(hi) == ("merged", lo)
+    assert repo.disposition_of(lo) is None
+    assert tuple(_q(ctx, "SELECT title, year FROM films WHERE id = ?", lo)[0]) == (title, year)
+    assert repo.external_ids_for(lo)["tmdb"] == tid
+
+
 @then(parsers.parse('the edition film is merged into the work film "{title}" ({year:d})'))
 def edition_merged_into(ctx, title, year):
     assert ctx["repo"].disposition_of(ctx["edition"]) == ("merged", ctx["works"][(title, year)])

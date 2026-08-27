@@ -672,13 +672,51 @@ def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> li
                         f"becomes {work_title!r} ({c.work_year}) {c.tt}/{c.tmdb_id or '-'}",
                     )
                 )
-    # A survivor that is itself a contract row is folded BY the twin group naming it: a twin
-    # always sits AT the work year, so (after the same-year rule) its own group can only exist
-    # when its title still parses with editions — exactly the case the twin path re-keys. Listing
-    # it again would double-count one fold, and would report the loser's ids as `conflict`
-    # blockers against it. Its own `twin` group is kept: that is a chain, not a duplicate.
-    survivors = {g.twin_id for g in groups if g.verdict == "twin"}
-    return [g for g in groups if g.verdict == "twin" or g.film_id not in survivors]
+    return _dedup_survivor_groups(groups)
+
+
+def _dedup_survivor_groups(groups: list[EditionGroup]) -> list[EditionGroup]:
+    """Two passes over the raw verdicts, both about a survivor that is ITSELF a contract row.
+
+    1. MUTUAL twins. Two same-year editions of one work, neither holding the tmdb id, are each
+       other's fellow-contract twin — two `twin` groups pointing at each other. Applying both
+       merges A into B and then asks `merge_film` to merge B into the now-dispositioned A, which
+       raises AFTER the first merge has committed. The pair is broken deterministically toward
+       the LOWER id: the higher id's group survives and merges into the lower, whose own group is
+       dropped. The lower one is re-keyed as the work by the twin path (its title still parses
+       with editions, or it would not have been a group at all).
+    2. The survivor's NON-twin groups (`no-twin`, `conflict`, `csv-mismatch`). A twin always sits
+       AT the work year, so after the same-year rule the survivor's own group exists only when its
+       title still parses with editions — exactly the re-key the twin path already performs.
+       Listing it again would double-count one fold and, once the loser's ids move onto it, report
+       them as `conflict` blockers against it. Dropped only when the twin group really will do
+       that work: same `(work_title, work_year, tt)`, and a survivor title that parses with
+       editions. Anything else is a DIFFERENT fold and stays listed.
+    """
+    twins = {g.film_id: g for g in groups if g.verdict == "twin"}
+    dropped: set[int] = set()
+    for g in twins.values():
+        other = twins.get(g.twin_id) if g.twin_id is not None else None
+        if other is not None and other.twin_id == g.film_id and g.film_id < other.film_id:
+            dropped.add(g.film_id)
+    for g in groups:
+        if g.verdict == "twin" or g.film_id in dropped:
+            continue
+        folder = next(
+            (
+                t
+                for t in twins.values()
+                if t.film_id not in dropped
+                and t.twin_id == g.film_id
+                and (t.work_title, t.work_year, t.tt) == (g.work_title, g.work_year, g.tt)
+                and t.twin_title is not None
+                and parse_title(t.twin_title).editions
+            ),
+            None,
+        )
+        if folder is not None:
+            dropped.add(g.film_id)
+    return [g for g in groups if g.film_id not in dropped]
 
 
 def format_edition(g: EditionGroup) -> str:
