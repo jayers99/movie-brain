@@ -128,15 +128,54 @@ _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = 
 KEY_AUTHORITIES: frozenset[str] = frozenset({"tmdb", "imdb"})
 
 
-def init_db(db_path: Path) -> None:
+class PendingMigrations(RuntimeError):
+    """An existing DB is behind the checked-in migrations; only `migrate --apply` may advance it."""
+
+    def __init__(self, pending: list[str]) -> None:
+        self.pending = pending
+        super().__init__("pending migrations: " + ", ".join(pending) + " — run 'movie-brain migrate --apply'")
+
+
+def _applied_versions(conn: sqlite3.Connection) -> set[int] | None:
+    """Applied schema versions, or None when the DB has never been initialised."""
+    has_versions = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    ).fetchone()
+    if not has_versions:
+        return None
+    return {int(r[0]) for r in conn.execute("SELECT version FROM schema_version")}
+
+
+def _pending_files(applied: set[int]) -> list[Path]:
+    return [m for m in sorted(MIGRATIONS_DIR.glob("*.sql")) if int(m.name.split("_")[0]) not in applied]
+
+
+def pending_migrations(db_path: Path) -> list[str]:
+    """Migration file names an existing DB still lacks (empty for a fresh or current DB)."""
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(db_path)
+    try:
+        applied = _applied_versions(conn)
+        return [] if applied is None else [m.name for m in _pending_files(applied)]
+    finally:
+        conn.close()
+
+
+def init_db(db_path: Path, *, apply: bool = False) -> None:
+    """Create a fresh DB in full, or bring an existing one up to date ONLY when `apply` is set.
+
+    Creation is not migration: a DB with no `schema_version` table (first run, tests, a
+    scratch copy) bootstraps regardless. An existing DB behind the checked-in migrations
+    raises `PendingMigrations` so no ordinary verb can advance the live schema as a side
+    effect of merely opening the repository (a T2 subagent did exactly that)."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     try:
-        has_versions = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
-        ).fetchone()
-        applied = {r[0] for r in conn.execute("SELECT version FROM schema_version")} if has_versions else set()
-        pending = [m for m in sorted(MIGRATIONS_DIR.glob("*.sql")) if int(m.name.split("_")[0]) not in applied]
+        applied = _applied_versions(conn)
+        pending = _pending_files(applied or set())
+        if applied is not None and pending and not apply:
+            raise PendingMigrations([m.name for m in pending])
         if pending and applied:
             _backup_pre_migration(conn, db_path, max(applied))
         for mig in pending:
@@ -314,9 +353,9 @@ def _row_to_view(
 
 
 class Repository:
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, *, migrate: bool = False) -> None:
         self.db_path = db_path
-        init_db(db_path)
+        init_db(db_path, apply=migrate)
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
