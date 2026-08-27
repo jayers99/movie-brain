@@ -191,6 +191,23 @@ def test_load_edition_contract_reads_verified_c_rows(tmp_path):
     assert c[4409].tt == "tt0083658" and c[4409].tmdb_id == "78"
 
 
+def test_load_edition_contract_reads_human_ratified_rows(tmp_path):
+    from movie_brain.application.repair import load_edition_contract
+
+    csv = tmp_path / "eval.csv"
+    csv.write_text(
+        "group,film_id,source,title_ingested,year_ingested,expected_tt,expected_tmdb,verified_by,note,status,"
+        "director,runtime_min\n"
+        "F-human,4098,apple,Apocalypse Now (Final Cut),1979,tt0078788,28,human,review 7 picked A; "
+        "work='Apocalypse Now' 1979,verified,,182\n"
+        "F-human,4200,apple,Some Film,1999,tt9,9,human,review 8 picked A,verified,,\n"
+    )
+    c = load_edition_contract(csv)
+    assert set(c) == {4098}  # the row without a `work='…' YYYY` note is not an edition contract
+    assert c[4098].work_title_note == "Apocalypse Now" and c[4098].work_year == 1979
+    assert c[4098].tt == "tt0078788" and c[4098].tmdb_id == "28"
+
+
 def _edition_film(repo, title, year):
     from datetime import date
 
@@ -243,10 +260,15 @@ def test_audit_editions_twin_path_blocks_when_the_work_key_is_held_elsewhere(rep
     contract = {
         fid: EditionContract(fid, "Donnie Darko", 2001, "tt0246578", "141") for fid in (loser, survivor)
     }
-    (g,) = audit_editions(repo, contract)
+    groups = {g.film_id: g for g in audit_editions(repo, contract)}
+    g = groups[loser]
     assert (g.film_id, g.verdict, g.twin_id) == (loser, "conflict", None)
     assert g.twin_title == "Donnie Darko: Anniversary Special Edition"
     assert f"twin #{survivor} but key 'donnie darko (2001)' held by #" in g.detail
+    # the merge never happens, so the survivor is not folded by it: it is a same-year edition
+    # in its own right, and the same third film blocks the key it would take
+    assert groups[survivor].verdict == "conflict"
+    assert "key 'donnie darko (2001)' held by #" in groups[survivor].detail
 
 
 def test_audit_editions_blocks_a_twin_that_holds_a_different_imdb_id(repo):

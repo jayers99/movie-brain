@@ -31,6 +31,14 @@
 > 0→15 · imdb 549→564 · tmdb 4,338→4,344 · open no-match 225→209 · owned 861→859; second apply 0 applied.
 > Retitled works: Quai des Orfèvres 1947, How the Grinch Stole Christmas 2000, Phantasm 1979, Ghost in the
 > Shell 1995, Donnie Darko 2001, Blade Runner 1982.
+> **T2b (same day, branch `feature/T2b-same-year-editions`):** `repair editions` now folds SAME-YEAR
+> editions (idempotence = year == work year AND no edition markers; `edition_year` only when older;
+> F-human contract rows accepted; tmdb-holding twin preferred over unkeyed fellow rows; survivor
+> de-dup + mutual-pair tie-break). Live 2026-08-26 (snapshot `.bak-pre-t2b`): 8 applied — merges
+> #2416→#3091 Fanny and Alexander, #3264 Redux + #4098 Final Cut → #3190 Apocalypse Now (owned row
+> moved), #4094→#4093 Straight Outta Compton; keyed #3414 Investigation of a Citizen…, #4133 My Man
+> Godfrey, #4304 American Psycho, #4532 Van Wilder. Counts 4,666 | disp 116 | edition_year 16 | imdb
+> 570 | tmdb 4,348 | open no-match 201 | owned 858; second apply 0 (#1909 conflict only).
 
 ## Global Constraints
 

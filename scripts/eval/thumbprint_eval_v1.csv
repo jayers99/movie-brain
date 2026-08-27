@@ -527,3 +527,4 @@ E-benchmark,,benchmark,"Muhammad Ali, the Greatest",1974,tt0219935,29211,TMDB ex
 E-benchmark,,benchmark,Dr. Strangelove,1964,tt0057012,935,hand-supplied TMDB id (official longer title),,verified,,
 E-benchmark,,benchmark,Intolerance,1916,tt0006864,3059,hand-supplied TMDB id (official longer title),,verified,,
 F-human,3141,metacritic,The Bride of Frankenstein,1935,tt0026138,229,human,review 6274 --tt,verified,,
+F-human,3264,metacritic,Apocalypse Now Redux,2001,tt0078788,28,human,work='Apocalypse Now' 1979; edition=['redux']; owner-ratified 2026-08-26 (memo §1 three-slug example),verified,,
