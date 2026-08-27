@@ -104,6 +104,31 @@ def test_verdict_table(repo, today):
     assert format_nomatch(got[match]).startswith("[match]") and "Bound" in format_nomatch(got[match])
 
 
+def test_tmdb_held_conflict_via_own_imdb_and_via_resolve(repo, today):
+    # Path 1: film already holds an imdb tt; find_by_imdb resolves a tmdb id ANOTHER film holds.
+    own_imdb = _nomatch(repo, today, "Rope", 1948)
+    repo.set_external_id(own_imdb, "imdb", "tt0040746", today)
+    tmdb_holder_a = repo.create_film(Film("OtherA", 1948, None, ""))
+    repo.set_external_id(tmdb_holder_a, "tmdb", "222", today)
+
+    # Path 2: film has no own imdb tt; resolve() matches an OMDb-only candidate (tmdb_id=None),
+    # so the code calls find_by_imdb itself — and that id is held by ANOTHER film.
+    via_resolve = _nomatch(repo, today, "Echo", 2010)
+    tmdb_holder_b = repo.create_film(Film("OtherB", 2010, None, ""))
+    repo.set_external_id(tmdb_holder_b, "tmdb", "333", today)
+
+    fetcher = FakeFetcher(
+        {"Echo": [_cand("tt_echo", None, "Echo", 2010, votes=5000, in_tmdb=False, in_omdb=True)]}
+    )
+    tmdb = FakeTmdb(by_imdb={"tt0040746": 222, "tt_echo": 333})
+    got = {g.film_id: g for g in audit_nomatch(repo, fetcher, tmdb)}
+
+    assert got[own_imdb].verdict == "conflict"
+    assert f"tmdb 222 held by #{tmdb_holder_a}" in got[own_imdb].detail
+    assert got[via_resolve].verdict == "conflict"
+    assert f"tmdb 333 held by #{tmdb_holder_b}" in got[via_resolve].detail
+
+
 def test_open_reviewed_row_is_review_open_and_no_fetcher_is_conflict(repo, today):
     fid = _nomatch(repo, today, "Bound", 1996)
     repo.append_reviews("tmdb", [ReviewEntry(NO_MATCH_REVIEWED, film_id=fid, detail="{}")], today)
