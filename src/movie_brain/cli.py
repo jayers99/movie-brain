@@ -17,16 +17,19 @@ from movie_brain.application.owned import import_owned
 from movie_brain.application.rematch import rematch
 from movie_brain.application.repair import (
     DupGroup,
+    EditionGroup,
     TwinGroup,
+    load_edition_contract,
     load_expected_twins,
     repair_dupes,
+    repair_editions,
     repair_links,
     repair_twins,
     repair_years,
 )
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
-from movie_brain.application.thumbprint import backfill_claims
+from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
@@ -308,6 +311,35 @@ def repair_twins_cmd(
     )
 
 
+@repair_app.command("editions")
+def repair_editions_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Merge/key confirmed groups (default: dry-run).")] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="With --apply: confirm every group without prompting.")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Only the first N groups (batch size).")] = None,
+) -> None:
+    """Fold edition-year films into their work (eval group C is the contract); old year → claim.edition_year."""
+    from pathlib import Path
+
+    eval_csv = Path(__file__).resolve().parents[2] / "scripts" / "eval" / "thumbprint_eval_v1.csv"
+    contract = load_edition_contract(eval_csv)
+
+    def confirm(g: EditionGroup) -> bool:
+        target = f"merge → #{g.twin_id}" if g.verdict == "twin" else f"become {g.work_title!r} ({g.work_year})"
+        return yes or typer.confirm(f"#{g.film_id} {g.title!r} {target}?", default=False)
+
+    try:
+        report = repair_editions(
+            _repo(), date.today(), apply=apply, confirm=confirm, contract=contract, limit=limit, log=_plain
+        )
+    except RuntimeError as exc:
+        err.print(str(exc))
+        raise typer.Exit(1) from exc
+    console.print(
+        f"groups: {report.groups} · twin: {report.twins} · no-twin: {report.no_twin} · conflict: {report.conflict} · "
+        f"csv-mismatch: {report.csv_mismatch} · applied: {report.applied} · declined: {report.declined}"
+    )
+
+
 @thumbprint_app.command("backfill")
 def thumbprint_backfill_cmd(
     apply: Annotated[
@@ -375,12 +407,22 @@ def review_list(
     table = Table(title=f"open reviews ({len(rows)})")
     for col in ("id", "authority", "reason", "film", "value", "detail"):
         table.add_column(col)
+    parsed: dict[object, ReviewDetail] = {}
     for r in rows:
         film = f"#{r['film_id']} {r['title']} ({r['year']})" if r["film_id"] is not None else ""
-        table.add_row(
-            str(r["id"]), str(r["authority"]), str(r["reason"]), film, str(r["value"] or ""), str(r["detail"] or "")
-        )
+        detail = r["detail"]
+        d = parse_review_detail(str(detail)) if detail is not None else None
+        detail_cell = d.reason if d is not None else str(detail or "")
+        if d is not None:
+            parsed[r["id"]] = d
+        table.add_row(str(r["id"]), str(r["authority"]), str(r["reason"]), film, str(r["value"] or ""), detail_cell)
     console.print(table)
+    for rid, d in parsed.items():
+        for c in d.candidates:
+            console.print(
+                f"  {rid} {c['letter']} {c['tt']} · {c['title']} ({c['year']}) · {c['director']} · "
+                f"{c['runtime'] or '-'}m · {c['why_not'] or 'best'}"
+            )
 
 
 @review_app.command("revisits")
@@ -402,11 +444,21 @@ def review_resolve(
     tmdb_id: Annotated[int | None, typer.Option("--tmdb-id", help="Claim this TMDB id (tmdb no-match rows).")] = None,
     create: Annotated[bool, typer.Option("--create", help="Create a new film from the staged/owned title.")] = False,
     dismiss: Annotated[bool, typer.Option("--dismiss", help="Close the row; it is never re-queued.")] = False,
+    pick: Annotated[
+        str | None, typer.Option("--pick", help="Key the film to candidate A/B/C off the review detail.")
+    ] = None,
+    tt: Annotated[str | None, typer.Option("--tt", help="Key the film to this IMDb id (ranked or not).")] = None,
+    none: Annotated[
+        bool, typer.Option("--none", help="Standing 'no such work' verdict: verified unkeyed.")
+    ] = False,
     note: Annotated[str | None, typer.Option("--note")] = None,
+    eval_csv: Annotated[Path | None, typer.Option("--eval-csv", hidden=True)] = None,
 ) -> None:
     """Resolve one open review row."""
     token = load_tmdb_token(load_config())
     client = TmdbClient(token) if token else None
+    if eval_csv is None:
+        eval_csv = Path(__file__).resolve().parents[2] / "scripts" / "eval" / "thumbprint_eval_v1.csv"
     try:
         outcome = resolve_review(
             _repo(),
@@ -418,6 +470,11 @@ def review_resolve(
             dismiss=dismiss,
             client=client,
             note=note,
+            pick=pick,
+            tt=tt,
+            none=none,
+            eval_csv=eval_csv,
+            warn=err.print,
         )
     except ValueError as exc:
         err.print(str(exc))

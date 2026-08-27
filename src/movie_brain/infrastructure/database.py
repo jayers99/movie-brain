@@ -15,6 +15,7 @@ from typing import Any, NamedTuple
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
+from movie_brain.domain.thumbprint import title_norm
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -73,6 +74,17 @@ class ClaimRow(NamedTuple):
     first_seen: str
 
 
+class EditionFilm(NamedTuple):
+    """One undisposed film with its tmdb/imdb external ids, for the editions resolver."""
+
+    id: int
+    title: str
+    year: int | None
+    title_norm: str | None
+    tmdb_id: str | None
+    imdb_id: str | None
+
+
 class TwinFilm(NamedTuple):
     """One undisposed film's twin-audit evidence (repair twins)."""
 
@@ -112,6 +124,9 @@ _TMDB_TARGET_SELECT = (
 # (films_for_matching) rather than surfaced under their own id.
 _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
 
+# One id per film for identity authorities; claim authorities may repeat (migration 012).
+KEY_AUTHORITIES: frozenset[str] = frozenset({"tmdb", "imdb"})
+
 
 def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -149,7 +164,18 @@ def _backup_pre_migration(conn: sqlite3.Connection, db_path: Path, current_versi
         dest.close()
 
 
-_VIEW_SQL = """
+# One deterministic metacritic slug per film (earliest first_seen, then smallest value) — a
+# film may hold several claim-authority `metacritic` external_ids (editions/rereleases), and
+# these read models must not fan out into duplicate rows per film. `metacritic_claim_rows`
+# is exempt: it must keep returning every slug.
+_MC_SLUG_SQL = (
+    "(SELECT e.film_id, e.value FROM external_ids e WHERE e.authority = 'metacritic' "
+    " AND NOT EXISTS (SELECT 1 FROM external_ids e2 WHERE e2.film_id = e.film_id AND e2.authority = 'metacritic' "
+    "   AND (e2.first_seen < e.first_seen OR (e2.first_seen = e.first_seen AND e2.value < e.value))))"
+)
+
+
+_VIEW_SQL = f"""
 SELECT f.id, f.title, f.year,
        COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director,
        l.url, o.language, o.imdb, o.rt,
@@ -161,7 +187,7 @@ FROM films f
 LEFT JOIN listings l ON l.film_id = f.id AND l.source = ?
 LEFT JOIN omdb o ON o.film_id = f.id
 LEFT JOIN my_ratings r ON r.film_id = f.id
-LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic'
+LEFT JOIN {_MC_SLUG_SQL} x ON x.film_id = f.id
 LEFT JOIN metacritic mc ON mc.slug = x.value
 """
 
@@ -421,10 +447,15 @@ class Repository:
                     film_id = int(dispositions[film_id][1])  # alias → survivor (chains allowed)
                 self._write_listing(c, film_id, source, film.url, day, frontier)
                 try:
+                    # A catalog source is a CLAIM authority (migration 012): extra rows are
+                    # legal, so a changed URL is added, never UPDATEd over the film's existing
+                    # row. The UPDATE this replaced collapsed every row a film held for the
+                    # source onto one value — after 012 a merge survivor can hold two criterion
+                    # URLs, and that collapse raised IntegrityError on every sync.
                     c.execute(
                         "INSERT INTO external_ids (film_id, authority, value, first_seen) "
                         "VALUES (?, ?, ?, ?) "
-                        "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                        "ON CONFLICT(film_id, authority, value) DO NOTHING",
                         (film_id, source, film.url, day),
                     )
                 except sqlite3.IntegrityError:
@@ -469,10 +500,18 @@ class Repository:
 
     # external ids / services ------------------------------------------
     def set_external_id(self, film_id: int, authority: str, value: str, seen: date) -> None:
+        """Key authority (tmdb/imdb): replace this film's single row. Claim authority:
+        add the row (no-op if this film already has it). Raises IntegrityError when another
+        film holds (authority, value)."""
         with self._conn() as c:
+            if authority in KEY_AUTHORITIES:
+                c.execute(
+                    "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = ? AND value != ?",
+                    (value, film_id, authority, value),
+                )
             c.execute(
                 "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                "ON CONFLICT(film_id, authority, value) DO NOTHING",
                 (film_id, authority, value, seen.isoformat()),
             )
 
@@ -481,10 +520,39 @@ class Repository:
             rows = c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (film_id,)).fetchall()
             return {str(r["authority"]): str(r["value"]) for r in rows}
 
+    def external_ids_all(self, film_id: int) -> list[tuple[str, str]]:
+        """Every (authority, value) row for this film, ordered — claim authorities may hold several."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT authority, value FROM external_ids WHERE film_id = ? ORDER BY authority, value", (film_id,)
+            ).fetchall()
+            return [(str(r["authority"]), str(r["value"])) for r in rows]
+
     def claimed_values(self, authority: str) -> set[str]:
         with self._conn() as c:
             rows = c.execute("SELECT value FROM external_ids WHERE authority = ?", (authority,)).fetchall()
             return {str(r["value"]) for r in rows}
+
+    def external_id_holders(self, authority: str) -> dict[str, int]:
+        """value → film id for one authority across EVERY film, disposed included. The
+        `UNIQUE(authority, value)` guard and `key_work`'s refusal checks are blind to
+        dispositions, so a pre-check built from live films only would miss a merged-away or
+        tombstoned holder and promise a write that the DB then refuses."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, value FROM external_ids WHERE authority = ? ORDER BY film_id", (authority,)
+            ).fetchall()
+            return {str(r["value"]): int(r["film_id"]) for r in rows}
+
+    def has_listing(self, film_id: int, source: str) -> bool:
+        """This film carries a listing from `source` — the same subquery `_TMDB_TARGET_SELECT`
+        negates for `commerce`. Departed counts: Criterion rotates titles back in, and a
+        re-listing under a key we re-keyed away would mint a duplicate film."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT 1 FROM listings WHERE film_id = ? AND source = ? LIMIT 1", (film_id, source)
+            ).fetchone()
+            return row is not None
 
     def tmdb_facts_needed(self) -> list[tuple[int, int]]:
         """Linked films with no tmdb_facts row, or a row fetched for a different tmdb id."""
@@ -531,7 +599,7 @@ class Repository:
                 "t.runtime_min AS t_rt "
                 "FROM films f "
                 "LEFT JOIN omdb o ON o.film_id = f.id AND o.found = 1 AND o.payload IS NOT NULL "
-                "LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic' "
+                f"LEFT JOIN {_MC_SLUG_SQL} x ON x.film_id = f.id "
                 "LEFT JOIN metacritic mc ON mc.slug = x.value "
                 "LEFT JOIN tmdb_facts t ON t.film_id = f.id "
                 "WHERE " + _NOT_DISPOSED + " ORDER BY f.id"
@@ -1047,7 +1115,7 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT f.id, f.title, f.year, x.value AS slug FROM films f "
-                "LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic' "
+                f"LEFT JOIN {_MC_SLUG_SQL} x ON x.film_id = f.id "
                 "WHERE NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = ?) "
                 "AND (NOT EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id) "
                 "OR EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id AND "
@@ -1262,10 +1330,82 @@ class Repository:
                 return False
             c.execute("UPDATE films SET title = ?, key = ? WHERE id = ?", (new_title, new_key, film_id))
             c.execute(
+                "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = 'imdb' AND value != ?",
+                (imdb_id, film_id, imdb_id),
+            )
+            c.execute(
                 "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'imdb', ?, ?) "
-                "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                "ON CONFLICT(film_id, authority, value) DO NOTHING",
                 (film_id, imdb_id, today.isoformat()),
             )
+            return True
+
+    def films_for_editions(self) -> list[EditionFilm]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, f.title_norm, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'tmdb') AS t_id, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb') AS i_id "
+                f"FROM films f WHERE {_NOT_DISPOSED} ORDER BY f.id"
+            ).fetchall()
+            return [
+                EditionFilm(int(r["id"]), str(r["title"]), r["year"], r["title_norm"], r["t_id"], r["i_id"])
+                for r in rows
+            ]
+
+    def set_claim_edition_year(self, claim_id: int, year: int | None) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE claim SET edition_year = ? WHERE id = ?", (year, claim_id))
+
+    def claim_for_film_authority(self, film_id: int, authority: str) -> ClaimRow | None:
+        """This film's claim from one authority — lowest id when several exist."""
+        rows = [r for r in self.claims_for_film(film_id) if r.authority == authority]
+        return rows[0] if rows else None
+
+    def key_work(self, film_id: int, *, title: str, year: int, tt: str, tmdb_id: str | None, today: date) -> bool:
+        """An edition row becomes its work (repair editions NO-TWIN): retitle, re-year, recompute
+        key + title_norm, record imdb (+ tmdb). False, nothing written, when the new key is held
+        by another live identity or tt / tmdb_id is held by another film. This film's own
+        merged-away loser holding the key is retired in place (update_film_year rule)."""
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                raise LookupError(f"unknown film {film_id}")
+            new_key = film_key(title, year)
+            holder = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            # Every refusal check runs before any write: a plain `return False` inside an
+            # open `_conn()` still commits, so a dead-key retirement or id write performed
+            # before a later check fails would survive the refusal (bug fixed in review).
+            retire_holder_id: int | None = None
+            if holder is not None:
+                if self._canonical_in(c, int(holder["id"])) != film_id:
+                    return False
+                retire_holder_id = int(holder["id"])
+            for auth, val in (("imdb", tt), ("tmdb", tmdb_id)):
+                if val and c.execute(
+                    "SELECT 1 FROM external_ids WHERE authority = ? AND value = ? AND film_id != ?",
+                    (auth, val, film_id),
+                ).fetchone():
+                    return False
+            if retire_holder_id is not None:
+                c.execute("UPDATE films SET key = key || ' #' || id WHERE id = ?", (retire_holder_id,))
+            c.execute(
+                "UPDATE films SET title = ?, year = ?, key = ?, title_norm = ? WHERE id = ?",
+                (title, year, new_key, title_norm(title), film_id),
+            )
+            for auth, val in (("imdb", tt), ("tmdb", tmdb_id)):
+                if val:
+                    # Same UPDATE-then-INSERT shape as set_external_id: preserves first_seen
+                    # on an existing row instead of the DELETE+INSERT this replaced (bug
+                    # fixed in review), which reset first_seen to `today` on every call.
+                    c.execute(
+                        "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = ? AND value != ?",
+                        (val, film_id, auth, val),
+                    )
+                    c.execute(
+                        "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(film_id, authority, value) DO NOTHING",
+                        (film_id, auth, val, today.isoformat()),
+                    )
             return True
 
     # dispositions -----------------------------------------------------
@@ -1415,21 +1555,27 @@ class Repository:
             if n_claims:
                 moved["claim"] = n_claims
             for row in c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (loser_id,)).fetchall():
-                held = c.execute(
-                    "SELECT 1 FROM external_ids WHERE film_id = ? AND authority = ?", (survivor_id, row["authority"])
-                ).fetchone()
+                auth, val = str(row["authority"]), str(row["value"])
+                held = (
+                    c.execute(
+                        "SELECT 1 FROM external_ids WHERE film_id = ? AND authority = ?", (survivor_id, auth)
+                    ).fetchone()
+                    if auth in KEY_AUTHORITIES
+                    else None
+                )
                 if held is None:
                     c.execute(
-                        "UPDATE external_ids SET film_id = ? WHERE film_id = ? AND authority = ?",
-                        (survivor_id, loser_id, row["authority"]),
+                        "UPDATE external_ids SET film_id = ? WHERE film_id = ? AND authority = ? AND value = ?",
+                        (survivor_id, loser_id, auth, val),
                     )
                     moved["external_ids"] = moved.get("external_ids", 0) + 1
                 else:
                     c.execute(
-                        "DELETE FROM external_ids WHERE film_id = ? AND authority = ?", (loser_id, row["authority"])
+                        "DELETE FROM external_ids WHERE film_id = ? AND authority = ? AND value = ?",
+                        (loser_id, auth, val),
                     )
                     dropped["external_ids"] = dropped.get("external_ids", 0) + 1
-                    kept.setdefault("external_ids", []).append({row["authority"]: row["value"]})
+                    kept.setdefault("external_ids", []).append({auth: val})
             cur = c.execute(
                 "UPDATE availability_transitions SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)
             )

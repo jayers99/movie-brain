@@ -6,7 +6,14 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import Film, McTitle, OmdbRating, ReviewEntry
-from movie_brain.infrastructure.database import MIGRATIONS_DIR, FilmRow, Repository, TmdbMatchTarget, init_db
+from movie_brain.infrastructure.database import (
+    KEY_AUTHORITIES,
+    MIGRATIONS_DIR,
+    FilmRow,
+    Repository,
+    TmdbMatchTarget,
+    init_db,
+)
 
 TRIO = Film("Trio", 1950, "Ken Annakin", "https://c/trio")
 QUARTET = Film("Quartet", 1948, "Ken Annakin", "https://c/quartet")
@@ -311,6 +318,25 @@ def test_record_catalog_records_criterion_external_ids(repo):
     assert repo.external_ids_for(fid) == {"criterion": "https://c/trio"}
 
 
+def test_record_catalog_url_change_adds_a_row_and_preserves_first_seen(repo):
+    """Task 2 reads first_seen for earliest-slug tie-breaks — a re-listed film under a new URL
+    must keep its original first_seen, not reset it to the day of the re-list. Since 012 a
+    catalog source is a claim authority, so the new URL is a SECOND row (the UPDATE this
+    replaced collapsed every row a film held for the source into one)."""
+    repo.record_catalog("criterion", [TRIO], D1)
+    fid = repo.film_id_by_key("trio (1950)")
+    assert fid is not None
+    moved = Film(TRIO.title, TRIO.year, TRIO.director, "https://c/trio-remastered")
+    repo.record_catalog("criterion", [moved], D2)
+    conn = sqlite3.connect(repo.db_path)
+    rows = conn.execute(
+        "SELECT value, first_seen FROM external_ids WHERE film_id = ? AND authority = 'criterion' "
+        "ORDER BY first_seen",
+        (fid,),
+    ).fetchall()
+    assert rows == [("https://c/trio", D1.isoformat()), ("https://c/trio-remastered", D2.isoformat())]
+
+
 def test_record_catalog_contains_external_id_uniqueness_conflicts(repo):
     repo.record_catalog("criterion", [TRIO], D1)
     trio_fid = repo.film_id_by_key("trio (1950)")
@@ -391,7 +417,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 11
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 12
     finally:
         conn.close()
 
@@ -1123,7 +1149,7 @@ def test_migration_011_claims_and_film_columns(tmp_path):
     repo.set_title_norm(fid, "bladerunner")
     assert repo.films_missing_title_norm() == []
     with sqlite3.connect(tmp_path / "t.db") as c:
-        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 11
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 12
         assert c.execute("SELECT kind FROM films WHERE id = ?", (fid,)).fetchone()[0] == "movie"
 
 
@@ -1159,3 +1185,166 @@ def test_key_film_directly_blocks_on_a_foreign_key_holder(tmp_path):
     assert raw
     assert not repo.key_film_directly(raw, new_title="Vertigo", imdb_id="tt0052357", today=date(2026, 8, 25))
     assert repo.external_ids_for(raw) == {}
+
+
+T = date(2026, 8, 26)
+
+
+def _film(repo: Repository, title: str, year: int) -> int:
+    fid = repo.create_film(Film(title, year, None, ""))
+    assert fid is not None
+    return fid
+
+
+def test_migration_012_allows_two_claim_values_per_authority(repo):
+    fid = _film(repo, "Apocalypse Now", 1979)
+    repo.set_external_id(fid, "metacritic", "apocalypse-now", T)
+    repo.set_external_id(fid, "metacritic", "apocalypse-now-redux", T)
+    conn = sqlite3.connect(repo.db_path)
+    rows = conn.execute("SELECT value FROM external_ids WHERE film_id = ? ORDER BY value", (fid,)).fetchall()
+    assert [r[0] for r in rows] == ["apocalypse-now", "apocalypse-now-redux"]
+    assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 12
+
+
+def test_record_catalog_keeps_both_criterion_ids_when_a_film_holds_two(repo):
+    """A merge survivor can hold two criterion URLs (012 + merge_film's move policy). The walk
+    that re-lists it under one of them must not collapse them — that raised IntegrityError on
+    every sync — and it must not lose the other."""
+    fid = _film(repo, "Trio", 1950)
+    repo.set_external_id(fid, "criterion", "https://c/trio", D1)
+    repo.set_external_id(fid, "criterion", "https://c/trio-loser", D1)
+    repo.record_catalog("criterion", [Film("Trio", 1950, None, "https://c/trio")], D2)
+    assert repo.external_ids_all(fid) == [("criterion", "https://c/trio"), ("criterion", "https://c/trio-loser")]
+    # a changed URL is ADDED, never UPDATEd over the rows the film already holds
+    repo.record_catalog("criterion", [Film("Trio", 1950, None, "https://c/trio-v2")], D2)
+    assert ("criterion", "https://c/trio-v2") in repo.external_ids_all(fid)
+    assert ("criterion", "https://c/trio") in repo.external_ids_all(fid)
+
+
+def test_external_id_holders_includes_disposed_films(repo):
+    live = _film(repo, "Trio", 1950)
+    gone = _film(repo, "Trio (Restored)", 2001)
+    repo.set_external_id(live, "imdb", "tt0042917", D1)
+    repo.set_external_id(gone, "imdb", "tt9999999", D1)
+    repo.tombstone_film(gone, D1, note="x")
+    assert repo.external_id_holders("imdb") == {"tt0042917": live, "tt9999999": gone}
+
+
+def test_has_listing_sees_the_films_catalog_row(repo):
+    fid = _film(repo, "Trio", 1950)
+    assert not repo.has_listing(fid, "criterion")
+    repo.record_catalog("criterion", [Film("Trio", 1950, None, "https://c/trio")], D2)
+    assert repo.has_listing(fid, "criterion")
+    assert not repo.has_listing(fid, "apple-tv-store")
+
+
+def test_key_authorities_stay_single_per_film(repo):
+    fid = _film(repo, "Blade Runner", 1982)
+    for auth in KEY_AUTHORITIES:
+        repo.set_external_id(fid, auth, "1", T)
+        repo.set_external_id(fid, auth, "2", T)
+        assert repo.external_ids_for(fid)[auth] == "2"
+    conn = sqlite3.connect(repo.db_path)
+    assert conn.execute("SELECT COUNT(*) FROM external_ids WHERE film_id = ?", (fid,)).fetchone()[0] == 2
+
+
+def test_unique_authority_value_still_guards_across_films(repo):
+    a, b = _film(repo, "A", 1950), _film(repo, "B", 1951)
+    repo.set_external_id(a, "metacritic", "shared", T)
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.set_external_id(b, "metacritic", "shared", T)
+
+
+def test_two_metacritic_slugs_do_not_duplicate_read_models(repo):
+    fid = _film(repo, "Apocalypse Now", 1979)
+    repo.set_external_id(fid, "metacritic", "apocalypse-now-redux", date(2026, 8, 2))
+    repo.set_external_id(fid, "metacritic", "apocalypse-now", date(2026, 8, 1))
+    views = [v for v in repo.list_views(T) if v.title == "Apocalypse Now"]
+    assert len(views) == 1
+    assert views[0].metacritic_url == "https://www.metacritic.com/movie/apocalypse-now/"  # earliest first_seen wins
+    assert len([s for s in repo.audit_subjects() if s.film_id == fid]) == 1
+    assert len([f for f, _ in repo.films_needing_lookup_discovery("criterion", T) if f == fid]) == 1
+
+
+def test_merge_moves_claim_ids_and_drops_duplicate_key_ids(repo):
+    loser, surv = _film(repo, "Blade Runner (The Final Cut)", 2007), _film(repo, "Blade Runner", 1982)
+    repo.set_external_id(surv, "tmdb", "78", T)
+    repo.set_external_id(surv, "metacritic", "blade-runner", T)
+    repo.set_external_id(loser, "tmdb", "999", T)
+    repo.set_external_id(loser, "metacritic", "blade-runner-the-final-cut", T)
+    report = repo.merge_film(loser, surv, T, note="t")
+    ids = repo.external_ids_all(surv)
+    assert ("metacritic", "blade-runner-the-final-cut") in ids and ("metacritic", "blade-runner") in ids
+    assert ("tmdb", "78") in ids and ("tmdb", "999") not in ids
+    assert report.moved["external_ids"] == 1 and report.dropped["external_ids"] == 1
+
+
+def test_set_claim_edition_year_and_lookup(repo):
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    repo.add_claim(fid, "apple-tv", "Blade Runner (The Final Cut)", "Blade Runner (The Final Cut)",
+                   year_claimed=2007, edition_label="the final cut", runtime_min=117, first_seen="2026-08-23")
+    claim = repo.claim_for_film_authority(fid, "apple-tv")
+    assert claim is not None and claim.edition_year is None
+    repo.set_claim_edition_year(claim.id, 2007)
+    assert repo.claim_for_film_authority(fid, "apple-tv").edition_year == 2007
+
+
+def test_key_work_retitles_reyears_and_keys(repo):
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    repo.set_title_norm(fid, "blade runner the final cut")
+    assert repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=T)
+    conn = sqlite3.connect(repo.db_path)
+    title, year, key, norm = conn.execute("SELECT title, year, key, title_norm FROM films WHERE id = ?", (fid,)).fetchone()
+    assert (title, year, key, norm) == ("Blade Runner", 1982, "blade runner (1982)", "bladerunner")
+    assert repo.external_ids_for(fid) == {"imdb": "tt0083658", "tmdb": "78"}
+
+
+def test_key_work_refuses_when_key_or_tt_is_held_elsewhere(repo):
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    other = _film(repo, "Blade Runner", 1982)
+    assert not repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=T)
+    repo.update_film_year(other, 1983)  # frees the key
+    repo.set_external_id(other, "imdb", "tt0083658", T)
+    assert not repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=T)
+    assert repo.external_ids_for(fid) == {}
+
+
+def test_key_work_retires_its_own_losers_dead_key(repo):
+    surv = _film(repo, "Donnie Darko: Anniversary Special Edition", 2001)
+    loser = _film(repo, "Donnie Darko", 2001)
+    repo.merge_film(loser, surv, T, note="t")
+    assert repo.key_work(surv, title="Donnie Darko", year=2001, tt="tt0246578", tmdb_id="141", today=T)
+    conn = sqlite3.connect(repo.db_path)
+    assert conn.execute("SELECT key FROM films WHERE id = ?", (surv,)).fetchone()[0] == "donnie darko (2001)"
+    assert conn.execute("SELECT key FROM films WHERE id = ?", (loser,)).fetchone()[0] == f"donnie darko (2001) #{loser}"
+
+
+def test_key_work_refusal_on_tt_leaves_own_losers_key_untouched(repo):
+    """Regression (review fix round 1, finding 1): the dead-key retirement of this film's own
+    merged-away loser must not survive a later refusal (tt held by an unrelated film) — every
+    refusal check must run before any write."""
+    surv = _film(repo, "Donnie Darko: Anniversary Special Edition", 2001)
+    loser = _film(repo, "Donnie Darko", 2001)
+    repo.merge_film(loser, surv, T, note="t")
+    other = _film(repo, "Something Else", 1999)
+    repo.set_external_id(other, "imdb", "tt0246578", T)
+    assert not repo.key_work(surv, title="Donnie Darko", year=2001, tt="tt0246578", tmdb_id="141", today=T)
+    conn = sqlite3.connect(repo.db_path)
+    assert conn.execute("SELECT key FROM films WHERE id = ?", (loser,)).fetchone()[0] == "donnie darko (2001)"
+    assert conn.execute("SELECT key, title, year FROM films WHERE id = ?", (surv,)).fetchone() == (
+        "donnie darko: anniversary special edition (2001)", "Donnie Darko: Anniversary Special Edition", 2001,
+    )
+
+
+def test_key_work_preserves_first_seen_on_repeat_call(repo):
+    """Regression (review fix round 1, finding 2): imdb/tmdb writes must UPDATE-then-INSERT
+    (set_external_id's shape) rather than DELETE+INSERT, so first_seen survives a repeat call."""
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    d1, d2 = date(2026, 8, 20), date(2026, 8, 26)
+    assert repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=d1)
+    assert repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=d2)
+    conn = sqlite3.connect(repo.db_path)
+    rows = conn.execute(
+        "SELECT authority, first_seen FROM external_ids WHERE film_id = ? ORDER BY authority", (fid,)
+    ).fetchall()
+    assert dict(rows) == {"imdb": d1.isoformat(), "tmdb": d1.isoformat()}

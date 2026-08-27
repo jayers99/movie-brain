@@ -11,10 +11,11 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, NamedTuple, TypedDict
 
 from movie_brain.domain.matching import parse_apple_title
 from movie_brain.domain.models import film_key
-from movie_brain.domain.thumbprint import Verdict, parse_title, title_norm
+from movie_brain.domain.thumbprint import Query, Verdict, parse_title, title_norm
 from movie_brain.infrastructure.database import Repository
 
 
@@ -145,9 +146,33 @@ def backfill_claims(
     return BackfillReport(n_crit, n_mc, n_apple, unrecovered, twin_covered, norms, len(editions))
 
 
-def review_detail(verdict: Verdict) -> str:
-    """The one `match_review.detail` format for resolver rows (spec §5): reason + A/B/C."""
-    cands = []
+class ReviewCandidate(TypedDict):
+    letter: str
+    tt: str
+    tmdb_id: int | None
+    title: str
+    year: int | None
+    director: str
+    runtime: int | None
+    votes: int
+    in_tmdb: bool
+    in_omdb: bool
+    why_not: str | None
+
+
+class ReviewDetail(NamedTuple):
+    reason: str
+    candidates: list[dict[str, Any]]
+    query: dict[str, Any] | None
+
+
+def review_detail(verdict: Verdict, query: Query | None = None) -> str:
+    """The one `match_review.detail` format for resolver rows (spec §5): reason + A/B/C.
+
+    Optionally carries the resolver's own query (title/year/source/director/runtime) so
+    a human reviewer can see what was searched for, not just what it found.
+    """
+    cands: list[ReviewCandidate] = []
     for letter, s in zip("ABC", verdict.ranked, strict=False):
         c = s.candidate
         cands.append(
@@ -167,4 +192,29 @@ def review_detail(verdict: Verdict) -> str:
                 else f"score {s.score}: title {s.title_level} year {s.year_points} director {s.director_points}",
             }
         )
-    return json.dumps({"reason": verdict.reason, "candidates": cands}, ensure_ascii=False)
+    payload: dict[str, Any] = {"reason": verdict.reason, "candidates": cands}
+    if query is not None:
+        payload["query"] = {
+            "title": query.raw_title,
+            "year": query.year,
+            "source": query.source,
+            "director": query.director,
+            "runtime": query.runtime_min,
+        }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def parse_review_detail(detail: str | None) -> ReviewDetail | None:
+    """Parse a `review_detail`-produced string back into its parts. Returns None for legacy
+    plain-text details (pre-resolver rows) or anything that isn't the resolver's JSON shape.
+    """
+    if not detail or not detail.lstrip().startswith("{"):
+        return None
+    body = detail[: detail.rfind("}") + 1]  # resolve_review appends " [note]" after the JSON
+    try:
+        obj = json.loads(body)
+    except ValueError:
+        return None
+    if not isinstance(obj, dict) or "candidates" not in obj:
+        return None
+    return ReviewDetail(str(obj.get("reason", "")), list(obj["candidates"]), obj.get("query"))

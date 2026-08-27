@@ -204,6 +204,44 @@ def test_repair_years_args_pair(monkeypatch):
     assert r.exit_code == 0 and calls == {"film_id": 12, "year": 1927, "apply": True}
 
 
+def test_repair_editions_dry_run_lists_zero_groups(config_dir):
+    r = runner.invoke(app, ["repair", "editions"])
+    assert r.exit_code == 0
+    assert "groups: 0" in r.output
+
+
+def test_repair_editions_partial_merge_exits_1(monkeypatch):
+    def fake(repo, today, *, apply, confirm, contract, limit, log):
+        raise RuntimeError("[partial] #1 PARTIAL: merged into #2 but survivor keying refused")
+
+    monkeypatch.setattr("movie_brain.cli.repair_editions", fake)
+    r = runner.invoke(app, ["repair", "editions", "--apply", "--yes"])
+    assert r.exit_code == 1
+    assert "PARTIAL: merged into #2" in r.output
+
+
+def test_review_list_shows_candidate_lines(config_dir):
+    from datetime import date
+
+    from movie_brain.application.thumbprint import review_detail
+    from movie_brain.domain.models import Film, ReviewEntry
+    from movie_brain.domain.thumbprint import Candidate, Scored, Verdict, make_query
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("Blade Runner (The Final Cut)", 2007, None, ""))
+    q = make_query("Blade Runner (The Final Cut)", 2007, "apple", director=None, runtime_min=117)
+    c = Candidate("tt0083658", 78, ("Blade Runner",), 1982, "Ridley Scott", 117, 10000, "movie", True, True)
+    v = Verdict("review", None, "rerelease-ambiguous", (Scored(c, 5, 3, 0, 0, False, False),))
+    repo.append_reviews(
+        "tmdb", [ReviewEntry("rerelease-ambiguous", film_id=fid, detail=review_detail(v, q))], date(2026, 8, 26)
+    )
+
+    r = runner.invoke(app, ["review", "list"])
+    assert r.exit_code == 0
+    assert "A tt0083658" in r.output
+
+
 def test_review_resolve_reports_value_errors(monkeypatch):
     def fake(repo, review_id, **kw):
         raise ValueError("choose exactly one")

@@ -62,3 +62,39 @@ Feature: match_review rows are resolved by CLI and never come back
     And an open metacritic "year-gap" review for slug "alpha-rr"
     And "King Kong (1933)" is tombstoned
     Then resolving it with film "King Kong (1933)" fails
+
+  Scenario: Picking candidate B keys the film to its tt and tmdb id and ratifies an eval row
+    Given an open tmdb resolver review for "King Kong (1933)" with candidates A "tt0000001"/1 and B "tt0024216"/244
+    And TMDB says id 244 was released in 1933
+    When I resolve it with pick "B"
+    Then "King Kong (1933)" holds imdb "tt0024216" and tmdb id "244"
+    And the eval log has a verified human row for "King Kong (1933)" expecting "tt0024216"
+
+  Scenario: --tt keys any tmdb no-match row, finding the tmdb id through TMDB
+    Given an open tmdb "no-match" review for "King Kong (1933)"
+    And TMDB finds "tt0024216" as id 244 released in 1933
+    When I resolve it with tt "tt0024216"
+    Then "King Kong (1933)" holds imdb "tt0024216" and tmdb id "244"
+    And the eval log has a verified human row for "King Kong (1933)" expecting "tt0024216"
+
+  Scenario: --tt without a TMDB client writes only the imdb id and warns
+    Given an open tmdb "no-match" review for "King Kong (1933)"
+    When I resolve it offline with tt "tt0024216"
+    Then "King Kong (1933)" holds imdb "tt0024216" and no tmdb id
+    And a warning mentions "tmdb id not resolved"
+
+  Scenario: --none is a standing verified-unkeyed decision
+    Given an open tmdb "no-match" review for "King Kong (1933)"
+    When I resolve it with none
+    Then the review is resolved
+    And the eval log has a verified human row for "King Kong (1933)" expecting "NONE"
+    And rebuilding the tmdb no-match queue queues nothing for "King Kong (1933)"
+
+  Scenario: --pick on a row without candidates is refused
+    Given an open tmdb "no-match" review for "King Kong (1933)"
+    Then resolving it with pick "A" fails
+
+  Scenario: A yearless ingestion ratifies a yearless eval row
+    Given an open tmdb resolver review for "King Kong (1933)" with a yearless query and candidate A "tt0024216"/244
+    When I resolve it with pick "A"
+    Then the eval log row for "King Kong (1933)" has no ingested year

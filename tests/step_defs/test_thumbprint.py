@@ -7,11 +7,12 @@ from datetime import date
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from movie_brain.application.repair import repair_twins
+from movie_brain.application.repair import EditionContract, repair_editions, repair_twins
 from movie_brain.application.thumbprint import backfill_claims
 from movie_brain.domain.models import Film, OmdbRating
 
 scenarios("../features/thumbprint.feature")
+scenarios("../features/thumbprint_editions.feature")
 
 TODAY = date(2026, 8, 25)
 
@@ -204,3 +205,147 @@ def merged_plain(ctx):
 def claim_owner(ctx, value, title, rt):
     rows = _q(ctx, "SELECT f.title, c.runtime_min FROM claim c JOIN films f ON f.id = c.film_id WHERE c.value = ?", value)
     assert rows == [(title, rt)]
+
+
+# --- editions ------------------------------------------------------------------------------
+
+
+@given(parsers.parse('an edition film "{title}" year {year:d} from "{authority}" slug "{value}"'))
+def edition_film(ctx, title, year, authority, value):
+    from movie_brain.domain.thumbprint import parse_title, title_norm
+
+    repo = ctx["repo"]
+    fid = repo.create_film(Film(title, year, None, ""))
+    assert fid is not None
+    repo.set_title_norm(fid, title_norm(title))
+    if authority != "apple-tv":
+        repo.set_external_id(fid, authority, value, TODAY)
+    repo.add_claim(
+        fid,
+        authority,
+        value,
+        title,
+        year_claimed=year,
+        edition_label=" ".join(parse_title(title).editions) or None,
+        first_seen=TODAY.isoformat(),
+    )
+    ctx.setdefault("editions", []).append(fid)
+    ctx["edition"] = fid
+
+
+@given(parsers.parse('a work film "{title}" ({year:d}) with tmdb id "{tid}"'))
+def work_film(ctx, title, year, tid):
+    from movie_brain.domain.thumbprint import title_norm
+
+    repo = ctx["repo"]
+    fid = repo.create_film(Film(title, year, "Dir", ""))
+    assert fid is not None
+    repo.set_title_norm(fid, title_norm(title))
+    repo.set_external_id(fid, "tmdb", tid, TODAY)
+    ctx.setdefault("works", {})[(title, year)] = fid
+    ctx["work"] = fid
+
+
+@given(parsers.parse('the edition contract says the work is "{work}" {year:d} tt "{tt}" tmdb "{tid}"'))
+def contract_one(ctx, work, year, tt, tid):
+    ctx["contract"] = {ctx["edition"]: EditionContract(ctx["edition"], work, year, tt, tid)}
+
+
+@given(parsers.parse('the edition contract says the work is "{work}" {year:d} tt "{tt}" tmdb "{tid}" for both'))
+def contract_both(ctx, work, year, tt, tid):
+    ctx["contract"] = {fid: EditionContract(fid, work, year, tt, tid) for fid in ctx["editions"]}
+
+
+@given("the edition film has a criterion listing")
+def edition_listing(ctx):
+    repo = ctx["repo"]
+    row = _q(ctx, "SELECT title, year FROM films WHERE id = ?", ctx["edition"])[0]
+    url = _q(ctx, "SELECT value FROM external_ids WHERE film_id = ? AND authority = 'criterion'", ctx["edition"])[0][0]
+    repo.record_catalog("criterion", [Film(row[0], row[1], None, url)], TODAY)
+    assert repo.has_listing(ctx["edition"], "criterion")
+
+
+@given("the edition film has an open tmdb no-match review")
+def edition_review(ctx):
+    from movie_brain.domain.models import ReviewEntry
+
+    ctx["repo"].append_reviews("tmdb", [ReviewEntry("no-match", film_id=ctx["edition"], detail="x")], TODAY)
+
+
+@when("I run repair editions --apply answering yes")
+def run_editions(ctx):
+    ctx["report"] = repair_editions(
+        ctx["repo"], TODAY, apply=True, confirm=lambda g: True, contract=ctx["contract"], log=ctx["log"].append
+    )
+
+
+@then("the edition film is merged into the work film")
+def edition_merged(ctx):
+    assert ctx["repo"].disposition_of(ctx["edition"]) == ("merged", ctx["work"])
+
+
+@then(parsers.parse('the edition film is merged into the work film "{title}" ({year:d})'))
+def edition_merged_into(ctx, title, year):
+    assert ctx["repo"].disposition_of(ctx["edition"]) == ("merged", ctx["works"][(title, year)])
+
+
+@then(parsers.parse('the work film holds imdb "{tt}" and its metacritic claim has edition_year {y:d}'))
+def work_keyed(ctx, tt, y):
+    repo = ctx["repo"]
+    assert repo.external_ids_for(ctx["work"])["imdb"] == tt
+    assert repo.claim_for_film_authority(ctx["work"], "metacritic").edition_year == y
+
+
+@then(parsers.parse("the editions report says twin {t:d}, no-twin {n:d}, conflict {c:d}, csv-mismatch {m:d}, applied {a:d}"))
+def editions_report(ctx, t, n, c, m, a):
+    r = ctx["report"]
+    assert (r.twins, r.no_twin, r.conflict, r.csv_mismatch, r.applied) == (t, n, c, m, a)
+
+
+@then(parsers.parse('the edition film is titled "{title}" year {year:d} with imdb "{tt}" and tmdb "{tid}" and no disposition'))
+def edition_became_work(ctx, title, year, tt, tid):
+    repo = ctx["repo"]
+    row = _q(ctx, "SELECT title, year FROM films WHERE id = ?", ctx["edition"])[0]
+    assert tuple(row) == (title, year)
+    # the film keeps its source (claim-authority) id; only the key authorities are asserted
+    ids = repo.external_ids_for(ctx["edition"])
+    assert {k: v for k, v in ids.items() if k in ("imdb", "tmdb")} == {"imdb": tt, "tmdb": tid}
+    assert repo.disposition_of(ctx["edition"]) is None
+
+
+@then(parsers.parse("its {authority} claim has edition_year {y:d}"))
+def claim_year(ctx, authority, y):
+    assert ctx["repo"].claim_for_film_authority(ctx["edition"], authority).edition_year == y
+
+
+@then(parsers.parse("its {authority} claim has no edition_year"))
+def claim_no_year(ctx, authority):
+    assert ctx["repo"].claim_for_film_authority(ctx["edition"], authority).edition_year is None
+
+
+@then("its tmdb no-match review is resolved")
+def review_resolved(ctx):
+    assert not [r for r in ctx["repo"].open_reviews("tmdb") if r["film_id"] == ctx["edition"]]
+
+
+@then(parsers.parse('the film "{loser}" is merged into the film now titled "{title}" ({year:d}) holding tmdb "{tid}"'))
+def darko(ctx, loser, title, year, tid):
+    repo = ctx["repo"]
+    lid = next(f for f in ctx["editions"] if _q(ctx, "SELECT title FROM films WHERE id = ?", f)[0][0] == loser)
+    sid = next(f for f in ctx["editions"] if f != lid)
+    assert repo.disposition_of(lid) == ("merged", sid)
+    assert tuple(_q(ctx, "SELECT title, year FROM films WHERE id = ?", sid)[0]) == (title, year)
+    assert repo.external_ids_for(sid)["tmdb"] == tid
+
+
+@then(parsers.parse('the edition film is still titled "{title}" and holds no imdb id'))
+def edition_untouched(ctx, title):
+    assert _q(ctx, "SELECT title FROM films WHERE id = ?", ctx["edition"])[0][0] == title
+    assert "imdb" not in ctx["repo"].external_ids_for(ctx["edition"])
+
+
+@then(parsers.parse('the edition film\'s verdict is "{verdict}" and it has no disposition and year {year:d}'))
+def edition_verdict(ctx, verdict, year):
+    assert any(f"[{verdict}] #{ctx['edition']} " in line for line in ctx["log"]), ctx["log"]
+    assert ctx["repo"].disposition_of(ctx["edition"]) is None
+    assert _q(ctx, "SELECT year FROM films WHERE id = ?", ctx["edition"])[0][0] == year
