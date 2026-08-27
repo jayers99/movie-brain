@@ -36,9 +36,20 @@ paths:
   in T1: `thumbprint backfill --apply` is the only writer and is idempotent; `merge_film`
   re-points them. `films.title_norm` is derived from `title_norm()` — never hand-edited.
 - `movie-brain repair editions [--apply] [--yes] [--limit N]` folds `Title (edition)` films
-  into their same-year work: the contract is eval group `C-edition` (`load_edition_contract`),
+  into their same-year work: the contract is eval group `C-edition` OR `F-human`
+  (`load_edition_contract`) — a human-ratified `F-human` row joins on the same terms, its
+  `work='…' YYYY` note IS the ratification, so one without that note is not a contract —
   keyed by film id with an expected tt/tmdb and the work's title+year parsed from the row's
-  note. A twin is exactly one same-norm-title/same-work-year candidate agreeing on tmdb id (or,
+  note. Idempotence is title-shaped, not year-shaped: a contract film is skipped when it is
+  disposed, or when `films.year == work_year` AND its title no longer parses with editions (it
+  already IS the work). A SAME-YEAR edition ("Apocalypse Now (Final Cut)" 1979 beside the work
+  at 1979) is therefore listed and folded through the ordinary twin / no-twin paths, with
+  `edition_year` NULL — only a year strictly LATER than the work's is an edition year. Both
+  outcomes are self-idempotent: a twin loser ends disposed, a no-twin ends retitled to a
+  marker-free base. A survivor that is itself a contract row is folded BY the twin group naming
+  it and never gets a second group of its own (a twin always sits at the work year, so its own
+  group could only be the re-key the twin path already performs). A twin is exactly one
+  same-norm-title/same-work-year candidate agreeing on tmdb id (or,
   when neither side has a tmdb id, a fellow contract row sharing the same tt); `_edition_blockers`
   pre-checks tt/tmdb/key holders (over EVERY film, disposed included — the UNIQUE guard is blind to disposed rows too) on
   both the twin-merge and no-twin-keying paths and downgrades to `conflict` rather than write
@@ -46,8 +57,9 @@ paths:
   carries a Criterion listing is never re-keyed: `record_catalog` upserts
   `ON CONFLICT(films.key)`, so the next walk would mint a duplicate under the old key — that
   group is a `conflict` deferred to the ingester switch. `edition_year` is the film's old
-  `films.year` unless that year predates the work's year, in which case it's NULL (an edition
-  can't be older than the work it's an edition of). `repair_editions` never touches
+  `films.year` only when that year is strictly LATER than the work's — NULL at or before it (an
+  edition can't be older than the work it's an edition of, and the work's OWN year is not an
+  edition year). `repair_editions` never touches
   `omdb`/`owned`/`listings` and never appends an eval row itself — a survivor-keying refusal
   after its merge already committed logs `[partial]` and raises (CLI exits 1) rather than report
   a half-done fold as a success.

@@ -481,14 +481,18 @@ class EditionsReport:
 
 def load_edition_contract(csv_path: Path) -> dict[int, EditionContract]:
     """Verified group-C rows with an expected tt, keyed by film id; the note's `work='…' YYYY`
-    is the work year."""
+    is the work year. `F-human` rows (written by `eval_log.ratify` when a human resolved a
+    review) join the contract on the same terms — the `work='…' YYYY` note IS the ratification
+    that this row is an edition of that work, so an F-human row without one is not a contract."""
     out: dict[int, EditionContract] = {}
     if not csv_path.exists():
         return out
     with csv_path.open(encoding="utf-8") as f:
         for r in csv.DictReader(f):
             m = _WORK_NOTE.search(r.get("note") or "")
-            if r["group"] != "C-edition" or r["status"] != "verified" or not r["expected_tt"] or not m:
+            if r["group"] not in ("C-edition", "F-human") or r["status"] != "verified":
+                continue
+            if not r["expected_tt"] or not m:
                 continue
             if not r["film_id"].isdigit():
                 continue
@@ -577,11 +581,20 @@ def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> li
     groups: list[EditionGroup] = []
     for fid, c in sorted(contract.items()):
         f = films.get(fid)
-        if f is None or f.year == c.work_year:
-            continue  # disposed, or already at the work year (idempotence)
+        if f is None:
+            continue  # disposed: a previous run folded it away
         p = parse_title(f.title)
+        if f.year == c.work_year and not p.editions:
+            # Idempotence: sitting at the work year is not enough — the row must also have
+            # stopped looking like an edition. A SAME-YEAR edition ("Apocalypse Now (Final Cut)"
+            # 1979 beside the work at 1979) still needs folding; once folded it is either
+            # disposed (twin) or retitled to a marker-free base (no-twin), so both paths land
+            # here on the next run.
+            continue
         work_title = _work_title(p.base, c.work_title_note)
-        edition_year = f.year if f.year is not None and f.year >= c.work_year else None
+        # `>` not `>=`: an edition released the SAME year as the work carries no edition year —
+        # only a later re-release/restoration year is one (and an earlier year never is).
+        edition_year = f.year if f.year is not None and f.year > c.work_year else None
         base = (fid, f.title, f.year, work_title, c.work_year, c.tt, c.tmdb_id)
         if not p.editions and title_norm(f.title) != title_norm(c.work_title_note):
             # The row no longer looks like an edition of anything: nothing to fold.
@@ -655,7 +668,13 @@ def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> li
                         f"becomes {work_title!r} ({c.work_year}) {c.tt}/{c.tmdb_id or '-'}",
                     )
                 )
-    return groups
+    # A survivor that is itself a contract row is folded BY the twin group naming it: a twin
+    # always sits AT the work year, so (after the same-year rule) its own group can only exist
+    # when its title still parses with editions — exactly the case the twin path re-keys. Listing
+    # it again would double-count one fold, and would report the loser's ids as `conflict`
+    # blockers against it. Its own `twin` group is kept: that is a chain, not a duplicate.
+    survivors = {g.twin_id for g in groups if g.verdict == "twin"}
+    return [g for g in groups if g.verdict == "twin" or g.film_id not in survivors]
 
 
 def format_edition(g: EditionGroup) -> str:
