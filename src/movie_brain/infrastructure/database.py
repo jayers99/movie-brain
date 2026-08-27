@@ -425,8 +425,8 @@ class Repository:
                 self._write_listing(c, film_id, source, film.url, day, frontier)
                 try:
                     c.execute(
-                        "DELETE FROM external_ids WHERE film_id = ? AND authority = ? AND value != ?",
-                        (film_id, source, film.url),
+                        "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = ? AND value != ?",
+                        (film.url, film_id, source, film.url),
                     )
                     c.execute(
                         "INSERT INTO external_ids (film_id, authority, value, first_seen) "
@@ -482,8 +482,8 @@ class Repository:
         with self._conn() as c:
             if authority in KEY_AUTHORITIES:
                 c.execute(
-                    "DELETE FROM external_ids WHERE film_id = ? AND authority = ? AND value != ?",
-                    (film_id, authority, value),
+                    "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = ? AND value != ?",
+                    (value, film_id, authority, value),
                 )
             c.execute(
                 "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?) "
@@ -1276,9 +1276,13 @@ class Repository:
             if holder is not None or other is not None:
                 return False
             c.execute("UPDATE films SET title = ?, key = ? WHERE id = ?", (new_title, new_key, film_id))
-            c.execute("DELETE FROM external_ids WHERE film_id = ? AND authority = 'imdb'", (film_id,))
             c.execute(
-                "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'imdb', ?, ?)",
+                "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = 'imdb' AND value != ?",
+                (imdb_id, film_id, imdb_id),
+            )
+            c.execute(
+                "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'imdb', ?, ?) "
+                "ON CONFLICT(film_id, authority, value) DO NOTHING",
                 (film_id, imdb_id, today.isoformat()),
             )
             return True
