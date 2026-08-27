@@ -1228,3 +1228,16 @@ def test_two_metacritic_slugs_do_not_duplicate_read_models(repo):
     assert views[0].metacritic_url == "https://www.metacritic.com/movie/apocalypse-now/"  # earliest first_seen wins
     assert len([s for s in repo.audit_subjects() if s.film_id == fid]) == 1
     assert len([f for f, _ in repo.films_needing_lookup_discovery("criterion", T) if f == fid]) == 1
+
+
+def test_merge_moves_claim_ids_and_drops_duplicate_key_ids(repo):
+    loser, surv = _film(repo, "Blade Runner (The Final Cut)", 2007), _film(repo, "Blade Runner", 1982)
+    repo.set_external_id(surv, "tmdb", "78", T)
+    repo.set_external_id(surv, "metacritic", "blade-runner", T)
+    repo.set_external_id(loser, "tmdb", "999", T)
+    repo.set_external_id(loser, "metacritic", "blade-runner-the-final-cut", T)
+    report = repo.merge_film(loser, surv, T, note="t")
+    ids = repo.external_ids_all(surv)
+    assert ("metacritic", "blade-runner-the-final-cut") in ids and ("metacritic", "blade-runner") in ids
+    assert ("tmdb", "78") in ids and ("tmdb", "999") not in ids
+    assert report.moved["external_ids"] == 1 and report.dropped["external_ids"] == 1
