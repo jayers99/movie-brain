@@ -444,11 +444,21 @@ def review_resolve(
     tmdb_id: Annotated[int | None, typer.Option("--tmdb-id", help="Claim this TMDB id (tmdb no-match rows).")] = None,
     create: Annotated[bool, typer.Option("--create", help="Create a new film from the staged/owned title.")] = False,
     dismiss: Annotated[bool, typer.Option("--dismiss", help="Close the row; it is never re-queued.")] = False,
+    pick: Annotated[
+        str | None, typer.Option("--pick", help="Key the film to candidate A/B/C off the review detail.")
+    ] = None,
+    tt: Annotated[str | None, typer.Option("--tt", help="Key the film to this IMDb id (ranked or not).")] = None,
+    none: Annotated[
+        bool, typer.Option("--none", help="Standing 'no such work' verdict: verified unkeyed.")
+    ] = False,
     note: Annotated[str | None, typer.Option("--note")] = None,
+    eval_csv: Annotated[Path | None, typer.Option("--eval-csv", hidden=True)] = None,
 ) -> None:
     """Resolve one open review row."""
     token = load_tmdb_token(load_config())
     client = TmdbClient(token) if token else None
+    if eval_csv is None:
+        eval_csv = Path(__file__).resolve().parents[2] / "scripts" / "eval" / "thumbprint_eval_v1.csv"
     try:
         outcome = resolve_review(
             _repo(),
@@ -460,6 +470,11 @@ def review_resolve(
             dismiss=dismiss,
             client=client,
             note=note,
+            pick=pick,
+            tt=tt,
+            none=none,
+            eval_csv=eval_csv,
+            warn=err.print,
         )
     except ValueError as exc:
         err.print(str(exc))
