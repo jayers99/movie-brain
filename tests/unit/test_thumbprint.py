@@ -137,3 +137,61 @@ def test_review_detail_serializes_top_three_with_letters():
     assert d["reason"] == "ambiguous"
     assert [c["letter"] for c in d["candidates"]] == ["A", "B", "C"]
     assert all(c["why_not"] for c in d["candidates"])
+
+
+def test_load_edition_contract_reads_verified_c_rows(tmp_path):
+    from movie_brain.application.repair import load_edition_contract
+
+    csv = tmp_path / "eval.csv"
+    csv.write_text(
+        "group,film_id,source,title_ingested,year_ingested,expected_tt,expected_tmdb,verified_by,note,status,"
+        "director,runtime_min\n"
+        "C-edition,4409,apple,Blade Runner (The Final Cut),2007,tt0083658,78,x,work='Blade Runner' 1982; "
+        "edition=['the final cut']; films.year=2007,verified,,117\n"
+        "C-edition,4503,apple,Moonwalk One (The Director's Cut),2009,,,x,NEEDS HUMAN,proposed,,108\n"
+        "B-apple-year-title,1,apple,X (1999),1999,tt1,2,x,twin 3,verified,,\n"
+    )
+    c = load_edition_contract(csv)
+    assert set(c) == {4409}
+    assert c[4409].work_title_note == "Blade Runner" and c[4409].work_year == 1982
+    assert c[4409].tt == "tt0083658" and c[4409].tmdb_id == "78"
+
+
+def _edition_film(repo, title, year):
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.domain.thumbprint import title_norm as tnorm
+
+    fid = repo.create_film(Film(title, year, None, ""))
+    repo.set_title_norm(fid, tnorm(title))
+    repo.add_claim(fid, "metacritic", f"slug-{fid}", title, year_claimed=year, first_seen=date(2026, 8, 25).isoformat())
+    return fid
+
+
+def test_audit_editions_keeps_a_note_title_that_names_another_work_informational(repo):
+    """Quai des Orfèvres: the note carries TMDB's English title — informational, not a mismatch."""
+    from movie_brain.application.repair import EditionContract, audit_editions
+
+    fid = _edition_film(repo, "Quai des Orfèvres [re-release]", 2002)
+    contract = {fid: EditionContract(fid, "Jenny Lamour", 1947, "tt0039739", "49842")}
+    (g,) = audit_editions(repo, contract)
+    assert (g.verdict, g.work_title, g.work_year, g.edition_year) == ("no-twin", "Quai des Orfèvres", 1947, 2002)
+
+
+def test_audit_editions_flags_a_row_that_is_no_longer_an_edition_of_anything(repo):
+    from movie_brain.application.repair import EditionContract, audit_editions
+
+    fid = _edition_film(repo, "Some Other Film", 2004)
+    contract = {fid: EditionContract(fid, "Donnie Darko", 2001, "tt0246578", "141")}
+    (g,) = audit_editions(repo, contract)
+    assert g.verdict == "csv-mismatch"
+
+
+def test_audit_editions_upgrades_the_work_title_casing_from_the_contract(repo):
+    from movie_brain.application.repair import EditionContract, audit_editions
+
+    fid = _edition_film(repo, "Goodfellas (Remastered Feature)", 2015)
+    contract = {fid: EditionContract(fid, "GoodFellas", 1990, "tt0099685", "769")}
+    (g,) = audit_editions(repo, contract)
+    assert (g.verdict, g.work_title) == ("no-twin", "GoodFellas")

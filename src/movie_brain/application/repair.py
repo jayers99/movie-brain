@@ -13,9 +13,9 @@ import requests
 
 from movie_brain.application.availability import MAX_CONSECUTIVE_FAILURES, TMDB_AUTHORITY, queue_review_once
 from movie_brain.domain.matching import norm_title, split_annotations
-from movie_brain.domain.models import ReviewEntry
+from movie_brain.domain.models import ReviewEntry, film_key
 from movie_brain.domain.thumbprint import parse_title, title_norm
-from movie_brain.infrastructure.database import RepairFilm, Repository, TwinFilm
+from movie_brain.infrastructure.database import EditionFilm, RepairFilm, Repository, TwinFilm
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 
@@ -434,5 +434,217 @@ def repair_twins(
         applied += 1
     counts = {v: sum(1 for g in groups if g.verdict == v) for v in ("twin", "no-twin", "conflict", "csv-mismatch")}
     return TwinsReport(
+        len(groups), counts["twin"], counts["no-twin"], counts["conflict"], counts["csv-mismatch"], applied, declined
+    )
+
+
+# --- editions: edition-year films → their work (thumbprint step 2) --------------------------
+
+_WORK_NOTE = re.compile(r"work='(?P<title>.+?)' (?P<year>\d{4})")
+
+
+@dataclass(frozen=True)
+class EditionContract:
+    film_id: int
+    work_title_note: str  # the CSV's TMDB title: casing/punctuation only, never a retitle to another work
+    work_year: int
+    tt: str
+    tmdb_id: str | None
+
+
+@dataclass(frozen=True)
+class EditionGroup:
+    film_id: int
+    title: str
+    old_year: int | None
+    work_title: str
+    work_year: int
+    tt: str
+    tmdb_id: str | None
+    verdict: str  # "twin" | "no-twin" | "conflict" | "csv-mismatch"
+    twin_id: int | None
+    edition_year: int | None
+    detail: str
+
+
+@dataclass(frozen=True)
+class EditionsReport:
+    groups: int
+    twins: int
+    no_twin: int
+    conflict: int
+    csv_mismatch: int
+    applied: int
+    declined: int
+
+
+def load_edition_contract(csv_path: Path) -> dict[int, EditionContract]:
+    """Verified group-C rows with an expected tt, keyed by film id; the note's `work='…' YYYY`
+    is the work year."""
+    out: dict[int, EditionContract] = {}
+    if not csv_path.exists():
+        return out
+    with csv_path.open(encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            m = _WORK_NOTE.search(r.get("note") or "")
+            if r["group"] != "C-edition" or r["status"] != "verified" or not r["expected_tt"] or not m:
+                continue
+            if not r["film_id"].isdigit():
+                continue
+            out[int(r["film_id"])] = EditionContract(
+                int(r["film_id"]),
+                m["title"],
+                int(m["year"]),
+                r["expected_tt"],
+                r.get("expected_tmdb") or None,
+            )
+    return out
+
+
+def _work_title(base: str, note: str) -> str:
+    """The work's display title: the film's own parsed base, upgraded to the contract note's
+    casing/punctuation when the two name the same work ("GoodFellas", "Waiting..."). A note
+    naming a DIFFERENT title (TMDB's English "Jenny Lamour" for "Quai des Orfèvres") is
+    informational only and never retitles the film."""
+    return note if norm_title(base) == norm_title(note) else base
+
+
+def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> list[EditionGroup]:
+    films = {f.id: f for f in repo.films_for_editions()}
+    by_norm_year: dict[tuple[str, int | None], list[EditionFilm]] = defaultdict(list)
+    for row in films.values():
+        by_norm_year[(row.title_norm or title_norm(row.title), row.year)].append(row)
+    tt_holders = {row.imdb_id: row.id for row in films.values() if row.imdb_id}
+    tmdb_holders = {row.tmdb_id: row.id for row in films.values() if row.tmdb_id}
+    groups: list[EditionGroup] = []
+    for fid, c in sorted(contract.items()):
+        f = films.get(fid)
+        if f is None or f.year == c.work_year:
+            continue  # disposed, or already at the work year (idempotence)
+        p = parse_title(f.title)
+        work_title = _work_title(p.base, c.work_title_note)
+        edition_year = f.year if f.year is not None and f.year >= c.work_year else None
+        base = (fid, f.title, f.year, work_title, c.work_year, c.tt, c.tmdb_id)
+        if not p.editions and title_norm(f.title) != title_norm(c.work_title_note):
+            # The row no longer looks like an edition of anything: nothing to fold.
+            groups.append(
+                EditionGroup(
+                    *base,
+                    "csv-mismatch",
+                    None,
+                    edition_year,
+                    f"no edition marker and title parses to {p.base!r}, contract names {c.work_title_note!r}",
+                )
+            )
+            continue
+        cands = [t for t in by_norm_year[(title_norm(work_title), c.work_year)] if t.id != fid]
+        agreeing = [
+            t
+            for t in cands
+            if (t.tmdb_id is not None and t.tmdb_id == c.tmdb_id)
+            or (t.tmdb_id is None and t.id in contract and contract[t.id].tt == c.tt)
+        ]
+        if len(agreeing) == 1:
+            t = agreeing[0]
+            groups.append(
+                EditionGroup(
+                    *base,
+                    "twin",
+                    t.id,
+                    edition_year,
+                    f"twin #{t.id} {t.title!r} ({t.year}) tmdb {t.tmdb_id or '-'}",
+                )
+            )
+        elif agreeing:
+            detail = f"several agreeing twins {[t.id for t in agreeing]}"
+            groups.append(EditionGroup(*base, "conflict", None, edition_year, detail))
+        else:
+            key = film_key(work_title, c.work_year)
+            key_holder = repo.film_id_by_key(key)
+            blockers = []
+            if key_holder is not None and repo.canonical_film_id(key_holder) != fid:
+                blockers.append(f"key {key!r} held by #{key_holder}")
+            if tt_holders.get(c.tt, fid) != fid:
+                blockers.append(f"{c.tt} held by #{tt_holders[c.tt]}")
+            if c.tmdb_id and tmdb_holders.get(c.tmdb_id, fid) != fid:
+                blockers.append(f"tmdb {c.tmdb_id} held by #{tmdb_holders[c.tmdb_id]}")
+            if blockers:
+                groups.append(EditionGroup(*base, "conflict", None, edition_year, "; ".join(blockers)))
+            else:
+                groups.append(
+                    EditionGroup(
+                        *base,
+                        "no-twin",
+                        None,
+                        edition_year,
+                        f"becomes {work_title!r} ({c.work_year}) {c.tt}/{c.tmdb_id or '-'}",
+                    )
+                )
+    return groups
+
+
+def format_edition(g: EditionGroup) -> str:
+    ey = f" edition_year {g.edition_year}" if g.edition_year else " edition_year NULL"
+    return f"[{g.verdict}] #{g.film_id} {g.title!r} ({g.old_year}) → {g.work_title!r} ({g.work_year}){ey}: {g.detail}"
+
+
+def _key_as_work(repo: Repository, fid: int, g: EditionGroup, today: date, log: Callable[[str], None]) -> bool:
+    if not repo.key_work(fid, title=g.work_title, year=g.work_year, tt=g.tt, tmdb_id=g.tmdb_id, today=today):
+        log("  key blocked (key/tt/tmdb held elsewhere); skipped")
+        return False
+    for r in repo.open_reviews("tmdb"):
+        if r["film_id"] == fid and r["reason"] == "no-match":
+            repo.resolve_review(int(str(r["id"])), f"repair editions keyed tmdb {g.tmdb_id or '-'} {today.isoformat()}")
+    repo.mark_omdb_refresh(fid)  # the OMDb stub was fetched under the edition's year
+    repo.clear_revisit(fid)
+    return True
+
+
+def repair_editions(
+    repo: Repository,
+    today: date,
+    *,
+    apply: bool,
+    confirm: Callable[[EditionGroup], bool],
+    contract: dict[int, EditionContract],
+    limit: int | None = None,
+    log: Callable[[str], None] = _stderr,
+) -> EditionsReport:
+    """Dry-run lists every group; --apply merges each confirmed `twin` into its work and keys
+    each confirmed `no-twin` as the work. `conflict` / `csv-mismatch` are never touched."""
+    groups = audit_editions(repo, contract)
+    if limit is not None:
+        groups = groups[:limit]
+    applied = declined = 0
+    for g in groups:
+        log(format_edition(g))
+        if not apply or g.verdict not in ("twin", "no-twin"):
+            continue
+        if not confirm(g):
+            declined += 1
+            continue
+        claim = None
+        for auth in ("metacritic", "apple-tv", "criterion"):
+            claim = claim or repo.claim_for_film_authority(g.film_id, auth)
+        if g.verdict == "twin" and g.twin_id is not None:
+            report = repo.merge_film(g.film_id, g.twin_id, today, note=f"repair editions {g.title!r}")
+            log(f"  merged #{g.film_id} → #{g.twin_id}: moved {report.moved} dropped {report.dropped}")
+            if claim is not None:
+                repo.set_claim_edition_year(claim.id, g.edition_year)
+            ids = repo.external_ids_for(g.twin_id)
+            if "imdb" not in ids:
+                repo.set_external_id(g.twin_id, "imdb", g.tt, today)
+            twin_title = next(f.title for f in repo.films_for_editions() if f.id == g.twin_id)
+            if parse_title(twin_title).editions and not _key_as_work(repo, g.twin_id, g, today, log):
+                continue
+        else:
+            if not _key_as_work(repo, g.film_id, g, today, log):
+                continue
+            if claim is not None:
+                repo.set_claim_edition_year(claim.id, g.edition_year)
+            log(f"  keyed #{g.film_id} as {g.work_title!r} ({g.work_year}) {g.tt}/{g.tmdb_id or '-'}")
+        applied += 1
+    counts = {v: sum(1 for g in groups if g.verdict == v) for v in ("twin", "no-twin", "conflict", "csv-mismatch")}
+    return EditionsReport(
         len(groups), counts["twin"], counts["no-twin"], counts["conflict"], counts["csv-mismatch"], applied, declined
     )
