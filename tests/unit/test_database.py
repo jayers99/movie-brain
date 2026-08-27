@@ -1241,3 +1241,43 @@ def test_merge_moves_claim_ids_and_drops_duplicate_key_ids(repo):
     assert ("metacritic", "blade-runner-the-final-cut") in ids and ("metacritic", "blade-runner") in ids
     assert ("tmdb", "78") in ids and ("tmdb", "999") not in ids
     assert report.moved["external_ids"] == 1 and report.dropped["external_ids"] == 1
+
+
+def test_set_claim_edition_year_and_lookup(repo):
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    repo.add_claim(fid, "apple-tv", "Blade Runner (The Final Cut)", "Blade Runner (The Final Cut)",
+                   year_claimed=2007, edition_label="the final cut", runtime_min=117, first_seen="2026-08-23")
+    claim = repo.claim_for_film_authority(fid, "apple-tv")
+    assert claim is not None and claim.edition_year is None
+    repo.set_claim_edition_year(claim.id, 2007)
+    assert repo.claim_for_film_authority(fid, "apple-tv").edition_year == 2007
+
+
+def test_key_work_retitles_reyears_and_keys(repo):
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    repo.set_title_norm(fid, "blade runner the final cut")
+    assert repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=T)
+    conn = sqlite3.connect(repo.db_path)
+    title, year, key, norm = conn.execute("SELECT title, year, key, title_norm FROM films WHERE id = ?", (fid,)).fetchone()
+    assert (title, year, key, norm) == ("Blade Runner", 1982, "blade runner (1982)", "bladerunner")
+    assert repo.external_ids_for(fid) == {"imdb": "tt0083658", "tmdb": "78"}
+
+
+def test_key_work_refuses_when_key_or_tt_is_held_elsewhere(repo):
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    other = _film(repo, "Blade Runner", 1982)
+    assert not repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=T)
+    repo.update_film_year(other, 1983)  # frees the key
+    repo.set_external_id(other, "imdb", "tt0083658", T)
+    assert not repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=T)
+    assert repo.external_ids_for(fid) == {}
+
+
+def test_key_work_retires_its_own_losers_dead_key(repo):
+    surv = _film(repo, "Donnie Darko: Anniversary Special Edition", 2001)
+    loser = _film(repo, "Donnie Darko", 2001)
+    repo.merge_film(loser, surv, T, note="t")
+    assert repo.key_work(surv, title="Donnie Darko", year=2001, tt="tt0246578", tmdb_id="141", today=T)
+    conn = sqlite3.connect(repo.db_path)
+    assert conn.execute("SELECT key FROM films WHERE id = ?", (surv,)).fetchone()[0] == "donnie darko (2001)"
+    assert conn.execute("SELECT key FROM films WHERE id = ?", (loser,)).fetchone()[0] == f"donnie darko (2001) #{loser}"
