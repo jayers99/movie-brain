@@ -284,6 +284,11 @@ def edition_merged(ctx):
     assert ctx["repo"].disposition_of(ctx["edition"]) == ("merged", ctx["work"])
 
 
+@then("both edition films are merged into the work film")
+def both_editions_merged(ctx):
+    assert [ctx["repo"].disposition_of(f) for f in ctx["editions"]] == [("merged", ctx["work"])] * 2
+
+
 @then(parsers.parse('the edition film is merged into the work film "{title}" ({year:d})'))
 def edition_merged_into(ctx, title, year):
     assert ctx["repo"].disposition_of(ctx["edition"]) == ("merged", ctx["works"][(title, year)])

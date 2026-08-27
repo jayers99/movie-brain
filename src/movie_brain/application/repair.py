@@ -609,11 +609,15 @@ def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> li
             )
             continue
         cands = [t for t in by_norm_year[(title_norm(work_title), c.work_year)] if t.id != fid]
-        agreeing = [
-            t
-            for t in cands
-            if (t.tmdb_id is not None and t.tmdb_id == c.tmdb_id)
-            or (t.tmdb_id is None and t.id in contract and contract[t.id].tt == c.tt)
+        # The tmdb id is the strong agreement; the fellow-contract fallback exists only for the
+        # case where NO candidate holds the id at all (Donnie Darko: two editions, neither
+        # keyed). Once a candidate holds it, an unkeyed fellow edition beside the real work is
+        # not a rival reading — counting it turned "Apocalypse Now Redux" beside #3190 (tmdb 28)
+        # and the unkeyed "(Final Cut)" into `several agreeing twins`, a conflict that only
+        # cleared on a SECOND pass once the Final Cut had merged away.
+        by_id = [t for t in cands if t.tmdb_id is not None and t.tmdb_id == c.tmdb_id]
+        agreeing = by_id or [
+            t for t in cands if t.tmdb_id is None and t.id in contract and contract[t.id].tt == c.tt
         ]
         if len(agreeing) == 1:
             t = agreeing[0]
