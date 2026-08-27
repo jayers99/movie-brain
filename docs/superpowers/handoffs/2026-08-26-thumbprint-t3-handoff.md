@@ -66,6 +66,16 @@ Shape it as ONE verb, `repair disagreements` (or `keys`), same protocol as `repa
   tally must not grow; `scripts/thumbprint_benchmark.py --refresh` ONLY after a ratification
   batch (needs both keys) — cache-miss rows score as `review`, never a gate failure.
 
+## Pattern found after the handoff was written (2026-08-26, late)
+**Leading articles.** #3141 *The Bride of Frankenstein* (owned, MC 95) sat in `tmdb no-match` because
+TMDB/IMDb/OMDb title it *Bride of Frankenstein*; `norm_title` and the resolver grammar keep the
+article, so the exact-title level fails even though TMDB search returns the right film first.
+**32 of the 209 open no-match films start with The/A/An.** Resolved live by hand:
+`review resolve 6274 --tt tt0026138` → the first live `F-human` eval row (title as ingested keeps
+the article, so the gate now carries the case). T3 candidate rule: an article-insensitive title
+level in `resolve()` (benchmark it — *The Thing* / *Thing*, *A Star Is Born* traps), reason string
+added to the contract, then rerun the 32 through step 4.
+
 ## Traps
 - **Set `MOVIE_BRAIN_CONFIG_DIR` before ANY `movie-brain` command in rehearsal or in a subagent.**
   `Repository.__init__` migrates on construction — a subagent's `review resolve --help`-era smoke

@@ -526,3 +526,4 @@ E-benchmark,,benchmark,300,2006,tt0416449,1271,TMDB exact title at known year,30
 E-benchmark,,benchmark,"Muhammad Ali, the Greatest",1974,tt0219935,29211,TMDB exact title at known year,"Muhammad Ali, the Greatest",verified,,
 E-benchmark,,benchmark,Dr. Strangelove,1964,tt0057012,935,hand-supplied TMDB id (official longer title),,verified,,
 E-benchmark,,benchmark,Intolerance,1916,tt0006864,3059,hand-supplied TMDB id (official longer title),,verified,,
+F-human,3141,metacritic,The Bride of Frankenstein,1935,tt0026138,229,human,review 6274 --tt,verified,,
