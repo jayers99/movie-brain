@@ -4,6 +4,7 @@ paths:
   - src/movie_brain/infrastructure/thumbprint_fetch.py
   - src/movie_brain/application/thumbprint.py
   - src/movie_brain/application/repair.py
+  - src/movie_brain/application/repair_keys.py
   - src/movie_brain/application/eval_log.py
   - scripts/thumbprint_benchmark.py
   - scripts/eval/**
@@ -131,3 +132,23 @@ paths:
   fetch an article-folded exact title hit too. Adopted behind the gate (n=484/0/94.8% unchanged
   with the rule on); live measurement of the 32 open article `no-match` films (rule on vs. off)
   is evaluated but NOT yet adopted — that's a separate owner decision on the numbers.
+- `movie-brain repair nomatch [--apply] [--yes] [--limit N]` (`application/repair_keys.py`, T4 /
+  memo step 4): worklist = open `tmdb/no-match` rows on undisposed films; query = the film's
+  highest-precedence claim (criterion > metacritic > apple-tv → source `apple`) with
+  `films.director`, apple runtime shown never scored. Verdicts, all holder-checked BEFORE any
+  write: `keyed` (film already holds an imdb tt → `find_by_imdb` + `record_tmdb_match`),
+  `unlinked` (holds tt, TMDB has no record — listed, not work), `match` (`resolve()` match →
+  `set_external_id(imdb)` THEN `record_tmdb_match` — commerce guard keeps Criterion years —
+  then `mark_omdb_refresh` when OMDb's tt differs), `review` (`promote_review` rewrites the
+  SAME row to reason `no-match-reviewed` with `review_detail(verdict, query)` — id and
+  created_at kept; never a second row), `review-open`, `conflict` (held tt/tmdb, TMDB error,
+  no client). `--limit` slices actionable (`keyed`/`match`/`review`) only. The verb NEVER
+  resolves a `no-match` row (a resolved one blocks the manual `repair links --film` relink
+  path); on `--apply` it ends with `rebuild_no_match_queue`, which drops matched films' rows
+  as the next sync would. `rebuild_no_match_queue` treats a RESOLVED `no-match-reviewed` row as
+  a standing decision (so `--none` does not loop). Auto matches are never ratified into the
+  eval CSV (the gate would score itself); human `--pick/--tt/--none` ratify as before, and
+  `--pick` on an OMDb-only candidate now resolves the tmdb id via `find_by_imdb`. Candidates
+  come from `<config_dir>/nomatch-cache.json.gz` (seeded from the fixture, saved per run) —
+  the eval fixture is never written by the verb. A post-`record_tmdb_match` failure logs
+  `[partial]` and raises (CLI exit 1).
