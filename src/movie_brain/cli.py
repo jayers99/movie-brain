@@ -16,11 +16,14 @@ from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, craw
 from movie_brain.application.owned import import_owned
 from movie_brain.application.rematch import rematch
 from movie_brain.application.repair import (
+    DisagreementGroup,
     DupGroup,
     EditionGroup,
     TwinGroup,
+    load_disagreement_contract,
     load_edition_contract,
     load_expected_twins,
+    repair_disagreements,
     repair_dupes,
     repair_editions,
     repair_links,
@@ -360,6 +363,47 @@ def repair_editions_cmd(
     console.print(
         f"groups: {report.groups} · twin: {report.twins} · no-twin: {report.no_twin} · conflict: {report.conflict} · "
         f"csv-mismatch: {report.csv_mismatch} · applied: {report.applied} · declined: {report.declined}"
+    )
+
+
+@repair_app.command("disagreements")
+def repair_disagreements_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Act on confirmed groups (default: dry-run).")] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="With --apply: confirm every group without prompting.")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Only the first N groups (batch size).")] = None,
+) -> None:
+    """Repair films whose OMDb imdbID ≠ TMDB imdb_id from eval group D (verified rows applied,
+    proposed rows → A/B/C review)."""
+    from movie_brain.infrastructure.omdb import OmdbClient
+    from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
+
+    root = Path(__file__).resolve().parents[2]
+    contract = load_disagreement_contract(root / "scripts" / "eval" / "thumbprint_eval_v1.csv")
+    cfg = load_config()
+    token, key = load_tmdb_token(cfg), load_api_key(cfg)
+    tmdb = TmdbClient(token) if token else None
+    fetcher = None
+    if tmdb is not None and key:
+        # fixture hits are free; misses hit the live clients; NOTHING is saved back (path=None)
+        data = CandidateCache.load(root / "scripts" / "eval" / "fixtures" / "cand_cache.json.gz", read_only=True).data
+        fetcher = CandidateFetcher(CandidateCache(data, None), tmdb, OmdbClient(key))
+
+    def confirm(g: DisagreementGroup) -> bool:
+        prompt = f"#{g.film_id} {g.title!r} [{g.verdict}] → {g.expected_tt or 'review'}?"
+        return yes or typer.confirm(prompt, default=False)
+
+    try:
+        report = repair_disagreements(
+            _repo(), date.today(), apply=apply, confirm=confirm, contract=contract, tmdb=tmdb, fetcher=fetcher,
+            limit=limit, log=_plain,
+        )
+    except RuntimeError as exc:
+        err.print(str(exc))
+        raise typer.Exit(1) from exc
+    console.print(
+        f"groups: {report.groups} · refetch: {report.refetch} · relink: {report.relink} · adopt: {report.adopt} · "
+        f"review: {report.review} · conflict: {report.conflict} · applied: {report.applied} · "
+        f"declined: {report.declined}"
     )
 
 
