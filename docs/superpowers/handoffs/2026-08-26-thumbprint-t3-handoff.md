@@ -27,14 +27,14 @@
   A/B/C lines from `review_detail(verdict, query)` / `parse_review_detail`; `TmdbClient.find_by_imdb`;
   `application/eval_log.py::ratify` = the ONLY programmatic eval-CSV writer (rewrites a matching
   `proposed` row, else appends `F-human`). **Rehearsed on scratch only — no live ratification yet.**
-- Gate unchanged: `scripts/thumbprint_benchmark.py --assert` → n=482 / 0 wrong / 94.8 %.
+- Gate: `scripts/thumbprint_benchmark.py --assert` → n=483 / 0 wrong (the 483rd row = the live F-human Bride of Frankenstein; fixture refreshed for it).
 
 ## Live numbers today (read-only, 2026-08-26 late)
 | what | count |
 |---|---|
 | OMDb `imdbID` vs TMDB `imdb_id` (undisposed, OMDb found) | **agree 4,136 · disagree 94** · OMDb-only 136 · TMDB-only 2 · neither 186 |
 | eval group D (`D-disagree`) | 94 rows: **50 verified · 44 proposed** (1 `NONE` expectation) |
-| all `proposed` eval rows | **45** (44 D + `C-edition` #4503 Moonwalk One) — *the T2 brief said "4"; that was a counting error (awk split on commas inside notes). Owner decision Q1 still stands: ratify through the A/B/C flow.* |
+| all `proposed` eval rows | **45** (44 D + `C-edition` #4503 Moonwalk One); the benchmark reports **38** of them (those with a non-empty `expected_tt`) — *the T2 brief said "4"; that was a counting error (awk split on commas inside notes). Owner decision Q1 still stands: ratify through the A/B/C flow.* |
 | open reviews | tmdb `no-match` 209 · metacritic `expected-miss` 111 (was 96 — sync growth) · apple-tv `year-drift` 51 · MC small reasons 14 |
 | dispositions / imdb ids / edition_year claims | 112 / 564 / 15 |
 
