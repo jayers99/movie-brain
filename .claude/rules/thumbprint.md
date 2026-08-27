@@ -151,4 +151,8 @@ paths:
   `--pick` on an OMDb-only candidate now resolves the tmdb id via `find_by_imdb`. Candidates
   come from `<config_dir>/nomatch-cache.json.gz` (seeded from the fixture, saved per run) —
   the eval fixture is never written by the verb. A post-`record_tmdb_match` failure logs
-  `[partial]` and raises (CLI exit 1).
+  `[partial]` and raises (CLI exit 1). A WRONG auto match is undone with `review resolve --tt`
+  on a fresh row or `repair links --film ID` followed by `review resolve --tt` BEFORE the next
+  `sync` — `clear_tmdb_link` leaves the imdb id the verb wrote, and sync's OMDb refetch prefers
+  the stored imdb id. Once a film holds both ids with `tmdb.found = 1` it audits as `linked`
+  and is never re-keyed by this verb.
