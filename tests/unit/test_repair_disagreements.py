@@ -410,3 +410,25 @@ def test_limit_never_hides_the_non_actionable_groups(repo, today):
     rep, lines = _run(repo, today, c, apply=False, limit=1)
     assert (rep.groups, rep.conflict, rep.refetch) == (2, 1, 1)
     assert [ln.split()[1] for ln in lines] == [f"#{orphan}", f"#{a}"]
+
+
+def test_resolved_key_disagreement_is_a_standing_decision_not_work(repo, today, monkeypatch):
+    """A resolved review row closes the ticket but the film keeps disagreeing: it must NOT
+    re-enter as actionable `review` (queue_review_once would refuse anyway) and must spend
+    none of a --limit batch."""
+    import movie_brain.application.repair as mod
+
+    stalled = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
+    nxt = _split(repo, today, "Refetch", "ttA", "ttB", 6)
+    c = {stalled: _contract(stalled, "ttJ", status="proposed"), nxt: _contract(nxt, "ttB")}
+    _run(repo, today, c, limit=1)                            # batch 1 queues the review
+    row = next(r for r in repo.open_reviews("tmdb") if r["reason"] == "key-disagreement")
+    repo.resolve_review(int(row["id"]), "dismissed by the human")
+
+    calls = []
+    monkeypatch.setattr(mod, "queue_review_once", lambda *a, **k: calls.append(a))
+    rep, lines = _run(repo, today, c, limit=1)               # batch 2 must move past the stalled film
+    assert (rep.review_open, rep.review) == (1, 0)
+    assert calls == []                                       # nothing queued for the resolved film
+    assert lines[0].startswith("[review-open]") and "standing decision" in lines[0]
+    assert repo.external_ids_for(nxt)["imdb"] == "ttB"       # the NEXT actionable film got the batch

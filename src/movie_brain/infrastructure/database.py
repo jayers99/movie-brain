@@ -181,7 +181,7 @@ def init_db(db_path: Path, *, apply: bool = False) -> None:
     Creation is not migration: a DB with no `schema_version` table (first run, tests, a
     scratch copy) bootstraps regardless. An existing DB behind the checked-in migrations
     raises `PendingMigrations` so no ordinary verb can advance the live schema as a side
-    effect of merely opening the repository (a T2 subagent did exactly that)."""
+    effect of merely opening the repository."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     try:

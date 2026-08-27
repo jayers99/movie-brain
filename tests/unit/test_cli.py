@@ -309,3 +309,16 @@ def test_migrate_dry_run_lists_pending_then_apply(config_dir, tmp_path, monkeypa
 def test_migrate_on_current_db_says_so(config_dir):
     r = runner.invoke(app, ["migrate"])
     assert r.exit_code == 0 and "up to date" in r.output
+
+
+def test_repair_verbs_still_exit_2_on_a_db_that_is_behind(config_dir, tmp_path, monkeypatch):
+    """`typer.Exit` subclasses RuntimeError: the migrate guard must not be swallowed by the
+    repair verbs' own `except RuntimeError` (which would print a bare "2" and exit 1)."""
+    from movie_brain.infrastructure.database import init_db
+
+    init_db(config_dir / "movie-brain.db")
+    _pretend_one_behind(tmp_path, monkeypatch)
+    for argv in (["repair", "disagreements"], ["repair", "editions"]):
+        r = runner.invoke(app, argv)
+        assert r.exit_code == 2, (argv, r.exit_code, r.output)
+        assert "movie-brain migrate --apply" in r.output, (argv, r.output)
