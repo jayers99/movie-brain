@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from datetime import date
+from pathlib import Path
 
 from movie_brain.application.availability import TMDB_AUTHORITY, record_tmdb_match
+from movie_brain.application.eval_log import EvalEntry, ratify
+from movie_brain.application.thumbprint import parse_review_detail
 from movie_brain.domain.matching import parse_apple_title
 from movie_brain.domain.models import Film, ReviewEntry
 from movie_brain.infrastructure.database import Repository
@@ -38,6 +42,11 @@ def resolve_review(
     dismiss: bool = False,
     client: TmdbClient | None = None,
     note: str | None = None,
+    pick: str | None = None,
+    tt: str | None = None,
+    none: bool = False,
+    eval_csv: Path | None = None,
+    warn: Callable[[str], None] = lambda _m: None,
 ) -> str:
     """Apply exactly one resolution to one open match_review row; returns a one-line outcome.
 
@@ -48,6 +57,13 @@ def resolve_review(
     creates + marks owned · every row accepts --dismiss. The row is marked resolved, which
     also suppresses the same anomaly from being re-queued by later runs.
 
+    The three thumbprint verdicts on a tmdb row — --pick A/B/C (a candidate off the resolver's
+    own review detail), --tt (any IMDb id, whether or not it was ranked), --none (verified
+    unkeyed) — key the film by IMDb id (plus the TMDB id when one is known) and ratify the
+    decision into the eval CSV, so a human verdict becomes permanent resolver ground truth.
+    `eval_csv=None` skips that append entirely (library callers that don't keep an eval log);
+    the CLI always passes a path.
+
     Imports metacritic/owned locally (not at module top) — those two modules import
     `suppress_resolved` from this one at their own top level, so a module-level import here
     would be circular depending on which module a caller happens to import first.
@@ -56,9 +72,13 @@ def resolve_review(
     from movie_brain.application.metacritic import create_from_staged
     from movie_brain.application.owned import AUTHORITY as APPLE_AUTHORITY
 
-    chosen = [x for x in (film_id is not None, tmdb_id is not None, create, dismiss) if x]
+    chosen = [
+        x
+        for x in (film_id is not None, tmdb_id is not None, create, dismiss, pick is not None, tt is not None, none)
+        if x
+    ]
     if len(chosen) != 1:
-        raise ValueError("choose exactly one of --film, --tmdb-id, --create, --dismiss")
+        raise ValueError("choose exactly one of --film, --tmdb-id, --create, --dismiss, --pick, --tt, --none")
     if film_id is not None:
         # --film targets an id chosen by a human, possibly stale by the time this runs
         # (merged away, tombstoned) — canonicalize to the ultimate survivor and refuse a
@@ -79,6 +99,67 @@ def resolve_review(
 
     if dismiss:
         outcome = "dismissed"
+    elif pick is not None or tt is not None or none:
+        if authority != TMDB_AUTHORITY or rid is None:
+            raise ValueError("--pick/--tt/--none apply to tmdb rows for a film")
+        parsed = parse_review_detail(str(row["detail"]) if row["detail"] else None)
+        chosen_tt: str
+        chosen_tmdb: int | None = None
+        if pick is not None:
+            if parsed is None:
+                raise ValueError(f"review {review_id} has no A/B/C candidates — use --tt or --none")
+            cand = next((c for c in parsed.candidates if c["letter"] == pick.upper()), None)
+            if cand is None:
+                raise ValueError(f"no candidate {pick!r} on review {review_id}")
+            chosen_tt, chosen_tmdb = str(cand["tt"]), cand.get("tmdb_id")
+        elif tt is not None:
+            chosen_tt = tt
+            chosen_tmdb = client.find_by_imdb(tt) if client is not None else None
+            if chosen_tmdb is None:
+                warn(f"tmdb id not resolved for {tt} (no client or no TMDB record); imdb only")
+        else:
+            chosen_tt = "NONE"
+        if chosen_tt != "NONE":
+            try:
+                repo.set_external_id(rid, "imdb", chosen_tt, today)
+            except sqlite3.IntegrityError as exc:
+                holder = repo.film_id_for_external("imdb", chosen_tt)
+                raise ValueError(f"{chosen_tt} is already held by film {holder}") from exc
+            if chosen_tmdb is not None:
+                target = repo.tmdb_target(rid)
+                if target is None:
+                    raise ValueError(f"film {rid} not found")
+                year = client.movie_year(chosen_tmdb) if client is not None else None
+                result = record_tmdb_match(repo, target, chosen_tmdb, year, today, lambda _m: None)
+                if result == "id-conflict":
+                    raise ValueError(f"tmdb id {chosen_tmdb} is already held by another film — merge instead")
+            outcome = f"keyed imdb {chosen_tt} tmdb {chosen_tmdb or '-'}"
+        else:
+            outcome = "verified unkeyed"
+        if eval_csv is not None:
+            q = parsed.query if parsed is not None and parsed.query else None
+            view = repo.get_view(rid, today)
+            claims = repo.claims_for_film(rid)
+            authorities = {c.authority for c in claims}
+            source = (
+                str(q["source"])
+                if q
+                else next(
+                    (a for a in ("criterion", "metacritic") if a in authorities),
+                    "apple" if "apple-tv" in authorities else "unknown",
+                )
+            )
+            verb = f"--pick {pick}" if pick else ("--tt" if tt else "--none")
+            entry = EvalEntry(
+                rid,
+                source,
+                str(q["title"]) if q else (view.title if view else ""),
+                int(q["year"]) if q and q["year"] else (view.year if view else None),
+                chosen_tt,
+                "" if chosen_tmdb is None else str(chosen_tmdb),
+                f"review {review_id} {verb}",
+            )
+            ratify(eval_csv, entry)
     elif authority == TMDB_AUTHORITY:
         if tmdb_id is not None and rid is not None:
             target = repo.tmdb_target(rid)
