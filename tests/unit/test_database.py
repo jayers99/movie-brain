@@ -43,7 +43,7 @@ def _v2_db_with_criterion_data(p):
 def test_migration_003_assigns_guids_and_preserves_data(tmp_path):
     p = tmp_path / "old.db"
     _v2_db_with_criterion_data(p)
-    init_db(p)
+    init_db(p, apply=True)
     conn = sqlite3.connect(p)
     conn.row_factory = sqlite3.Row
     guids = [r["guid"] for r in conn.execute("SELECT guid FROM films ORDER BY id")]
@@ -65,7 +65,7 @@ def test_migration_003_assigns_guids_and_preserves_data(tmp_path):
 def test_migration_003_backfills_criterion_external_ids(tmp_path):
     p = tmp_path / "old.db"
     _v2_db_with_criterion_data(p)
-    init_db(p)
+    init_db(p, apply=True)
     conn = sqlite3.connect(p)
     ext = dict(conn.execute("SELECT film_id, value FROM external_ids WHERE authority = 'criterion'"))
     assert ext == {1: "https://c/trio", 2: "https://c/quartet"}
@@ -150,7 +150,7 @@ def test_migration_backfills_metacritic_from_stored_payloads(tmp_path):
         )
     conn.commit()
     conn.close()
-    init_db(p)
+    init_db(p, apply=True)
     conn = sqlite3.connect(p)
     assert dict(conn.execute("SELECT film_id, metacritic FROM omdb")) == {1: 74, 2: None, 3: None}
     conn.close()
@@ -377,7 +377,7 @@ def test_init_db_backs_up_before_applying_pending_migrations(tmp_path):
     conn.execute("INSERT INTO films (id, title, year, key) VALUES (1, 'Trio', 1950, 'trio (1950)')")
     conn.commit()
     conn.close()
-    init_db(p)  # later migrations are pending → snapshot the v1 state first
+    init_db(p, apply=True)  # later migrations are pending → snapshot the v1 state first
     backups = list((tmp_path / "backups").glob("x-v1-*.db"))
     assert len(backups) == 1
     b = sqlite3.connect(backups[0])
@@ -407,7 +407,7 @@ def test_init_db_never_overwrites_an_existing_backup_snapshot(tmp_path):
     sentinel = b"not a real sqlite file - pre-existing snapshot must survive byte-identical"
     dest_path.write_bytes(sentinel)
 
-    init_db(p)  # a same-day re-run must never clobber the existing snapshot
+    init_db(p, apply=True)  # a same-day re-run must never clobber the existing snapshot
 
     assert dest_path.read_bytes() == sentinel
 
@@ -1348,3 +1348,52 @@ def test_key_work_preserves_first_seen_on_repeat_call(repo):
         "SELECT authority, first_seen FROM external_ids WHERE film_id = ? ORDER BY authority", (fid,)
     ).fetchall()
     assert dict(rows) == {"imdb": d1.isoformat(), "tmdb": d1.isoformat()}
+
+
+def _pretend_one_behind(tmp_path, monkeypatch):
+    """Point MIGRATIONS_DIR at a copy with one extra migration so the DB is 'behind'."""
+    import shutil
+
+    from movie_brain.infrastructure import database as dbmod
+
+    src = dbmod.MIGRATIONS_DIR
+    copy = tmp_path / "migrations"
+    shutil.copytree(src, copy)
+    n = max(int(p.name.split("_")[0]) for p in copy.glob("*.sql")) + 1
+    (copy / f"{n:03d}_t3_probe.sql").write_text(
+        f"CREATE TABLE t3_probe (x INTEGER); INSERT INTO schema_version (version) VALUES ({n});"
+    )
+    monkeypatch.setattr(dbmod, "MIGRATIONS_DIR", copy)
+    return n
+
+
+def test_fresh_db_bootstraps_without_apply(tmp_path):
+    p = tmp_path / "fresh.db"
+    init_db(p)  # no flag: creation is allowed
+    assert Repository(p).summary("criterion")["films"] == 0
+
+
+def test_existing_db_with_pending_migration_raises(tmp_path, monkeypatch):
+    from movie_brain.infrastructure.database import PendingMigrations, pending_migrations
+
+    p = tmp_path / "live.db"
+    init_db(p)
+    n = _pretend_one_behind(tmp_path, monkeypatch)
+    assert pending_migrations(p) == [f"{n:03d}_t3_probe.sql"]
+    with pytest.raises(PendingMigrations) as exc:
+        Repository(p)
+    assert exc.value.pending == [f"{n:03d}_t3_probe.sql"]
+    # nothing was written
+    with sqlite3.connect(p) as c:
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == n - 1
+
+
+def test_apply_migrates_and_backs_up(tmp_path, monkeypatch):
+    p = tmp_path / "live.db"
+    init_db(p)
+    n = _pretend_one_behind(tmp_path, monkeypatch)
+    init_db(p, apply=True)
+    with sqlite3.connect(p) as c:
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == n
+    assert list((tmp_path / "backups").glob(f"live-v{n - 1}-*.db"))
+    assert Repository(p, migrate=True) is not None  # idempotent
