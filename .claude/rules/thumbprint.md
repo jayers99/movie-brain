@@ -46,9 +46,15 @@ paths:
   at 1979) is therefore listed and folded through the ordinary twin / no-twin paths, with
   `edition_year` NULL — only a year strictly LATER than the work's is an edition year. Both
   outcomes are self-idempotent: a twin loser ends disposed, a no-twin ends retitled to a
-  marker-free base. A survivor that is itself a contract row is folded BY the twin group naming
-  it and never gets a second group of its own (a twin always sits at the work year, so its own
-  group could only be the re-key the twin path already performs). A twin is exactly one
+  marker-free base. A post-pass (`_dedup_survivor_groups`) then reconciles a survivor that is
+  itself a contract row: its NON-twin group (`no-twin`, `conflict` and `csv-mismatch` alike) is
+  DROPPED when the twin group naming it will do that very work — same `(work_title, work_year,
+  tt)` and a survivor title that still parses with editions, which is the re-key the twin path
+  performs; any other group stays listed, because it is a different fold. Two same-year editions
+  with no keyed work are each other's fellow-contract twin — a MUTUAL pair whose second merge
+  would hit an already-dispositioned film and raise after the first merge committed — so the pair
+  is broken deterministically toward the LOWER id: the higher id's group survives and merges into
+  the lower, which the twin path re-keys as the work. A twin is exactly one
   same-norm-title/same-work-year candidate agreeing on tmdb id. The fellow-contract fallback (an
   unkeyed candidate that is itself a contract row sharing the same tt) applies ONLY when NO
   candidate holds the tmdb id — once one does, an unkeyed fellow edition beside the real work is
