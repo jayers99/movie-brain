@@ -110,7 +110,11 @@ paths:
   ever saved back to the fixture — `CandidateCache(..., path=None)`); `conflict` (no D row,
   disposed, expected id held by another film, `record_tmdb_match` returned anything but
   `matched`/`adopted`, or a verified row with no `expected_tt`) is logged and skipped, never
-  written. Holder checks (`external_id_holders`, over EVERY film including disposed) run BEFORE
+  written. Two verdicts mark work already done and are computed FIRST: `pending` (keyed to
+  `expected_tt` with an OMDb refetch queued) and `review-open` (its `key-disagreement` review is
+  already open). Both are listed, never re-applied, and — like `conflict` — are exempt from
+  `--limit`, which is a batch size over the ACTIONABLE groups only, so repeated batches advance
+  through the worklist instead of re-hitting its head. Holder checks (`external_id_holders`, over EVERY film including disposed) run BEFORE
   any write on every verdict, so a film is either fully repaired or untouched — except a
   post-`record_tmdb_match` failure, which is the one case that logs `[partial]` and raises
   (same loud-stop rule as `repair editions`). `resolve_review` now refreshes a found-but-wrong

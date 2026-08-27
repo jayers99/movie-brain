@@ -370,10 +370,13 @@ def repair_editions_cmd(
 def repair_disagreements_cmd(
     apply: Annotated[bool, typer.Option("--apply", help="Act on confirmed groups (default: dry-run).")] = False,
     yes: Annotated[bool, typer.Option("--yes", help="With --apply: confirm every group without prompting.")] = False,
-    limit: Annotated[int | None, typer.Option("--limit", help="Only the first N groups (batch size).")] = None,
+    limit: Annotated[
+        int | None, typer.Option("--limit", help="Batch size over the actionable groups only.")
+    ] = None,
 ) -> None:
     """Repair films whose OMDb imdbID ≠ TMDB imdb_id from eval group D (verified rows applied,
-    proposed rows → A/B/C review)."""
+    proposed rows → A/B/C review). Already-repaired films list as pending / review-open and
+    spend none of --limit, so repeated batches advance."""
     from movie_brain.infrastructure.omdb import OmdbClient
     from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
 
@@ -402,8 +405,8 @@ def repair_disagreements_cmd(
         raise typer.Exit(1) from exc
     console.print(
         f"groups: {report.groups} · refetch: {report.refetch} · relink: {report.relink} · adopt: {report.adopt} · "
-        f"review: {report.review} · conflict: {report.conflict} · applied: {report.applied} · "
-        f"declined: {report.declined}"
+        f"review: {report.review} · pending: {report.pending} · review-open: {report.review_open} · "
+        f"conflict: {report.conflict} · applied: {report.applied} · declined: {report.declined}"
     )
 
 

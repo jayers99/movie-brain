@@ -223,6 +223,7 @@ def test_repair_editions_partial_merge_exits_1(monkeypatch):
 def test_repair_disagreements_dry_run_on_empty_db(config_dir):
     r = runner.invoke(app, ["repair", "disagreements"])
     assert r.exit_code == 0 and "groups: 0" in r.output
+    assert "pending: 0" in r.output and "review-open: 0" in r.output
 
 
 def test_repair_disagreements_partial_exits_1(monkeypatch):

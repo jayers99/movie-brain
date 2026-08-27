@@ -143,7 +143,9 @@ def test_refetch_is_idempotent(repo, today):
     c = {fid: _contract(fid, "ttB")}
     _run(repo, today, c)
     rep, _ = _run(repo, today, c)
-    assert (rep.refetch, rep.applied) == (1, 1)
+    # The second run re-lists the film as pending (the OMDb payload only changes on the next
+    # sync) and writes nothing more.
+    assert (rep.refetch, rep.pending, rep.applied) == (0, 1, 0)
     assert repo.external_ids_for(fid)["imdb"] == "ttB"
 
 
@@ -227,8 +229,12 @@ def test_conflict_is_never_touched_and_limit_trims(repo, today):
     rep, _ = _run(repo, today, {a: _contract(a, "ttB")})
     assert (rep.groups, rep.conflict, rep.applied) == (2, 1, 1)
     assert "imdb" not in repo.external_ids_for(b)
-    limited, lines = _run(repo, today, {a: _contract(a, "ttB")}, limit=1)
-    assert limited.groups == 1 and len(lines) >= 1
+    c = _split(repo, today, "Second", "ttC", "ttD", 9)
+    d = _split(repo, today, "Third", "ttE", "ttF", 10)
+    contract = {a: _contract(a, "ttB"), c: _contract(c, "ttD"), d: _contract(d, "ttF")}
+    limited, lines = _run(repo, today, contract, apply=False, limit=1)
+    # one actionable group past the two non-actionable ones (conflict + the applied pending)
+    assert (limited.groups, limited.refetch) == (3, 1) and len(lines) == 3
 
 
 def test_declined_groups_are_counted_not_applied(repo, today):
@@ -351,3 +357,56 @@ def test_review_detail_carries_the_live_resolver_ranking(repo, today):
     assert parsed.query == {"title": "T", "year": 2000, "source": "criterion", "director": None, "runtime": None}
     assert parsed.reason != "no candidates"  # the live resolver's own reason, not the CSV's note
     assert row["value"] == "ttJ"  # the proposed tt lives in `value`, never in the detail
+
+
+# --- fix round 2: non-actionable verdicts so --limit batches advance -------------------------
+
+
+def test_applied_refetch_becomes_pending_and_is_never_re_applied(repo, today):
+    fid = _split(repo, today, "Refetch", "ttA", "ttB", 1)
+    c = {fid: _contract(fid, "ttB")}
+    _run(repo, today, c)
+    rep, lines = _run(repo, today, c, apply=False)
+    assert (rep.pending, rep.refetch, rep.applied) == (1, 0, 0)
+    assert lines[0].startswith("[pending]") and "next sync" in lines[0]
+    rep2, lines2 = _run(repo, today, c)
+    assert (rep2.pending, rep2.applied) == (1, 0)
+    assert lines2 == lines                                   # listed only, nothing written
+    assert repo.external_ids_for(fid)["imdb"] == "ttB"
+
+
+def test_open_review_makes_the_film_review_open_and_never_re_queues(repo, today, monkeypatch):
+    import movie_brain.application.repair as mod
+
+    fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
+    c = {fid: _contract(fid, "ttJ", status="proposed")}
+    _run(repo, today, c)
+    calls = []
+    real = mod.queue_review_once
+    monkeypatch.setattr(mod, "queue_review_once", lambda *a, **k: calls.append(a) or real(*a, **k))
+    rep, lines = _run(repo, today, c)
+    assert (rep.review_open, rep.review, rep.applied) == (1, 0, 0)
+    assert calls == [] and lines[0].startswith("[review-open]")
+    assert len([r for r in repo.open_reviews("tmdb") if r["reason"] == "key-disagreement"]) == 1
+
+
+def test_limit_batches_advance_through_the_actionable_groups(repo, today):
+    ids = [_split(repo, today, f"R{i}", f"ttA{i}", f"ttB{i}", 30 + i) for i in range(3)]
+    c = {fid: _contract(fid, f"ttB{i}") for i, fid in enumerate(ids)}
+    keyed = []
+    for _ in range(3):
+        _run(repo, today, c, limit=1)
+        keyed.append({fid for fid in ids if "imdb" in repo.external_ids_for(fid)})
+    assert [len(k) for k in keyed] == [1, 2, 3]              # one NEW film per batch
+    rep, _ = _run(repo, today, c, apply=False)
+    assert (rep.pending, rep.groups, rep.applied) == (3, 3, 0)
+
+
+def test_limit_never_hides_the_non_actionable_groups(repo, today):
+    orphan = _split(repo, today, "Orphan", "ttM", "ttN", 7)
+    a = _split(repo, today, "A", "ttA", "ttB", 8)
+    b = _split(repo, today, "B", "ttC", "ttD", 9)
+    c = {a: _contract(a, "ttB"), b: _contract(b, "ttD")}
+    rep, lines = _run(repo, today, c, apply=False, limit=1)
+    assert (rep.groups, rep.conflict, rep.refetch) == (2, 1, 1)
+    assert [ln.split()[1] for ln in lines] == [f"#{orphan}", f"#{a}"]
