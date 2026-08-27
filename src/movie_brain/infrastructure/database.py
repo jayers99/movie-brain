@@ -85,6 +85,19 @@ class EditionFilm(NamedTuple):
     imdb_id: str | None
 
 
+class DisagreementFilm(NamedTuple):
+    """One undisposed film whose found OMDb record and TMDB side name different IMDb ids."""
+
+    id: int
+    title: str
+    year: int | None
+    omdb_tt: str  # OMDb payload imdbID (found=1 only)
+    tmdb_tt: str  # COALESCE(external imdb, tmdb_facts.imdb_id)
+    tmdb_id: str | None  # external tmdb
+    imdb_ext: str | None  # external imdb (raw, may be None)
+    criterion: bool  # has any criterion listing
+
+
 class TwinFilm(NamedTuple):
     """One undisposed film's twin-audit evidence (repair twins)."""
 
@@ -128,15 +141,54 @@ _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = 
 KEY_AUTHORITIES: frozenset[str] = frozenset({"tmdb", "imdb"})
 
 
-def init_db(db_path: Path) -> None:
+class PendingMigrations(RuntimeError):
+    """An existing DB is behind the checked-in migrations; only `migrate --apply` may advance it."""
+
+    def __init__(self, pending: list[str]) -> None:
+        self.pending = pending
+        super().__init__("pending migrations: " + ", ".join(pending) + " — run 'movie-brain migrate --apply'")
+
+
+def _applied_versions(conn: sqlite3.Connection) -> set[int] | None:
+    """Applied schema versions, or None when the DB has never been initialised."""
+    has_versions = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
+    ).fetchone()
+    if not has_versions:
+        return None
+    return {int(r[0]) for r in conn.execute("SELECT version FROM schema_version")}
+
+
+def _pending_files(applied: set[int]) -> list[Path]:
+    return [m for m in sorted(MIGRATIONS_DIR.glob("*.sql")) if int(m.name.split("_")[0]) not in applied]
+
+
+def pending_migrations(db_path: Path) -> list[str]:
+    """Migration file names an existing DB still lacks (empty for a fresh or current DB)."""
+    if not db_path.exists():
+        return []
+    conn = sqlite3.connect(db_path)
+    try:
+        applied = _applied_versions(conn)
+        return [] if applied is None else [m.name for m in _pending_files(applied)]
+    finally:
+        conn.close()
+
+
+def init_db(db_path: Path, *, apply: bool = False) -> None:
+    """Create a fresh DB in full, or bring an existing one up to date ONLY when `apply` is set.
+
+    Creation is not migration: a DB with no `schema_version` table (first run, tests, a
+    scratch copy) bootstraps regardless. An existing DB behind the checked-in migrations
+    raises `PendingMigrations` so no ordinary verb can advance the live schema as a side
+    effect of merely opening the repository."""
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     try:
-        has_versions = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_version'"
-        ).fetchone()
-        applied = {r[0] for r in conn.execute("SELECT version FROM schema_version")} if has_versions else set()
-        pending = [m for m in sorted(MIGRATIONS_DIR.glob("*.sql")) if int(m.name.split("_")[0]) not in applied]
+        applied = _applied_versions(conn)
+        pending = _pending_files(applied or set())
+        if applied is not None and pending and not apply:
+            raise PendingMigrations([m.name for m in pending])
         if pending and applied:
             _backup_pre_migration(conn, db_path, max(applied))
         for mig in pending:
@@ -314,9 +366,9 @@ def _row_to_view(
 
 
 class Repository:
-    def __init__(self, db_path: Path) -> None:
+    def __init__(self, db_path: Path, *, migrate: bool = False) -> None:
         self.db_path = db_path
-        init_db(db_path)
+        init_db(db_path, apply=migrate)
 
     @contextmanager
     def _conn(self) -> Iterator[sqlite3.Connection]:
@@ -1352,6 +1404,48 @@ class Repository:
                 EditionFilm(int(r["id"]), str(r["title"]), r["year"], r["title_norm"], r["t_id"], r["i_id"])
                 for r in rows
             ]
+
+    def key_disagreements(self) -> list[DisagreementFilm]:
+        """Undisposed films whose found OMDb record names a different IMDb id than their TMDB
+        side (external `imdb`, else `tmdb_facts.imdb_id`) — memo §7 step 3's worklist."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, json_extract(o.payload, '$.imdbID') AS o_tt, "
+                "COALESCE((SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb'), "
+                "         (SELECT imdb_id FROM tmdb_facts t WHERE t.film_id = f.id)) AS t_tt, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'tmdb') AS t_id, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb') AS i_ext, "
+                "EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') AS crit "
+                "FROM films f JOIN omdb o ON o.film_id = f.id AND o.found = 1 "
+                f"WHERE {_NOT_DISPOSED} AND json_extract(o.payload, '$.imdbID') IS NOT NULL "
+                "AND COALESCE((SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb'), "
+                "             (SELECT imdb_id FROM tmdb_facts t WHERE t.film_id = f.id)) IS NOT NULL "
+                "AND json_extract(o.payload, '$.imdbID') != "
+                "    COALESCE((SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb'), "
+                "             (SELECT imdb_id FROM tmdb_facts t WHERE t.film_id = f.id)) "
+                "ORDER BY f.id"
+            ).fetchall()
+            return [
+                DisagreementFilm(
+                    int(r["id"]), str(r["title"]), r["year"], str(r["o_tt"]), str(r["t_tt"]), r["t_id"], r["i_ext"],
+                    bool(r["crit"]),
+                )
+                for r in rows
+            ]
+
+    def omdb_imdb_id(self, film_id: int) -> str | None:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT json_extract(payload, '$.imdbID') AS tt FROM omdb WHERE film_id = ? AND found = 1",
+                (film_id,),
+            ).fetchone()
+            return None if row is None or row["tt"] is None else str(row["tt"])
+
+    def omdb_needs_refresh(self, film_id: int) -> bool:
+        """True while this film's OMDb row is queued for refetch (the next sync clears it)."""
+        with self._conn() as c:
+            row = c.execute("SELECT needs_refresh FROM omdb WHERE film_id = ?", (film_id,)).fetchone()
+            return bool(row is not None and row["needs_refresh"])
 
     def set_claim_edition_year(self, claim_id: int, year: int | None) -> None:
         with self._conn() as c:

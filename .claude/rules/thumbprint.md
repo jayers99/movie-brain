@@ -94,3 +94,40 @@ paths:
   `scripts/thumbprint_benchmark.py --refresh` after a ratification batch so the fixture catches
   up — until then, cache-miss rows on the freshly-ratified fixture score as `review`, never a
   gate failure.
+- `movie-brain repair disagreements [--apply] [--yes] [--limit N]` repairs films whose OMDb
+  `imdbID` ≠ TMDB `imdb_id`: the worklist is `Repository.key_disagreements()` ∩ eval group
+  `D-disagree` (`load_disagreement_contract` keeps EVERY D row keyed by film id — `verified`
+  rows are the contract, `proposed`/verified-`NONE` rows render as review, never applied).
+  Verdicts: `refetch` (expected tt = TMDB's side → `set_external_id(imdb)` + `mark_omdb_refresh`,
+  so the disagreement count drops after the NEXT `sync`, not after `--apply`); `relink`
+  (expected tt = OMDb's side → `find_by_imdb` then `set_external_id` + `record_tmdb_match`, or
+  `clear_tmdb_link` + `set_external_id` when TMDB has no record); `adopt` (matches neither, but
+  `expected_tmdb` is given → `set_external_id` + `record_tmdb_match` + `mark_omdb_refresh`);
+  `review` (`proposed`, or verified `NONE`) queues a durable `key-disagreement` `match_review`
+  row (authority `tmdb`, `queue_review_once`-idempotent) — `value` is the CSV's proposed tt (or
+  `NONE`), `detail` = `review_detail(verdict, query)` where `verdict = resolve(query, candidates)`
+  runs the LIVE resolver (fixture hits free, misses hit the live TMDB/OMDb clients, nothing is
+  ever saved back to the fixture — `CandidateCache(..., path=None)`); `conflict` (no D row,
+  expected id held by another film, `record_tmdb_match` returned anything but
+  `matched`/`adopted`, or a verified row with no `expected_tt`) is logged and skipped, never
+  written. Two verdicts mark work already done and are computed FIRST: `pending` (keyed to
+  `expected_tt` with an OMDb refetch queued) and `review-open` (its `key-disagreement` review is
+  already open — or already RESOLVED: a resolution is a standing decision, so the film is not
+  work again even though it keeps disagreeing until the next `sync`). Both are listed, never re-applied, and — like `conflict` — are exempt from
+  `--limit`, which is a batch size over the ACTIONABLE groups only, so repeated batches advance
+  through the worklist instead of re-hitting its head. Holder checks (`external_id_holders`, over EVERY film including disposed) run BEFORE
+  any write on every verdict, so a film is either fully repaired or untouched — except a
+  post-`record_tmdb_match` failure, which is the one case that logs `[partial]` and raises
+  (same loud-stop rule as `repair editions`). `resolve_review` now refreshes a found-but-wrong
+  OMDb stub too: after `--pick`/`--tt` keys a film whose stored OMDb `imdbID` ≠ the chosen tt,
+  it calls `mark_omdb_refresh`; `--none` on a `key-disagreement` row leaves ids alone.
+- Article-insensitive title level (`domain/thumbprint.py`): `article_norm` folds one leading
+  English article (`the|a|an`, ASCII, after `norm_title`-style folding — `La Strada` stays
+  distinct from `Strada` on purpose) and never returns empty. `title_level(..., article_ok=)`
+  scores an article-folded match as level 3 ONLY when no candidate matches article-exactly for
+  that query (`article_ok = not any(title_level(q, c) == 3 for c in candidates)`), so an
+  article-exact hit always outranks an article-only one; no new reason strings — it's a
+  per-candidate signal only. `infrastructure/thumbprint_fetch.py`'s `plausible()` is widened to
+  fetch an article-folded exact title hit too. Adopted behind the gate (n=484/0/94.8% unchanged
+  with the rule on); live measurement of the 32 open article `no-match` films (rule on vs. off)
+  is evaluated but NOT yet adopted — that's a separate owner decision on the numbers.

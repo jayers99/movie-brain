@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import re
+import sqlite3
 from datetime import date
 
 import pytest
@@ -13,7 +14,7 @@ from movie_brain.application.availability import TMDB_AUTHORITY
 from movie_brain.application.metacritic import match_archive
 from movie_brain.application.owned import import_owned
 from movie_brain.application.thumbprint import review_detail
-from movie_brain.domain.models import Film, McTitle, OwnedTitle, ReviewEntry
+from movie_brain.domain.models import Film, McTitle, OmdbRating, OwnedTitle, ReviewEntry
 from movie_brain.domain.thumbprint import Candidate, Scored, Verdict, make_query
 from movie_brain.infrastructure.tmdb import TMDB_API, TmdbClient
 
@@ -226,6 +227,12 @@ def open_resolver_row(ctx, spec, tta, ida, ttb, idb):
     ctx["review_id"] = ctx["repo"].open_reviews("tmdb")[-1]["id"]
 
 
+@given(parsers.parse('"{spec}" has a found OMDb payload with imdb "{tt}"'))
+def found_omdb_payload(ctx, spec, tt):
+    fid = _id(ctx["repo"], spec)
+    ctx["repo"].upsert_omdb(fid, OmdbRating(7.0, 90, True, None, f'{{"imdbID": "{tt}"}}', 61), TODAY)
+
+
 @given(parsers.parse('TMDB finds "{tt}" as id {tid:d} released in {year:d}'))
 def tmdb_find(ctx, tt, tid, year):
     ctx["rs"].add(responses.GET, f"{TMDB_API}/find/{tt}", json={"movie_results": [{"id": tid}]})
@@ -312,6 +319,26 @@ def open_yearless_resolver_row(ctx, spec, tt, tid):
     detail = review_detail(v, make_query(t, None, "criterion"))
     ctx["repo"].append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail=detail)], TODAY)
     ctx["review_id"] = ctx["repo"].open_reviews("tmdb")[-1]["id"]
+
+
+def _omdb_needs_refresh(ctx, film_id: int) -> bool:
+    conn = sqlite3.connect(ctx["repo"].db_path)
+    try:
+        row = conn.execute("SELECT needs_refresh FROM omdb WHERE film_id = ?", (film_id,)).fetchone()
+    finally:
+        conn.close()
+    assert row is not None, f"no omdb row for film {film_id}"
+    return bool(row[0])
+
+
+@then(parsers.parse('"{spec}" needs an OMDb refresh'))
+def needs_refresh_true(ctx, spec):
+    assert _omdb_needs_refresh(ctx, _id(ctx["repo"], spec))
+
+
+@then(parsers.parse('"{spec}" does not need an OMDb refresh'))
+def needs_refresh_false(ctx, spec):
+    assert not _omdb_needs_refresh(ctx, _id(ctx["repo"], spec))
 
 
 @then(parsers.parse('the eval log row for "{spec}" has no ingested year'))

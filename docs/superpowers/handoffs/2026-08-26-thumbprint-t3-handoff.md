@@ -1,3 +1,29 @@
+## Status (2026-08-26, T3 build)
+
+Tasks 1–8 landed on `feature/T3-thumbprint-disagreements` (not merged): `migrate [--apply]` guard
+(`init_db(apply=)`/`PendingMigrations`, every verb exits 2 when behind); `repair disagreements
+[--apply] [--yes] [--limit N]` (group-D contract, seven verdicts —
+`refetch`/`relink`/`adopt`/`review`/`pending`/`review-open`/`conflict` — and a durable
+`key-disagreement` review); `resolve_review` refresh-on-mismatch fix; article-insensitive
+`title_level`/`article_norm` evaluated and adopted BEHIND the gate. Gate:
+`scripts/thumbprint_benchmark.py --assert` → n=484 / 0 wrong / 94.8% (unchanged with the rule on).
+
+**Scratch rehearsal DONE (2026-08-26):** dry run = 94 groups (28 refetch · 17 relink · 3 adopt ·
+45 review · 1 conflict — #3940 *Birdman*, its identity held by #3552, a merge candidate);
+`--apply` + a simulated next `sync` = 0 `external id conflict for`, worklist 94 → 45,
+`audit_flags` 996 → 929. Article rule measured on the 31 live article `no-match` films: identical
+on and off (22 match / 9 review) — keep-or-revert is the owner's decision.
+
+**LIVE applied (2026-08-27, snapshot `movie-brain.db.bak-pre-t3`):** `--apply --yes --limit 20` ×5 →
+93 applied (28 refetch · 17 relink · 3 adopt · 45 `key-disagreement` rows); imdb ids 570 → 618; one
+`sync` → 31 OMDb records refetched by id, 0 `external id conflict for`; worklist 94 → 46 = 45
+`review-open` + #3940 *Birdman* (`conflict`: tmdb 194662 held by #3552 → MERGE candidate, owner call).
+**Not done:** draining the 45 rows (`review list --reason key-disagreement`, then `review resolve ID
+--pick A|B|C | --tt X | --none` — each ratifies the CSV), `thumbprint_benchmark.py --refresh` after
+that drain, the #3940/#3552 merge, the article-rule keep/revert, and the merge to main.
+
+---
+
 # Thumbprint T3 handoff — the 94 OMDb/TMDB key disagreements (memo step 3)
 
 **Written:** 2026-08-26, end of the T2 session. **For:** a fresh session. **Repo:** `main` @ `d74a31b`

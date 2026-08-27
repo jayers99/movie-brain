@@ -20,6 +20,7 @@ uv run movie-brain dashboard [--port 5556]
 uv run movie-brain import-legacy [--from DIR]        # one-shot criterion-ratings import
 uv run movie-brain export csv PATH
 uv run movie-brain status
+uv run movie-brain migrate [--apply]                  # the ONLY path that advances an existing DB's schema; dry run lists pending, --apply backs up + applies; fresh DBs bootstrap on open
 uv run movie-brain rematch                            # one-shot repair: rematch TMDB misses, reconcile non-Criterion years (needs TMDB token; idempotent)
 
 uv run movie-brain repair dupes [--apply] [--yes]     # audit norm-title + id-conflict dup groups; --apply merges TWIN groups only (--yes skips the per-group prompt)
@@ -31,6 +32,7 @@ uv run movie-brain review revisits                    # films the user flagged "
 
 uv run movie-brain repair twins [--apply] [--yes] [--limit N]  # retire raw `Title (YYYY)` films into their same-year twin (contract-checked); --limit = batch size
 uv run movie-brain repair editions [--apply] [--yes] [--limit N]  # fold `Title (edition)` films into their same-year work (contract-checked); --limit = batch size
+uv run movie-brain repair disagreements [--apply] [--yes] [--limit N]  # repair films whose OMDb imdbID ≠ TMDB imdb_id (eval group D): verified rows applied, proposed rows → A/B/C review; already-repaired films list as pending/review-open and --limit batches only the actionable ones
 uv run movie-brain thumbprint backfill [--apply]      # copy owned/criterion/metacritic evidence into `claim` rows (pure copy, idempotent)
 uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
 uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)
@@ -132,14 +134,14 @@ Path-scoped contracts in `.claude/rules/`: `matching.md` (the one evidence-score
   it, and a filter chip surfaces it. It is cleared automatically when the film's review is
   resolved, when `repair years --apply` fixes the year, when the film is merged away (loser), or
   when it is tombstoned. `review revisits` prints the flagged worklist.
-- Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it.
+- Schema change → new `migrations/NNN_*.sql` that also inserts its `schema_version` row; never edit an applied migration. Wrap risky multi-statement migrations in BEGIN/COMMIT (executescript is not atomic); pre-migration backups are the last-resort net, not a license to skip it. No verb applies pending migrations implicitly: `movie-brain migrate --apply` is the one path that advances an existing DB, and `Repository(path)` raises `PendingMigrations` (CLI exits 2) when the DB is behind — a fresh DB with no `schema_version` table still bootstraps on open, since that's creation, not migration.
 - Tests mirror the layers: `tests/unit` (domain + infrastructure), `tests/features` + `tests/step_defs` (pytest-bdd application scenarios, HTTP mocked with `responses`), `tests/web` (Flask client API tests + Playwright against a seeded live server).
 ## Data
 
 DB: `~/.config/movie-brain/movie-brain.db` (`MOVIE_BRAIN_CONFIG_DIR` overrides the directory). OMDb key: `OMDB_API_KEY` or `<config_dir>/omdb-api-key.txt`. TMDB token: `MOVIE_BRAIN_TMDB_TOKEN` or `<config_dir>/tmdb-read-token.txt`. Sync log: `<config_dir>/sync.log`. Daily 3 AM launchd job: `scripts/install-launch-agent.sh`.
 
-Pre-migration backups land in `<config_dir>/backups/` automatically whenever `init_db` is
-about to apply a new migration — each file is the rollback point for one schema change.
+Pre-migration backups land in `<config_dir>/backups/` automatically whenever `migrate --apply`
+applies one — each file is the rollback point for one schema change.
 
 Metacritic archive: `<config_dir>/metacritic/pages/page-NNNN.html` + `fetch-log.jsonl`.
 

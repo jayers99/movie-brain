@@ -31,6 +31,12 @@ def ratify(csv_path: Path, entry: EvalEntry) -> str:
     if csv_path.exists():
         with csv_path.open(encoding="utf-8", newline="") as f:
             rows = list(csv.DictReader(f))
+    for r in rows:
+        if r["film_id"] == str(entry.film_id) and r["source"] == entry.source and r["status"] == "verified" \
+                and r["expected_tt"] == entry.expected_tt:
+            # The same decision is already on record: a second F-human row would only make the
+            # benchmark score this film twice. Nothing is rewritten.
+            return "already ratified"
     outcome = "appended"
     for r in rows:
         if r["film_id"] == str(entry.film_id) and r["source"] == entry.source and r["status"] == "proposed":
