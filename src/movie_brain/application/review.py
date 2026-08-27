@@ -96,6 +96,7 @@ def resolve_review(
     raw_film_id = row["film_id"]
     rid = int(raw_film_id) if isinstance(raw_film_id, int) else None
     value = None if row["value"] is None else str(row["value"])
+    eval_entry: EvalEntry | None = None
 
     if dismiss:
         outcome = "dismissed"
@@ -105,13 +106,14 @@ def resolve_review(
         parsed = parse_review_detail(str(row["detail"]) if row["detail"] else None)
         chosen_tt: str
         chosen_tmdb: int | None = None
+        chosen_year: int | None = None  # --pick already has the candidate's year; don't re-ask TMDB
         if pick is not None:
             if parsed is None:
                 raise ValueError(f"review {review_id} has no A/B/C candidates — use --tt or --none")
             cand = next((c for c in parsed.candidates if c["letter"] == pick.upper()), None)
             if cand is None:
                 raise ValueError(f"no candidate {pick!r} on review {review_id}")
-            chosen_tt, chosen_tmdb = str(cand["tt"]), cand.get("tmdb_id")
+            chosen_tt, chosen_tmdb, chosen_year = str(cand["tt"]), cand.get("tmdb_id"), cand.get("year")
         elif tt is not None:
             chosen_tt = tt
             chosen_tmdb = client.find_by_imdb(tt) if client is not None else None
@@ -129,7 +131,10 @@ def resolve_review(
                 target = repo.tmdb_target(rid)
                 if target is None:
                     raise ValueError(f"film {rid} not found")
-                year = client.movie_year(chosen_tmdb) if client is not None else None
+                if pick is not None:
+                    year = chosen_year
+                else:
+                    year = client.movie_year(chosen_tmdb) if client is not None else None
                 result = record_tmdb_match(repo, target, chosen_tmdb, year, today, lambda _m: None)
                 if result == "id-conflict":
                     raise ValueError(f"tmdb id {chosen_tmdb} is already held by another film — merge instead")
@@ -150,16 +155,18 @@ def resolve_review(
                 )
             )
             verb = f"--pick {pick}" if pick else ("--tt" if tt else "--none")
-            entry = EvalEntry(
+            # The eval row records what the INGESTER saw, not what the film now knows: a query
+            # with no year stays yearless here. Falling back to films.year would hand the
+            # benchmark a year the real ingestion never had and score those rows optimistically.
+            eval_entry = EvalEntry(
                 rid,
                 source,
                 str(q["title"]) if q else (view.title if view else ""),
-                int(q["year"]) if q and q["year"] else (view.year if view else None),
+                (int(q["year"]) if q["year"] else None) if q else (view.year if view else None),
                 chosen_tt,
                 "" if chosen_tmdb is None else str(chosen_tmdb),
                 f"review {review_id} {verb}",
             )
-            ratify(eval_csv, entry)
     elif authority == TMDB_AUTHORITY:
         if tmdb_id is not None and rid is not None:
             target = repo.tmdb_target(rid)
@@ -225,4 +232,6 @@ def resolve_review(
     for fid in (rid, film_id):
         if fid is not None:
             repo.clear_revisit(fid)  # Task 9 replaces the no-op stub in Repository
+    if eval_entry is not None and eval_csv is not None:
+        ratify(eval_csv, eval_entry)  # spec §4.3: ground truth is ratified after the row is closed
     return outcome

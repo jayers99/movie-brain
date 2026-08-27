@@ -295,3 +295,28 @@ def eval_row(ctx, spec, tt):
 def pick_fails(ctx, letter):
     with pytest.raises(ValueError):
         _resolve(ctx, pick=letter)
+
+
+@given(
+    parsers.parse(
+        'an open tmdb resolver review for "{spec}" with a yearless query and candidate A "{tt}"/{tid:d}'
+    )
+)
+def open_yearless_resolver_row(ctx, spec, tt, tid):
+    t, y = _split(spec)
+    fid = _id(ctx["repo"], spec)
+    ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
+    cand = Candidate(tt, tid, (t,), y, "A Dir", 90, 10, "movie", True, True)
+    v = Verdict("review", None, "ambiguous", (Scored(cand, 1, 3, 0, 0, False, False),))
+    # The ingester saw no year at all — films.year (1933) must NOT leak into the eval row.
+    detail = review_detail(v, make_query(t, None, "criterion"))
+    ctx["repo"].append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail=detail)], TODAY)
+    ctx["review_id"] = ctx["repo"].open_reviews("tmdb")[-1]["id"]
+
+
+@then(parsers.parse('the eval log row for "{spec}" has no ingested year'))
+def eval_row_yearless(ctx, spec):
+    fid = _id(ctx["repo"], spec)
+    with (ctx["config_dir"] / "eval.csv").open(encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r["film_id"] == str(fid)]
+    assert rows and rows[-1]["year_ingested"] == "", rows

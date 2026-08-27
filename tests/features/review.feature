@@ -93,3 +93,8 @@ Feature: match_review rows are resolved by CLI and never come back
   Scenario: --pick on a row without candidates is refused
     Given an open tmdb "no-match" review for "King Kong (1933)"
     Then resolving it with pick "A" fails
+
+  Scenario: A yearless ingestion ratifies a yearless eval row
+    Given an open tmdb resolver review for "King Kong (1933)" with a yearless query and candidate A "tt0024216"/244
+    When I resolve it with pick "A"
+    Then the eval log row for "King Kong (1933)" has no ingested year
