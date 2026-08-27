@@ -112,6 +112,9 @@ _TMDB_TARGET_SELECT = (
 # (films_for_matching) rather than surfaced under their own id.
 _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
 
+# One id per film for identity authorities; claim authorities may repeat (migration 012).
+KEY_AUTHORITIES: frozenset[str] = frozenset({"tmdb", "imdb"})
+
 
 def init_db(db_path: Path) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -422,9 +425,13 @@ class Repository:
                 self._write_listing(c, film_id, source, film.url, day, frontier)
                 try:
                     c.execute(
+                        "DELETE FROM external_ids WHERE film_id = ? AND authority = ? AND value != ?",
+                        (film_id, source, film.url),
+                    )
+                    c.execute(
                         "INSERT INTO external_ids (film_id, authority, value, first_seen) "
                         "VALUES (?, ?, ?, ?) "
-                        "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                        "ON CONFLICT(film_id, authority, value) DO NOTHING",
                         (film_id, source, film.url, day),
                     )
                 except sqlite3.IntegrityError:
@@ -469,10 +476,18 @@ class Repository:
 
     # external ids / services ------------------------------------------
     def set_external_id(self, film_id: int, authority: str, value: str, seen: date) -> None:
+        """Key authority (tmdb/imdb): replace this film's single row. Claim authority:
+        add the row (no-op if this film already has it). Raises IntegrityError when another
+        film holds (authority, value)."""
         with self._conn() as c:
+            if authority in KEY_AUTHORITIES:
+                c.execute(
+                    "DELETE FROM external_ids WHERE film_id = ? AND authority = ? AND value != ?",
+                    (film_id, authority, value),
+                )
             c.execute(
                 "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                "ON CONFLICT(film_id, authority, value) DO NOTHING",
                 (film_id, authority, value, seen.isoformat()),
             )
 
@@ -1261,9 +1276,9 @@ class Repository:
             if holder is not None or other is not None:
                 return False
             c.execute("UPDATE films SET title = ?, key = ? WHERE id = ?", (new_title, new_key, film_id))
+            c.execute("DELETE FROM external_ids WHERE film_id = ? AND authority = 'imdb'", (film_id,))
             c.execute(
-                "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'imdb', ?, ?) "
-                "ON CONFLICT(film_id, authority) DO UPDATE SET value=excluded.value",
+                "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'imdb', ?, ?)",
                 (film_id, imdb_id, today.isoformat()),
             )
             return True
