@@ -1,6 +1,15 @@
 import pytest
 
-from movie_brain.domain.thumbprint import Candidate, YearClass, make_query, parse_title, resolve, title_norm
+from movie_brain.domain.thumbprint import (
+    Candidate,
+    Scored,
+    Verdict,
+    YearClass,
+    make_query,
+    parse_title,
+    resolve,
+    title_norm,
+)
 
 
 @pytest.mark.parametrize(
@@ -137,6 +146,31 @@ def test_review_detail_serializes_top_three_with_letters():
     assert d["reason"] == "ambiguous"
     assert [c["letter"] for c in d["candidates"]] == ["A", "B", "C"]
     assert all(c["why_not"] for c in d["candidates"])
+
+
+def test_review_detail_round_trips_with_query():
+    from movie_brain.application.thumbprint import parse_review_detail, review_detail
+
+    q = make_query("Blade Runner (The Final Cut)", 2007, "apple", director=None, runtime_min=117)
+    c = Candidate("tt0083658", 78, ("Blade Runner",), 1982, "Ridley Scott", 117, 10000, "movie", True, True)
+    v = Verdict("review", None, "rerelease-ambiguous", (Scored(c, 5, 3, 0, 0, False, False),))
+    d = parse_review_detail(review_detail(v, q))
+    assert d is not None and d.reason == "rerelease-ambiguous"
+    assert d.candidates[0]["letter"] == "A" and d.candidates[0]["tt"] == "tt0083658"
+    assert d.query == {
+        "title": "Blade Runner (The Final Cut)",
+        "year": 2007,
+        "source": "apple",
+        "director": None,
+        "runtime": 117,
+    }
+
+
+def test_parse_review_detail_returns_none_for_legacy_text():
+    from movie_brain.application.thumbprint import parse_review_detail
+
+    assert parse_review_detail("King Kong (1933)") is None
+    assert parse_review_detail(None) is None
 
 
 def test_load_edition_contract_reads_verified_c_rows(tmp_path):

@@ -29,7 +29,7 @@ from movie_brain.application.repair import (
 )
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
-from movie_brain.application.thumbprint import backfill_claims
+from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
@@ -407,12 +407,22 @@ def review_list(
     table = Table(title=f"open reviews ({len(rows)})")
     for col in ("id", "authority", "reason", "film", "value", "detail"):
         table.add_column(col)
+    parsed: dict[object, ReviewDetail] = {}
     for r in rows:
         film = f"#{r['film_id']} {r['title']} ({r['year']})" if r["film_id"] is not None else ""
-        table.add_row(
-            str(r["id"]), str(r["authority"]), str(r["reason"]), film, str(r["value"] or ""), str(r["detail"] or "")
-        )
+        detail = r["detail"]
+        d = parse_review_detail(str(detail)) if detail is not None else None
+        detail_cell = d.reason if d is not None else str(detail or "")
+        if d is not None:
+            parsed[r["id"]] = d
+        table.add_row(str(r["id"]), str(r["authority"]), str(r["reason"]), film, str(r["value"] or ""), detail_cell)
     console.print(table)
+    for rid, d in parsed.items():
+        for c in d.candidates:
+            console.print(
+                f"  {rid} {c['letter']} {c['tt']} · {c['title']} ({c['year']}) · {c['director']} · "
+                f"{c['runtime'] or '-'}m · {c['why_not'] or 'best'}"
+            )
 
 
 @review_app.command("revisits")
