@@ -7,12 +7,17 @@ from datetime import date
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from movie_brain.application import review as rv
+from movie_brain.application.availability import rebuild_no_match_queue
 from movie_brain.application.repair import EditionContract, repair_editions, repair_twins
+from movie_brain.application.repair_keys import repair_nomatch
 from movie_brain.application.thumbprint import backfill_claims
-from movie_brain.domain.models import Film, OmdbRating
+from movie_brain.domain.models import Film, OmdbRating, ReviewEntry
+from movie_brain.domain.thumbprint import Candidate
 
 scenarios("../features/thumbprint.feature")
 scenarios("../features/thumbprint_editions.feature")
+scenarios("../features/thumbprint_nomatch.feature")
 
 TODAY = date(2026, 8, 25)
 
@@ -378,3 +383,140 @@ def edition_verdict(ctx, verdict, year):
     assert any(f"[{verdict}] #{ctx['edition']} " in line for line in ctx["log"]), ctx["log"]
     assert ctx["repo"].disposition_of(ctx["edition"]) is None
     assert _q(ctx, "SELECT year FROM films WHERE id = ?", ctx["edition"])[0][0] == year
+
+
+# --- nomatch (T4) ----------------------------------------------------------------------
+
+
+class _PoolFetcher:
+    def __init__(self):
+        self.pool = {}
+
+    def fetch(self, q):
+        return self.pool.get(q.title, [])
+
+
+class _StubTmdb:
+    def find_by_imdb(self, tt):
+        return None
+
+    def movie_year(self, tid):
+        return {9081: 1996}.get(tid)
+
+
+def _nomatch_film(ctx, title, year, director, authority):
+    repo = ctx["repo"]
+    fid = repo.create_film(Film(title, year, director, ""))
+    repo.upsert_tmdb(fid, found=False, looked_up=TODAY)
+    repo.upsert_omdb(fid, OmdbRating(None, None, False, None, None), TODAY)
+    repo.append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail=f"{title} ({year})")], TODAY)
+    repo.add_claim(fid, authority, f"{authority}:{title}", title, year_claimed=year, first_seen=TODAY.isoformat())
+    ctx.setdefault("films", {})[title] = fid
+    ctx.setdefault("pool", _PoolFetcher())
+
+
+@given(parsers.parse('a no-match film "{title}" ({year:d}) directed by "{director}" with a criterion claim'))
+def nomatch_crit(ctx, title, year, director):
+    _nomatch_film(ctx, title, year, director, "criterion")
+
+
+@given(parsers.parse('a no-match film "{title}" ({year:d}) with a metacritic claim'))
+def nomatch_mc(ctx, title, year):
+    _nomatch_film(ctx, title, year, None, "metacritic")
+
+
+@given(parsers.parse('the candidate pool has "{title}" → {tt}/{tid:d} {year:d} by "{director}"'))
+def pool_one(ctx, title, tt, tid, year, director):
+    ctx["pool"].pool[title] = [Candidate(tt, tid, (title,), year, director, 100, 5000, "movie", True, True)]
+
+
+@given(parsers.parse('the candidate pool has "{title}" → {tta}/{ida:d} {ya:d} and {ttb}/{idb:d} {yb:d}'))
+def pool_two(ctx, title, tta, ida, ya, ttb, idb, yb):
+    ctx["pool"].pool[title] = [
+        Candidate(tta, ida, (title,), ya, "", 100, 50, "movie", True, True),
+        Candidate(ttb, idb, (title,), yb, "", 100, 60, "movie", True, True),
+    ]
+
+
+def _run_nomatch(ctx, apply):
+    ctx["nomatch_report"] = repair_nomatch(
+        ctx["repo"], TODAY, apply=apply, confirm=lambda g: True, tmdb=_StubTmdb(), fetcher=ctx["pool"],
+        log=ctx["log"].append,
+    )
+
+
+@when("I run repair nomatch without --apply")
+def nomatch_dry(ctx):
+    _run_nomatch(ctx, False)
+
+
+@when("I run repair nomatch --apply answering yes")
+@given("I ran repair nomatch --apply answering yes")
+def nomatch_apply(ctx):
+    _run_nomatch(ctx, True)
+
+
+@then(parsers.parse("the nomatch report says match {m:d}, review {r:d}, applied {a:d}"))
+def nomatch_report(ctx, m, r, a):
+    rep = ctx["nomatch_report"]
+    assert (rep.match, rep.review, rep.applied) == (m, r, a)
+
+
+@then("no film holds an imdb id")
+def no_imdb(ctx):
+    assert _q(ctx, "SELECT COUNT(*) FROM external_ids WHERE authority = 'imdb'")[0][0] == 0
+
+
+@then(parsers.parse('both no-match rows are still open as "{reason}"'))
+def both_open(ctx, reason):
+    assert [r["reason"] for r in ctx["repo"].open_reviews("tmdb")] == [reason, reason]
+
+
+@then(parsers.parse('"{title}" holds imdb "{tt}" and tmdb "{tid}" and is found'))
+def holds_both(ctx, title, tt, tid):
+    fid = ctx["films"][title]
+    ids = ctx["repo"].external_ids_for(fid)
+    assert (ids["imdb"], ids["tmdb"]) == (tt, tid)
+    assert _q(ctx, "SELECT found FROM tmdb WHERE film_id = ?", fid)[0][0] == 1
+
+
+@then(parsers.parse('the only open tmdb row is for "{title}" with reason "{reason}" and candidates A, B'))
+def only_open(ctx, title, reason):
+    from movie_brain.application.thumbprint import parse_review_detail
+
+    rows = ctx["repo"].open_reviews("tmdb")
+    assert len(rows) == 1 and rows[0]["film_id"] == ctx["films"][title] and rows[0]["reason"] == reason
+    parsed = parse_review_detail(str(rows[0]["detail"]))
+    assert parsed is not None and [c["letter"] for c in parsed.candidates] == ["A", "B"]
+    ctx["review_id"] = rows[0]["id"]
+
+
+@then(parsers.parse('the "{title}" row keeps its original id'))
+def keeps_id(ctx, title):
+    ids = _q(ctx, "SELECT id FROM match_review WHERE film_id = ?", ctx["films"][title])
+    assert len(ids) == 1 and ids[0][0] == ctx["review_id"]
+
+
+@when(parsers.parse('I resolve the "{title}" row with --none'))
+def resolve_none(ctx, title):
+    row = next(r for r in ctx["repo"].open_reviews("tmdb") if r["film_id"] == ctx["films"][title])
+    rv.resolve_review(ctx["repo"], int(row["id"]), today=TODAY, none=True, eval_csv=ctx["config_dir"] / "eval.csv")
+
+
+@when("the tmdb no-match queue is rebuilt as sync would")
+def rebuild_queue(ctx):
+    rebuild_no_match_queue(ctx["repo"], TODAY)
+
+
+@then("there are no open tmdb rows")
+def no_open(ctx):
+    assert ctx["repo"].open_reviews("tmdb") == []
+
+
+@then(parsers.parse('the eval log has a verified human row for "{title}" expecting "{tt}"'))
+def eval_row(ctx, title, tt):
+    import csv
+
+    with (ctx["config_dir"] / "eval.csv").open(encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r["title_ingested"] == title]
+    assert rows and rows[-1]["expected_tt"] == tt and rows[-1]["status"] == "verified"
