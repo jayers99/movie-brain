@@ -507,6 +507,14 @@ class Repository:
             rows = c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (film_id,)).fetchall()
             return {str(r["authority"]): str(r["value"]) for r in rows}
 
+    def external_ids_all(self, film_id: int) -> list[tuple[str, str]]:
+        """Every (authority, value) row for this film, ordered — claim authorities may hold several."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT authority, value FROM external_ids WHERE film_id = ? ORDER BY authority, value", (film_id,)
+            ).fetchall()
+            return [(str(r["authority"]), str(r["value"])) for r in rows]
+
     def claimed_values(self, authority: str) -> set[str]:
         with self._conn() as c:
             rows = c.execute("SELECT value FROM external_ids WHERE authority = ?", (authority,)).fetchall()
@@ -1445,21 +1453,27 @@ class Repository:
             if n_claims:
                 moved["claim"] = n_claims
             for row in c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (loser_id,)).fetchall():
-                held = c.execute(
-                    "SELECT 1 FROM external_ids WHERE film_id = ? AND authority = ?", (survivor_id, row["authority"])
-                ).fetchone()
+                auth, val = str(row["authority"]), str(row["value"])
+                held = (
+                    c.execute(
+                        "SELECT 1 FROM external_ids WHERE film_id = ? AND authority = ?", (survivor_id, auth)
+                    ).fetchone()
+                    if auth in KEY_AUTHORITIES
+                    else None
+                )
                 if held is None:
                     c.execute(
-                        "UPDATE external_ids SET film_id = ? WHERE film_id = ? AND authority = ?",
-                        (survivor_id, loser_id, row["authority"]),
+                        "UPDATE external_ids SET film_id = ? WHERE film_id = ? AND authority = ? AND value = ?",
+                        (survivor_id, loser_id, auth, val),
                     )
                     moved["external_ids"] = moved.get("external_ids", 0) + 1
                 else:
                     c.execute(
-                        "DELETE FROM external_ids WHERE film_id = ? AND authority = ?", (loser_id, row["authority"])
+                        "DELETE FROM external_ids WHERE film_id = ? AND authority = ? AND value = ?",
+                        (loser_id, auth, val),
                     )
                     dropped["external_ids"] = dropped.get("external_ids", 0) + 1
-                    kept.setdefault("external_ids", []).append({row["authority"]: row["value"]})
+                    kept.setdefault("external_ids", []).append({auth: val})
             cur = c.execute(
                 "UPDATE availability_transitions SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)
             )
