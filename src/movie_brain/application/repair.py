@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import re
+import sqlite3
 import sys
 from collections import defaultdict
 from collections.abc import Callable
@@ -891,6 +892,11 @@ def audit_disagreements(repo: Repository, contract: dict[int, DisagreementContra
         if c.expected_tt == "NONE":
             groups.append(mk("review", "verified NONE — human decides"))
             continue
+        if not c.expected_tt:
+            # A verified row with a blank tt decides nothing; without this guard an
+            # expected_tmdb would carry it into `adopt` and write "" as an IMDb id.
+            groups.append(mk("conflict", "no expected_tt"))
+            continue
         holder = tt_holders.get(c.expected_tt)
         if holder is not None and holder != f.id:
             groups.append(mk("conflict", f"{c.expected_tt} held by #{holder}"))
@@ -938,7 +944,9 @@ def _disagreement_review(g: DisagreementGroup, fetcher: CandidateFetcher | None)
     else:
         try:
             v = resolve(q, fetcher.fetch(q))
-        except CacheMiss as exc:  # no clients for a miss
+        except (CacheMiss, requests.RequestException, AuthError) as exc:
+            # No clients for a miss, or the network/token failed: the review row is still
+            # worth writing — a human reads it — so degrade to an evidence-free verdict.
             v = Verdict("review", None, f"no candidates ({exc})", ())
     value: str | None
     if c.status != "verified":  # noqa: SIM108 - spelled out: the ternary form hides an `or` precedence trap
@@ -985,24 +993,48 @@ def repair_disagreements(
         if g.verdict in ("relink", "adopt") and tmdb is None:
             log("  no TMDB client — skipped (needs the TMDB token)")
             continue
+        # Every remote call and every holder check happens BEFORE the first write: a film is
+        # either fully repaired or completely untouched (the half-state below is the only
+        # exception, and it raises).
         tid: int | None
-        if g.verdict == "refetch":
-            tid = None
-        elif g.verdict == "relink":
-            assert tmdb is not None
-            tid = tmdb.find_by_imdb(g.expected_tt)
-        else:
-            tid = int(str(g.expected_tmdb))
-        repo.set_external_id(g.film_id, "imdb", g.expected_tt, today)
+        winner_year: int | None = None
+        try:
+            if g.verdict == "refetch":
+                tid = None
+            elif g.verdict == "relink":
+                assert tmdb is not None
+                tid = tmdb.find_by_imdb(g.expected_tt)
+            else:
+                tid = int(str(g.expected_tmdb))
+            if tid is not None:
+                assert tmdb is not None
+                # `adopt`'s id was holder-checked by the audit, but `relink`'s comes from
+                # find_by_imdb just now — an id another film holds would make record_tmdb_match
+                # return id-conflict AFTER the imdb write, leaving the wrong TMDB link on a film
+                # that no longer looks like a disagreement. Check first, write nothing.
+                holder = repo.film_id_for_external(TMDB_AUTHORITY, str(tid))
+                if holder is not None and holder != g.film_id:
+                    log(f"  tmdb {tid} held by #{holder} — skipped (conflict)")
+                    continue
+                winner_year = tmdb.movie_year(tid)
+        except (requests.RequestException, AuthError) as exc:
+            log(f"  TMDB error: {exc} — skipped")
+            continue
+        try:
+            repo.set_external_id(g.film_id, "imdb", g.expected_tt, today)
+        except sqlite3.IntegrityError:
+            # Another film in this very batch just claimed it — the audit's holder map predates
+            # the batch's own writes.
+            log(f"  {g.expected_tt} already held — skipped (conflict)")
+            continue
         if g.verdict == "relink" and tid is None:
             repo.clear_tmdb_link(g.film_id, today)
             log(f"  unlinked tmdb (no TMDB record for {g.expected_tt}); imdb {g.expected_tt} keyed")
         elif tid is not None:
-            assert tmdb is not None
             target = repo.tmdb_target(g.film_id)
             if target is None:
                 raise RuntimeError(f"[partial] #{g.film_id} vanished after its imdb id was written")
-            res = record_tmdb_match(repo, target, tid, tmdb.movie_year(tid), today, log)
+            res = record_tmdb_match(repo, target, tid, winner_year, today, log)
             if res not in ("matched", "adopted"):
                 partial = f"[partial] #{g.film_id} PARTIAL: imdb {g.expected_tt} written but tmdb {tid} {res}"
                 log(partial)
