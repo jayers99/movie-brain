@@ -114,6 +114,12 @@ def resolve_review(
             if cand is None:
                 raise ValueError(f"no candidate {pick!r} on review {review_id}")
             chosen_tt, chosen_tmdb, chosen_year = str(cand["tt"]), cand.get("tmdb_id"), cand.get("year")
+            if chosen_tmdb is None and client is not None:
+                # An OMDb-only candidate (The Cup, T3) still usually has a TMDB record under its tt.
+                chosen_tmdb = client.find_by_imdb(chosen_tt)
+                chosen_year = client.movie_year(chosen_tmdb) if chosen_tmdb is not None else None
+            if chosen_tmdb is None:
+                warn(f"tmdb id not resolved for {chosen_tt} (no client or no TMDB record); imdb only")
         elif tt is not None:
             chosen_tt = tt
             chosen_tmdb = client.find_by_imdb(tt) if client is not None else None

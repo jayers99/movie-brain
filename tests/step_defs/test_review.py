@@ -218,8 +218,8 @@ def open_resolver_row(ctx, spec, tta, ida, ttb, idb):
     fid = _id(ctx["repo"], spec)
     ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
     cands = [
-        Candidate(tta, ida, (t,), y, "A Dir", 90, 10, "movie", True, True),
-        Candidate(ttb, idb, (t,), y, "B Dir", 100, 20, "movie", True, True),
+        Candidate(tta, ida or None, (t,), y, "A Dir", 90, 10, "movie", bool(ida), True),
+        Candidate(ttb, idb or None, (t,), y, "B Dir", 100, 20, "movie", bool(idb), True),
     ]
     v = Verdict("review", None, "ambiguous", tuple(Scored(c, 1, 3, 0, 0, False, False) for c in cands))
     detail = review_detail(v, make_query(t, y, "criterion"))
