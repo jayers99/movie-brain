@@ -46,7 +46,7 @@ stays DARK for ingesters (memo step 5 is next). Two small follow-ups ride along:
 
 ### 4.1 Worklist and query
 
-Open `tmdb` rows with `reason = 'no-match'` whose film is undisposed, ordered by film id.
+Open `tmdb` rows with `reason = 'no-match'` whose film is undisposed, ordered by film id. A film whose row was already promoted to `no-match-reviewed` (and has no `no-match` row) is also listed, so it audits as `review-open` rather than vanishing from the worklist.
 Per film, the query is `make_query(title, year, source, director=films.director, runtime_min=rt)`:
 
 - source claim = the film's claim with precedence `criterion` > `metacritic` > `apple-tv`
@@ -70,7 +70,7 @@ where `data` starts as a copy of the eval fixture's data. Cache saved after the 
 | `unlinked` | holds `imdb` tt, TMDB has no record | none (non-actionable, listed) |
 | `match` | `resolve()` kind `match`; tt not held by another film; tmdb id from the candidate or `find_by_imdb` and not held elsewhere | `set_external_id(imdb)` → `record_tmdb_match` → `mark_omdb_refresh` if `omdb_imdb_id ≠ tt` |
 | `review` | `resolve()` kind `review` | `repo.promote_review(row_id, reason='no-match-reviewed', detail=review_detail(verdict, query))` — same row, id + `created_at` kept |
-| `review-open` | film already has an open `no-match-reviewed` row (defensive; the rebuild excludes such films) | none |
+| `review-open` | film already has an open `no-match-reviewed` row (the promoted row itself, listed via the worklist) | none |
 | `conflict` | tt/tmdb held by another film · TMDB/OMDb error · `record_tmdb_match` returned `collision`/`id-conflict` | none; the post-`record_tmdb_match` case logs `[partial]` and raises (CLI exit 1) |
 
 Holder maps (`external_id_holders('imdb'/'tmdb')`, every film incl. disposed) are read once

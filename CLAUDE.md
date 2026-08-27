@@ -33,6 +33,7 @@ uv run movie-brain review revisits                    # films the user flagged "
 uv run movie-brain repair twins [--apply] [--yes] [--limit N]  # retire raw `Title (YYYY)` films into their same-year twin (contract-checked); --limit = batch size
 uv run movie-brain repair editions [--apply] [--yes] [--limit N]  # fold `Title (edition)` films into their same-year work (contract-checked); --limit = batch size
 uv run movie-brain repair disagreements [--apply] [--yes] [--limit N]  # repair films whose OMDb imdbID ≠ TMDB imdb_id (eval group D): verified rows applied, proposed rows → A/B/C review; already-repaired films list as pending/review-open and --limit batches only the actionable ones
+uv run movie-brain repair nomatch [--apply] [--yes] [--limit N]  # rerun open tmdb no-match films through the thumbprint resolver: matches keyed via record_tmdb_match, non-matches promoted IN PLACE to durable `no-match-reviewed` A/B/C rows (drain with `review resolve --pick/--tt/--none`); --limit batches actionable films only; candidates cached in <config_dir>/nomatch-cache.json.gz (eval fixture never written)
 uv run movie-brain thumbprint backfill [--apply]      # copy owned/criterion/metacritic evidence into `claim` rows (pure copy, idempotent)
 uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
 uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)
@@ -128,7 +129,7 @@ Path-scoped contracts in `.claude/rules/`: `matching.md` (the one evidence-score
   matches/merges into an existing film, `--tmdb-id` claims a TMDB id (tmdb `no-match`),
   `--create` promotes the staged Metacritic title or owned Apple title into a real film, and
   `--dismiss` closes the row. Resolution re-derives the conflict at resolution time rather than
-  trusting the row's stored `value`.
+  trusting the row's stored `value`. `no-match-reviewed` rows (written only by `repair nomatch`) accept `--pick/--tt/--none/--dismiss`; a resolved one is excluded from the no-match rebuild exactly like a resolved `no-match` row.
 - `needs_revisit` is user-response data on the watchlist pattern: own table (film_id, marked_on,
   optional note), the dashboard drawer toggle / its API is the only UI writer, sync never touches
   it, and a filter chip surfaces it. It is cleared automatically when the film's review is
