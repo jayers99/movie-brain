@@ -35,8 +35,8 @@
 | OMDb `imdbID` vs TMDB `imdb_id` (undisposed, OMDb found) | **agree 4,136 · disagree 94** · OMDb-only 136 · TMDB-only 2 · neither 186 |
 | eval group D (`D-disagree`) | 94 rows: **50 verified · 44 proposed** (1 `NONE` expectation) |
 | all `proposed` eval rows | **45** (44 D + `C-edition` #4503 Moonwalk One); the benchmark reports **38** of them (those with a non-empty `expected_tt`) — *the T2 brief said "4"; that was a counting error (awk split on commas inside notes). Owner decision Q1 still stands: ratify through the A/B/C flow.* |
-| open reviews | tmdb `no-match` 209 · metacritic `expected-miss` 111 (was 96 — sync growth) · apple-tv `year-drift` 51 · MC small reasons 14 |
-| dispositions / imdb ids / edition_year claims | 112 / 564 / 15 |
+| open reviews | tmdb `no-match` 201 (after T2b + Bride of Frankenstein) · metacritic `expected-miss` 111 (was 96 — sync growth) · apple-tv `year-drift` 51 · MC small reasons 14 |
+| dispositions / imdb ids / edition_year claims | 116 / 570 / 16 (after T2b same-year fold) |
 
 ## T3 scope (memo §7 step 3)
 The 94 films whose OMDb record and TMDB link name different works. Memo's split (pre-T1 numbers,
@@ -87,9 +87,9 @@ added to the contract, then rerun the 32 through step 4.
   claim authorities.
 - `parse_review_detail` slices at the last `}` — a resolution note containing `}` would parse as
   None on a resolved row (unreachable today; use `json.JSONDecoder().raw_decode` if you touch it).
-- Deferred from T2, not T3's job unless cheap: #1909 Scenes from a Marriage (Criterion-listed, waits
-  for the ingester switch); #2416 Fanny and Alexander: Theatrical Version (year == work year, so
-  `repair editions` never folds it — needs a "same-year edition" path).
+- Deferred from T2: #1909 Scenes from a Marriage (Criterion-listed, waits for the ingester switch).
+  (#2416 and the other same-year editions were folded by T2b on 2026-08-26 — `repair editions` now
+  handles year == work year; see the plan status note.)
 - Never edit `scripts/eval/thumbprint_eval_v1.csv` by hand; `ratify` is the writer. Never run
   `repair twins`/`repair editions --apply` expecting work.
 
