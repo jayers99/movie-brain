@@ -16,20 +16,18 @@ from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, craw
 from movie_brain.application.owned import import_owned
 from movie_brain.application.rematch import rematch
 from movie_brain.application.repair import (
-    DisagreementGroup,
     DupGroup,
     EditionGroup,
     TwinGroup,
-    load_disagreement_contract,
     load_edition_contract,
     load_expected_twins,
-    repair_disagreements,
     repair_dupes,
     repair_editions,
     repair_links,
     repair_twins,
     repair_years,
 )
+from movie_brain.application.repair_keys import DisagreementGroup, load_disagreement_contract, repair_disagreements
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail

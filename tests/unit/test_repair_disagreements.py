@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 import requests
 
-from movie_brain.application.repair import (
+from movie_brain.application.repair_keys import (
     DisagreementContract,
     audit_disagreements,
     format_disagreement,
@@ -118,7 +118,7 @@ def _needs_refresh(repo, film_id) -> bool:
 
 
 def _run(repo, today, contract, tmdb=None, apply=True, limit=None):
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     lines = []
     rep = repair_disagreements(
@@ -238,7 +238,7 @@ def test_conflict_is_never_touched_and_limit_trims(repo, today):
 
 
 def test_declined_groups_are_counted_not_applied(repo, today):
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     fid = _split(repo, today, "Refetch", "ttA", "ttB", 1)
     rep = repair_disagreements(
@@ -295,7 +295,7 @@ def test_fetcher_failure_still_writes_an_evidence_free_review(repo, today):
             raise requests.ConnectionError("boom")
 
     fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     repair_disagreements(
         repo, today, apply=True, confirm=lambda g: True,
@@ -343,7 +343,7 @@ def test_review_detail_carries_the_live_resolver_ranking(repo, today):
             return [_cand("tt1", 11, "T", 2000), _cand("tt2", 22, "T", 2001)]
 
     fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     repair_disagreements(
         repo, today, apply=True, confirm=lambda g: True,
