@@ -6,7 +6,14 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import Film, McTitle, OmdbRating, ReviewEntry
-from movie_brain.infrastructure.database import MIGRATIONS_DIR, FilmRow, Repository, TmdbMatchTarget, init_db
+from movie_brain.infrastructure.database import (
+    KEY_AUTHORITIES,
+    MIGRATIONS_DIR,
+    FilmRow,
+    Repository,
+    TmdbMatchTarget,
+    init_db,
+)
 
 TRIO = Film("Trio", 1950, "Ken Annakin", "https://c/trio")
 QUARTET = Film("Quartet", 1948, "Ken Annakin", "https://c/quartet")
@@ -391,7 +398,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 11
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 12
     finally:
         conn.close()
 
@@ -1123,7 +1130,7 @@ def test_migration_011_claims_and_film_columns(tmp_path):
     repo.set_title_norm(fid, "bladerunner")
     assert repo.films_missing_title_norm() == []
     with sqlite3.connect(tmp_path / "t.db") as c:
-        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 11
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 12
         assert c.execute("SELECT kind FROM films WHERE id = ?", (fid,)).fetchone()[0] == "movie"
 
 
@@ -1159,3 +1166,39 @@ def test_key_film_directly_blocks_on_a_foreign_key_holder(tmp_path):
     assert raw
     assert not repo.key_film_directly(raw, new_title="Vertigo", imdb_id="tt0052357", today=date(2026, 8, 25))
     assert repo.external_ids_for(raw) == {}
+
+
+T = date(2026, 8, 26)
+
+
+def _film(repo: Repository, title: str, year: int) -> int:
+    fid = repo.create_film(Film(title, year, None, ""))
+    assert fid is not None
+    return fid
+
+
+def test_migration_012_allows_two_claim_values_per_authority(repo):
+    fid = _film(repo, "Apocalypse Now", 1979)
+    repo.set_external_id(fid, "metacritic", "apocalypse-now", T)
+    repo.set_external_id(fid, "metacritic", "apocalypse-now-redux", T)
+    conn = sqlite3.connect(repo.db_path)
+    rows = conn.execute("SELECT value FROM external_ids WHERE film_id = ? ORDER BY value", (fid,)).fetchall()
+    assert [r[0] for r in rows] == ["apocalypse-now", "apocalypse-now-redux"]
+    assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 12
+
+
+def test_key_authorities_stay_single_per_film(repo):
+    fid = _film(repo, "Blade Runner", 1982)
+    for auth in KEY_AUTHORITIES:
+        repo.set_external_id(fid, auth, "1", T)
+        repo.set_external_id(fid, auth, "2", T)
+        assert repo.external_ids_for(fid)[auth] == "2"
+    conn = sqlite3.connect(repo.db_path)
+    assert conn.execute("SELECT COUNT(*) FROM external_ids WHERE film_id = ?", (fid,)).fetchone()[0] == 2
+
+
+def test_unique_authority_value_still_guards_across_films(repo):
+    a, b = _film(repo, "A", 1950), _film(repo, "B", 1951)
+    repo.set_external_id(a, "metacritic", "shared", T)
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.set_external_id(b, "metacritic", "shared", T)
