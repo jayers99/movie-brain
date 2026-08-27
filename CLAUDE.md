@@ -32,7 +32,7 @@ uv run movie-brain review revisits                    # films the user flagged "
 
 uv run movie-brain repair twins [--apply] [--yes] [--limit N]  # retire raw `Title (YYYY)` films into their same-year twin (contract-checked); --limit = batch size
 uv run movie-brain repair editions [--apply] [--yes] [--limit N]  # fold `Title (edition)` films into their same-year work (contract-checked); --limit = batch size
-uv run movie-brain repair disagreements [--apply] [--yes] [--limit N]  # repair films whose OMDb imdbID ≠ TMDB imdb_id (eval group D): verified rows applied, proposed rows → A/B/C review
+uv run movie-brain repair disagreements [--apply] [--yes] [--limit N]  # repair films whose OMDb imdbID ≠ TMDB imdb_id (eval group D): verified rows applied, proposed rows → A/B/C review; already-repaired films list as pending/review-open and --limit batches only the actionable ones
 uv run movie-brain thumbprint backfill [--apply]      # copy owned/criterion/metacritic evidence into `claim` rows (pure copy, idempotent)
 uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
 uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)

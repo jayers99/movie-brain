@@ -847,7 +847,7 @@ class DisagreementGroup:
     omdb_tt: str
     tmdb_tt: str
     tmdb_id: str | None
-    verdict: str  # "refetch" | "relink" | "adopt" | "review" | "conflict"
+    verdict: str  # "refetch" | "relink" | "adopt" | "review" | "conflict" | "pending" | "review-open"
     expected_tt: str
     expected_tmdb: str | None
     detail: str
@@ -862,15 +862,29 @@ class DisagreementsReport:
     adopt: int
     review: int
     conflict: int
+    pending: int
+    review_open: int
     applied: int
     declined: int
 
 
+# Verdicts that are listed and never acted on: a `--limit` batch spends none of its budget here.
+NON_ACTIONABLE = ("conflict", "pending", "review-open")
+
+
 def audit_disagreements(repo: Repository, contract: dict[int, DisagreementContract]) -> list[DisagreementGroup]:
     """Live disagreements ∩ group D → one verdict each. Holders are read once, before any write,
-    over EVERY film (disposed included — the UNIQUE guard is blind to dispositions too)."""
+    over EVERY film (disposed included — the UNIQUE guard is blind to dispositions too).
+
+    A film whose repair already landed is NOT actionable again: `--apply` cannot clear the
+    disagreement itself (the OMDb payload only changes on the next `sync`), so the already-done
+    work is recognised up front — `pending` (keyed + OMDb refetch queued) and `review-open` (its
+    durable `key-disagreement` review is open) are checked before any actionable verdict."""
     tt_holders = repo.external_id_holders("imdb")
     tmdb_holders = repo.external_id_holders("tmdb")
+    reviewed = {
+        int(str(r["film_id"])) for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] == KEY_DISAGREEMENT
+    }
     groups: list[DisagreementGroup] = []
     for f in repo.key_disagreements():
         c = contract.get(f.id)
@@ -885,6 +899,17 @@ def audit_disagreements(repo: Repository, contract: dict[int, DisagreementContra
 
         if c is None:
             groups.append(mk("conflict", "no D-disagree row"))
+            continue
+        if f.id in reviewed:
+            groups.append(mk("review-open", f"{KEY_DISAGREEMENT} review already open"))
+            continue
+        if (
+            c.status == "verified"
+            and c.expected_tt not in ("", "NONE")
+            and f.imdb_ext == c.expected_tt
+            and repo.omdb_needs_refresh(f.id)
+        ):
+            groups.append(mk("pending", "keyed; OMDb refetch queued — resolves on the next sync"))
             continue
         if c.status != "verified":
             groups.append(mk("review", f"{c.status} {c.expected_tt or '?'} — A/B/C review"))
@@ -970,15 +995,22 @@ def repair_disagreements(
 ) -> DisagreementsReport:
     """Dry run lists every group; --apply acts per verdict (spec §3). A `refetch` film stays in
     the worklist until the next sync refetches its OMDb record by the id written here — the
-    disagreement count drops after `sync`, not after `--apply`. `review` rows are queued on
-    --apply only and are durable + idempotent (`queue_review_once`)."""
-    groups = audit_disagreements(repo, contract)
-    if limit is not None:
-        groups = groups[:limit]
+    disagreement count drops after `sync`, not after `--apply`; on the runs in between it is
+    listed as `pending`. `review` rows are queued on --apply only and are durable + idempotent
+    (`queue_review_once`); once open, the film is listed as `review-open`.
+
+    `--limit N` is a batch size over the ACTIONABLE groups only: the non-actionable ones
+    (`conflict`, `pending`, `review-open`) are cheap and informational, so they are always
+    listed in full and spend none of the budget. Repeated batches therefore advance through the
+    worklist instead of re-hitting its head."""
+    audited = audit_disagreements(repo, contract)
+    groups = [g for g in audited if g.verdict in NON_ACTIONABLE]
+    actionable = [g for g in audited if g.verdict not in NON_ACTIONABLE]
+    groups += actionable if limit is None else actionable[:limit]
     applied = declined = 0
     for g in groups:
         log(format_disagreement(g))
-        if not apply or g.verdict == "conflict":
+        if not apply or g.verdict in NON_ACTIONABLE:
             continue
         if not confirm(g):
             declined += 1
@@ -1045,9 +1077,10 @@ def repair_disagreements(
             log(f"  omdb refresh queued (by id {g.expected_tt})")
         applied += 1
     counts = {
-        v: sum(1 for g in groups if g.verdict == v) for v in ("refetch", "relink", "adopt", "review", "conflict")
+        v: sum(1 for g in groups if g.verdict == v)
+        for v in ("refetch", "relink", "adopt", "review", "conflict", "pending", "review-open")
     }
     return DisagreementsReport(
         len(groups), counts["refetch"], counts["relink"], counts["adopt"], counts["review"], counts["conflict"],
-        applied, declined,
+        counts["pending"], counts["review-open"], applied, declined,
     )

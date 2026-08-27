@@ -1441,6 +1441,12 @@ class Repository:
             ).fetchone()
             return None if row is None or row["tt"] is None else str(row["tt"])
 
+    def omdb_needs_refresh(self, film_id: int) -> bool:
+        """True while this film's OMDb row is queued for refetch (the next sync clears it)."""
+        with self._conn() as c:
+            row = c.execute("SELECT needs_refresh FROM omdb WHERE film_id = ?", (film_id,)).fetchone()
+            return bool(row is not None and row["needs_refresh"])
+
     def set_claim_edition_year(self, claim_id: int, year: int | None) -> None:
         with self._conn() as c:
             c.execute("UPDATE claim SET edition_year = ? WHERE id = ?", (year, claim_id))
