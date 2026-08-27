@@ -152,7 +152,18 @@ def _backup_pre_migration(conn: sqlite3.Connection, db_path: Path, current_versi
         dest.close()
 
 
-_VIEW_SQL = """
+# One deterministic metacritic slug per film (earliest first_seen, then smallest value) — a
+# film may hold several claim-authority `metacritic` external_ids (editions/rereleases), and
+# these read models must not fan out into duplicate rows per film. `metacritic_claim_rows`
+# is exempt: it must keep returning every slug.
+_MC_SLUG_SQL = (
+    "(SELECT e.film_id, e.value FROM external_ids e WHERE e.authority = 'metacritic' "
+    " AND NOT EXISTS (SELECT 1 FROM external_ids e2 WHERE e2.film_id = e.film_id AND e2.authority = 'metacritic' "
+    "   AND (e2.first_seen < e.first_seen OR (e2.first_seen = e.first_seen AND e2.value < e.value))))"
+)
+
+
+_VIEW_SQL = f"""
 SELECT f.id, f.title, f.year,
        COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director,
        l.url, o.language, o.imdb, o.rt,
@@ -164,7 +175,7 @@ FROM films f
 LEFT JOIN listings l ON l.film_id = f.id AND l.source = ?
 LEFT JOIN omdb o ON o.film_id = f.id
 LEFT JOIN my_ratings r ON r.film_id = f.id
-LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic'
+LEFT JOIN {_MC_SLUG_SQL} x ON x.film_id = f.id
 LEFT JOIN metacritic mc ON mc.slug = x.value
 """
 
@@ -546,7 +557,7 @@ class Repository:
                 "t.runtime_min AS t_rt "
                 "FROM films f "
                 "LEFT JOIN omdb o ON o.film_id = f.id AND o.found = 1 AND o.payload IS NOT NULL "
-                "LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic' "
+                f"LEFT JOIN {_MC_SLUG_SQL} x ON x.film_id = f.id "
                 "LEFT JOIN metacritic mc ON mc.slug = x.value "
                 "LEFT JOIN tmdb_facts t ON t.film_id = f.id "
                 "WHERE " + _NOT_DISPOSED + " ORDER BY f.id"
@@ -1062,7 +1073,7 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT f.id, f.title, f.year, x.value AS slug FROM films f "
-                "LEFT JOIN external_ids x ON x.film_id = f.id AND x.authority = 'metacritic' "
+                f"LEFT JOIN {_MC_SLUG_SQL} x ON x.film_id = f.id "
                 "WHERE NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = ?) "
                 "AND (NOT EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id) "
                 "OR EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id AND "
