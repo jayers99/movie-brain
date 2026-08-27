@@ -901,7 +901,7 @@ def parse_review_detail(detail: str | None) -> ReviewDetail | None            # 
 def test_review_detail_round_trips_with_query():
     q = make_query("Blade Runner (The Final Cut)", 2007, "apple", director=None, runtime_min=117)
     c = Candidate("tt0083658", 78, ("Blade Runner",), 1982, "Ridley Scott", 117, 10000, "movie", True, True)
-    v = Verdict("review", None, "rerelease-ambiguous", (Scored(c, 5, "exact", 0, 0),))
+    v = Verdict("review", None, "rerelease-ambiguous", (Scored(c, 5, 3, 0, 0, False, False),))
     d = parse_review_detail(review_detail(v, q))
     assert d is not None and d.reason == "rerelease-ambiguous"
     assert d.candidates[0]["letter"] == "A" and d.candidates[0]["tt"] == "tt0083658"
@@ -1157,7 +1157,7 @@ def open_resolver_row(ctx, spec, tta, ida, ttb, idb):
     ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
     cands = [Candidate(tta, ida, (t,), y, "A Dir", 90, 10, "movie", True, True),
              Candidate(ttb, idb, (t,), y, "B Dir", 100, 20, "movie", True, True)]
-    v = Verdict("review", None, "ambiguous", tuple(Scored(c, 1, "exact", 0, 0) for c in cands))
+    v = Verdict("review", None, "ambiguous", tuple(Scored(c, 1, 3, 0, 0, False, False) for c in cands))
     detail = review_detail(v, make_query(t, y, "criterion"))
     ctx["repo"].append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail=detail)], TODAY)
     ctx["review_id"] = ctx["repo"].open_reviews("tmdb")[-1]["id"]
