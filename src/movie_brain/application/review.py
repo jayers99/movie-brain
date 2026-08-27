@@ -106,7 +106,7 @@ def resolve_review(
         parsed = parse_review_detail(str(row["detail"]) if row["detail"] else None)
         chosen_tt: str
         chosen_tmdb: int | None = None
-        chosen_year: int | None = None  # --pick already has the candidate's year; don't re-ask TMDB
+        chosen_year: int | None = None  # --pick re-asks TMDB only when the candidate is OMDb-only (no tmdb_id)
         if pick is not None:
             if parsed is None:
                 raise ValueError(f"review {review_id} has no A/B/C candidates — use --tt or --none")
