@@ -146,23 +146,23 @@ def resolve_review(
             view = repo.get_view(rid, today)
             claims = repo.claims_for_film(rid)
             authorities = {c.authority for c in claims}
-            source = (
-                str(q["source"])
-                if q
-                else next(
-                    (a for a in ("criterion", "metacritic") if a in authorities),
-                    "apple" if "apple-tv" in authorities else "unknown",
-                )
+            # Every read of the stored query is a `.get()`: `review_detail`'s query is written by
+            # the resolver but the row is human-editable, and a hand-trimmed detail must degrade
+            # to the film's own facts rather than KeyError mid-resolution.
+            source = (str(q.get("source")) if q and q.get("source") else "") or next(
+                (a for a in ("criterion", "metacritic") if a in authorities),
+                "apple" if "apple-tv" in authorities else "unknown",
             )
             verb = f"--pick {pick}" if pick else ("--tt" if tt else "--none")
             # The eval row records what the INGESTER saw, not what the film now knows: a query
             # with no year stays yearless here. Falling back to films.year would hand the
             # benchmark a year the real ingestion never had and score those rows optimistically.
+            q_year = q.get("year") if q else None
             eval_entry = EvalEntry(
                 rid,
                 source,
-                str(q["title"]) if q else (view.title if view else ""),
-                (int(q["year"]) if q["year"] else None) if q else (view.year if view else None),
+                (str(q.get("title")) if q and q.get("title") else "") or (view.title if view else ""),
+                (int(str(q_year)) if q_year else None) if q else (view.year if view else None),
                 chosen_tt,
                 "" if chosen_tmdb is None else str(chosen_tmdb),
                 f"review {review_id} {verb}",

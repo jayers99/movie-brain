@@ -520,18 +520,29 @@ def _edition_blockers(
     allowed: set[int],
     tt_holders: dict[str, int],
     tmdb_holders: dict[str, int],
-    check_key: bool,
+    rekey_id: int | None,
+    twin: EditionFilm | None = None,
 ) -> list[str]:
     """Identities already holding what the write needs — `key_work`'s refusals and the
     `external_ids` UNIQUE guard, computed BEFORE anything is written. `allowed` are the ids the
     write may legitimately land on: the film itself, plus (twin path) the survivor it merges into.
-    `check_key` is False when nothing will re-key (a clean survivor keeps its own key)."""
+    `rekey_id` is the film whose `films.key` the fold would rewrite, or None when nothing
+    re-keys (a clean survivor keeps its own key)."""
     blockers: list[str] = []
-    if check_key:
+    if rekey_id is not None:
         key = film_key(work_title, c.work_year)
         holder = repo.film_id_by_key(key)
         if holder is not None and holder not in allowed and repo.canonical_film_id(holder) not in allowed:
             blockers.append(f"key {key!r} held by #{holder}")
+        if repo.has_listing(rekey_id, "criterion"):
+            # `record_catalog` upserts ON CONFLICT(films.key): re-keying a film Criterion still
+            # lists makes the next walk mint a fresh film under the old key and strand this one.
+            # Deferred to the ingester switch, where the resolver — not the key — owns identity.
+            blockers.append("current criterion listing — re-key deferred to the ingester switch")
+    if twin is not None and twin.imdb_id and twin.imdb_id != c.tt:
+        # The twin merge writes the contract tt onto the survivor; a survivor already keyed to a
+        # DIFFERENT work is not this work's twin, and silently keeping its id hides the mismatch.
+        blockers.append(f"holds imdb {twin.imdb_id}, contract says {c.tt}")
     tt_holder = tt_holders.get(c.tt)
     if tt_holder is not None and tt_holder not in allowed:
         blockers.append(f"{c.tt} held by #{tt_holder}")
@@ -558,8 +569,11 @@ def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> li
     by_norm_year: dict[tuple[str, int | None], list[EditionFilm]] = defaultdict(list)
     for row in films.values():
         by_norm_year[(row.title_norm or title_norm(row.title), row.year)].append(row)
-    tt_holders = {row.imdb_id: row.id for row in films.values() if row.imdb_id}
-    tmdb_holders = {row.tmdb_id: row.id for row in films.values() if row.tmdb_id}
+    # Holders come from EVERY film, disposed included: `films_for_editions` is the candidate
+    # scan (live films only), but the UNIQUE(authority, value) guard `key_work` runs into is
+    # blind to dispositions.
+    tt_holders = repo.external_id_holders("imdb")
+    tmdb_holders = repo.external_id_holders("tmdb")
     groups: list[EditionGroup] = []
     for fid, c in sorted(contract.items()):
         f = films.get(fid)
@@ -599,7 +613,8 @@ def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> li
                 allowed={fid, t.id},
                 tt_holders=tt_holders,
                 tmdb_holders=tmdb_holders,
-                check_key=bool(parse_title(t.title).editions),
+                rekey_id=t.id if parse_title(t.title).editions else None,
+                twin=t,
             )
             if blockers:
                 detail = f"twin #{t.id} but " + "; ".join(blockers)
@@ -626,7 +641,7 @@ def audit_editions(repo: Repository, contract: dict[int, EditionContract]) -> li
                 allowed={fid},
                 tt_holders=tt_holders,
                 tmdb_holders=tmdb_holders,
-                check_key=True,
+                rekey_id=fid,
             )
             if blockers:
                 groups.append(EditionGroup(*base, "conflict", None, edition_year, "; ".join(blockers)))

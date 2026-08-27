@@ -256,6 +256,15 @@ def contract_both(ctx, work, year, tt, tid):
     ctx["contract"] = {fid: EditionContract(fid, work, year, tt, tid) for fid in ctx["editions"]}
 
 
+@given("the edition film has a criterion listing")
+def edition_listing(ctx):
+    repo = ctx["repo"]
+    row = _q(ctx, "SELECT title, year FROM films WHERE id = ?", ctx["edition"])[0]
+    url = _q(ctx, "SELECT value FROM external_ids WHERE film_id = ? AND authority = 'criterion'", ctx["edition"])[0][0]
+    repo.record_catalog("criterion", [Film(row[0], row[1], None, url)], TODAY)
+    assert repo.has_listing(ctx["edition"], "criterion")
+
+
 @given("the edition film has an open tmdb no-match review")
 def edition_review(ctx):
     from movie_brain.domain.models import ReviewEntry
@@ -327,6 +336,12 @@ def darko(ctx, loser, title, year, tid):
     assert repo.disposition_of(lid) == ("merged", sid)
     assert tuple(_q(ctx, "SELECT title, year FROM films WHERE id = ?", sid)[0]) == (title, year)
     assert repo.external_ids_for(sid)["tmdb"] == tid
+
+
+@then(parsers.parse('the edition film is still titled "{title}" and holds no imdb id'))
+def edition_untouched(ctx, title):
+    assert _q(ctx, "SELECT title FROM films WHERE id = ?", ctx["edition"])[0][0] == title
+    assert "imdb" not in ctx["repo"].external_ids_for(ctx["edition"])
 
 
 @then(parsers.parse('the edition film\'s verdict is "{verdict}" and it has no disposition and year {year:d}'))
