@@ -318,6 +318,21 @@ def test_record_catalog_records_criterion_external_ids(repo):
     assert repo.external_ids_for(fid) == {"criterion": "https://c/trio"}
 
 
+def test_record_catalog_url_change_preserves_first_seen(repo):
+    """Task 2 reads first_seen for earliest-slug tie-breaks — a re-listed film under a new
+    URL must keep its original first_seen, not reset it to the day of the re-list."""
+    repo.record_catalog("criterion", [TRIO], D1)
+    fid = repo.film_id_by_key("trio (1950)")
+    assert fid is not None
+    moved = Film(TRIO.title, TRIO.year, TRIO.director, "https://c/trio-remastered")
+    repo.record_catalog("criterion", [moved], D2)
+    conn = sqlite3.connect(repo.db_path)
+    row = conn.execute(
+        "SELECT value, first_seen FROM external_ids WHERE film_id = ? AND authority = 'criterion'", (fid,)
+    ).fetchone()
+    assert row == ("https://c/trio-remastered", D1.isoformat())
+
+
 def test_record_catalog_contains_external_id_uniqueness_conflicts(repo):
     repo.record_catalog("criterion", [TRIO], D1)
     trio_fid = repo.film_id_by_key("trio (1950)")
