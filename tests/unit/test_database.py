@@ -1217,3 +1217,14 @@ def test_unique_authority_value_still_guards_across_films(repo):
     repo.set_external_id(a, "metacritic", "shared", T)
     with pytest.raises(sqlite3.IntegrityError):
         repo.set_external_id(b, "metacritic", "shared", T)
+
+
+def test_two_metacritic_slugs_do_not_duplicate_read_models(repo):
+    fid = _film(repo, "Apocalypse Now", 1979)
+    repo.set_external_id(fid, "metacritic", "apocalypse-now-redux", date(2026, 8, 2))
+    repo.set_external_id(fid, "metacritic", "apocalypse-now", date(2026, 8, 1))
+    views = [v for v in repo.list_views(T) if v.title == "Apocalypse Now"]
+    assert len(views) == 1
+    assert views[0].metacritic_url == "https://www.metacritic.com/movie/apocalypse-now/"  # earliest first_seen wins
+    assert len([s for s in repo.audit_subjects() if s.film_id == fid]) == 1
+    assert len([f for f, _ in repo.films_needing_lookup_discovery("criterion", T) if f == fid]) == 1
