@@ -40,7 +40,7 @@ paths:
   keyed by film id with an expected tt/tmdb and the work's title+year parsed from the row's
   note. A twin is exactly one same-norm-title/same-work-year candidate agreeing on tmdb id (or,
   when neither side has a tmdb id, a fellow contract row sharing the same tt); `_edition_blockers`
-  pre-checks tt/tmdb/key holders (over EVERY film, disposed included — the UNIQUE guard is) on
+  pre-checks tt/tmdb/key holders (over EVERY film, disposed included — the UNIQUE guard is blind to disposed rows too) on
   both the twin-merge and no-twin-keying paths and downgrades to `conflict` rather than write
   into a held identity, as it does for a twin already holding a DIFFERENT imdb id. A film that
   carries a Criterion listing is never re-keyed: `record_catalog` upserts

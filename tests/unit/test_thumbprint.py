@@ -302,7 +302,7 @@ def test_audit_editions_defers_a_film_criterion_still_lists(repo):
     contract = {fid: EditionContract(fid, "Scenes from a Marriage", 1974, "tt6725014", "133919")}
     (g,) = audit_editions(repo, contract)
     assert g.verdict == "conflict"
-    assert g.detail == "current criterion listing — re-key deferred to the ingester switch"
+    assert g.detail == "criterion listing — re-key deferred to the ingester switch"
 
 
 def test_repair_editions_stops_the_batch_when_survivor_keying_refuses_after_the_merge(repo, monkeypatch):
