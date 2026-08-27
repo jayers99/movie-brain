@@ -890,17 +890,6 @@ class Repository:
                     (authority, e.film_id, e.value, e.reason, e.detail, created.isoformat()),
                 )
 
-    def delete_reviews(self, review_ids: list[int]) -> None:
-        """Hard-delete specific `match_review` rows by id. Used only by diff-aware rebuilds
-        (`rebuild_no_match_queue`) to drop rows for films that no longer need them while
-        leaving still-needed rows' ids/`created_at` untouched — unlike
-        `replace_unresolved_reviews`, which wipes and reassigns ids for the whole reason-scope
-        on every call."""
-        if not review_ids:
-            return
-        with self._conn() as c:
-            c.executemany("DELETE FROM match_review WHERE id = ?", [(rid,) for rid in review_ids])
-
     def open_reviews(self, authority: str) -> list[dict[str, object]]:
         with self._conn() as c:
             rows = c.execute(
