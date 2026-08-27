@@ -137,3 +137,114 @@ def test_open_reviewed_row_is_review_open_and_no_fetcher_is_conflict(repo, today
     other = _nomatch(repo, today, "Love", 2024)
     g2 = {x.film_id: x.verdict for x in audit_nomatch(repo, None, None)}
     assert g2[other] == "conflict" and set(NOMATCH_ACTIONABLE) == {"keyed", "match", "review"}
+
+
+def _run(repo, today, fetcher, tmdb=None, apply=True, limit=None):
+    from movie_brain.application.repair_keys import repair_nomatch
+
+    lines = []
+    rep = repair_nomatch(repo, today, apply=apply, confirm=lambda g: True, tmdb=tmdb, fetcher=fetcher, limit=limit,
+                         log=lines.append)
+    return rep, lines
+
+
+def _tmdb_found(repo, fid):
+    import sqlite3
+
+    with sqlite3.connect(repo.db_path) as c:
+        row = c.execute("SELECT found FROM tmdb WHERE film_id = ?", (fid,)).fetchone()
+    return bool(row and row[0])
+
+
+BOUND = {"Bound": [_cand("tt0115736", 9081, "Bound", 1996, "Lana Wachowski, Lilly Wachowski")]}
+LOVE = {"Love": [_cand("tt1", 1, "Love", 2024, votes=50), _cand("tt2", 2, "Love", 2024, votes=60)]}
+
+
+def test_dry_run_writes_nothing(repo, today):
+    fid = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    rep, lines = _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1996}), apply=False)
+    assert rep.match == 1 and rep.applied == 0
+    assert repo.external_ids_for(fid) == {} and not _tmdb_found(repo, fid)
+    assert repo.open_reviews("tmdb")[0]["reason"] == "no-match"
+
+
+def test_match_keys_both_ids_refreshes_omdb_and_drops_the_row(repo, today):
+    fid = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    rep, _ = _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1996}))
+    ids = repo.external_ids_for(fid)
+    assert (ids["imdb"], ids["tmdb"]) == ("tt0115736", "9081") and _tmdb_found(repo, fid)
+    assert repo.omdb_needs_refresh(fid)
+    assert repo.open_reviews("tmdb") == []  # the rebuild dropped the now-matched film's row
+    assert (rep.match, rep.applied, rep.skipped) == (1, 1, 0)
+
+
+def test_criterion_film_keeps_its_year_on_match(repo, today):
+    fid = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    repo.record_catalog("criterion", [Film("Bound", 1996, "Lana Wachowski", "https://c/bound")], today)
+    _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1950}))
+    view = repo.get_view(fid, today)
+    assert view is not None and view.year == 1996 and repo.external_ids_for(fid)["tmdb"] == "9081"
+
+
+def test_review_promotes_the_row_in_place(repo, today):
+    from movie_brain.application.thumbprint import parse_review_detail
+
+    fid = _nomatch(repo, today, "Love", 2024)
+    before = repo.open_reviews("tmdb")[0]
+    rep, _ = _run(repo, today, FakeFetcher(LOVE), FakeTmdb())
+    rows = repo.open_reviews("tmdb")
+    assert len(rows) == 1 and rows[0]["id"] == before["id"] and rows[0]["reason"] == NO_MATCH_REVIEWED
+    parsed = parse_review_detail(str(rows[0]["detail"]))
+    assert parsed is not None and [c["letter"] for c in parsed.candidates] == ["A", "B"]
+    assert parsed.query is not None and parsed.query["title"] == "Love"
+    assert rep.review == 1 and rep.applied == 1
+    # idempotent: the second run lists it as review-open and writes nothing
+    rep2, _ = _run(repo, today, FakeFetcher(LOVE), FakeTmdb())
+    assert (rep2.review_open, rep2.applied) == (1, 0)
+    assert repo.external_ids_for(fid) == {}
+
+
+def test_keyed_film_links_tmdb_without_the_resolver(repo, today):
+    fid = _nomatch(repo, today, "Scarface", 1983)
+    repo.set_external_id(fid, "imdb", "tt0086250", today)
+    rep, _ = _run(repo, today, FakeFetcher({}), FakeTmdb({"tt0086250": 111}, {111: 1983}))
+    assert repo.external_ids_for(fid)["tmdb"] == "111" and rep.keyed == 1 and rep.applied == 1
+
+
+def test_limit_slices_actionable_only(repo, today):
+    _nomatch(repo, today, "Offline", 2001)  # conflict — always listed, free
+    a = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    b = _nomatch(repo, today, "Love", 2024)
+    rep, _ = _run(repo, today, FakeFetcher({**BOUND, **LOVE}), FakeTmdb({}, {9081: 1996}), limit=1)
+    assert (rep.groups, rep.conflict, rep.applied) == (2, 1, 1)
+    assert "tmdb" in repo.external_ids_for(a) and repo.external_ids_for(b) == {}
+    rep2, _ = _run(repo, today, FakeFetcher({**BOUND, **LOVE}), FakeTmdb({}, {9081: 1996}), limit=1)
+    assert rep2.applied == 1 and repo.open_reviews("tmdb")[-1]["reason"] == NO_MATCH_REVIEWED
+
+
+def test_batch_local_holder_is_skipped_not_written(repo, today):
+    # two films resolve to the same tt: the first wins, the second is skipped (counted), never half-written
+    a = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    b = _nomatch(repo, today, "Bound", 1997, director="Lana Wachowski")
+    rep, lines = _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1996}))
+    assert (rep.match, rep.applied, rep.skipped) == (2, 1, 1)
+    assert "tmdb" in repo.external_ids_for(a) and repo.external_ids_for(b) == {}
+    assert any("already held" in ln for ln in lines)
+
+
+def test_partial_after_record_tmdb_match_raises(repo, today, monkeypatch):
+    import pytest
+
+    _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    monkeypatch.setattr("movie_brain.application.repair_keys.record_tmdb_match", lambda *a, **k: "id-conflict")
+    with pytest.raises(RuntimeError, match=r"\[partial\]"):
+        _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1996}))
+
+
+def test_declined_is_counted_and_untouched(repo, today):
+    from movie_brain.application.repair_keys import repair_nomatch
+
+    fid = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    rep = repair_nomatch(repo, today, apply=True, confirm=lambda g: False, tmdb=FakeTmdb({}, {9081: 1996}),
+                         fetcher=FakeFetcher(BOUND), log=lambda _m: None)
+    assert (rep.declined, rep.applied) == (1, 0) and repo.external_ids_for(fid) == {}
