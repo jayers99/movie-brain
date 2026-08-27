@@ -204,6 +204,22 @@ def test_repair_years_args_pair(monkeypatch):
     assert r.exit_code == 0 and calls == {"film_id": 12, "year": 1927, "apply": True}
 
 
+def test_repair_editions_dry_run_lists_zero_groups(config_dir):
+    r = runner.invoke(app, ["repair", "editions"])
+    assert r.exit_code == 0
+    assert "groups: 0" in r.output
+
+
+def test_repair_editions_partial_merge_exits_1(monkeypatch):
+    def fake(repo, today, *, apply, confirm, contract, limit, log):
+        raise RuntimeError("[partial] #1 PARTIAL: merged into #2 but survivor keying refused")
+
+    monkeypatch.setattr("movie_brain.cli.repair_editions", fake)
+    r = runner.invoke(app, ["repair", "editions", "--apply", "--yes"])
+    assert r.exit_code == 1
+    assert "PARTIAL: merged into #2" in r.output
+
+
 def test_review_resolve_reports_value_errors(monkeypatch):
     def fake(repo, review_id, **kw):
         raise ValueError("choose exactly one")

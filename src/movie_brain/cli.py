@@ -17,9 +17,12 @@ from movie_brain.application.owned import import_owned
 from movie_brain.application.rematch import rematch
 from movie_brain.application.repair import (
     DupGroup,
+    EditionGroup,
     TwinGroup,
+    load_edition_contract,
     load_expected_twins,
     repair_dupes,
+    repair_editions,
     repair_links,
     repair_twins,
     repair_years,
@@ -302,6 +305,35 @@ def repair_twins_cmd(
         limit=limit,
         log=_plain,
     )
+    console.print(
+        f"groups: {report.groups} · twin: {report.twins} · no-twin: {report.no_twin} · conflict: {report.conflict} · "
+        f"csv-mismatch: {report.csv_mismatch} · applied: {report.applied} · declined: {report.declined}"
+    )
+
+
+@repair_app.command("editions")
+def repair_editions_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Merge/key confirmed groups (default: dry-run).")] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="With --apply: confirm every group without prompting.")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Only the first N groups (batch size).")] = None,
+) -> None:
+    """Fold edition-year films into their work (eval group C is the contract); old year → claim.edition_year."""
+    from pathlib import Path
+
+    eval_csv = Path(__file__).resolve().parents[2] / "scripts" / "eval" / "thumbprint_eval_v1.csv"
+    contract = load_edition_contract(eval_csv)
+
+    def confirm(g: EditionGroup) -> bool:
+        target = f"merge → #{g.twin_id}" if g.verdict == "twin" else f"become {g.work_title!r} ({g.work_year})"
+        return yes or typer.confirm(f"#{g.film_id} {g.title!r} {target}?", default=False)
+
+    try:
+        report = repair_editions(
+            _repo(), date.today(), apply=apply, confirm=confirm, contract=contract, limit=limit, log=_plain
+        )
+    except RuntimeError as exc:
+        err.print(str(exc))
+        raise typer.Exit(1) from exc
     console.print(
         f"groups: {report.groups} · twin: {report.twins} · no-twin: {report.no_twin} · conflict: {report.conflict} · "
         f"csv-mismatch: {report.csv_mismatch} · applied: {report.applied} · declined: {report.declined}"
