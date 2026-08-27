@@ -40,18 +40,24 @@ paths:
   keyed by film id with an expected tt/tmdb and the work's title+year parsed from the row's
   note. A twin is exactly one same-norm-title/same-work-year candidate agreeing on tmdb id (or,
   when neither side has a tmdb id, a fellow contract row sharing the same tt); `_edition_blockers`
-  pre-checks tt/tmdb/key holders on both the twin-merge and no-twin-keying paths and downgrades
-  to `conflict` rather than write into a held identity. `edition_year` is the film's old
+  pre-checks tt/tmdb/key holders (over EVERY film, disposed included — the UNIQUE guard is) on
+  both the twin-merge and no-twin-keying paths and downgrades to `conflict` rather than write
+  into a held identity, as it does for a twin already holding a DIFFERENT imdb id. A film that
+  carries a Criterion listing is never re-keyed: `record_catalog` upserts
+  `ON CONFLICT(films.key)`, so the next walk would mint a duplicate under the old key — that
+  group is a `conflict` deferred to the ingester switch. `edition_year` is the film's old
   `films.year` unless that year predates the work's year, in which case it's NULL (an edition
   can't be older than the work it's an edition of). `repair_editions` never touches
   `omdb`/`owned`/`listings` and never appends an eval row itself — a survivor-keying refusal
   after its merge already committed logs `[partial]` and raises (CLI exits 1) rather than report
   a half-done fold as a success.
 - `external_ids` policy (migration 012, PK `(film_id, authority, value)`): `KEY_AUTHORITIES =
-  {tmdb, imdb}` are single-per-film — `set_external_id` replaces the film's existing row for a
-  key authority (preserving nothing of the old `first_seen`) — while every other authority is a
-  repeatable claim authority (`INSERT OR IGNORE`); `UNIQUE(authority, value)` still guards
-  cross-film collisions on both kinds. `merge_film` moves a loser's claim-authority ids onto the
+  {tmdb, imdb}` are single-per-film — `set_external_id` (and `key_work`) replaces the value on
+  the film's existing row for a key authority, an UPDATE-then-INSERT that KEEPS the original
+  `first_seen` — while every other authority is a repeatable claim authority (`INSERT OR
+  IGNORE`, never an UPDATE: `record_catalog` adds a changed catalog URL alongside the old one
+  rather than collapsing every row the film holds for that source); `UNIQUE(authority, value)`
+  still guards cross-film collisions on both kinds. `merge_film` moves a loser's claim-authority ids onto the
   survivor and moves a key-authority id too UNLESS the survivor already holds that authority, in
   which case the loser's is dropped (today's behaviour, recorded in the disposition note). Read
   models that join `external_ids` for metacritic must pick exactly one slug per film via the

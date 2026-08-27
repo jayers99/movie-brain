@@ -249,6 +249,62 @@ def test_audit_editions_twin_path_blocks_when_the_work_key_is_held_elsewhere(rep
     assert f"twin #{survivor} but key 'donnie darko (2001)' held by #" in g.detail
 
 
+def test_audit_editions_blocks_a_twin_that_holds_a_different_imdb_id(repo):
+    """The merge writes the contract tt onto the survivor; a survivor already keyed to another
+    work is not this work's twin, and keeping its id silently would hide the disagreement."""
+    from datetime import date
+
+    from movie_brain.application.repair import EditionContract, audit_editions
+    from movie_brain.domain.models import Film
+    from movie_brain.domain.thumbprint import title_norm as tnorm
+
+    fid = _edition_film(repo, "Overlord [re-release]", 2006)
+    twin = repo.create_film(Film("Overlord", 1975, None, ""))
+    repo.set_title_norm(twin, tnorm("Overlord"))
+    repo.set_external_id(twin, "tmdb", "55343", date(2026, 8, 25))
+    repo.set_external_id(twin, "imdb", "tt0080749", date(2026, 8, 25))  # the 2018 film's tt
+    contract = {fid: EditionContract(fid, "Overlord", 1975, "tt0073502", "55343")}
+    (g,) = audit_editions(repo, contract)
+    assert (g.verdict, g.twin_id) == ("conflict", None)
+    assert g.detail == f"twin #{twin} but holds imdb tt0080749, contract says tt0073502"
+
+
+def test_audit_editions_blocks_on_a_tt_held_by_a_disposed_film(repo):
+    """`key_work`'s UNIQUE(authority, value) refusal is blind to dispositions, so the pre-check
+    must be too — holders built from live films only would promise a write the DB refuses."""
+    from datetime import date
+
+    from movie_brain.application.repair import EditionContract, audit_editions
+
+    fid = _edition_film(repo, "Blade Runner (The Final Cut)", 2007)
+    ghost = _edition_film(repo, "Blade Runner (ghost)", 1982)
+    repo.set_external_id(ghost, "imdb", "tt0083658", date(2026, 8, 25))
+    repo.tombstone_film(ghost, date(2026, 8, 25), note="x")
+    contract = {fid: EditionContract(fid, "Blade Runner", 1982, "tt0083658", "78")}
+    (g,) = audit_editions(repo, contract)
+    assert g.verdict == "conflict" and f"tt0083658 held by #{ghost}" in g.detail
+
+
+def test_audit_editions_defers_a_film_criterion_still_lists(repo):
+    """`record_catalog` upserts ON CONFLICT(films.key): re-keying a listed film would mint a
+    duplicate on the next walk."""
+    from datetime import date
+
+    from movie_brain.application.repair import EditionContract, audit_editions
+    from movie_brain.domain.models import Film
+
+    fid = _edition_film(repo, "SCENES FROM A MARRIAGE: Theatrical Version", 1973)
+    repo.record_catalog(
+        "criterion",
+        [Film("SCENES FROM A MARRIAGE: Theatrical Version", 1973, None, "https://c/sfam")],
+        date(2026, 8, 25),
+    )
+    contract = {fid: EditionContract(fid, "Scenes from a Marriage", 1974, "tt6725014", "133919")}
+    (g,) = audit_editions(repo, contract)
+    assert g.verdict == "conflict"
+    assert g.detail == "current criterion listing — re-key deferred to the ingester switch"
+
+
 def test_repair_editions_stops_the_batch_when_survivor_keying_refuses_after_the_merge(repo, monkeypatch):
     from datetime import date
 

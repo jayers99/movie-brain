@@ -447,10 +447,11 @@ class Repository:
                     film_id = int(dispositions[film_id][1])  # alias → survivor (chains allowed)
                 self._write_listing(c, film_id, source, film.url, day, frontier)
                 try:
-                    c.execute(
-                        "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = ? AND value != ?",
-                        (film.url, film_id, source, film.url),
-                    )
+                    # A catalog source is a CLAIM authority (migration 012): extra rows are
+                    # legal, so a changed URL is added, never UPDATEd over the film's existing
+                    # row. The UPDATE this replaced collapsed every row a film held for the
+                    # source onto one value — after 012 a merge survivor can hold two criterion
+                    # URLs, and that collapse raised IntegrityError on every sync.
                     c.execute(
                         "INSERT INTO external_ids (film_id, authority, value, first_seen) "
                         "VALUES (?, ?, ?, ?) "
@@ -531,6 +532,27 @@ class Repository:
         with self._conn() as c:
             rows = c.execute("SELECT value FROM external_ids WHERE authority = ?", (authority,)).fetchall()
             return {str(r["value"]) for r in rows}
+
+    def external_id_holders(self, authority: str) -> dict[str, int]:
+        """value → film id for one authority across EVERY film, disposed included. The
+        `UNIQUE(authority, value)` guard and `key_work`'s refusal checks are blind to
+        dispositions, so a pre-check built from live films only would miss a merged-away or
+        tombstoned holder and promise a write that the DB then refuses."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, value FROM external_ids WHERE authority = ? ORDER BY film_id", (authority,)
+            ).fetchall()
+            return {str(r["value"]): int(r["film_id"]) for r in rows}
+
+    def has_listing(self, film_id: int, source: str) -> bool:
+        """This film carries a listing from `source` — the same subquery `_TMDB_TARGET_SELECT`
+        negates for `commerce`. Departed counts: Criterion rotates titles back in, and a
+        re-listing under a key we re-keyed away would mint a duplicate film."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT 1 FROM listings WHERE film_id = ? AND source = ? LIMIT 1", (film_id, source)
+            ).fetchone()
+            return row is not None
 
     def tmdb_facts_needed(self) -> list[tuple[int, int]]:
         """Linked films with no tmdb_facts row, or a row fetched for a different tmdb id."""

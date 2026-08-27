@@ -318,19 +318,23 @@ def test_record_catalog_records_criterion_external_ids(repo):
     assert repo.external_ids_for(fid) == {"criterion": "https://c/trio"}
 
 
-def test_record_catalog_url_change_preserves_first_seen(repo):
-    """Task 2 reads first_seen for earliest-slug tie-breaks — a re-listed film under a new
-    URL must keep its original first_seen, not reset it to the day of the re-list."""
+def test_record_catalog_url_change_adds_a_row_and_preserves_first_seen(repo):
+    """Task 2 reads first_seen for earliest-slug tie-breaks — a re-listed film under a new URL
+    must keep its original first_seen, not reset it to the day of the re-list. Since 012 a
+    catalog source is a claim authority, so the new URL is a SECOND row (the UPDATE this
+    replaced collapsed every row a film held for the source into one)."""
     repo.record_catalog("criterion", [TRIO], D1)
     fid = repo.film_id_by_key("trio (1950)")
     assert fid is not None
     moved = Film(TRIO.title, TRIO.year, TRIO.director, "https://c/trio-remastered")
     repo.record_catalog("criterion", [moved], D2)
     conn = sqlite3.connect(repo.db_path)
-    row = conn.execute(
-        "SELECT value, first_seen FROM external_ids WHERE film_id = ? AND authority = 'criterion'", (fid,)
-    ).fetchone()
-    assert row == ("https://c/trio-remastered", D1.isoformat())
+    rows = conn.execute(
+        "SELECT value, first_seen FROM external_ids WHERE film_id = ? AND authority = 'criterion' "
+        "ORDER BY first_seen",
+        (fid,),
+    ).fetchall()
+    assert rows == [("https://c/trio", D1.isoformat()), ("https://c/trio-remastered", D2.isoformat())]
 
 
 def test_record_catalog_contains_external_id_uniqueness_conflicts(repo):
@@ -1200,6 +1204,38 @@ def test_migration_012_allows_two_claim_values_per_authority(repo):
     rows = conn.execute("SELECT value FROM external_ids WHERE film_id = ? ORDER BY value", (fid,)).fetchall()
     assert [r[0] for r in rows] == ["apocalypse-now", "apocalypse-now-redux"]
     assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 12
+
+
+def test_record_catalog_keeps_both_criterion_ids_when_a_film_holds_two(repo):
+    """A merge survivor can hold two criterion URLs (012 + merge_film's move policy). The walk
+    that re-lists it under one of them must not collapse them — that raised IntegrityError on
+    every sync — and it must not lose the other."""
+    fid = _film(repo, "Trio", 1950)
+    repo.set_external_id(fid, "criterion", "https://c/trio", D1)
+    repo.set_external_id(fid, "criterion", "https://c/trio-loser", D1)
+    repo.record_catalog("criterion", [Film("Trio", 1950, None, "https://c/trio")], D2)
+    assert repo.external_ids_all(fid) == [("criterion", "https://c/trio"), ("criterion", "https://c/trio-loser")]
+    # a changed URL is ADDED, never UPDATEd over the rows the film already holds
+    repo.record_catalog("criterion", [Film("Trio", 1950, None, "https://c/trio-v2")], D2)
+    assert ("criterion", "https://c/trio-v2") in repo.external_ids_all(fid)
+    assert ("criterion", "https://c/trio") in repo.external_ids_all(fid)
+
+
+def test_external_id_holders_includes_disposed_films(repo):
+    live = _film(repo, "Trio", 1950)
+    gone = _film(repo, "Trio (Restored)", 2001)
+    repo.set_external_id(live, "imdb", "tt0042917", D1)
+    repo.set_external_id(gone, "imdb", "tt9999999", D1)
+    repo.tombstone_film(gone, D1, note="x")
+    assert repo.external_id_holders("imdb") == {"tt0042917": live, "tt9999999": gone}
+
+
+def test_has_listing_sees_the_films_catalog_row(repo):
+    fid = _film(repo, "Trio", 1950)
+    assert not repo.has_listing(fid, "criterion")
+    repo.record_catalog("criterion", [Film("Trio", 1950, None, "https://c/trio")], D2)
+    assert repo.has_listing(fid, "criterion")
+    assert not repo.has_listing(fid, "apple-tv-store")
 
 
 def test_key_authorities_stay_single_per_film(repo):
