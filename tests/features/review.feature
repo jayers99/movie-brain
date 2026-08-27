@@ -70,6 +70,12 @@ Feature: match_review rows are resolved by CLI and never come back
     Then "King Kong (1933)" holds imdb "tt0024216" and tmdb id "244"
     And the eval log has a verified human row for "King Kong (1933)" expecting "tt0024216"
 
+  Scenario: --pick on an OMDb-only candidate finds the tmdb id through TMDB
+    Given an open tmdb resolver review for "King Kong (1933)" with candidates A "tt0024216"/0 and B "tt0000001"/1
+    And TMDB finds "tt0024216" as id 244 released in 1933
+    When I resolve it with pick "A"
+    Then "King Kong (1933)" holds imdb "tt0024216" and tmdb id "244"
+
   Scenario: --tt keys any tmdb no-match row, finding the tmdb id through TMDB
     Given an open tmdb "no-match" review for "King Kong (1933)"
     And TMDB finds "tt0024216" as id 244 released in 1933
