@@ -463,8 +463,9 @@ def repair_nomatch_cmd(
             cache.save()  # the session cache, never the fixture
     console.print(
         f"groups: {report.groups} · keyed: {report.keyed} · match: {report.match} · review: {report.review} · "
-        f"unlinked: {report.unlinked} · review-open: {report.review_open} · conflict: {report.conflict} · "
-        f"applied: {report.applied} · declined: {report.declined} · skipped: {report.skipped}"
+        f"unlinked: {report.unlinked} · linked: {report.linked} · review-open: {report.review_open} · "
+        f"conflict: {report.conflict} · applied: {report.applied} · declined: {report.declined} · "
+        f"skipped: {report.skipped}"
     )
 
 

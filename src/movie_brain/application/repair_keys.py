@@ -334,6 +334,7 @@ def repair_disagreements(
 # --- repair nomatch (T4, memo step 4) ------------------------------------------------------
 
 NOMATCH_ACTIONABLE = ("keyed", "match", "review")
+NOMATCH_SUCCESS = ("matched", "adopted", "collision")  # record_tmdb_match results that are complete, not [partial]
 _CLAIM_PRECEDENCE = ("criterion", "metacritic", "apple-tv")
 _CLAIM_SOURCE = {"criterion": "criterion", "metacritic": "metacritic", "apple-tv": "apple"}
 
@@ -344,7 +345,7 @@ class NomatchGroup:
     film_id: int
     title: str
     year: int | None
-    verdict: str  # "keyed" | "unlinked" | "match" | "review" | "review-open" | "conflict"
+    verdict: str  # "keyed" | "unlinked" | "linked" | "match" | "review" | "review-open" | "conflict"
     reason: str
     tt: str | None
     tmdb_id: int | None
@@ -402,7 +403,11 @@ def audit_nomatch(
         if f.film_id in reviewed_open:
             out.append(mk("review-open", "already promoted"))
             continue
-        own_tt = repo.external_ids_for(f.film_id).get("imdb")
+        own_ids = repo.external_ids_for(f.film_id)
+        own_tt = own_ids.get("imdb")
+        if own_tt is not None and own_ids.get("tmdb") is not None and repo.tmdb_found(f.film_id):
+            out.append(mk("linked", "already keyed and found", tt=own_tt, tid=int(own_ids["tmdb"])))
+            continue
         if own_tt is not None:
             if tmdb is None:
                 out.append(mk("conflict", "no client", "holds imdb but no TMDB client to look it up", tt=own_tt))
@@ -478,6 +483,7 @@ class NomatchReport:
     groups: int
     keyed: int
     unlinked: int
+    linked: int  # non-actionable, like unlinked: already holds imdb+tmdb with tmdb.found=1
     match: int
     review: int
     review_open: int
@@ -557,11 +563,14 @@ def repair_nomatch(
             if target is None:
                 raise RuntimeError(f"[partial] #{g.film_id} vanished after its imdb id was written")
             res = record_tmdb_match(repo, target, tid, winner_year, today, log)
-            if res not in ("matched", "adopted"):
+            if res not in NOMATCH_SUCCESS:
                 partial = f"[partial] #{g.film_id} PARTIAL: imdb {g.tt} written but tmdb {tid} {res}"
                 log(partial)
                 raise RuntimeError(partial)
-            log(f"  keyed imdb {g.tt} tmdb {tid} ({res})")
+            if res == "collision":
+                log(f"  keyed imdb {g.tt} tmdb {tid} (collision → year-collision review queued)")
+            else:
+                log(f"  keyed imdb {g.tt} tmdb {tid} ({res})")
         else:
             log(f"  keyed imdb {g.tt} (no TMDB record)")
         if repo.omdb_imdb_id(g.film_id) != g.tt:
@@ -572,9 +581,9 @@ def repair_nomatch(
         rebuild_no_match_queue(repo, today)
     counts = {
         v: sum(1 for g in groups if g.verdict == v)
-        for v in ("keyed", "unlinked", "match", "review", "review-open", "conflict")
+        for v in ("keyed", "unlinked", "linked", "match", "review", "review-open", "conflict")
     }
     return NomatchReport(
-        len(groups), counts["keyed"], counts["unlinked"], counts["match"], counts["review"], counts["review-open"],
-        counts["conflict"], applied, declined, skipped,
+        len(groups), counts["keyed"], counts["unlinked"], counts["linked"], counts["match"], counts["review"],
+        counts["review-open"], counts["conflict"], applied, declined, skipped,
     )

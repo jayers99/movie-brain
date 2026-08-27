@@ -1097,6 +1097,11 @@ class Repository:
                 (film_id, int(found), looked_up.isoformat()),
             )
 
+    def tmdb_found(self, film_id: int) -> bool:
+        with self._conn() as c:
+            row = c.execute("SELECT found FROM tmdb WHERE film_id = ?", (film_id,)).fetchone()
+            return False if row is None else bool(row["found"])
+
     def record_tmdb_providers(self, film_id: int, checked: date, payload: str) -> None:
         with self._conn() as c:
             c.execute(

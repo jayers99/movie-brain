@@ -345,7 +345,7 @@ def test_repair_nomatch_session_cache_is_not_the_fixture(config_dir, monkeypatch
         seen["fetcher"] = fetcher
         from movie_brain.application.repair_keys import NomatchReport
 
-        return NomatchReport(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+        return NomatchReport(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
     monkeypatch.setattr("movie_brain.cli.repair_nomatch", fake)
     (config_dir / "tmdb-read-token.txt").write_text("tok")

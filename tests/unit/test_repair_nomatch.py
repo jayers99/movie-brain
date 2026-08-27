@@ -249,3 +249,41 @@ def test_declined_is_counted_and_untouched(repo, today):
     rep = repair_nomatch(repo, today, apply=True, confirm=lambda g: False, tmdb=FakeTmdb({}, {9081: 1996}),
                          fetcher=FakeFetcher(BOUND), log=lambda _m: None)
     assert (rep.declined, rep.applied) == (1, 0) and repo.external_ids_for(fid) == {}
+
+
+def test_collision_is_a_complete_state_not_partial(repo, today, monkeypatch):
+    """record_tmdb_match returning "collision" means the tmdb id was claimed and a durable
+    year-collision review was already queued — the same complete state nightly sync leaves.
+    It must be applied, not raised as [partial]."""
+    fid = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+
+    def fake_record(repo_arg, target, winner_id, winner_year, today_arg, log):
+        # Mirror what the real record_tmdb_match does before it hits the year clash: the
+        # tmdb id IS claimed and found IS set — only the year write-back collided.
+        repo_arg.set_external_id(target.film_id, "tmdb", str(winner_id), today_arg)
+        repo_arg.upsert_tmdb(target.film_id, found=True, looked_up=today_arg)
+        return "collision"
+
+    monkeypatch.setattr("movie_brain.application.repair_keys.record_tmdb_match", fake_record)
+    rep, lines = _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1996}))
+    assert rep.applied == 1
+    ids = repo.external_ids_for(fid)
+    assert ids.get("imdb") == "tt0115736" and ids.get("tmdb") == "9081"
+    assert any("collision" in ln for ln in lines)
+    assert not any(ln.startswith("[partial]") for ln in lines)
+
+
+def test_already_linked_film_audits_as_linked_and_is_never_reapplied(repo, today):
+    fid = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
+    repo.set_external_id(fid, "imdb", "tt0115736", today)
+    repo.set_external_id(fid, "tmdb", "9081", today)
+    repo.upsert_tmdb(fid, found=True, looked_up=today)
+
+    groups = audit_nomatch(repo, None, None)
+    assert [g.verdict for g in groups] == ["linked"]
+    assert "linked" not in NOMATCH_ACTIONABLE
+
+    rep, _ = _run(repo, today, FakeFetcher({}), FakeTmdb(), limit=1)
+    assert rep.applied == 0 and rep.linked == 1
+    # non-actionable: --limit spends no budget on it
+    assert rep.groups == 1
