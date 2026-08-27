@@ -296,6 +296,14 @@ def work_keyed(ctx, tt, y):
     assert repo.claim_for_film_authority(ctx["work"], "metacritic").edition_year == y
 
 
+@then(parsers.parse('the work film\'s {authority} claim has edition_label "{label}" and no edition_year'))
+def work_claim_label(ctx, authority, label):
+    # a same-year fold: `merge_film` re-points the loser's claim onto the survivor, and the
+    # label survives while `edition_year` stays NULL (old_year == work_year is not an edition year)
+    claim = ctx["repo"].claim_for_film_authority(ctx["work"], authority)
+    assert claim is not None and claim.edition_label == label and claim.edition_year is None
+
+
 @then(parsers.parse("the editions report says twin {t:d}, no-twin {n:d}, conflict {c:d}, csv-mismatch {m:d}, applied {a:d}"))
 def editions_report(ctx, t, n, c, m, a):
     r = ctx["report"]
