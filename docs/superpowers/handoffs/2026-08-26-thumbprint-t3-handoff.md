@@ -1,3 +1,17 @@
+## Status (2026-08-26, T3 build)
+
+Tasks 1–8 landed on `feature/T3-thumbprint-disagreements` (not merged): `migrate [--apply]` guard
+(`init_db(apply=)`/`PendingMigrations`, every verb exits 2 when behind); `repair disagreements
+[--apply] [--yes] [--limit N]` (group-D contract, five verdicts, durable `key-disagreement`
+review); `resolve_review` refresh-on-mismatch fix; article-insensitive `title_level`/`article_norm`
+evaluated and adopted BEHIND the gate. Gate: `scripts/thumbprint_benchmark.py --assert` →
+n=484 / 0 wrong / 94.8% (unchanged with the article rule on). Scratch rehearsal and live batches
+(both `migrate` and `repair disagreements`) have NOT been run yet — do that before merging. Live
+measurement of the 32 open article `no-match` films (rule on vs. off) is also still pending;
+adoption on live data is a separate owner decision per spec §4.
+
+---
+
 # Thumbprint T3 handoff — the 94 OMDb/TMDB key disagreements (memo step 3)
 
 **Written:** 2026-08-26, end of the T2 session. **For:** a fresh session. **Repo:** `main` @ `d74a31b`
