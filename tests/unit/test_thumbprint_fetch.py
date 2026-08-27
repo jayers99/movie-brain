@@ -64,3 +64,32 @@ def test_fetcher_unifies_on_tt_from_cache():
 def test_fetcher_without_clients_raises_on_miss():
     with pytest.raises(CacheMiss):
         CandidateFetcher(CandidateCache({}, read_only=True), None, None).fetch(make_query("X", 2000, "criterion"))
+
+
+def test_fetcher_fetches_article_folded_hit_beyond_top_three():
+    # TMDB search for "The Bride of Frankenstein" returns four irrelevant hits before the
+    # real (article-folded) match at position 4 (j=3) — plausible() must widen past j < 3.
+    data = {
+        "ts:The Bride of Frankenstein|None": [
+            {"id": 1, "title": "Something Else Entirely"},
+            {"id": 2, "title": "Another Movie"},
+            {"id": 3, "title": "Random Title"},
+            {"id": 4, "title": "Fourth Filler"},
+            {"id": 999, "title": "Bride of Frankenstein", "original_title": "Bride of Frankenstein"},
+        ],
+        "td:999": {
+            "id": 999,
+            "title": "Bride of Frankenstein",
+            "original_title": "Bride of Frankenstein",
+            "release_date": "1935-04-22",
+            "runtime": 75,
+            "external_ids": {"imdb_id": "tt0026138"},
+            "credits": {"crew": [{"job": "Director", "name": "James Whale"}]},
+            "alternative_titles": {"titles": []},
+        },
+        'o:{"s": "The Bride of Frankenstein"}': {"Search": []},
+    }
+    cands = CandidateFetcher(CandidateCache(data, read_only=True), None, None).fetch(
+        make_query("The Bride of Frankenstein", None, "criterion")
+    )
+    assert any(c.tt == "tt0026138" and c.in_tmdb for c in cands)

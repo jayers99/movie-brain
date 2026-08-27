@@ -36,3 +36,21 @@ def test_ratify_none_marks_verified_unkeyed(tmp_path: Path):
     p.write_text(HEADER)
     ratify(p, EvalEntry(2, "criterion", "Short", None, "NONE", "", "review 4 --none"))
     assert _rows(p)[0]["expected_tt"] == "NONE"
+
+
+def test_ratify_is_idempotent_for_an_already_verified_row(tmp_path: Path):
+    """Same film + source already verified with the same tt: no second F-human row (a verified
+    NONE would otherwise be scored twice by the benchmark)."""
+    p = tmp_path / "e.csv"
+    p.write_text(HEADER)
+    entry = EvalEntry(2, "criterion", "Marrow", 1998, "NONE", "", "review 4 --none")
+    assert ratify(p, entry) == "appended"
+    assert ratify(p, entry) == "already ratified"
+    assert len(_rows(p)) == 1
+
+
+def test_ratify_still_appends_when_the_verified_row_says_something_else(tmp_path: Path):
+    p = tmp_path / "e.csv"
+    p.write_text(HEADER + "D-disagree,7,criterion,Tiger,2020,tt1,5,human,note,verified,,\n")
+    assert ratify(p, EvalEntry(7, "criterion", "Tiger", 2020, "tt2", "6", "review 3 --tt")) == "appended"
+    assert len(_rows(p)) == 2

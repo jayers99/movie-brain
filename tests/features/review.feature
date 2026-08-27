@@ -98,3 +98,15 @@ Feature: match_review rows are resolved by CLI and never come back
     Given an open tmdb resolver review for "King Kong (1933)" with a yearless query and candidate A "tt0024216"/244
     When I resolve it with pick "A"
     Then the eval log row for "King Kong (1933)" has no ingested year
+
+  Scenario: --tt refreshes a found-but-wrong OMDb stub
+    Given an open tmdb "no-match" review for "King Kong (1933)"
+    And "King Kong (1933)" has a found OMDb payload with imdb "ttOLD"
+    When I resolve it offline with tt "ttNEW"
+    Then "King Kong (1933)" needs an OMDb refresh
+
+  Scenario: --tt matching the existing OMDb imdb id does not force a refresh
+    Given an open tmdb "no-match" review for "King Kong (1933)"
+    And "King Kong (1933)" has a found OMDb payload with imdb "ttOLD"
+    When I resolve it offline with tt "ttOLD"
+    Then "King Kong (1933)" does not need an OMDb refresh

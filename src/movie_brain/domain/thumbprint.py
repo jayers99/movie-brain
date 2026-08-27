@@ -197,11 +197,27 @@ def _sim(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, norm_title(a), norm_title(b)).ratio()
 
 
-def title_level(q: Query, c: Candidate) -> int:
+_ARTICLE = re.compile(r"^(the|an|a)\s+", re.I)
+
+
+def article_norm(title: str) -> str:
+    """`norm_title` after dropping one leading English article — *The Bride of Frankenstein*
+    vs TMDB's *Bride of Frankenstein*. English only on purpose (*La Strada* is not *Strada*).
+    Folding both sides means "The Ring" and "A Ring" land on the same key too. Never returns
+    empty: a title that strips to nothing (e.g. "The ...") falls back to the un-stripped norm."""
+    stripped = _ARTICLE.sub("", title.strip(), count=1)
+    return norm_title(stripped) or norm_title(title.strip())
+
+
+def title_level(q: Query, c: Candidate, *, article_ok: bool = False) -> int:
     forms = {norm_title(f) for f in q.parsed.forms()}
     nt = norm_title(q.title)
     if any(norm_title(x) in forms for x in c.titles if x):
         return 3
+    if article_ok:
+        aforms = {article_norm(f) for f in q.parsed.forms()}
+        if any(article_norm(x) in aforms for x in c.titles if x):
+            return 3
     if any(norm_title(x).startswith(nt) and len(nt) >= 8 for x in c.titles if x):
         return 2
     return 1 if max((_sim(q.title, x) for x in c.titles if x), default=0.0) >= 0.85 else 0
@@ -223,8 +239,9 @@ def resolve(q: Query, candidates: Sequence[Candidate]) -> Verdict:  # noqa: C901
     surv: list[Scored] = []
     conflicts = 0
     junk_query = bool(JUNK.search(q.title))
+    article_ok = not any(title_level(q, c) == 3 for c in candidates)
     for c in candidates:
-        lvl = title_level(q, c)
+        lvl = title_level(q, c, article_ok=article_ok)
         if lvl == 0:
             continue
         if JUNK.search(c.omdb_title) and not junk_query:

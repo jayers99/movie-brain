@@ -1,10 +1,12 @@
 import pytest
 
+from movie_brain.domain.matching import norm_title
 from movie_brain.domain.thumbprint import (
     Candidate,
     Scored,
     Verdict,
     YearClass,
+    article_norm,
     make_query,
     parse_title,
     resolve,
@@ -49,6 +51,35 @@ def test_year_class_rule():
 
 def cand(tt, title, year, director="", votes=0, tmdb=1, in_omdb=True, kind="movie", titles=()):
     return Candidate(tt, tmdb, (title, *titles), year, director, None, votes, kind, tmdb is not None, in_omdb, title)
+
+
+def test_article_norm():
+    assert article_norm("The Bride of Frankenstein") == article_norm("Bride of Frankenstein")
+    assert article_norm("A Star Is Born") == "starisborn"
+    assert article_norm("Thing") == "thing" and article_norm("A") == "a"
+    assert article_norm("Theatre of Blood") == "theatreofblood"  # no false prefix
+    assert article_norm("The ...") == norm_title("The ...")  # strips to empty: fall back, never ""
+
+
+def test_article_insensitive_match_when_no_exact_candidate():
+    q = make_query("The Bride of Frankenstein", 1935, "criterion")
+    v = resolve(q, [cand("tt0026138", "Bride of Frankenstein", 1935, votes=50000, in_omdb=True)])
+    assert (v.kind, v.tt, v.reason) == ("match", "tt0026138", "exact title + year + agreement")
+    assert v.ranked[0].title_level == 3
+
+
+def test_article_exact_candidate_outranks_article_folded_rival():
+    q = make_query("The Thing", 1982, "criterion")
+    v = resolve(q, [cand("ttthing", "The Thing", 1982, votes=400000), cand("ttother", "Thing", 1982, votes=5000)])
+    assert (v.kind, v.tt) == ("match", "ttthing")
+    # the folded rival never reaches tier 3 while an article-exact candidate exists
+    assert v.reason == "exact title + year + agreement" and len(v.ranked) == 1
+
+
+def test_star_is_born_year_still_decides():
+    q = make_query("A Star Is Born", 1937, "criterion")
+    v = resolve(q, [cand("tt1937", "A Star Is Born", 1937, votes=9000), cand("tt1954", "A Star Is Born", 1954, votes=30000)])
+    assert (v.kind, v.tt) == ("match", "tt1937")
 
 
 def test_director_corroborated_beats_year_and_type():
