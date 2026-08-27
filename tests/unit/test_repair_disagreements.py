@@ -1,14 +1,20 @@
 import json
 import sqlite3
 
+import pytest
+import requests
+
 from movie_brain.application.repair import (
     DisagreementContract,
     audit_disagreements,
     format_disagreement,
     load_disagreement_contract,
 )
+from movie_brain.application.thumbprint import parse_review_detail
 from movie_brain.domain.models import Film
+from movie_brain.domain.thumbprint import Candidate
 from movie_brain.infrastructure.database import OmdbRating, TmdbFactsRow
+from movie_brain.infrastructure.tmdb import AuthError
 
 HEADER = "group,film_id,source,title_ingested,year_ingested,expected_tt,expected_tmdb,verified_by,note,status,director,runtime_min\n"
 
@@ -234,3 +240,114 @@ def test_declined_groups_are_counted_not_applied(repo, today):
         tmdb=None, fetcher=None, log=lambda m: None,
     )
     assert (rep.applied, rep.declined) == (0, 1) and "imdb" not in repo.external_ids_for(fid)
+
+
+# --- fix round 1: nothing-written skips, the [partial] half-state, live-resolver evidence -----
+
+
+class BoomTmdb(FakeTmdb):
+    """A client whose calls fail the way a dead token / dead network does."""
+
+    def __init__(self, exc, *, on="find"):
+        super().__init__({}, {})
+        self.exc, self.on = exc, on
+
+    def find_by_imdb(self, tt):
+        if self.on == "find":
+            raise self.exc
+        return 77
+
+    def movie_year(self, tid):
+        if self.on == "year":
+            raise self.exc
+        return 2000
+
+
+def test_relink_never_writes_into_a_held_tmdb_id(repo, today):
+    fid = _split(repo, today, "Relink", "ttC", "ttD", 2)
+    other = repo.create_film(Film("Other", 1999, None, ""))
+    repo.set_external_id(other, "tmdb", "77", today)
+    rep, lines = _run(repo, today, {fid: _contract(fid, "ttC")}, tmdb=FakeTmdb({"ttC": 77}, {77: 2000}))
+    assert rep.applied == 0 and any(f"tmdb 77 held by #{other} — skipped (conflict)" in ln for ln in lines)
+    ids = repo.external_ids_for(fid)
+    assert "imdb" not in ids and ids["tmdb"] == "2"           # nothing written at all
+    assert [f.id for f in repo.key_disagreements()] == [fid]  # still visible as a disagreement
+
+
+def test_tmdb_errors_are_a_skip_not_a_half_apply(repo, today):
+    for on, exc in (("find", requests.ConnectionError("boom")), ("year", AuthError("bad token"))):
+        fid = _split(repo, today, f"Relink-{on}", "ttC" + on, "ttD" + on, 20 if on == "find" else 21)
+        rep, lines = _run(repo, today, {fid: _contract(fid, "ttC" + on)}, tmdb=BoomTmdb(exc, on=on))
+        assert rep.applied == 0 and any("TMDB error" in ln and "skipped" in ln for ln in lines)
+        ids = repo.external_ids_for(fid)
+        assert "imdb" not in ids and ids["tmdb"] == str(20 if on == "find" else 21)
+
+
+def test_fetcher_failure_still_writes_an_evidence_free_review(repo, today):
+    class Boom:
+        def fetch(self, q):
+            raise requests.ConnectionError("boom")
+
+    fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
+    from movie_brain.application.repair import repair_disagreements
+
+    repair_disagreements(
+        repo, today, apply=True, confirm=lambda g: True,
+        contract={fid: _contract(fid, "ttJ", status="proposed")}, tmdb=None, fetcher=Boom(), log=lambda m: None,
+    )
+    rows = [r for r in repo.open_reviews("tmdb") if r["reason"] == "key-disagreement"]
+    parsed = parse_review_detail(str(rows[0]["detail"]))
+    assert len(rows) == 1 and parsed is not None and parsed.reason.startswith("no candidates (")
+
+
+def test_partial_tmdb_write_raises_after_the_imdb_id_landed(repo, today):
+    # adopt on a commerce film whose TMDB year (1950) collides with another film's key →
+    # record_tmdb_match returns "collision" AFTER claiming the tmdb id: a real half-state.
+    fid = _split(repo, today, "Adopt", "ttE", "ttF", 3)
+    repo.create_film(Film("Adopt", 1950, None, ""))
+    with pytest.raises(RuntimeError) as exc:
+        _run(repo, today, {fid: _contract(fid, "ttZ", "99")}, tmdb=FakeTmdb({}, {99: 1950}))
+    assert str(exc.value).startswith("[partial]") and "collision" in str(exc.value)
+    assert repo.external_ids_for(fid)["imdb"] == "ttZ"  # the documented half-state
+
+
+def test_two_rows_wanting_one_tt_skip_the_loser(repo, today):
+    a = _split(repo, today, "A", "ttA", "ttSHARED", 1)
+    b = _split(repo, today, "B", "ttB", "ttSHARED", 2)
+    rep, lines = _run(repo, today, {a: _contract(a, "ttSHARED"), b: _contract(b, "ttSHARED")})
+    assert rep.applied == 1 and any("ttSHARED already held — skipped (conflict)" in ln for ln in lines)
+    assert repo.external_ids_for(a)["imdb"] == "ttSHARED" and "imdb" not in repo.external_ids_for(b)
+
+
+def test_verified_row_with_a_blank_tt_is_a_conflict(repo, today):
+    fid = _split(repo, today, "Blank", "ttE", "ttF", 3)
+    g = next(g for g in audit_disagreements(repo, {fid: _contract(fid, "", "99")}) if g.film_id == fid)
+    assert (g.verdict, g.detail) == ("conflict", "no expected_tt")
+    _run(repo, today, {fid: _contract(fid, "", "99")}, tmdb=FakeTmdb({}, {99: 2000}))
+    assert "imdb" not in repo.external_ids_for(fid)
+
+
+def _cand(tt, tmdb_id, title, year):
+    return Candidate(tt, tmdb_id, (title,), year, "Dir", 100, 500, "movie", True, True, title)
+
+
+def test_review_detail_carries_the_live_resolver_ranking(repo, today):
+    class TwoHits:
+        def fetch(self, q):
+            return [_cand("tt1", 11, "T", 2000), _cand("tt2", 22, "T", 2001)]
+
+    fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
+    from movie_brain.application.repair import repair_disagreements
+
+    repair_disagreements(
+        repo, today, apply=True, confirm=lambda g: True,
+        contract={fid: _contract(fid, "ttJ", status="proposed")}, tmdb=None, fetcher=TwoHits(), log=lambda m: None,
+    )
+    row = next(r for r in repo.open_reviews("tmdb") if r["reason"] == "key-disagreement")
+    parsed = parse_review_detail(str(row["detail"]))
+    assert parsed is not None
+    assert [c["letter"] for c in parsed.candidates] == ["A", "B"]
+    assert {c["tt"] for c in parsed.candidates} == {"tt1", "tt2"}
+    assert parsed.query == {"title": "T", "year": 2000, "source": "criterion", "director": None, "runtime": None}
+    assert parsed.reason != "no candidates"  # the live resolver's own reason, not the CSV's note
+    assert row["value"] == "ttJ"  # the proposed tt lives in `value`, never in the detail
