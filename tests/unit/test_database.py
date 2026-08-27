@@ -1281,3 +1281,34 @@ def test_key_work_retires_its_own_losers_dead_key(repo):
     conn = sqlite3.connect(repo.db_path)
     assert conn.execute("SELECT key FROM films WHERE id = ?", (surv,)).fetchone()[0] == "donnie darko (2001)"
     assert conn.execute("SELECT key FROM films WHERE id = ?", (loser,)).fetchone()[0] == f"donnie darko (2001) #{loser}"
+
+
+def test_key_work_refusal_on_tt_leaves_own_losers_key_untouched(repo):
+    """Regression (review fix round 1, finding 1): the dead-key retirement of this film's own
+    merged-away loser must not survive a later refusal (tt held by an unrelated film) — every
+    refusal check must run before any write."""
+    surv = _film(repo, "Donnie Darko: Anniversary Special Edition", 2001)
+    loser = _film(repo, "Donnie Darko", 2001)
+    repo.merge_film(loser, surv, T, note="t")
+    other = _film(repo, "Something Else", 1999)
+    repo.set_external_id(other, "imdb", "tt0246578", T)
+    assert not repo.key_work(surv, title="Donnie Darko", year=2001, tt="tt0246578", tmdb_id="141", today=T)
+    conn = sqlite3.connect(repo.db_path)
+    assert conn.execute("SELECT key FROM films WHERE id = ?", (loser,)).fetchone()[0] == "donnie darko (2001)"
+    assert conn.execute("SELECT key, title, year FROM films WHERE id = ?", (surv,)).fetchone() == (
+        "donnie darko: anniversary special edition (2001)", "Donnie Darko: Anniversary Special Edition", 2001,
+    )
+
+
+def test_key_work_preserves_first_seen_on_repeat_call(repo):
+    """Regression (review fix round 1, finding 2): imdb/tmdb writes must UPDATE-then-INSERT
+    (set_external_id's shape) rather than DELETE+INSERT, so first_seen survives a repeat call."""
+    fid = _film(repo, "Blade Runner (The Final Cut)", 2007)
+    d1, d2 = date(2026, 8, 20), date(2026, 8, 26)
+    assert repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=d1)
+    assert repo.key_work(fid, title="Blade Runner", year=1982, tt="tt0083658", tmdb_id="78", today=d2)
+    conn = sqlite3.connect(repo.db_path)
+    rows = conn.execute(
+        "SELECT authority, first_seen FROM external_ids WHERE film_id = ? ORDER BY authority", (fid,)
+    ).fetchall()
+    assert dict(rows) == {"imdb": d1.isoformat(), "tmdb": d1.isoformat()}
