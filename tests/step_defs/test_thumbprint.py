@@ -284,6 +284,27 @@ def edition_merged(ctx):
     assert ctx["repo"].disposition_of(ctx["edition"]) == ("merged", ctx["work"])
 
 
+@then("both edition films are merged into the work film")
+def both_editions_merged(ctx):
+    assert [ctx["repo"].disposition_of(f) for f in ctx["editions"]] == [("merged", ctx["work"])] * 2
+
+
+@then(
+    parsers.parse(
+        'the higher-id edition film is merged into the lower-id one, now titled "{title}" ({year:d}) with tmdb "{tid}"'
+    )
+)
+def mutual_twins_break_low(ctx, title, year, tid):
+    # two editions that are each other's fellow-contract twin: the pair is broken deterministically
+    # toward the LOWER id, which survives and is re-keyed as the work
+    lo, hi = sorted(ctx["editions"])
+    repo = ctx["repo"]
+    assert repo.disposition_of(hi) == ("merged", lo)
+    assert repo.disposition_of(lo) is None
+    assert tuple(_q(ctx, "SELECT title, year FROM films WHERE id = ?", lo)[0]) == (title, year)
+    assert repo.external_ids_for(lo)["tmdb"] == tid
+
+
 @then(parsers.parse('the edition film is merged into the work film "{title}" ({year:d})'))
 def edition_merged_into(ctx, title, year):
     assert ctx["repo"].disposition_of(ctx["edition"]) == ("merged", ctx["works"][(title, year)])
@@ -294,6 +315,14 @@ def work_keyed(ctx, tt, y):
     repo = ctx["repo"]
     assert repo.external_ids_for(ctx["work"])["imdb"] == tt
     assert repo.claim_for_film_authority(ctx["work"], "metacritic").edition_year == y
+
+
+@then(parsers.parse('the work film\'s {authority} claim has edition_label "{label}" and no edition_year'))
+def work_claim_label(ctx, authority, label):
+    # a same-year fold: `merge_film` re-points the loser's claim onto the survivor, and the
+    # label survives while `edition_year` stays NULL (old_year == work_year is not an edition year)
+    claim = ctx["repo"].claim_for_film_authority(ctx["work"], authority)
+    assert claim is not None and claim.edition_label == label and claim.edition_year is None
 
 
 @then(parsers.parse("the editions report says twin {t:d}, no-twin {n:d}, conflict {c:d}, csv-mismatch {m:d}, applied {a:d}"))
