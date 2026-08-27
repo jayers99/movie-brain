@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from movie_brain.domain.matching import norm_title
-from movie_brain.domain.thumbprint import Candidate, Query
+from movie_brain.domain.thumbprint import Candidate, Query, article_norm
 from movie_brain.infrastructure.omdb import OmdbClient
 from movie_brain.infrastructure.tmdb import TmdbClient
 
@@ -218,11 +218,17 @@ class CandidateFetcher:
                 c.runtime = d.get("runtime") or c.runtime
 
         forms = {norm_title(f) for f in q.parsed.forms()}
+        aforms = {article_norm(f) for f in q.parsed.forms()}
 
         def plausible(j: int, x: dict[str, Any]) -> bool:
-            # the prototype fetched details for the top 3 plus any exact-title hit (≤ 6 per query)
+            # the prototype fetched details for the top 3 plus any exact-title hit (≤ 6 per query),
+            # widened to an article-folded exact hit too (memo T3 task 8)
             return (
-                j < 3 or norm_title(x.get("title") or "") in forms or norm_title(x.get("original_title") or "") in forms
+                j < 3
+                or norm_title(x.get("title") or "") in forms
+                or norm_title(x.get("original_title") or "") in forms
+                or article_norm(x.get("title") or "") in aforms
+                or article_norm(x.get("original_title") or "") in aforms
             )
 
         picked: list[dict[str, Any]] = []
