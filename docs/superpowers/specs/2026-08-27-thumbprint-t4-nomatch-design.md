@@ -121,7 +121,9 @@ client.find_by_imdb(tt)`, `year = client.movie_year(chosen_tmdb)`; still `None` 
 - Auto matches are the algorithm's own verdicts → NOT ratified, no new CSV rows (the gate would
   score itself). Human resolutions ratify as today.
 - Spot check: the rehearsal shows the full auto-match list (title/year/director → candidate);
-  wrong ones are fixed via `repair links --film` + `review resolve --tt`, which ratifies.
+  wrong ones are fixed via `repair links --film` + `review resolve --tt`, which ratifies. Undo
+  BEFORE the next `sync` — once a film holds both ids with `tmdb.found = 1` it audits `linked`
+  and is never re-keyed.
 - Article rule: if any auto match is WRONG on an article title, revert `92efefc`+`d672da3`.
 - Gates at every step: `uv run pytest`, `ruff check .`, `mypy`,
   `scripts/thumbprint_benchmark.py --assert` (n=528 / 0 / 92.0 %),
