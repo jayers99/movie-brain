@@ -919,6 +919,20 @@ class Repository:
                 (f" [{note}]", review_id),
             )
 
+    def promote_review(self, review_id: int, *, reason: str, detail: str, value: str | None = None) -> None:
+        """Rewrite an OPEN row's reason/detail/value in place — `id` and `created_at` survive.
+
+        The one way a per-run `no-match` row becomes durable: `repair nomatch` promotes it to
+        `no-match-reviewed` with the resolver's A/B/C detail instead of queueing a second row
+        the next sync's rebuild would then orphan."""
+        with self._conn() as c:
+            n = c.execute(
+                "UPDATE match_review SET reason = ?, detail = ?, value = ? WHERE id = ? AND resolved = 0",
+                (reason, detail, value, review_id),
+            ).rowcount
+        if n != 1:
+            raise ValueError(f"review {review_id} is not open")
+
     def resolved_review_keys(self, authority: str) -> set[tuple[str, int | None, str | None]]:
         """(reason, film_id, value) of every resolved row — a resolution is a standing decision."""
         with self._conn() as c:
