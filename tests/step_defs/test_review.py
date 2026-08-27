@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import re
 from datetime import date
 
@@ -11,7 +12,9 @@ from movie_brain.application import review as rv
 from movie_brain.application.availability import TMDB_AUTHORITY
 from movie_brain.application.metacritic import match_archive
 from movie_brain.application.owned import import_owned
+from movie_brain.application.thumbprint import review_detail
 from movie_brain.domain.models import Film, McTitle, OwnedTitle, ReviewEntry
+from movie_brain.domain.thumbprint import Candidate, Scored, Verdict, make_query
 from movie_brain.infrastructure.tmdb import TMDB_API, TmdbClient
 
 scenarios("../features/review.feature")
@@ -202,3 +205,118 @@ def both_fail(ctx, spec):
 def with_film_fails(ctx, spec):
     with pytest.raises(ValueError):
         rv.resolve_review(ctx["repo"], ctx["review_id"], film_id=_id(ctx["repo"], spec), today=TODAY)
+
+
+@given(
+    parsers.parse(
+        'an open tmdb resolver review for "{spec}" with candidates A "{tta}"/{ida:d} and B "{ttb}"/{idb:d}'
+    )
+)
+def open_resolver_row(ctx, spec, tta, ida, ttb, idb):
+    t, y = _split(spec)
+    fid = _id(ctx["repo"], spec)
+    ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
+    cands = [
+        Candidate(tta, ida, (t,), y, "A Dir", 90, 10, "movie", True, True),
+        Candidate(ttb, idb, (t,), y, "B Dir", 100, 20, "movie", True, True),
+    ]
+    v = Verdict("review", None, "ambiguous", tuple(Scored(c, 1, 3, 0, 0, False, False) for c in cands))
+    detail = review_detail(v, make_query(t, y, "criterion"))
+    ctx["repo"].append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail=detail)], TODAY)
+    ctx["review_id"] = ctx["repo"].open_reviews("tmdb")[-1]["id"]
+
+
+@given(parsers.parse('TMDB finds "{tt}" as id {tid:d} released in {year:d}'))
+def tmdb_find(ctx, tt, tid, year):
+    ctx["rs"].add(responses.GET, f"{TMDB_API}/find/{tt}", json={"movie_results": [{"id": tid}]})
+    ctx["rs"].add(responses.GET, f"{TMDB_API}/movie/{tid}", json={"id": tid, "release_date": f"{year}-01-01"})
+    ctx["client"] = TmdbClient("tok")
+
+
+def _resolve(ctx, **kw):
+    ctx["warnings"] = []
+    return rv.resolve_review(
+        ctx["repo"],
+        ctx["review_id"],
+        today=TODAY,
+        client=ctx["client"],
+        eval_csv=ctx["config_dir"] / "eval.csv",
+        warn=ctx["warnings"].append,
+        **kw,
+    )
+
+
+@when(parsers.parse('I resolve it with pick "{letter}"'))
+def do_pick(ctx, letter):
+    _resolve(ctx, pick=letter)
+
+
+@when(parsers.parse('I resolve it with tt "{tt}"'))
+def do_tt(ctx, tt):
+    _resolve(ctx, tt=tt)
+
+
+@when(parsers.parse('I resolve it offline with tt "{tt}"'))
+def do_tt_offline(ctx, tt):
+    ctx["client"] = None
+    _resolve(ctx, tt=tt)
+
+
+@when("I resolve it with none")
+def do_none(ctx):
+    _resolve(ctx, none=True)
+
+
+@then(parsers.parse('"{spec}" holds imdb "{tt}" and tmdb id "{tid}"'))
+def holds_both(ctx, spec, tt, tid):
+    assert ctx["repo"].external_ids_for(_id(ctx["repo"], spec)) == {"imdb": tt, "tmdb": tid}
+
+
+@then(parsers.parse('"{spec}" holds imdb "{tt}" and no tmdb id'))
+def holds_imdb_only(ctx, spec, tt):
+    assert ctx["repo"].external_ids_for(_id(ctx["repo"], spec)) == {"imdb": tt}
+
+
+@then(parsers.parse('a warning mentions "{text}"'))
+def warned(ctx, text):
+    assert any(text in w for w in ctx["warnings"]), ctx["warnings"]
+
+
+@then(parsers.parse('the eval log has a verified human row for "{spec}" expecting "{tt}"'))
+def eval_row(ctx, spec, tt):
+    fid = _id(ctx["repo"], spec)
+    with (ctx["config_dir"] / "eval.csv").open(encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r["film_id"] == str(fid)]
+    assert rows and rows[-1]["expected_tt"] == tt
+    assert rows[-1]["status"] == "verified" and rows[-1]["verified_by"] == "human"
+
+
+@then(parsers.parse('resolving it with pick "{letter}" fails'))
+def pick_fails(ctx, letter):
+    with pytest.raises(ValueError):
+        _resolve(ctx, pick=letter)
+
+
+@given(
+    parsers.parse(
+        'an open tmdb resolver review for "{spec}" with a yearless query and candidate A "{tt}"/{tid:d}'
+    )
+)
+def open_yearless_resolver_row(ctx, spec, tt, tid):
+    t, y = _split(spec)
+    fid = _id(ctx["repo"], spec)
+    ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
+    cand = Candidate(tt, tid, (t,), y, "A Dir", 90, 10, "movie", True, True)
+    v = Verdict("review", None, "ambiguous", (Scored(cand, 1, 3, 0, 0, False, False),))
+    # The ingester saw no year at all — films.year (1933) must NOT leak into the eval row.
+    detail = review_detail(v, make_query(t, None, "criterion"))
+    ctx["repo"].append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail=detail)], TODAY)
+    ctx["review_id"] = ctx["repo"].open_reviews("tmdb")[-1]["id"]
+
+
+@then(parsers.parse('the eval log row for "{spec}" has no ingested year'))
+def eval_row_yearless(ctx, spec):
+    fid = _id(ctx["repo"], spec)
+    with (ctx["config_dir"] / "eval.csv").open(encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if r["film_id"] == str(fid)]
+    assert rows and rows[-1]["year_ingested"] == "", rows

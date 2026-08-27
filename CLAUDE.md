@@ -26,10 +26,11 @@ uv run movie-brain repair dupes [--apply] [--yes]     # audit norm-title + id-co
 uv run movie-brain repair links [--film ID] [--apply]  # re-validate stored TMDB links against TMDB's title/original_title/alternative titles (one call each); --film audits/clears one link unconditionally; --apply clears suspects
 uv run movie-brain repair years [FILM_ID YEAR] [--apply]  # year worklist: open year-collisions + stale OMDb payloads; --apply marks stale rows for OMDb refetch; with FILM_ID YEAR, corrects one film's year
 uv run movie-brain review list [--authority A] [--reason R]   # open match_review rows (filterable)
-uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, or dismiss
+uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss | --pick A|B|C | --tt X | --none) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, dismiss, key to an A/B/C candidate, key to an IMDb id, or verify unkeyed
 uv run movie-brain review revisits                    # films the user flagged "needs revisit" in the drawer
 
 uv run movie-brain repair twins [--apply] [--yes] [--limit N]  # retire raw `Title (YYYY)` films into their same-year twin (contract-checked); --limit = batch size
+uv run movie-brain repair editions [--apply] [--yes] [--limit N]  # fold `Title (edition)` films into their same-year work (contract-checked); --limit = batch size
 uv run movie-brain thumbprint backfill [--apply]      # copy owned/criterion/metacritic evidence into `claim` rows (pure copy, idempotent)
 uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
 uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)
@@ -66,7 +67,9 @@ Path-scoped contracts in `.claude/rules/`: `matching.md` (the one evidence-score
   current-or-rated view filter; rated departed films are shown as departed.
 - `movie_service` is the service registry (slug PK; kind `svod`|`store`; `subscribed`/`region`
   are data). `service_provider` groups TMDB provider ids per service; `external_ids` maps
-  films to per-authority native ids with `UNIQUE(authority, value)` as the dedup guard.
+  films to per-authority native ids, PK `(film_id, authority, value)`; `UNIQUE(authority,
+  value)` remains the dedup guard; tmdb/imdb are single per work by policy, claim authorities
+  may repeat.
 - Metascores are scraped-first: the FilmView `metacritic` value COALESCEs the scraped
   `metacritic` table (joined via `external_ids` authority `metacritic` = slug) over
   `omdb.metacritic`. The raw page archive under `<config_dir>/metacritic/` is the crawl

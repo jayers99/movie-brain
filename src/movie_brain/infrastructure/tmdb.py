@@ -120,6 +120,11 @@ class TmdbClient:
         v = self._get(f"/movie/{tmdb_id}/external_ids").json().get("imdb_id")
         return str(v) if v else None
 
+    def find_by_imdb(self, tt: str) -> int | None:
+        """TMDB movie id for an IMDb id (one call) — the reverse of imdb_id()."""
+        hits = self._get(f"/find/{tt}", external_source="imdb_id").json().get("movie_results") or []
+        return int(hits[0]["id"]) if hits else None
+
     def movie_titles(self, tmdb_id: int) -> TmdbTitles:
         """Title, original title, year, and every alternative title — one API call."""
         d = self._get(f"/movie/{tmdb_id}", append_to_response="alternative_titles").json()
