@@ -64,35 +64,21 @@ def rebuild_no_match_queue(repo: Repository, today: date) -> None:
     A resolved `no-match-reviewed` row (T4 promotion drained with --pick/--tt/--none) is the
     same standing decision — `--none` leaves the film found=0, and re-queueing it would rerun
     the resolver on a verdict a human already gave.
-
-    Diffed against the current open `no-match` rows rather than a blanket wipe-and-reinsert: a
-    film that still needs its row keeps it (same id/`created_at`) — only films that no longer
-    need one lose their row, and only newly-missed films get a fresh one. This matters for a
-    film `repair nomatch` just promoted to `no-match-reviewed` (T4): a sibling film's row isn't
-    reassigned a new id out from under it on the very next rebuild.
     """
     durably_flagged = {r["film_id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] != "no-match"}
     dismissed = {
         k[1] for k in repo.resolved_review_keys(TMDB_AUTHORITY) if k[0] in ("no-match", NO_MATCH_REVIEWED)
     }
-    desired = {
-        fid: (t, y)
-        for fid, t, y in repo.films_tmdb_missed()
-        if fid not in durably_flagged and fid not in dismissed
-    }
-    existing = {
-        int(str(r["film_id"])): int(str(r["id"]))
-        for r in repo.open_reviews(TMDB_AUTHORITY)
-        if r["reason"] == "no-match"
-    }
-    repo.delete_reviews([rid for fid, rid in existing.items() if fid not in desired])
-    new_entries = [
-        ReviewEntry("no-match", film_id=fid, detail=f"{t} ({y})")
-        for fid, (t, y) in desired.items()
-        if fid not in existing
-    ]
-    if new_entries:
-        repo.append_reviews(TMDB_AUTHORITY, new_entries, today)
+    repo.replace_unresolved_reviews(
+        TMDB_AUTHORITY,
+        [
+            ReviewEntry("no-match", film_id=fid, detail=f"{t} ({y})")
+            for fid, t, y in repo.films_tmdb_missed()
+            if fid not in durably_flagged and fid not in dismissed
+        ],
+        today,
+        reason="no-match",
+    )
 
 
 def record_tmdb_match(

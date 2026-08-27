@@ -219,7 +219,8 @@ def test_limit_slices_actionable_only(repo, today):
     assert (rep.groups, rep.conflict, rep.applied) == (2, 1, 1)
     assert "tmdb" in repo.external_ids_for(a) and repo.external_ids_for(b) == {}
     rep2, _ = _run(repo, today, FakeFetcher({**BOUND, **LOVE}), FakeTmdb({}, {9081: 1996}), limit=1)
-    assert rep2.applied == 1 and repo.open_reviews("tmdb")[-1]["reason"] == NO_MATCH_REVIEWED
+    assert rep2.applied == 1
+    assert any(r["film_id"] == b and r["reason"] == NO_MATCH_REVIEWED for r in repo.open_reviews("tmdb"))
 
 
 def test_batch_local_holder_is_skipped_not_written(repo, today):
