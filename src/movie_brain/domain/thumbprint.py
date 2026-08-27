@@ -202,8 +202,11 @@ _ARTICLE = re.compile(r"^(the|an|a)\s+", re.I)
 
 def article_norm(title: str) -> str:
     """`norm_title` after dropping one leading English article — *The Bride of Frankenstein*
-    vs TMDB's *Bride of Frankenstein*. English only on purpose (*La Strada* is not *Strada*)."""
-    return norm_title(_ARTICLE.sub("", title.strip(), count=1))
+    vs TMDB's *Bride of Frankenstein*. English only on purpose (*La Strada* is not *Strada*).
+    Folding both sides means "The Ring" and "A Ring" land on the same key too. Never returns
+    empty: a title that strips to nothing (e.g. "The ...") falls back to the un-stripped norm."""
+    stripped = _ARTICLE.sub("", title.strip(), count=1)
+    return norm_title(stripped) or norm_title(title.strip())
 
 
 def title_level(q: Query, c: Candidate, *, article_ok: bool = False) -> int:

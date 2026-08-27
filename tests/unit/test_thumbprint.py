@@ -1,5 +1,6 @@
 import pytest
 
+from movie_brain.domain.matching import norm_title
 from movie_brain.domain.thumbprint import (
     Candidate,
     Scored,
@@ -57,12 +58,14 @@ def test_article_norm():
     assert article_norm("A Star Is Born") == "starisborn"
     assert article_norm("Thing") == "thing" and article_norm("A") == "a"
     assert article_norm("Theatre of Blood") == "theatreofblood"  # no false prefix
+    assert article_norm("The ...") == norm_title("The ...")  # strips to empty: fall back, never ""
 
 
 def test_article_insensitive_match_when_no_exact_candidate():
     q = make_query("The Bride of Frankenstein", 1935, "criterion")
     v = resolve(q, [cand("tt0026138", "Bride of Frankenstein", 1935, votes=50000, in_omdb=True)])
     assert (v.kind, v.tt, v.reason) == ("match", "tt0026138", "exact title + year + agreement")
+    assert v.ranked[0].title_level == 3
 
 
 def test_article_exact_candidate_outranks_article_folded_rival():
@@ -70,7 +73,7 @@ def test_article_exact_candidate_outranks_article_folded_rival():
     v = resolve(q, [cand("ttthing", "The Thing", 1982, votes=400000), cand("ttother", "Thing", 1982, votes=5000)])
     assert (v.kind, v.tt) == ("match", "ttthing")
     # the folded rival never reaches tier 3 while an article-exact candidate exists
-    assert [s.title_level for s in v.ranked] == [3] or v.ranked[0].candidate.tt == "ttthing"
+    assert v.reason == "exact title + year + agreement" and len(v.ranked) == 1
 
 
 def test_star_is_born_year_still_decides():
