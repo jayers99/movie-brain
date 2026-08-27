@@ -58,3 +58,11 @@ Feature: Thumbprint T2 — edition-year films fold into their work
     When I run repair editions --apply answering yes
     And I run repair editions --apply answering yes
     Then the editions report says twin 0, no-twin 0, conflict 0, csv-mismatch 0, applied 0
+
+  Scenario: a same-title same-year film with the wrong tmdb id blocks rather than merges
+    Given an edition film "Overlord [re-release]" year 2006 from "metacritic" slug "overlord-re-release"
+    And a work film "Overlord" (1975) with tmdb id "438799"
+    And the edition contract says the work is "Overlord" 1975 tt "tt0073502" tmdb "55343"
+    When I run repair editions --apply answering yes
+    Then the edition film's verdict is "conflict" and it has no disposition and year 2006
+    And the editions report says twin 0, no-twin 0, conflict 1, csv-mismatch 0, applied 0

@@ -195,3 +195,41 @@ def test_audit_editions_upgrades_the_work_title_casing_from_the_contract(repo):
     contract = {fid: EditionContract(fid, "GoodFellas", 1990, "tt0099685", "769")}
     (g,) = audit_editions(repo, contract)
     assert (g.verdict, g.work_title) == ("no-twin", "GoodFellas")
+
+
+def test_audit_editions_twin_path_blocks_when_the_work_key_is_held_elsewhere(repo):
+    """The survivor still parses with editions, so it gets re-keyed — a third film already
+    holding that key must downgrade the group to `conflict` BEFORE the merge is committed."""
+    from movie_brain.application.repair import EditionContract, audit_editions
+    from movie_brain.domain.models import Film
+
+    loser = _edition_film(repo, "Donnie Darko: The Director's Cut", 2004)
+    survivor = _edition_film(repo, "Donnie Darko: Anniversary Special Edition", 2001)
+    repo.create_film(Film("Donnie Darko", 2001, None, ""))  # holds 'donnie darko (2001)'
+    contract = {
+        fid: EditionContract(fid, "Donnie Darko", 2001, "tt0246578", "141") for fid in (loser, survivor)
+    }
+    (g,) = audit_editions(repo, contract)
+    assert (g.film_id, g.verdict, g.twin_id) == (loser, "conflict", None)
+    assert g.twin_title == "Donnie Darko: Anniversary Special Edition"
+    assert f"twin #{survivor} but key 'donnie darko (2001)' held by #" in g.detail
+
+
+def test_repair_editions_stops_the_batch_when_survivor_keying_refuses_after_the_merge(repo, monkeypatch):
+    from datetime import date
+
+    from movie_brain.application.repair import EditionContract, repair_editions
+
+    loser = _edition_film(repo, "Donnie Darko: The Director's Cut", 2004)
+    survivor = _edition_film(repo, "Donnie Darko: Anniversary Special Edition", 2001)
+    contract = {
+        fid: EditionContract(fid, "Donnie Darko", 2001, "tt0246578", "141") for fid in (loser, survivor)
+    }
+    monkeypatch.setattr(repo, "key_work", lambda *a, **k: False)  # a concurrent writer took the key
+    log: list[str] = []
+    with pytest.raises(RuntimeError, match="PARTIAL"):
+        repair_editions(
+            repo, date(2026, 8, 25), apply=True, confirm=lambda g: True, contract=contract, log=log.append
+        )
+    assert any(line.startswith("[partial] ") and "survivor keying refused" in line for line in log)
+    assert repo.disposition_of(loser) == ("merged", survivor)
