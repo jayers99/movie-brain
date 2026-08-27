@@ -890,6 +890,17 @@ class Repository:
                     (authority, e.film_id, e.value, e.reason, e.detail, created.isoformat()),
                 )
 
+    def delete_reviews(self, review_ids: list[int]) -> None:
+        """Hard-delete specific `match_review` rows by id. Used only by diff-aware rebuilds
+        (`rebuild_no_match_queue`) to drop rows for films that no longer need them while
+        leaving still-needed rows' ids/`created_at` untouched — unlike
+        `replace_unresolved_reviews`, which wipes and reassigns ids for the whole reason-scope
+        on every call."""
+        if not review_ids:
+            return
+        with self._conn() as c:
+            c.executemany("DELETE FROM match_review WHERE id = ?", [(rid,) for rid in review_ids])
+
     def open_reviews(self, authority: str) -> list[dict[str, object]]:
         with self._conn() as c:
             rows = c.execute(
@@ -1458,11 +1469,22 @@ class Repository:
             ]
 
     def nomatch_worklist(self) -> list[NomatchFilm]:
+        """Open `no-match` rows, plus a film whose row `repair nomatch` promoted in place to
+        `no-match-reviewed` (T4) — carried so it still reports as `review-open` rather than
+        vanishing from the worklist. A film that (unusually) holds BOTH an open `no-match` row
+        and a separate open `no-match-reviewed` row counts once, via the `no-match` row."""
         with self._conn() as c:
             rows = c.execute(
                 "SELECT m.id AS review_id, f.id, f.title, f.year, f.director FROM match_review m "
                 "JOIN films f ON f.id = m.film_id "
-                "WHERE m.authority = 'tmdb' AND m.reason = 'no-match' AND m.resolved = 0 AND "
+                "WHERE m.authority = 'tmdb' AND m.resolved = 0 AND ("
+                "  m.reason = 'no-match' OR ("
+                "    m.reason = 'no-match-reviewed' AND NOT EXISTS ("
+                "      SELECT 1 FROM match_review m2 WHERE m2.film_id = m.film_id AND m2.authority = 'tmdb' "
+                "      AND m2.reason = 'no-match' AND m2.resolved = 0"
+                "    )"
+                "  )"
+                ") AND "
                 + _NOT_DISPOSED
                 + " ORDER BY f.id"
             ).fetchall()
