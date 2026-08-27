@@ -249,3 +249,48 @@ def test_review_resolve_reports_value_errors(monkeypatch):
     monkeypatch.setattr("movie_brain.cli.resolve_review", fake)
     r = runner.invoke(app, ["review", "resolve", "7", "--dismiss", "--create"])
     assert r.exit_code == 1 and "choose exactly one" in r.output
+
+
+def _pretend_one_behind(tmp_path, monkeypatch):
+    """Point MIGRATIONS_DIR at a copy with one extra migration so the DB is 'behind'."""
+    import shutil
+
+    from movie_brain.infrastructure import database as dbmod
+
+    src = dbmod.MIGRATIONS_DIR
+    copy = tmp_path / "migrations"
+    shutil.copytree(src, copy)
+    n = max(int(p.name.split("_")[0]) for p in copy.glob("*.sql")) + 1
+    (copy / f"{n:03d}_t3_probe.sql").write_text(
+        f"CREATE TABLE t3_probe (x INTEGER); INSERT INTO schema_version (version) VALUES ({n});"
+    )
+    monkeypatch.setattr(dbmod, "MIGRATIONS_DIR", copy)
+    return n
+
+
+def test_status_refuses_a_db_that_is_behind(config_dir, tmp_path, monkeypatch):
+    from movie_brain.infrastructure.database import init_db
+
+    init_db(config_dir / "movie-brain.db")
+    _pretend_one_behind(tmp_path, monkeypatch)
+    r = runner.invoke(app, ["status"])
+    assert r.exit_code == 2
+    assert "movie-brain migrate --apply" in r.output
+
+
+def test_migrate_dry_run_lists_pending_then_apply(config_dir, tmp_path, monkeypatch):
+    from movie_brain.infrastructure.database import init_db, pending_migrations
+
+    init_db(config_dir / "movie-brain.db")
+    n = _pretend_one_behind(tmp_path, monkeypatch)
+    r = runner.invoke(app, ["migrate"])
+    assert r.exit_code == 0 and f"{n:03d}_t3_probe.sql" in r.output and "--apply" in r.output
+    assert pending_migrations(config_dir / "movie-brain.db")  # dry run wrote nothing
+    r = runner.invoke(app, ["migrate", "--apply"])
+    assert r.exit_code == 0 and pending_migrations(config_dir / "movie-brain.db") == []
+    assert runner.invoke(app, ["status"]).exit_code == 0
+
+
+def test_migrate_on_current_db_says_so(config_dir):
+    r = runner.invoke(app, ["migrate"])
+    assert r.exit_code == 0 and "up to date" in r.output

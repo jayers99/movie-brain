@@ -31,7 +31,7 @@ from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
-from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
 from movie_brain.infrastructure.notify import notify
 from movie_brain.infrastructure.tmdb import TmdbClient
@@ -69,7 +69,11 @@ def _plain(msg: str) -> None:
 def _repo() -> Repository:
     cfg = load_config()
     cfg.config_dir.mkdir(parents=True, exist_ok=True)
-    return Repository(cfg.db_path)
+    try:
+        return Repository(cfg.db_path)
+    except PendingMigrations as exc:
+        err.print(str(exc))
+        raise typer.Exit(2) from exc
 
 
 @app.command("sync")
@@ -152,6 +156,25 @@ def status() -> None:
     for k, v in s.items():
         table.add_row(k, str(v))
     console.print(table)
+
+
+@app.command("migrate")
+def migrate_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Apply pending migrations (backs up first).")] = False,
+) -> None:
+    """The ONLY path that advances an existing DB's schema; without --apply it just lists what is pending."""
+    cfg = load_config()
+    pending = pending_migrations(cfg.db_path)
+    if not pending:
+        console.print("schema up to date")
+        return
+    for name in pending:
+        console.print(f"pending: {name}")
+    if not apply:
+        console.print("dry run — re-run with --apply to migrate (a backup lands in backups/ first)")
+        return
+    init_db(cfg.db_path, apply=True)
+    console.print(f"applied {len(pending)} migration(s)")
 
 
 @metacritic_app.command("crawl")
