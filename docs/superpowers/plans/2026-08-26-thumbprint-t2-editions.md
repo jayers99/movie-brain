@@ -25,7 +25,12 @@
 > simulated Criterion re-walk creates 0 films. **INCIDENT:** migration 012 reached the LIVE DB on
 > 2026-08-26 19:06 via a subagent CLI call without `MOVIE_BRAIN_CONFIG_DIR` (schema-only, 9,448
 > external_ids rows before/after, integrity ok, backup `backups/movie-brain-v11-2026-08-26.db`) — Task 12
-> starts at the dry run. **Task 12 (live apply) NOT run — awaiting owner approval.**
+> starts at the dry run. **LIVE (2026-08-26, done):** snapshot `movie-brain.db.bak-pre-t2`; dry run identical to
+> rehearsal; owner "apply" → batches 8 + 8 (`--apply --yes --limit 8`, then the rest): 15 applied (10 merges,
+> 5 direct keys), #1909 conflict skipped. End state: films 4,666 = · dispositions 102→112 · edition_year
+> 0→15 · imdb 549→564 · tmdb 4,338→4,344 · open no-match 225→209 · owned 861→859; second apply 0 applied.
+> Retitled works: Quai des Orfèvres 1947, How the Grinch Stole Christmas 2000, Phantasm 1979, Ghost in the
+> Shell 1995, Donnie Darko 2001, Blade Runner 1982.
 
 ## Global Constraints
 
