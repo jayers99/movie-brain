@@ -1350,25 +1350,38 @@ class Repository:
                 raise LookupError(f"unknown film {film_id}")
             new_key = film_key(title, year)
             holder = c.execute("SELECT id FROM films WHERE key = ? AND id != ?", (new_key, film_id)).fetchone()
+            # Every refusal check runs before any write: a plain `return False` inside an
+            # open `_conn()` still commits, so a dead-key retirement or id write performed
+            # before a later check fails would survive the refusal (bug fixed in review).
+            retire_holder_id: int | None = None
             if holder is not None:
                 if self._canonical_in(c, int(holder["id"])) != film_id:
                     return False
-                c.execute("UPDATE films SET key = key || ' #' || id WHERE id = ?", (holder["id"],))
+                retire_holder_id = int(holder["id"])
             for auth, val in (("imdb", tt), ("tmdb", tmdb_id)):
                 if val and c.execute(
                     "SELECT 1 FROM external_ids WHERE authority = ? AND value = ? AND film_id != ?",
                     (auth, val, film_id),
                 ).fetchone():
                     return False
+            if retire_holder_id is not None:
+                c.execute("UPDATE films SET key = key || ' #' || id WHERE id = ?", (retire_holder_id,))
             c.execute(
                 "UPDATE films SET title = ?, year = ?, key = ?, title_norm = ? WHERE id = ?",
                 (title, year, new_key, title_norm(title), film_id),
             )
             for auth, val in (("imdb", tt), ("tmdb", tmdb_id)):
                 if val:
-                    c.execute("DELETE FROM external_ids WHERE film_id = ? AND authority = ?", (film_id, auth))
+                    # Same UPDATE-then-INSERT shape as set_external_id: preserves first_seen
+                    # on an existing row instead of the DELETE+INSERT this replaced (bug
+                    # fixed in review), which reset first_seen to `today` on every call.
                     c.execute(
-                        "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?)",
+                        "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = ? AND value != ?",
+                        (val, film_id, auth, val),
+                    )
+                    c.execute(
+                        "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(film_id, authority, value) DO NOTHING",
                         (film_id, auth, val, today.isoformat()),
                     )
             return True
