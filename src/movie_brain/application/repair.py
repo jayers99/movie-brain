@@ -879,12 +879,21 @@ def audit_disagreements(repo: Repository, contract: dict[int, DisagreementContra
     A film whose repair already landed is NOT actionable again: `--apply` cannot clear the
     disagreement itself (the OMDb payload only changes on the next `sync`), so the already-done
     work is recognised up front — `pending` (keyed + OMDb refetch queued) and `review-open` (its
-    durable `key-disagreement` review is open) are checked before any actionable verdict."""
+    durable `key-disagreement` review is open, or already RESOLVED — a standing decision the
+    human has made) are checked before any actionable verdict."""
     tt_holders = repo.external_id_holders("imdb")
     tmdb_holders = repo.external_id_holders("tmdb")
     reviewed = {
         int(str(r["film_id"])) for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] == KEY_DISAGREEMENT
     }
+    # A RESOLVED row is a standing decision, not a closed ticket: the film keeps disagreeing
+    # (its OMDb payload is untouched) but `queue_review_once` will never re-queue it, so it is
+    # not work either — without this it would sit at the head of every `--limit` batch.
+    decided = {
+        fid
+        for reason, fid, _ in repo.resolved_review_keys(TMDB_AUTHORITY)
+        if reason == KEY_DISAGREEMENT and fid is not None
+    } - reviewed
     groups: list[DisagreementGroup] = []
     for f in repo.key_disagreements():
         c = contract.get(f.id)
@@ -902,6 +911,9 @@ def audit_disagreements(repo: Repository, contract: dict[int, DisagreementContra
             continue
         if f.id in reviewed:
             groups.append(mk("review-open", f"{KEY_DISAGREEMENT} review already open"))
+            continue
+        if f.id in decided:
+            groups.append(mk("review-open", f"{KEY_DISAGREEMENT} review resolved — standing decision"))
             continue
         if (
             c.status == "verified"

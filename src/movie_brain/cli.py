@@ -353,9 +353,10 @@ def repair_editions_cmd(
         target = f"merge → #{g.twin_id}" if g.verdict == "twin" else f"become {g.work_title!r} ({g.work_year})"
         return yes or typer.confirm(f"#{g.film_id} {g.title!r} {target}?", default=False)
 
+    repo = _repo()  # outside the try: typer.Exit subclasses RuntimeError, so the migrate guard would be swallowed
     try:
         report = repair_editions(
-            _repo(), date.today(), apply=apply, confirm=confirm, contract=contract, limit=limit, log=_plain
+            repo, date.today(), apply=apply, confirm=confirm, contract=contract, limit=limit, log=_plain
         )
     except RuntimeError as exc:
         err.print(str(exc))
@@ -382,6 +383,9 @@ def repair_disagreements_cmd(
 
     root = Path(__file__).resolve().parents[2]
     contract = load_disagreement_contract(root / "scripts" / "eval" / "thumbprint_eval_v1.csv")
+    # outside the try below: typer.Exit subclasses RuntimeError, so the migrate guard would be
+    # swallowed there — and a behind DB should fail before the candidate cache is loaded.
+    repo = _repo()
     cfg = load_config()
     token, key = load_tmdb_token(cfg), load_api_key(cfg)
     tmdb = TmdbClient(token) if token else None
@@ -397,7 +401,7 @@ def repair_disagreements_cmd(
 
     try:
         report = repair_disagreements(
-            _repo(), date.today(), apply=apply, confirm=confirm, contract=contract, tmdb=tmdb, fetcher=fetcher,
+            repo, date.today(), apply=apply, confirm=confirm, contract=contract, tmdb=tmdb, fetcher=fetcher,
             limit=limit, log=_plain,
         )
     except RuntimeError as exc:

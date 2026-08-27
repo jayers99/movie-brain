@@ -108,11 +108,12 @@ paths:
   `NONE`), `detail` = `review_detail(verdict, query)` where `verdict = resolve(query, candidates)`
   runs the LIVE resolver (fixture hits free, misses hit the live TMDB/OMDb clients, nothing is
   ever saved back to the fixture — `CandidateCache(..., path=None)`); `conflict` (no D row,
-  disposed, expected id held by another film, `record_tmdb_match` returned anything but
+  expected id held by another film, `record_tmdb_match` returned anything but
   `matched`/`adopted`, or a verified row with no `expected_tt`) is logged and skipped, never
   written. Two verdicts mark work already done and are computed FIRST: `pending` (keyed to
   `expected_tt` with an OMDb refetch queued) and `review-open` (its `key-disagreement` review is
-  already open). Both are listed, never re-applied, and — like `conflict` — are exempt from
+  already open — or already RESOLVED: a resolution is a standing decision, so the film is not
+  work again even though it keeps disagreeing until the next `sync`). Both are listed, never re-applied, and — like `conflict` — are exempt from
   `--limit`, which is a batch size over the ACTIONABLE groups only, so repeated batches advance
   through the worklist instead of re-hitting its head. Holder checks (`external_id_holders`, over EVERY film including disposed) run BEFORE
   any write on every verdict, so a film is either fully repaired or untouched — except a

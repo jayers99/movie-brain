@@ -2,13 +2,18 @@
 
 Tasks 1–8 landed on `feature/T3-thumbprint-disagreements` (not merged): `migrate [--apply]` guard
 (`init_db(apply=)`/`PendingMigrations`, every verb exits 2 when behind); `repair disagreements
-[--apply] [--yes] [--limit N]` (group-D contract, five verdicts, durable `key-disagreement`
-review); `resolve_review` refresh-on-mismatch fix; article-insensitive `title_level`/`article_norm`
-evaluated and adopted BEHIND the gate. Gate: `scripts/thumbprint_benchmark.py --assert` →
-n=484 / 0 wrong / 94.8% (unchanged with the article rule on). Scratch rehearsal and live batches
-(both `migrate` and `repair disagreements`) have NOT been run yet — do that before merging. Live
-measurement of the 32 open article `no-match` films (rule on vs. off) is also still pending;
-adoption on live data is a separate owner decision per spec §4.
+[--apply] [--yes] [--limit N]` (group-D contract, seven verdicts —
+`refetch`/`relink`/`adopt`/`review`/`pending`/`review-open`/`conflict` — and a durable
+`key-disagreement` review); `resolve_review` refresh-on-mismatch fix; article-insensitive
+`title_level`/`article_norm` evaluated and adopted BEHIND the gate. Gate:
+`scripts/thumbprint_benchmark.py --assert` → n=484 / 0 wrong / 94.8% (unchanged with the rule on).
+
+**Scratch rehearsal DONE (2026-08-26):** dry run = 94 groups (28 refetch · 17 relink · 3 adopt ·
+45 review · 1 conflict — #3940 *Birdman*, its identity held by #3552, a merge candidate);
+`--apply` + a simulated next `sync` = 0 `external id conflict for`, worklist 94 → 45,
+`audit_flags` 996 → 929. Article rule measured on the 31 live article `no-match` films: identical
+on and off (22 match / 9 review) — keep-or-revert is the owner's decision. **LIVE batches and the
+#3940/#3552 merge are NOT done.**
 
 ---
 
