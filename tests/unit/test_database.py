@@ -11,6 +11,7 @@ from movie_brain.infrastructure.database import (
     MIGRATIONS_DIR,
     FilmRow,
     Repository,
+    TmdbFactsRow,
     TmdbMatchTarget,
     init_db,
 )
@@ -1348,6 +1349,35 @@ def test_key_work_preserves_first_seen_on_repeat_call(repo):
         "SELECT authority, first_seen FROM external_ids WHERE film_id = ? ORDER BY authority", (fid,)
     ).fetchall()
     assert dict(rows) == {"imdb": d1.isoformat(), "tmdb": d1.isoformat()}
+
+
+def _found_rating(tt: str) -> OmdbRating:
+    return OmdbRating(7.0, 80, True, "English", json.dumps({"imdbID": tt, "Title": "x"}))
+
+
+def _facts(tmdb_id: int, tt: str) -> TmdbFactsRow:
+    return TmdbFactsRow(tmdb_id, tt, "T", "T", (), 2000, None)
+
+
+def test_key_disagreements_lists_only_split_keys(repo, today):
+    from movie_brain.domain.models import Film
+
+    agree = repo.create_film(Film("Agree", 2000, None, ""))
+    split = repo.create_film(Film("Split", 2001, None, ""))
+    nostub = repo.create_film(Film("No Stub", 2002, None, ""))
+    for fid, tt in ((agree, "tt1"), (split, "tt2")):
+        repo.upsert_omdb(fid, _found_rating(tt), today)  # helper below
+    repo.set_external_id(agree, "tmdb", "10", today)
+    repo.set_external_id(split, "tmdb", "20", today)
+    repo.upsert_tmdb_facts(agree, _facts(10, "tt1"), today)
+    repo.upsert_tmdb_facts(split, _facts(20, "tt9"), today)
+    repo.upsert_tmdb_facts(nostub, _facts(30, "tt3"), today)
+    rows = repo.key_disagreements()
+    assert [(r.id, r.omdb_tt, r.tmdb_tt, r.tmdb_id, r.criterion) for r in rows] == [(split, "tt2", "tt9", "20", False)]
+    assert repo.omdb_imdb_id(split) == "tt2" and repo.omdb_imdb_id(nostub) is None
+    # an external imdb id wins over tmdb_facts
+    repo.set_external_id(split, "imdb", "tt2", today)
+    assert repo.key_disagreements() == []
 
 
 def _pretend_one_behind(tmp_path, monkeypatch):

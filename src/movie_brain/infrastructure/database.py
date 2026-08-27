@@ -85,6 +85,19 @@ class EditionFilm(NamedTuple):
     imdb_id: str | None
 
 
+class DisagreementFilm(NamedTuple):
+    """One undisposed film whose found OMDb record and TMDB side name different IMDb ids."""
+
+    id: int
+    title: str
+    year: int | None
+    omdb_tt: str  # OMDb payload imdbID (found=1 only)
+    tmdb_tt: str  # COALESCE(external imdb, tmdb_facts.imdb_id)
+    tmdb_id: str | None  # external tmdb
+    imdb_ext: str | None  # external imdb (raw, may be None)
+    criterion: bool  # has any criterion listing
+
+
 class TwinFilm(NamedTuple):
     """One undisposed film's twin-audit evidence (repair twins)."""
 
@@ -1391,6 +1404,42 @@ class Repository:
                 EditionFilm(int(r["id"]), str(r["title"]), r["year"], r["title_norm"], r["t_id"], r["i_id"])
                 for r in rows
             ]
+
+    def key_disagreements(self) -> list[DisagreementFilm]:
+        """Undisposed films whose found OMDb record names a different IMDb id than their TMDB
+        side (external `imdb`, else `tmdb_facts.imdb_id`) — memo §7 step 3's worklist."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, json_extract(o.payload, '$.imdbID') AS o_tt, "
+                "COALESCE((SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb'), "
+                "         (SELECT imdb_id FROM tmdb_facts t WHERE t.film_id = f.id)) AS t_tt, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'tmdb') AS t_id, "
+                "(SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb') AS i_ext, "
+                "EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') AS crit "
+                "FROM films f JOIN omdb o ON o.film_id = f.id AND o.found = 1 "
+                f"WHERE {_NOT_DISPOSED} AND json_extract(o.payload, '$.imdbID') IS NOT NULL "
+                "AND COALESCE((SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb'), "
+                "             (SELECT imdb_id FROM tmdb_facts t WHERE t.film_id = f.id)) IS NOT NULL "
+                "AND json_extract(o.payload, '$.imdbID') != "
+                "    COALESCE((SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'imdb'), "
+                "             (SELECT imdb_id FROM tmdb_facts t WHERE t.film_id = f.id)) "
+                "ORDER BY f.id"
+            ).fetchall()
+            return [
+                DisagreementFilm(
+                    int(r["id"]), str(r["title"]), r["year"], str(r["o_tt"]), str(r["t_tt"]), r["t_id"], r["i_ext"],
+                    bool(r["crit"]),
+                )
+                for r in rows
+            ]
+
+    def omdb_imdb_id(self, film_id: int) -> str | None:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT json_extract(payload, '$.imdbID') AS tt FROM omdb WHERE film_id = ? AND found = 1",
+                (film_id,),
+            ).fetchone()
+            return None if row is None or row["tt"] is None else str(row["tt"])
 
     def set_claim_edition_year(self, claim_id: int, year: int | None) -> None:
         with self._conn() as c:
