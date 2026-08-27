@@ -49,8 +49,11 @@ paths:
   marker-free base. A survivor that is itself a contract row is folded BY the twin group naming
   it and never gets a second group of its own (a twin always sits at the work year, so its own
   group could only be the re-key the twin path already performs). A twin is exactly one
-  same-norm-title/same-work-year candidate agreeing on tmdb id (or,
-  when neither side has a tmdb id, a fellow contract row sharing the same tt); `_edition_blockers`
+  same-norm-title/same-work-year candidate agreeing on tmdb id. The fellow-contract fallback (an
+  unkeyed candidate that is itself a contract row sharing the same tt) applies ONLY when NO
+  candidate holds the tmdb id — once one does, an unkeyed fellow edition beside the real work is
+  not a rival reading, and counting it made a one-pass fold report `several agreeing twins`;
+  `_edition_blockers`
   pre-checks tt/tmdb/key holders (over EVERY film, disposed included — the UNIQUE guard is blind to disposed rows too) on
   both the twin-merge and no-twin-keying paths and downgrades to `conflict` rather than write
   into a held identity, as it does for a twin already holding a DIFFERENT imdb id. A film that
