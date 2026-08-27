@@ -98,6 +98,16 @@ class DisagreementFilm(NamedTuple):
     criterion: bool  # has any criterion listing
 
 
+class NomatchFilm(NamedTuple):
+    """One open tmdb `no-match` row with its undisposed film — the T4 worklist."""
+
+    review_id: int
+    film_id: int
+    title: str
+    year: int | None
+    director: str | None
+
+
 class TwinFilm(NamedTuple):
     """One undisposed film's twin-audit evidence (repair twins)."""
 
@@ -1444,6 +1454,20 @@ class Repository:
                     int(r["id"]), str(r["title"]), r["year"], str(r["o_tt"]), str(r["t_tt"]), r["t_id"], r["i_ext"],
                     bool(r["crit"]),
                 )
+                for r in rows
+            ]
+
+    def nomatch_worklist(self) -> list[NomatchFilm]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT m.id AS review_id, f.id, f.title, f.year, f.director FROM match_review m "
+                "JOIN films f ON f.id = m.film_id "
+                "WHERE m.authority = 'tmdb' AND m.reason = 'no-match' AND m.resolved = 0 AND "
+                + _NOT_DISPOSED
+                + " ORDER BY f.id"
+            ).fetchall()
+            return [
+                NomatchFilm(int(r["review_id"]), int(r["id"]), str(r["title"]), r["year"], r["director"] or None)
                 for r in rows
             ]
 

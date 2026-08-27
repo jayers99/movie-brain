@@ -17,11 +17,11 @@ from pathlib import Path
 
 import requests
 
-from movie_brain.application.availability import TMDB_AUTHORITY, queue_review_once, record_tmdb_match
+from movie_brain.application.availability import NO_MATCH_REVIEWED, TMDB_AUTHORITY, queue_review_once, record_tmdb_match
 from movie_brain.application.thumbprint import review_detail
 from movie_brain.domain.models import ReviewEntry
-from movie_brain.domain.thumbprint import Verdict, make_query, resolve
-from movie_brain.infrastructure.database import DisagreementFilm, Repository
+from movie_brain.domain.thumbprint import Query, Verdict, make_query, resolve
+from movie_brain.infrastructure.database import DisagreementFilm, NomatchFilm, Repository
 from movie_brain.infrastructure.thumbprint_fetch import CacheMiss, CandidateFetcher
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
@@ -323,3 +323,145 @@ def repair_disagreements(
         len(groups), counts["refetch"], counts["relink"], counts["adopt"], counts["review"], counts["conflict"],
         counts["pending"], counts["review-open"], applied, declined,
     )
+
+
+# --- repair nomatch (T4, memo step 4) ------------------------------------------------------
+
+NOMATCH_ACTIONABLE = ("keyed", "match", "review")
+_CLAIM_PRECEDENCE = ("criterion", "metacritic", "apple-tv")
+_CLAIM_SOURCE = {"criterion": "criterion", "metacritic": "metacritic", "apple-tv": "apple"}
+
+
+@dataclass(frozen=True)
+class NomatchGroup:
+    review_id: int
+    film_id: int
+    title: str
+    year: int | None
+    verdict: str  # "keyed" | "unlinked" | "match" | "review" | "review-open" | "conflict"
+    reason: str
+    tt: str | None
+    tmdb_id: int | None
+    query: Query | None
+    verdict_obj: Verdict | None
+    detail: str
+
+
+def _nomatch_query(repo: Repository, film: NomatchFilm) -> Query:
+    """What the ingester saw: the film's highest-precedence claim (criterion > metacritic >
+    apple-tv), title/year from the claim (year falls back to films.year), director from
+    films.director, the apple runtime shown but never scored (Q3)."""
+    claims = repo.claims_for_film(film.film_id)
+    by_auth = {a: next((c for c in claims if c.authority == a), None) for a in _CLAIM_PRECEDENCE}
+    chosen = next((by_auth[a] for a in _CLAIM_PRECEDENCE if by_auth[a] is not None), None)
+    apple = by_auth["apple-tv"]
+    runtime = apple.runtime_min if apple is not None else None
+    if chosen is None:
+        return make_query(film.title, film.year, "unknown", director=film.director, runtime_min=runtime)
+    return make_query(
+        chosen.title_ingested or film.title,
+        chosen.year_claimed or film.year,
+        _CLAIM_SOURCE[chosen.authority],
+        director=film.director,
+        runtime_min=runtime,
+    )
+
+
+def audit_nomatch(
+    repo: Repository, fetcher: CandidateFetcher | None, tmdb: TmdbClient | None
+) -> list[NomatchGroup]:
+    """One verdict per open no-match film, every holder check done here, nothing written."""
+    imdb_holders = repo.external_id_holders("imdb")
+    tmdb_holders = repo.external_id_holders(TMDB_AUTHORITY)
+    reviewed_open = {
+        int(str(r["film_id"])) for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] == NO_MATCH_REVIEWED
+    }
+    out: list[NomatchGroup] = []
+    for f in repo.nomatch_worklist():
+
+        def mk(
+            verdict: str,
+            reason: str,
+            detail: str = "",
+            tt: str | None = None,
+            tid: int | None = None,
+            q: Query | None = None,
+            v: Verdict | None = None,
+            f: NomatchFilm = f,
+        ) -> NomatchGroup:
+            return NomatchGroup(
+                f.review_id, f.film_id, f.title, f.year, verdict, reason, tt, tid, q, v, detail
+            )
+
+        if f.film_id in reviewed_open:
+            out.append(mk("review-open", "already promoted"))
+            continue
+        own_tt = repo.external_ids_for(f.film_id).get("imdb")
+        if own_tt is not None:
+            if tmdb is None:
+                out.append(mk("conflict", "no client", "holds imdb but no TMDB client to look it up", tt=own_tt))
+                continue
+            try:
+                tid = tmdb.find_by_imdb(own_tt)
+            except (requests.RequestException, AuthError) as exc:
+                out.append(mk("conflict", "TMDB error", str(exc), tt=own_tt))
+                continue
+            if tid is None:
+                out.append(mk("unlinked", "no TMDB record", f"imdb {own_tt} has no TMDB movie", tt=own_tt))
+            elif tmdb_holders.get(str(tid), f.film_id) != f.film_id:
+                out.append(
+                    mk("conflict", "tmdb held", f"tmdb {tid} held by #{tmdb_holders[str(tid)]}", tt=own_tt, tid=tid)
+                )
+            else:
+                out.append(mk("keyed", "imdb already keyed", tt=own_tt, tid=tid))
+            continue
+        q = _nomatch_query(repo, f)
+        if fetcher is None:
+            out.append(mk("conflict", "no client", "no TMDB/OMDb clients", q=q))
+            continue
+        try:
+            v = resolve(q, fetcher.fetch(q))
+        except (CacheMiss, requests.RequestException, AuthError) as exc:
+            out.append(mk("conflict", "TMDB error", str(exc), q=q))
+            continue
+        if v.kind != "match" or v.tt is None:
+            out.append(mk("review", v.reason, review_detail(v, q), q=q, v=v))
+            continue
+        holder = imdb_holders.get(v.tt)
+        if holder is not None and holder != f.film_id:
+            out.append(mk("conflict", "imdb held", f"{v.tt} held by #{holder}", tt=v.tt, q=q, v=v))
+            continue
+        winner = next((s.candidate for s in v.ranked if s.candidate.tt == v.tt), None)
+        tid = winner.tmdb_id if winner is not None else None
+        if tid is None and tmdb is not None:
+            try:
+                tid = tmdb.find_by_imdb(v.tt)
+            except (requests.RequestException, AuthError) as exc:
+                out.append(mk("conflict", "TMDB error", str(exc), tt=v.tt, q=q, v=v))
+                continue
+        if tid is not None and tmdb_holders.get(str(tid), f.film_id) != f.film_id:
+            out.append(
+                mk(
+                    "conflict", "tmdb held", f"tmdb {tid} held by #{tmdb_holders[str(tid)]}",
+                    tt=v.tt, tid=tid, q=q, v=v,
+                )
+            )
+            continue
+        out.append(mk("match", v.reason, tt=v.tt, tid=tid, q=q, v=v))
+    return out
+
+
+def format_nomatch(g: NomatchGroup) -> str:
+    src = f" src={g.query.source} dir={g.query.director or '-'}" if g.query else ""
+    head = (
+        f"[{g.verdict}] #{g.film_id} {g.title!r} ({g.year or '-'}){src} → "
+        f"{g.tt or '-'} ({g.tmdb_id or '-'}): {g.reason}"
+    )
+    if g.verdict == "review" and g.verdict_obj is not None:
+        cands = " / ".join(
+            f"{letter} {s.candidate.tt} {s.candidate.titles[0] if s.candidate.titles else ''!r} "
+            f"{s.candidate.year or '-'} {s.candidate.directors or '-'}"
+            for letter, s in zip("ABC", g.verdict_obj.ranked, strict=False)
+        )
+        return f"{head} [{cands}]"
+    return f"{head} {g.detail}".rstrip()
