@@ -1,6 +1,8 @@
-"""Thumbprint use cases (T1): the claims backfill and the review-row serializer.
+"""Thumbprint use cases: the claims backfill, the query builder, and the review-row serializer.
 
-The resolver itself stays dark in T1 — nothing here is called by sync.
+`film_query` and `review_detail` are called from `application/keying.py::key_films` (the sync
+keying step) as well as `repair nomatch` — the resolver has been live since the T5 ingester
+switch. `backfill_claims` stays a standalone one-shot verb.
 """
 
 from __future__ import annotations

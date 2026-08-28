@@ -51,7 +51,9 @@ def _resolve_imdb_id(
     repo: Repository, tmdb: TmdbClient | None, film_id: int, today: date, log: Callable[[str], None]
 ) -> str | None:
     """IMDb id for a film: stored `imdb` external id, else resolved once via its TMDB link
-    and stored. None (no link, TMDB has none, or TMDB weather) → caller uses the title path."""
+    and stored. None (no link, TMDB has none, or TMDB weather) → the OMDb loop skips this film
+    for the run (counted in `SyncResult.omdb_unkeyed`) instead of falling back to a title
+    search; OMDb is fetched by IMDb id only (thumbprint T5)."""
     ids = repo.external_ids_for(film_id)
     if "imdb" in ids:
         return ids["imdb"]
@@ -68,7 +70,7 @@ def _resolve_imdb_id(
         repo.set_external_id(film_id, "imdb", imdb_id, today)
     except sqlite3.IntegrityError:
         holder = repo.film_id_for_external("imdb", imdb_id)
-        log(f"imdb id {imdb_id} already claimed by film {holder}; film {film_id} falls back to title lookup")
+        log(f"imdb id {imdb_id} already claimed by film {holder}; film {film_id} skipped this run (unkeyed)")
         return None
     return imdb_id
 

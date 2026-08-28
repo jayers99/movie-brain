@@ -57,7 +57,7 @@ app.add_typer(repair_app, name="repair")
 review_app = typer.Typer(help="Resolve match_review anomalies: match to a film, create, or dismiss.")
 app.add_typer(review_app, name="review")
 thumbprint_app = typer.Typer(
-    help="Thumbprint identity: claims backfill (T1); the resolver stays dark until the ingester switch."
+    help="Thumbprint identity: claims backfill; the resolver is live in sync, owned import, and Mode-B promotion."
 )
 app.add_typer(thumbprint_app, name="thumbprint")
 audit_app = typer.Typer(help="Data audit: read-only consistency checks; the human records verdicts in the dashboard.")
