@@ -4,6 +4,7 @@ paths:
   - src/movie_brain/infrastructure/thumbprint_fetch.py
   - src/movie_brain/application/thumbprint.py
   - src/movie_brain/application/repair.py
+  - src/movie_brain/application/repair_keys.py
   - src/movie_brain/application/eval_log.py
   - scripts/thumbprint_benchmark.py
   - scripts/eval/**
@@ -15,7 +16,7 @@ paths:
   ingester (Criterion walk, Mode-B promotion, `owned import`) uses it until the ingester switch
   (memo step 5). Don't wire it into sync as a side effect of other work.
 - Gate before change: `uv run python scripts/thumbprint_benchmark.py --assert` must exit 0
-  (0 wrong on `verified`+`believed`, auto ≥ 90%; baseline n=528 / 0 / 92.0% since the T3 drain ratified 44 rows on 2026-08-27) after ANY edit to
+  (0 wrong on `verified`+`believed`, auto ≥ 90% over the non-`F-human` rows — `F-human` rows are the resolver's own residue, scored for WRONG only; baseline n=557 / 0 / 92.0% over 526 since the T4 drain on 2026-08-28) after ANY edit to
   `domain/thumbprint.py`, `thumbprint_fetch.py`, or the fixture. Never edit
   `scripts/eval/thumbprint_eval_v1.csv` to make the gate green — a wrong expectation is
   corrected with a `note` and `verified_by`; `proposed` rows are reported, never scored.
@@ -131,3 +132,28 @@ paths:
   fetch an article-folded exact title hit too. Adopted behind the gate (n=484/0/94.8% unchanged
   with the rule on); live measurement of the 32 open article `no-match` films (rule on vs. off)
   is evaluated but NOT yet adopted — that's a separate owner decision on the numbers.
+- `movie-brain repair nomatch [--apply] [--yes] [--limit N]` (`application/repair_keys.py`, T4 /
+  memo step 4): worklist = open `tmdb/no-match` rows on undisposed films; query = the film's
+  highest-precedence claim (criterion > metacritic > apple-tv → source `apple`) with
+  `films.director`, apple runtime shown never scored. Verdicts, all holder-checked BEFORE any
+  write: `keyed` (film already holds an imdb tt → `find_by_imdb` + `record_tmdb_match`),
+  `unlinked` (holds tt, TMDB has no record — listed, not work), `match` (`resolve()` match →
+  `set_external_id(imdb)` THEN `record_tmdb_match` — commerce guard keeps Criterion years —
+  then `mark_omdb_refresh` when OMDb's tt differs), `review` (`promote_review` rewrites the
+  SAME row to reason `no-match-reviewed` with `review_detail(verdict, query)` — id and
+  created_at kept; never a second row), `review-open`, `conflict` (held tt/tmdb, TMDB error,
+  no client). `--limit` slices actionable (`keyed`/`match`/`review`) only. The verb NEVER
+  resolves a `no-match` row (a resolved one blocks the manual `repair links --film` relink
+  path); on `--apply` it ends with `rebuild_no_match_queue`, which drops matched films' rows
+  as the next sync would. `rebuild_no_match_queue` treats a RESOLVED `no-match-reviewed` row as
+  a standing decision (so `--none` does not loop). Auto matches are never ratified into the
+  eval CSV (the gate would score itself); human `--pick/--tt/--none` ratify as before, and
+  `--pick` on an OMDb-only candidate now resolves the tmdb id via `find_by_imdb`. Candidates
+  come from `<config_dir>/nomatch-cache.json.gz` (seeded from the fixture, saved per run —
+  a dry run writes NOTHING to the DB but still saves this session cache) —
+  the eval fixture is never written by the verb. A post-`record_tmdb_match` failure logs
+  `[partial]` and raises (CLI exit 1). A WRONG auto match is undone with `review resolve --tt`
+  on a fresh row or `repair links --film ID` followed by `review resolve --tt` BEFORE the next
+  `sync` — `clear_tmdb_link` leaves the imdb id the verb wrote, and sync's OMDb refetch prefers
+  the stored imdb id. Once a film holds both ids with `tmdb.found = 1` it audits as `linked`
+  and is never re-keyed by this verb.

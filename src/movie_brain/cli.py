@@ -16,19 +16,23 @@ from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, craw
 from movie_brain.application.owned import import_owned
 from movie_brain.application.rematch import rematch
 from movie_brain.application.repair import (
-    DisagreementGroup,
     DupGroup,
     EditionGroup,
     TwinGroup,
-    load_disagreement_contract,
     load_edition_contract,
     load_expected_twins,
-    repair_disagreements,
     repair_dupes,
     repair_editions,
     repair_links,
     repair_twins,
     repair_years,
+)
+from movie_brain.application.repair_keys import (
+    DisagreementGroup,
+    NomatchGroup,
+    load_disagreement_contract,
+    repair_disagreements,
+    repair_nomatch,
 )
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
@@ -411,6 +415,57 @@ def repair_disagreements_cmd(
         f"groups: {report.groups} · refetch: {report.refetch} · relink: {report.relink} · adopt: {report.adopt} · "
         f"review: {report.review} · pending: {report.pending} · review-open: {report.review_open} · "
         f"conflict: {report.conflict} · applied: {report.applied} · declined: {report.declined}"
+    )
+
+
+@repair_app.command("nomatch")
+def repair_nomatch_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Act on confirmed films (default: dry-run).")] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="With --apply: confirm every film without prompting.")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the actionable films only.")] = None,
+) -> None:
+    """Rerun the open tmdb no-match films through the thumbprint resolver: auto matches are
+    keyed, non-matches become durable A/B/C `no-match-reviewed` rows for `review resolve
+    --pick/--tt/--none`. Candidates are cached per session in <config_dir>/nomatch-cache.json.gz
+    (the eval fixture is never written)."""
+    from movie_brain.infrastructure.omdb import OmdbClient
+    from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
+
+    root = Path(__file__).resolve().parents[2]
+    repo = _repo()
+    cfg = load_config()
+    token, key = load_tmdb_token(cfg), load_api_key(cfg)
+    tmdb = TmdbClient(token) if token else None
+    fetcher = None
+    cache = None
+    if tmdb is not None and key:
+        session_path = cfg.config_dir / "nomatch-cache.json.gz"
+        fixture = root / "scripts" / "eval" / "fixtures" / "cand_cache.json.gz"
+        data = dict(CandidateCache.load(fixture, read_only=True).data)
+        if session_path.exists():
+            data.update(CandidateCache.load(session_path).data)
+        cache = CandidateCache(data, session_path)
+        fetcher = CandidateFetcher(cache, tmdb, OmdbClient(key))
+
+    def confirm(g: NomatchGroup) -> bool:
+        prompt = f"#{g.film_id} {g.title!r} [{g.verdict}] → {g.tt or 'review'}?"
+        return yes or typer.confirm(prompt, default=False)
+
+    try:
+        report = repair_nomatch(
+            repo, date.today(), apply=apply, confirm=confirm, tmdb=tmdb, fetcher=fetcher, limit=limit, log=_plain
+        )
+    except RuntimeError as exc:
+        err.print(str(exc))
+        raise typer.Exit(1) from exc
+    finally:
+        if cache is not None:
+            cache.save()  # the session cache, never the fixture
+    console.print(
+        f"groups: {report.groups} · keyed: {report.keyed} · match: {report.match} · review: {report.review} · "
+        f"unlinked: {report.unlinked} · linked: {report.linked} · review-open: {report.review_open} · "
+        f"conflict: {report.conflict} · applied: {report.applied} · declined: {report.declined} · "
+        f"skipped: {report.skipped}"
     )
 
 

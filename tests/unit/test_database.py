@@ -1427,3 +1427,32 @@ def test_apply_migrates_and_backs_up(tmp_path, monkeypatch):
         assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == n
     assert list((tmp_path / "backups").glob(f"live-v{n - 1}-*.db"))
     assert Repository(p, migrate=True) is not None  # idempotent
+
+
+def test_promote_review_rewrites_reason_and_detail_in_place(repo, today):
+    from movie_brain.domain.models import Film, ReviewEntry
+
+    fid = repo.create_film(Film("Bound", 1996, None, ""))
+    repo.append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail="Bound (1996)")], today)
+    row = repo.open_reviews("tmdb")[0]
+    repo.promote_review(int(row["id"]), reason="no-match-reviewed", detail='{"reason": "weak"}', value=None)
+    after = repo.review(int(row["id"]))
+    assert after is not None
+    assert (after["reason"], after["detail"], after["resolved"]) == ("no-match-reviewed", '{"reason": "weak"}', 0)
+    assert after["created_at"] == row["created_at"]
+    assert [r["id"] for r in repo.open_reviews("tmdb")] == [row["id"]]  # no second row
+
+
+def test_promote_review_refuses_a_resolved_row(repo, today):
+    import pytest
+
+    from movie_brain.domain.models import Film, ReviewEntry
+
+    fid = repo.create_film(Film("Bound", 1996, None, ""))
+    repo.append_reviews("tmdb", [ReviewEntry("no-match", film_id=fid, detail="x")], today)
+    rid = int(repo.open_reviews("tmdb")[0]["id"])
+    repo.resolve_review(rid, "dismissed")
+    with pytest.raises(ValueError):
+        repo.promote_review(rid, reason="no-match-reviewed", detail="y")
+    with pytest.raises(ValueError):
+        repo.promote_review(rid + 999, reason="no-match-reviewed", detail="y")
