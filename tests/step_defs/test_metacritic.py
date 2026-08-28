@@ -87,6 +87,12 @@ def holds_film_keyed(ctx, title_year, tt, tid):
     ctx["repo"].set_external_id(fid, "tmdb", tid, TODAY)
 
 
+@given(parsers.re(r'the repository holds the film "(?P<title_year>[^"]+)" keyed tmdb "(?P<tid>\d+)" only$'))
+def holds_film_keyed_tmdb_only(ctx, title_year, tid):
+    fid = ctx["repo"].create_film(_film(title_year))
+    ctx["repo"].set_external_id(fid, "tmdb", tid, TODAY)
+
+
 def _page_cards(page: int) -> list[tuple[str, str, int | None, int | None]]:
     # Deterministic distinct cards per page; scores descend with page number.
     return [(f"Film P{page}", f"film-p{page}", 2000 + page, 99 - page)]

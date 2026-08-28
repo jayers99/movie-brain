@@ -288,6 +288,10 @@ def promote_top_n(
                 log(f"resolver lookup failed for {t.title!r}: {exc}")
         if verdict is not None and verdict.kind == "match" and verdict.tt is not None:
             holder = repo.film_id_for_external("imdb", verdict.tt)
+            if holder is None:
+                winner = next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
+                if winner is not None and winner.tmdb_id is not None:
+                    holder = repo.film_id_for_external("tmdb", str(winner.tmdb_id))
             if holder is not None:
                 # The work is already here under its own title — claim the slug, don't twin it.
                 holder = repo.canonical_film_id(holder)
