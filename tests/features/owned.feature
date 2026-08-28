@@ -80,3 +80,34 @@ Feature: Apple TV owned films
     When I import owned films
     Then "Seven Samurai (1954)" has an "apple-tv" claim titled "Seven Samurai (Unrated)" for year 1954
     And that claim has runtime 207 and edition label "unrated"
+
+  Scenario: An owned edition lands on the keyed work instead of twinning it
+    Given the repository holds the film "Blade Runner (1982)" keyed imdb "tt0083658" tmdb "78"
+    And my Apple TV library has "Blade Runner (The Final Cut)" (2007)
+    And the resolver pool has "Blade Runner (The Final Cut)" → tt0083658/78 1982
+    When I import owned films
+    Then "Blade Runner (1982)" is owned
+    And the repository holds 1 films
+    And the owned report says 0 created and 1 resolved to existing
+
+  Scenario: An owned film nobody holds is created and keyed in one pass
+    Given my Apple TV library has "Step Brothers" (2008)
+    And the resolver pool has "Step Brothers" → tt1023111/12133 2008
+    When I import owned films
+    Then the film "Step Brothers (2008)" exists with a guid
+    And "Step Brothers (2008)" holds imdb "tt1023111" and tmdb id "12133"
+    And the owned report says 1 created and 1 keyed
+
+  Scenario: An ambiguous owned title falls back to the corpus path, never a guess
+    Given the repository holds the film "Nosferatu (1922)"
+    And my Apple TV library has "Nosferatu" (2024)
+    And the resolver pool has "Nosferatu" ambiguous
+    When I import owned films
+    Then the review queue has a "year-drift" entry
+    And the repository holds 1 films
+
+  Scenario: With no resolver the import behaves exactly as before
+    Given my Apple TV library has "Step Brothers" (2008)
+    When I import owned films without a resolver
+    Then the film "Step Brothers (2008)" exists with a guid
+    And the owned report says 1 created and 0 keyed
