@@ -24,7 +24,7 @@ from movie_brain.application.availability import (
     rebuild_no_match_queue,
     record_tmdb_match,
 )
-from movie_brain.application.thumbprint import review_detail
+from movie_brain.application.thumbprint import film_query, review_detail
 from movie_brain.domain.models import ReviewEntry
 from movie_brain.domain.thumbprint import Query, Verdict, make_query, resolve
 from movie_brain.infrastructure.database import DisagreementFilm, NomatchFilm, Repository
@@ -335,8 +335,6 @@ def repair_disagreements(
 
 NOMATCH_ACTIONABLE = ("keyed", "match", "review")
 NOMATCH_SUCCESS = ("matched", "adopted", "collision")  # record_tmdb_match results that are complete, not [partial]
-_CLAIM_PRECEDENCE = ("criterion", "metacritic", "apple-tv")
-_CLAIM_SOURCE = {"criterion": "criterion", "metacritic": "metacritic", "apple-tv": "apple"}
 
 
 @dataclass(frozen=True)
@@ -352,26 +350,6 @@ class NomatchGroup:
     query: Query | None
     verdict_obj: Verdict | None
     detail: str
-
-
-def _nomatch_query(repo: Repository, film: NomatchFilm) -> Query:
-    """What the ingester saw: the film's highest-precedence claim (criterion > metacritic >
-    apple-tv), title/year from the claim (year falls back to films.year), director from
-    films.director, the apple runtime shown but never scored (Q3)."""
-    claims = repo.claims_for_film(film.film_id)
-    by_auth = {a: next((c for c in claims if c.authority == a), None) for a in _CLAIM_PRECEDENCE}
-    chosen = next((by_auth[a] for a in _CLAIM_PRECEDENCE if by_auth[a] is not None), None)
-    apple = by_auth["apple-tv"]
-    runtime = apple.runtime_min if apple is not None else None
-    if chosen is None:
-        return make_query(film.title, film.year, "unknown", director=film.director, runtime_min=runtime)
-    return make_query(
-        chosen.title_ingested or film.title,
-        chosen.year_claimed or film.year,
-        _CLAIM_SOURCE[chosen.authority],
-        director=film.director,
-        runtime_min=runtime,
-    )
 
 
 def audit_nomatch(
@@ -426,7 +404,7 @@ def audit_nomatch(
             else:
                 out.append(mk("keyed", "imdb already keyed", tt=own_tt, tid=tid))
             continue
-        q = _nomatch_query(repo, f)
+        q = film_query(repo, f.film_id, f.title, f.year, f.director)
         if fetcher is None:
             out.append(mk("conflict", "no client", "no TMDB/OMDb clients", q=q))
             continue

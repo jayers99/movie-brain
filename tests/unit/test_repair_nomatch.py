@@ -56,21 +56,21 @@ def test_worklist_is_open_no_match_rows_of_undisposed_films(repo, today):
 
 
 def test_query_prefers_criterion_claim_then_metacritic_then_apple(repo, today):
-    from movie_brain.application.repair_keys import _nomatch_query
+    from movie_brain.application.thumbprint import film_query
 
     fid = _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski", source="apple-tv")
     repo.add_claim(fid, "metacritic", "bound", "Bound", year_claimed=1997, first_seen="2026-08-01")
     repo.add_claim(fid, "criterion", "https://c/bound", "Bound", year_claimed=1996, first_seen="2026-08-01")
-    q = _nomatch_query(repo, repo.nomatch_worklist()[0])
+    q = film_query(repo, fid, "Bound", 1996, "Lana Wachowski")
     assert (q.source, q.year, q.director, str(q.year_class)) == ("criterion", 1996, "Lana Wachowski", "database")
 
 
 def test_apple_claim_maps_to_source_apple_and_carries_runtime(repo, today):
-    from movie_brain.application.repair_keys import _nomatch_query
+    from movie_brain.application.thumbprint import film_query
 
     fid = _nomatch(repo, today, "Bound", 1996)
     repo.add_claim(fid, "apple-tv", "Bound", "Bound", year_claimed=None, runtime_min=108, first_seen="2026-08-01")
-    q = _nomatch_query(repo, repo.nomatch_worklist()[0])
+    q = film_query(repo, fid, "Bound", 1996, None)
     assert (q.source, q.year, q.runtime_min) == ("apple", 1996, 108)  # year falls back to films.year
 
 

@@ -15,12 +15,36 @@ from typing import Any, NamedTuple, TypedDict
 
 from movie_brain.domain.matching import parse_apple_title
 from movie_brain.domain.models import film_key
-from movie_brain.domain.thumbprint import Query, Verdict, parse_title, title_norm
+from movie_brain.domain.thumbprint import Query, Verdict, make_query, parse_title, title_norm
 from movie_brain.infrastructure.database import Repository
 
 
 def _stderr(msg: str) -> None:
     print(msg, file=sys.stderr)
+
+
+_CLAIM_PRECEDENCE = ("criterion", "metacritic", "apple-tv")
+_CLAIM_SOURCE = {"criterion": "criterion", "metacritic": "metacritic", "apple-tv": "apple"}
+
+
+def film_query(repo: Repository, film_id: int, title: str, year: int | None, director: str | None) -> Query:
+    """What the ingester saw: the film's highest-precedence claim (criterion > metacritic >
+    apple-tv), title/year from the claim (year falls back to the film's), director from the
+    film row, the apple runtime carried for display and never scored (owner Q3)."""
+    claims = repo.claims_for_film(film_id)
+    by_auth = {a: next((c for c in claims if c.authority == a), None) for a in _CLAIM_PRECEDENCE}
+    chosen = next((by_auth[a] for a in _CLAIM_PRECEDENCE if by_auth[a] is not None), None)
+    apple = by_auth["apple-tv"]
+    runtime = apple.runtime_min if apple is not None else None
+    if chosen is None:
+        return make_query(title, year, "unknown", director=director, runtime_min=runtime)
+    return make_query(
+        chosen.title_ingested or title,
+        chosen.year_claimed or year,
+        _CLAIM_SOURCE[chosen.authority],
+        director=director,
+        runtime_min=runtime,
+    )
 
 
 @dataclass(frozen=True)
