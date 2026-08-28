@@ -105,6 +105,7 @@ def strip(repo: Repository, count: int, manifest_path: Path) -> list[dict[str, A
         residual = sorted(base - classified)
 
         picked_ids: set[int] = set()
+        backfill_ids: set[int] = set()
         assignments: list[tuple[str, int]] = []
         for stratum in STRATA:
             narrow_available = sorted(narrow_pools[stratum] - picked_ids)
@@ -118,6 +119,7 @@ def strip(repo: Repository, count: int, manifest_path: Path) -> list[dict[str, A
                         f"criteria; backfilled {len(fill)} from the unclassified pool",
                         file=sys.stderr,
                     )
+                    backfill_ids.update(fill)
                     take = take + fill
                 still_short = shortfall - len(fill)
                 if still_short > 0:
@@ -145,6 +147,11 @@ def strip(repo: Repository, count: int, manifest_path: Path) -> list[dict[str, A
                     "title": film_row["title"],
                     "year": film_row["year"],
                     "stratum": stratum,
+                    # True when this film didn't actually meet the stratum's own criteria
+                    # and was pulled from the residual (unclassified) pool to fill quota —
+                    # a human reading the results must be able to tell it apart from a
+                    # genuine stratum member (ruling R5).
+                    "backfill": film_id in backfill_ids,
                     "imdb": ids.get("imdb"),
                     "tmdb": ids.get("tmdb"),
                 }
@@ -163,14 +170,21 @@ def strip(repo: Repository, count: int, manifest_path: Path) -> list[dict[str, A
     return manifest
 
 
+def _empty_counts() -> dict[str, int]:
+    return {"agree": 0, "disagree": 0, "reviewed": 0, "unkeyed": 0}
+
+
 def compare(manifest_path: Path, repo: Repository) -> dict[str, Any]:
     """Score the re-key against the manifest. Per film: `agree` (holds exactly the ids it held
     before), `disagree` (holds a DIFFERENT id — the number that must be zero), `reviewed` (no
     ids, but an open no-match/no-match-reviewed tmdb review row exists), `unkeyed` (no ids, no
-    review row). Returns overall totals plus a `by_stratum` breakdown."""
+    review row). Returns overall totals (unaffected by backfill status) plus a `by_stratum`
+    breakdown that splits each stratum into `genuine` members (met the stratum's own criteria)
+    and `backfill` members (pulled from the residual pool — see `strip`) so a human reading the
+    results can tell a stratum's real accuracy from its padding."""
     manifest = json.loads(Path(manifest_path).read_text())
-    totals = {"agree": 0, "disagree": 0, "reviewed": 0, "unkeyed": 0}
-    by_stratum: dict[str, dict[str, int]] = {}
+    totals = _empty_counts()
+    by_stratum: dict[str, dict[str, dict[str, int]]] = {}
 
     conn = sqlite3.connect(repo.db_path)
     conn.row_factory = sqlite3.Row
@@ -178,7 +192,8 @@ def compare(manifest_path: Path, repo: Repository) -> dict[str, Any]:
         for entry in manifest:
             film_id = entry["film_id"]
             stratum = entry["stratum"]
-            bucket = by_stratum.setdefault(stratum, {"agree": 0, "disagree": 0, "reviewed": 0, "unkeyed": 0})
+            group = "backfill" if entry.get("backfill") else "genuine"
+            bucket = by_stratum.setdefault(stratum, {"genuine": _empty_counts(), "backfill": _empty_counts()})[group]
 
             ids = {
                 r["authority"]: r["value"]
