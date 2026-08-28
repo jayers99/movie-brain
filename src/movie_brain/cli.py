@@ -111,8 +111,8 @@ def sync_cmd(
     )
     console.print(
         f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk} · "
-        f"tmdb matched: {result.tmdb_matched} · availability refreshed: {result.tmdb_refreshed} · "
-        f"promoted: {result.mc_promoted}"
+        f"availability refreshed: {result.tmdb_refreshed} · promoted: {result.mc_promoted} · "
+        f"keyed: {result.tmdb_matched} · review: {result.tmdb_reviewed}"
     )
     raise typer.Exit(result.exit_code)
 

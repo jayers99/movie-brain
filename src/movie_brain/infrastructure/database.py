@@ -53,6 +53,7 @@ class TmdbMatchTarget(NamedTuple):
     title: str
     year: int | None
     commerce: bool  # no criterion listing → commerce-created; year is COMMERCE band
+    director: str | None = None  # the resolver's strongest search key (thumbprint T5)
 
 
 class MergeReport(NamedTuple):
@@ -136,8 +137,12 @@ class RepairFilm(NamedTuple):
 _ONE_ROW_TABLES = ("omdb", "tmdb", "my_ratings", "watchlist", "owned")  # film_id PRIMARY KEY tables
 
 
+def _tmdb_target(r: sqlite3.Row) -> TmdbMatchTarget:
+    return TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"]), r["director"])
+
+
 _TMDB_TARGET_SELECT = (
-    "SELECT f.id, f.title, f.year, "
+    "SELECT f.id, f.title, f.year, f.director, "
     "NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') AS commerce "
     "FROM films f "
 )
@@ -974,7 +979,7 @@ class Repository:
         # tombstoned film is never a valid tmdb match target.
         with self._conn() as c:
             r = c.execute(_TMDB_TARGET_SELECT + "WHERE f.id = ? AND " + _NOT_DISPOSED, (film_id,)).fetchone()
-            return None if r is None else TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"]))
+            return None if r is None else _tmdb_target(r)
 
     # tmdb ---------------------------------------------------------------
     def films_needing_tmdb_match(self) -> list[TmdbMatchTarget]:
@@ -985,7 +990,7 @@ class Repository:
                 + _NOT_DISPOSED
                 + " AND NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
             ).fetchall()
-            return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
+            return [_tmdb_target(r) for r in rows]
 
     def films_tmdb_missed_targets(self) -> list[TmdbMatchTarget]:
         with self._conn() as c:
@@ -995,7 +1000,7 @@ class Repository:
                 + _NOT_DISPOSED
                 + " ORDER BY f.id"
             ).fetchall()
-            return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
+            return [_tmdb_target(r) for r in rows]
 
     def films_with_tmdb(self) -> list[tuple[int, str, int | None, str]]:
         with self._conn() as c:
