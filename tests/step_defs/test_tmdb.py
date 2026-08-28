@@ -7,15 +7,17 @@ from datetime import date, timedelta
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+import requests
 import responses
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.availability import META_REFRESHED_AT
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.domain.models import Film
+from movie_brain.domain.thumbprint import Candidate
 from movie_brain.infrastructure.criterion import API_URL, BROWSE_URL
 from movie_brain.infrastructure.omdb import OMDB_URL
-from movie_brain.infrastructure.tmdb import TMDB_API
+from movie_brain.infrastructure.tmdb import TMDB_API, AuthError
 
 scenarios("../features/tmdb.feature")
 
@@ -105,30 +107,49 @@ def preloaded(ctx, films, days):
     ctx["repo"].set_meta("films_fetched_at", walked.isoformat())
 
 
+class PoolFetcher:
+    """Stands in for CandidateFetcher: canned candidates per query title."""
+
+    def __init__(self):
+        self.pool: dict[str, list[Candidate]] = {}
+        self.empty = False
+        self.reject = False
+        self.error = False
+
+    def fetch(self, q):
+        if self.reject:
+            raise AuthError("bad token")
+        if self.error:
+            raise requests.RequestException("boom")
+        if self.empty:
+            return []
+        return self.pool.get(q.title, [])
+
+
+@pytest.fixture
+def pool(ctx):
+    ctx["pool"] = PoolFetcher()
+    return ctx["pool"]
+
+
+def register_movie(ctx, tid, year):
+    """`key_film` reads TMDB's own release year through `movie_year` before writing."""
+    if tid in ctx["flags"].setdefault("movies_registered", set()):
+        return
+    ctx["flags"]["movies_registered"].add(tid)
+    ctx["rs"].add(responses.GET, f"{TMDB_API}/movie/{tid}", json={"id": tid, "release_date": f"{year}-01-01"})
+
+
+def seed_candidate(ctx, pool, tmdb, title, tt, tid, year, director):
+    pool.pool[title] = [Candidate(tt, tid, (title,), year, director, 100, 5000, "movie", True, True)]
+    register_movie(ctx, tid, year)
+    tmdb["register_providers"](tid)
+
+
 @pytest.fixture
 def tmdb(ctx):
-    """One mutable TMDB world: search index, per-id providers, call counters."""
-    world = {
-        "search": {},
-        "providers": {},
-        "search_calls": 0,
-        "provider_calls": 0,
-        "search_mode": "index",
-        "reject": False,
-    }
-
-    def do_search(request):
-        world["search_calls"] += 1
-        if world["reject"]:
-            return (401, {}, json.dumps({"status_message": "bad token"}))
-        if world["search_mode"] == "error":
-            return (500, {}, "boom")
-        title = parse_qs(urlparse(request.url).query)["query"][0]
-        hit = world["search"].get(title)
-        results = [hit] if hit else []
-        return (200, {}, json.dumps({"results": results}))
-
-    ctx["rs"].add_callback(responses.GET, f"{TMDB_API}/search/movie", callback=do_search)
+    """One mutable TMDB world: per-id providers and the provider call counter."""
+    world = {"providers": {}, "provider_calls": 0}
 
     def provider_callback(tmdb_id):
         def cb(request):
@@ -152,35 +173,58 @@ def tmdb(ctx):
 
 
 @given(parsers.parse('TMDB knows "{title} ({year:d})" as id {tid:d}'))
-def tmdb_knows(tmdb, title, year, tid):
-    tmdb["search"][title] = {
-        "id": tid,
-        "title": title,
-        "original_title": title,
-        "release_date": f"{year}-01-01",
-        "popularity": 5.0,
-    }
-    tmdb["register_providers"](tid)
+def tmdb_knows(ctx, pool, tmdb, title, year, tid):
+    """The provider/refresh scenarios' shorthand for "the resolver keys this film to id N":
+    one unambiguous candidate in the pool (its tt synthesized from the id) plus the
+    provider callback. There is no TMDB title search any more (thumbprint T5)."""
+    seed_candidate(ctx, pool, tmdb, title, f"tt{tid:07d}", tid, year, "Someone")
 
 
 @given(parsers.parse('TMDB knows "{title}" as id {tid:d} released {year:d}'))
-def tmdb_knows_released(tmdb, title, tid, year):
-    """Same as above, but the search-result year can differ from the film's stored
-    year — the write-back/arbiter scenarios need to seed a TMDB release year that
-    disagrees with the film's own year."""
-    tmdb["search"][title] = {
-        "id": tid,
-        "title": title,
-        "original_title": title,
-        "release_date": f"{year}-01-01",
-        "popularity": 5.0,
-    }
-    tmdb["register_providers"](tid)
+def tmdb_knows_released(ctx, pool, tmdb, title, tid, year):
+    """Same as above, but the candidate's year can differ from the film's stored
+    year — the write-back scenarios need a TMDB release year that disagrees."""
+    seed_candidate(ctx, pool, tmdb, title, f"tt{tid:07d}", tid, year, "Someone")
+
+
+@given(
+    parsers.re(
+        r'the resolver pool has "(?P<title>[^"]+)" → (?P<tt>tt\d+)/(?P<tid>\d+) (?P<year>\d{4}) by "(?P<director>[^"]*)"'
+    )
+)
+def pool_one(ctx, pool, tmdb, title, tt, tid, year, director):
+    seed_candidate(ctx, pool, tmdb, title, tt, int(tid), int(year), director)
+
+
+@given(
+    parsers.re(
+        r'the resolver pool has "(?P<title>[^"]+)" ambiguous between (?P<a>tt\d+)/(?P<ida>\d+) (?P<ya>\d{4}) '
+        r'and (?P<b>tt\d+)/(?P<idb>\d+) (?P<yb>\d{4})'
+    )
+)
+def pool_two(ctx, pool, title, a, ida, ya, b, idb, yb):
+    pool.pool[title] = [
+        Candidate(a, int(ida), (title,), int(ya), "", 100, 50, "movie", True, True),
+        Candidate(b, int(idb), (title,), int(yb), "", 100, 60, "movie", True, True),
+    ]
+    register_movie(ctx, int(ida), int(ya))
+    register_movie(ctx, int(idb), int(yb))
+
+
+@given("the resolver pool is empty")
+def pool_empty(pool):
+    pool.empty = True
+
+
+@given(parsers.parse('the film "{title} ({year:d})" already holds imdb "{tt}"'))
+def already_holds(ctx, title, year, tt):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    ctx["repo"].set_external_id(fid, "imdb", tt, TODAY)
 
 
 @given(parsers.parse('a commerce film "{title}" from {year:d}'))
 def commerce_film(ctx, title, year):
-    """No criterion listing → the match loop treats this as commerce-created, per
+    """No criterion listing → the keying step treats this as commerce-created, per
     TmdbMatchTarget.commerce (year is COMMERCE band, eligible for year write-back)."""
     ctx["repo"].upsert_film(Film(title, year, None, f"https://mc/{title.lower()}"))
 
@@ -195,19 +239,14 @@ def tmdb_buys(tmdb, tid, a, b):
     tmdb["providers"][tid] = {"link": f"https://tmdb/w/{tid}", "buy": [{"provider_id": a}, {"provider_id": b}]}
 
 
-@given("TMDB has no results for any search")
-def tmdb_empty(tmdb):
-    pass  # empty search index → every search returns no results
-
-
 @given("TMDB rejects the token")
-def tmdb_reject(tmdb):
-    tmdb["reject"] = True
+def tmdb_reject(pool):
+    pool.reject = True
 
 
-@given("TMDB errors on every search")
-def tmdb_errors(tmdb):
-    tmdb["search_mode"] = "error"
+@given("the resolver fails on every lookup")
+def resolver_fails(pool):
+    pool.error = True
 
 
 @given(parsers.parse("the provider refresh ran {days:d} days ago"))
@@ -227,22 +266,28 @@ def do_sync(ctx, tmdb):
 
 @when("I sync with a TMDB token")
 def do_sync_tok(ctx, tmdb):
-    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok")
+    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok", fetcher=ctx.get("pool"))
 
 
 @when("I sync with a TMDB token and --ratings-only")
 def do_sync_tok_ratings_only(ctx, tmdb):
-    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok", ratings_only=True)
+    ctx["result"] = sync(
+        ctx["repo"], "omdb-key", TODAY, tmdb_token="tok", ratings_only=True, fetcher=ctx.get("pool")
+    )
 
 
 @when("I sync with a TMDB token again the next day")
 def do_sync_next(ctx, tmdb):
-    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY + timedelta(days=1), tmdb_token="tok")
+    ctx["result"] = sync(
+        ctx["repo"], "omdb-key", TODAY + timedelta(days=1), tmdb_token="tok", fetcher=ctx.get("pool")
+    )
 
 
 @when("I sync with a TMDB token 8 days later")
 def do_sync_later(ctx, tmdb):
-    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY + timedelta(days=8), tmdb_token="tok")
+    ctx["result"] = sync(
+        ctx["repo"], "omdb-key", TODAY + timedelta(days=8), tmdb_token="tok", fetcher=ctx.get("pool")
+    )
 
 
 @then(parsers.parse("the exit code is {code:d}"))
@@ -267,11 +312,6 @@ def matched_n(ctx, n):
     assert ctx["result"].tmdb_matched == n
 
 
-@then(parsers.parse("TMDB search was called exactly {n:d} times"))
-def search_calls(tmdb, n):
-    assert tmdb["search_calls"] == n
-
-
 @then(parsers.parse("TMDB providers were called exactly {n:d} times"))
 def provider_calls(tmdb, n):
     assert tmdb["provider_calls"] == n
@@ -292,6 +332,17 @@ def review_has_reason(ctx, reason):
 def review_reason_count(ctx, n, reason):
     got = sum(1 for r in ctx["repo"].open_reviews("tmdb") if r["reason"] == reason)
     assert got == n
+
+
+@then(parsers.parse('the review detail offers candidates "{a}" and "{b}"'))
+def detail_candidates(ctx, a, b):
+    from movie_brain.application.thumbprint import parse_review_detail
+
+    rows = [r for r in ctx["repo"].open_reviews("tmdb") if r["reason"] == "no-match-reviewed"]
+    detail = parse_review_detail(str(rows[0]["detail"]))
+    assert detail is not None
+    tts = {c["tt"] for c in detail.candidates}
+    assert {a, b} <= tts
 
 
 @then(parsers.parse('the film "{title}" has year {year:d} and key "{key}"'))
@@ -360,7 +411,7 @@ def transition_for_slug(ctx, slug):
 
 
 @given(parsers.parse('TMDB already checked "{title} ({year:d})" as id {tid:d} once'))
-def already_checked(ctx, title, year, tid):
+def already_checked(ctx, tmdb, title, year, tid):
     # Pre-match and pre-check (dated well before TODAY) so the sync under test is neither the
     # film's TMDB match nor its first-ever provider check.
     prior = date(2026, 1, 1)
@@ -371,24 +422,22 @@ def already_checked(ctx, title, year, tid):
     ctx["repo"].set_external_id(fid, "tmdb", str(tid), prior)
     ctx["repo"].upsert_tmdb(fid, found=True, looked_up=prior)
     ctx["repo"].record_tmdb_providers(fid, prior, "{}")
+    tmdb["register_providers"](tid)
 
 
 @given("OMDb answers only lookups by IMDb id")
 def omdb_by_id_only(ctx):
     ctx["rs"].remove(responses.GET, OMDB_URL)
+    ctx["omdb_title_calls"] = 0
 
     def cb(request):
         q = parse_qs(urlparse(request.url).query)
         if "i" in q:
             return (200, {}, json.dumps(FOUND))
+        ctx["omdb_title_calls"] += 1
         return (200, {}, json.dumps({"Response": "False", "Error": "Movie not found!"}))
 
     ctx["rs"].add_callback(responses.GET, OMDB_URL, callback=cb)
-
-
-@given(parsers.parse('TMDB reports id {tid:d} as IMDb "{imdb}"'))
-def tmdb_imdb(ctx, tmdb, tid, imdb):
-    ctx["rs"].get(f"{TMDB_API}/movie/{tid}/external_ids", json={"id": tid, "imdb_id": imdb})
 
 
 @given(parsers.parse("TMDB reports id {tid:d} as having no IMDb id"))
@@ -415,7 +464,24 @@ def has_no_omdb(ctx, title, year):
     assert not _omdb_found(ctx, title, year)
 
 
+@then("OMDb was never asked by title")
+def omdb_never_by_title(ctx):
+    assert ctx["omdb_title_calls"] == 0, f"{ctx['omdb_title_calls']} title lookups"
+
+
 @then(parsers.parse('"{title} ({year:d})" has no external id for authority "{authority}"'))
 def no_external_id(ctx, title, year, authority):
     fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
     assert authority not in ctx["repo"].external_ids_for(fid)
+
+
+@then(parsers.parse('"{title_year}" has a "{authority}" claim titled "{ingested}" for year {year:d}'))
+def has_claim(ctx, title_year, authority, ingested, year):
+    m = re.fullmatch(r"(.+) \((\d{4})\)", title_year)
+    assert m
+    title, film_year = m.group(1), int(m.group(2))
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({film_year})")
+    claims = [c for c in ctx["repo"].claims_for_film(fid) if c.authority == authority]
+    assert claims, f"no {authority} claim on #{fid}"
+    assert (claims[0].title_ingested, claims[0].year_claimed) == (ingested, year)
+    ctx["claim"] = claims[0]

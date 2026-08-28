@@ -15,7 +15,7 @@ from typing import Any, NamedTuple
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
-from movie_brain.domain.thumbprint import title_norm
+from movie_brain.domain.thumbprint import edition_label, title_norm
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -53,6 +53,7 @@ class TmdbMatchTarget(NamedTuple):
     title: str
     year: int | None
     commerce: bool  # no criterion listing → commerce-created; year is COMMERCE band
+    director: str | None = None  # the resolver's strongest search key (thumbprint T5)
 
 
 class MergeReport(NamedTuple):
@@ -136,8 +137,12 @@ class RepairFilm(NamedTuple):
 _ONE_ROW_TABLES = ("omdb", "tmdb", "my_ratings", "watchlist", "owned")  # film_id PRIMARY KEY tables
 
 
+def _tmdb_target(r: sqlite3.Row) -> TmdbMatchTarget:
+    return TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"]), r["director"])
+
+
 _TMDB_TARGET_SELECT = (
-    "SELECT f.id, f.title, f.year, "
+    "SELECT f.id, f.title, f.year, f.director, "
     "NOT EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source = 'criterion') AS commerce "
     "FROM films f "
 )
@@ -146,6 +151,11 @@ _TMDB_TARGET_SELECT = (
 # tombstoned films are hidden outright, merged losers are aliased onto their survivor
 # (films_for_matching) rather than surfaced under their own id.
 _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
+
+# A series is keyed by its IMDb id alone (memo Q2): TMDB movie and TV ids share one integer
+# namespace and the providers endpoint is movie-only, so a series must never enter a TMDB
+# keying worklist — it would be matched against /search/movie and mis-keyed.
+_IS_MOVIE = " AND f.kind = 'movie'"
 
 # One id per film for identity authorities; claim authorities may repeat (migration 012).
 KEY_AUTHORITIES: frozenset[str] = frozenset({"tmdb", "imdb"})
@@ -508,6 +518,13 @@ class Repository:
                 while film_id in dispositions and dispositions[film_id][0] == "merged":
                     film_id = int(dispositions[film_id][1])  # alias → survivor (chains allowed)
                 self._write_listing(c, film_id, source, film.url, day, frontier)
+                # The resolver reads the claim, not films.title: the ingested title and the
+                # claimed year are what the ingester actually saw (thumbprint T5).
+                c.execute(
+                    "INSERT OR IGNORE INTO claim (film_id, authority, value, title_ingested, "
+                    "year_claimed, edition_label, first_seen) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (film_id, source, film.url, film.title, film.year, edition_label(film.title), day),
+                )
                 try:
                     # A catalog source is a CLAIM authority (migration 012): extra rows are
                     # legal, so a changed URL is added, never UPDATEd over the film's existing
@@ -916,7 +933,7 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT m.id, m.authority, m.film_id, m.value, m.reason, m.detail, m.created_at, "
-                "f.title, f.year FROM match_review m LEFT JOIN films f ON f.id = m.film_id "
+                "f.title, f.year, f.kind FROM match_review m LEFT JOIN films f ON f.id = m.film_id "
                 "WHERE " + " AND ".join(where) + " ORDER BY m.authority, m.reason, m.id",
                 params,
             ).fetchall()
@@ -967,7 +984,7 @@ class Repository:
         # tombstoned film is never a valid tmdb match target.
         with self._conn() as c:
             r = c.execute(_TMDB_TARGET_SELECT + "WHERE f.id = ? AND " + _NOT_DISPOSED, (film_id,)).fetchone()
-            return None if r is None else TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"]))
+            return None if r is None else _tmdb_target(r)
 
     # tmdb ---------------------------------------------------------------
     def films_needing_tmdb_match(self) -> list[TmdbMatchTarget]:
@@ -976,9 +993,10 @@ class Repository:
                 _TMDB_TARGET_SELECT
                 + "WHERE "
                 + _NOT_DISPOSED
+                + _IS_MOVIE
                 + " AND NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
             ).fetchall()
-            return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
+            return [_tmdb_target(r) for r in rows]
 
     def films_tmdb_missed_targets(self) -> list[TmdbMatchTarget]:
         with self._conn() as c:
@@ -986,9 +1004,10 @@ class Repository:
                 _TMDB_TARGET_SELECT
                 + "JOIN tmdb t ON t.film_id = f.id WHERE t.found = 0 AND "
                 + _NOT_DISPOSED
+                + _IS_MOVIE
                 + " ORDER BY f.id"
             ).fetchall()
-            return [TmdbMatchTarget(int(r["id"]), str(r["title"]), r["year"], bool(r["commerce"])) for r in rows]
+            return [_tmdb_target(r) for r in rows]
 
     def films_with_tmdb(self) -> list[tuple[int, str, int | None, str]]:
         with self._conn() as c:
@@ -1059,6 +1078,16 @@ class Repository:
                 c.execute("UPDATE films SET key = key || ' #' || id WHERE id = ?", (held_by,))
             c.execute("UPDATE films SET year = ?, key = ? WHERE id = ?", (year, new_key, film_id))
             return None
+
+    def set_film_kind(self, film_id: int, kind: str) -> None:
+        """`movie` | `series` — a series is keyed by its IMDb id alone (memo Q2)."""
+        with self._conn() as c:
+            c.execute("UPDATE films SET kind = ? WHERE id = ?", (kind, film_id))
+
+    def film_kind(self, film_id: int) -> str:
+        with self._conn() as c:
+            row = c.execute("SELECT kind FROM films WHERE id = ?", (film_id,)).fetchone()
+            return "movie" if row is None else str(row["kind"])
 
     def stale_omdb_years(self) -> list[tuple[int, str, int | None, int]]:
         """Non-Criterion films whose OMDb payload was fetched under a different year than films.year."""
@@ -1154,7 +1183,7 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 "SELECT f.id, f.title, f.year FROM films f JOIN tmdb t ON t.film_id = f.id "
-                "WHERE t.found = 0 AND " + _NOT_DISPOSED + " ORDER BY f.id"
+                "WHERE t.found = 0 AND " + _NOT_DISPOSED + _IS_MOVIE + " ORDER BY f.id"
             ).fetchall()
             return [(int(r["id"]), str(r["title"]), r["year"]) for r in rows]
 
@@ -1480,6 +1509,7 @@ class Repository:
                 "  )"
                 ") AND "
                 + _NOT_DISPOSED
+                + _IS_MOVIE
                 + " ORDER BY f.id"
             ).fetchall()
             return [

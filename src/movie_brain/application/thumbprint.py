@@ -1,6 +1,8 @@
-"""Thumbprint use cases (T1): the claims backfill and the review-row serializer.
+"""Thumbprint use cases: the claims backfill, the query builder, and the review-row serializer.
 
-The resolver itself stays dark in T1 — nothing here is called by sync.
+`film_query` and `review_detail` are called from `application/keying.py::key_films` (the sync
+keying step) as well as `repair nomatch` — the resolver has been live since the T5 ingester
+switch. `backfill_claims` stays a standalone one-shot verb.
 """
 
 from __future__ import annotations
@@ -15,12 +17,36 @@ from typing import Any, NamedTuple, TypedDict
 
 from movie_brain.domain.matching import parse_apple_title
 from movie_brain.domain.models import film_key
-from movie_brain.domain.thumbprint import Query, Verdict, parse_title, title_norm
+from movie_brain.domain.thumbprint import Query, Verdict, edition_label, make_query, title_norm
 from movie_brain.infrastructure.database import Repository
 
 
 def _stderr(msg: str) -> None:
     print(msg, file=sys.stderr)
+
+
+_CLAIM_PRECEDENCE = ("criterion", "metacritic", "apple-tv")
+_CLAIM_SOURCE = {"criterion": "criterion", "metacritic": "metacritic", "apple-tv": "apple"}
+
+
+def film_query(repo: Repository, film_id: int, title: str, year: int | None, director: str | None) -> Query:
+    """What the ingester saw: the film's highest-precedence claim (criterion > metacritic >
+    apple-tv), title/year from the claim (year falls back to the film's), director from the
+    film row, the apple runtime carried for display and never scored (owner Q3)."""
+    claims = repo.claims_for_film(film_id)
+    by_auth = {a: next((c for c in claims if c.authority == a), None) for a in _CLAIM_PRECEDENCE}
+    chosen = next((by_auth[a] for a in _CLAIM_PRECEDENCE if by_auth[a] is not None), None)
+    apple = by_auth["apple-tv"]
+    runtime = apple.runtime_min if apple is not None else None
+    if chosen is None:
+        return make_query(title, year, "unknown", director=director, runtime_min=runtime)
+    return make_query(
+        chosen.title_ingested or title,
+        chosen.year_claimed or year,
+        _CLAIM_SOURCE[chosen.authority],
+        director=director,
+        runtime_min=runtime,
+    )
 
 
 @dataclass(frozen=True)
@@ -32,11 +58,6 @@ class BackfillReport:
     apple_twin_covered: int  # owned twins of a recovered raw `Title (YYYY)` line: no placeholder written
     title_norms: int
     editions: int
-
-
-def _edition_label(raw: str) -> str | None:
-    eds = parse_title(raw).editions
-    return " / ".join(eds) if eds else None
 
 
 def _apple_archive_lines(config_dir: Path) -> list[tuple[str, str, int | None, int | None]]:
@@ -112,13 +133,13 @@ def backfill_claims(
             t = titles.get(oid, str(oid))
             rows.append((oid, "apple-tv", t, t, None, None, first_imported))
     n_apple = len(owned)
-    editions = [r for r in rows if _edition_label(r[3])]
+    editions = [r for r in rows if edition_label(r[3])]
 
     unrecovered_rows = {id(r) for r in rows[n_crit + n_mc :] if r[4] is None and r[5] is None}
     shown: dict[str, int] = {}
     for r in rows:
         if shown.get(r[1], 0) < 20 or r in editions or id(r) in unrecovered_rows:
-            log(f"  {r[1]:10} #{r[0]:<5} {r[2]!r} title={r[3]!r} year={r[4]} rt={r[5]} ed={_edition_label(r[3])!r}")
+            log(f"  {r[1]:10} #{r[0]:<5} {r[2]!r} title={r[3]!r} year={r[4]} rt={r[5]} ed={edition_label(r[3])!r}")
             shown[r[1]] = shown.get(r[1], 0) + 1
     log(
         f"claims: criterion {n_crit} · metacritic {n_mc} · apple {n_apple} "
@@ -134,7 +155,7 @@ def backfill_claims(
                 value,
                 title,
                 year_claimed=year,
-                edition_label=_edition_label(title),
+                edition_label=edition_label(title),
                 runtime_min=runtime,
                 first_seen=seen,
             ):

@@ -6,7 +6,7 @@ Feature: Thumbprint T1 — claims backfill and Title (YYYY) twins
 
   Scenario: backfill dry run writes nothing and reports counts
     When I run the claims backfill without --apply
-    Then the claim table is empty
+    Then the dry run added no claim rows
     And the backfill report says criterion 1, metacritic 1, apple 1, editions 1
 
   Scenario: backfill apply is idempotent and fills title_norm

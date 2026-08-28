@@ -21,6 +21,13 @@ class TmdbTitles(NamedTuple):
     alternatives: tuple[str, ...]
 
 
+class FindResult(NamedTuple):
+    """What `/find` knows about an IMDb id: TMDB movie id, and whether TV knows it."""
+
+    movie_id: int | None
+    tv: bool
+
+
 class TmdbFacts(NamedTuple):
     imdb_id: str | None
     title: str
@@ -120,10 +127,18 @@ class TmdbClient:
         v = self._get(f"/movie/{tmdb_id}/external_ids").json().get("imdb_id")
         return str(v) if v else None
 
+    def find_by_imdb_any(self, tt: str) -> FindResult:
+        """One `/find` call reporting BOTH namespaces. A series holds no `external_ids.tmdb`
+        (TMDB movie and TV ids share one integer namespace and the providers endpoint is
+        movie-only), so the caller keys a tv-only hit by IMDb id alone."""
+        d = self._get(f"/find/{tt}", external_source="imdb_id").json()
+        movies = d.get("movie_results") or []
+        tv = bool(d.get("tv_results") or d.get("tv_episode_results"))
+        return FindResult(int(movies[0]["id"]) if movies else None, tv)
+
     def find_by_imdb(self, tt: str) -> int | None:
         """TMDB movie id for an IMDb id (one call) — the reverse of imdb_id()."""
-        hits = self._get(f"/find/{tt}", external_source="imdb_id").json().get("movie_results") or []
-        return int(hits[0]["id"]) if hits else None
+        return self.find_by_imdb_any(tt).movie_id
 
     def movie_titles(self, tmdb_id: int) -> TmdbTitles:
         """Title, original title, year, and every alternative title — one API call."""

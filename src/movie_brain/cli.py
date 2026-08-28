@@ -57,7 +57,7 @@ app.add_typer(repair_app, name="repair")
 review_app = typer.Typer(help="Resolve match_review anomalies: match to a film, create, or dismiss.")
 app.add_typer(review_app, name="review")
 thumbprint_app = typer.Typer(
-    help="Thumbprint identity: claims backfill (T1); the resolver stays dark until the ingester switch."
+    help="Thumbprint identity: claims backfill; the resolver is live in sync, owned import, and Mode-B promotion."
 )
 app.add_typer(thumbprint_app, name="thumbprint")
 audit_app = typer.Typer(help="Data audit: read-only consistency checks; the human records verdicts in the dashboard.")
@@ -111,8 +111,8 @@ def sync_cmd(
     )
     console.print(
         f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk} · "
-        f"tmdb matched: {result.tmdb_matched} · availability refreshed: {result.tmdb_refreshed} · "
-        f"promoted: {result.mc_promoted}"
+        f"availability refreshed: {result.tmdb_refreshed} · promoted: {result.mc_promoted} · "
+        f"keyed: {result.tmdb_matched} · review: {result.tmdb_reviewed}"
     )
     raise typer.Exit(result.exit_code)
 
@@ -234,13 +234,28 @@ def metacritic_dial(
 
 @owned_app.command("import")
 def owned_import() -> None:
-    """Export the Apple TV library via AppleScript and mark/create owned films."""
+    """Export the Apple TV library via AppleScript and mark/create owned films.
+
+    Each raw title is resolved through the thumbprint algorithm first, so an edition
+    already held by an existing film (e.g. a "(The Final Cut)" import of a film already
+    keyed under its own title) lands on that film instead of minting a twin."""
+    from movie_brain.infrastructure.omdb import OmdbClient
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
+
     cfg = load_config()
     cfg.config_dir.mkdir(parents=True, exist_ok=True)
-    report = import_owned(_repo(), cfg.config_dir, date.today())
+    token, key = load_tmdb_token(cfg), load_api_key(cfg)
+    tmdb = TmdbClient(token) if token else None
+    fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
+    try:
+        report = import_owned(_repo(), cfg.config_dir, date.today(), fetcher=fetcher, tmdb=tmdb)
+    finally:
+        if cache is not None:
+            cache.save()  # the session cache, never the fixture
     console.print(
         f"owned: {report.total} · matched: {report.matched} · created: {report.created} · "
-        f"already: {report.already_owned} · review: {report.review_open}"
+        f"already: {report.already_owned} · review: {report.review_open} · "
+        f"resolved: {report.resolved_to_existing} · keyed: {report.keyed}"
     )
     raise typer.Exit(report.exit_code)
 
@@ -429,23 +444,13 @@ def repair_nomatch_cmd(
     --pick/--tt/--none`. Candidates are cached per session in <config_dir>/nomatch-cache.json.gz
     (the eval fixture is never written)."""
     from movie_brain.infrastructure.omdb import OmdbClient
-    from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
 
-    root = Path(__file__).resolve().parents[2]
     repo = _repo()
     cfg = load_config()
     token, key = load_tmdb_token(cfg), load_api_key(cfg)
     tmdb = TmdbClient(token) if token else None
-    fetcher = None
-    cache = None
-    if tmdb is not None and key:
-        session_path = cfg.config_dir / "nomatch-cache.json.gz"
-        fixture = root / "scripts" / "eval" / "fixtures" / "cand_cache.json.gz"
-        data = dict(CandidateCache.load(fixture, read_only=True).data)
-        if session_path.exists():
-            data.update(CandidateCache.load(session_path).data)
-        cache = CandidateCache(data, session_path)
-        fetcher = CandidateFetcher(cache, tmdb, OmdbClient(key))
+    fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
 
     def confirm(g: NomatchGroup) -> bool:
         prompt = f"#{g.film_id} {g.title!r} [{g.verdict}] → {g.tt or 'review'}?"
@@ -538,7 +543,12 @@ def review_list(
         table.add_column(col)
     parsed: dict[object, ReviewDetail] = {}
     for r in rows:
+        kind = str(r["kind"] or "movie")
         film = f"#{r['film_id']} {r['title']} ({r['year']})" if r["film_id"] is not None else ""
+        if film and kind != "movie":
+            # A series is keyed by IMDb id alone — never offer it a tmdb id. The `\[` is rich's
+            # markup escape: an unescaped "[series]" is read as a style tag and rendered as nothing.
+            film += f" \\[{kind}]"
         detail = r["detail"]
         d = parse_review_detail(str(detail)) if detail is not None else None
         detail_cell = d.reason if d is not None else str(detail or "")
@@ -580,6 +590,7 @@ def review_resolve(
     none: Annotated[
         bool, typer.Option("--none", help="Standing 'no such work' verdict: verified unkeyed.")
     ] = False,
+    series: Annotated[bool, typer.Option("--series", help="With --tt: this work is a series (IMDb id only).")] = False,
     note: Annotated[str | None, typer.Option("--note")] = None,
     eval_csv: Annotated[Path | None, typer.Option("--eval-csv", hidden=True)] = None,
 ) -> None:
@@ -602,6 +613,7 @@ def review_resolve(
             pick=pick,
             tt=tt,
             none=none,
+            series=series,
             eval_csv=eval_csv,
             warn=err.print,
         )

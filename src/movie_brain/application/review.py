@@ -5,13 +5,16 @@ from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
+import requests
+
 from movie_brain.application.availability import TMDB_AUTHORITY, record_tmdb_match
 from movie_brain.application.eval_log import EvalEntry, ratify
+from movie_brain.application.keying import key_film
 from movie_brain.application.thumbprint import parse_review_detail
 from movie_brain.domain.matching import parse_apple_title
 from movie_brain.domain.models import Film, ReviewEntry
 from movie_brain.infrastructure.database import Repository
-from movie_brain.infrastructure.tmdb import TmdbClient
+from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 
 def suppress_resolved(repo: Repository, authority: str, entries: list[ReviewEntry]) -> list[ReviewEntry]:
@@ -45,6 +48,7 @@ def resolve_review(
     pick: str | None = None,
     tt: str | None = None,
     none: bool = False,
+    series: bool = False,
     eval_csv: Path | None = None,
     warn: Callable[[str], None] = lambda _m: None,
 ) -> str:
@@ -64,6 +68,16 @@ def resolve_review(
     `eval_csv=None` skips that append entirely (library callers that don't keep an eval log);
     the CLI always passes a path.
 
+    A --tt whose id TMDB knows only as TV (or one forced with --series) is a series work: it is
+    keyed by its IMDb id ALONE and marked `kind = series`, which takes it out of every TMDB
+    keying worklist. It can hold no TMDB id — movie and TV ids share one integer namespace and
+    the stored id drives the movie-only providers endpoint (memo Q2). TMDB's `/find` sometimes
+    answers a tt with BOTH a collection-style movie stub (whose `/movie/{id}` itself 404s) AND
+    a tv hit (Dekalog: movie id 37452, tv id 42699) — a human's explicit --series wins whenever
+    TMDB knows the tt as TV at all, movie stub or not; automatic detection stays conservative
+    (tv-only) so a film that legitimately has both a theatrical cut and a TV cut isn't silently
+    mis-kinded. --series is refused only when TMDB knows the tt purely as a movie.
+
     Imports metacritic/owned locally (not at module top) — those two modules import
     `suppress_resolved` from this one at their own top level, so a module-level import here
     would be circular depending on which module a caller happens to import first.
@@ -79,6 +93,8 @@ def resolve_review(
     ]
     if len(chosen) != 1:
         raise ValueError("choose exactly one of --film, --tmdb-id, --create, --dismiss, --pick, --tt, --none")
+    if series and tt is None:
+        raise ValueError("--series applies only to --tt")
     if film_id is not None:
         # --film targets an id chosen by a human, possibly stale by the time this runs
         # (merged away, tombstoned) — canonicalize to the ultimate survivor and refuse a
@@ -106,47 +122,63 @@ def resolve_review(
         parsed = parse_review_detail(str(row["detail"]) if row["detail"] else None)
         chosen_tt: str
         chosen_tmdb: int | None = None
-        chosen_year: int | None = None  # --pick re-asks TMDB only when the candidate is OMDb-only (no tmdb_id)
+        is_series = False
         if pick is not None:
             if parsed is None:
                 raise ValueError(f"review {review_id} has no A/B/C candidates — use --tt or --none")
             cand = next((c for c in parsed.candidates if c["letter"] == pick.upper()), None)
             if cand is None:
                 raise ValueError(f"no candidate {pick!r} on review {review_id}")
-            chosen_tt, chosen_tmdb, chosen_year = str(cand["tt"]), cand.get("tmdb_id"), cand.get("year")
+            chosen_tt, chosen_tmdb = str(cand["tt"]), cand.get("tmdb_id")
             if chosen_tmdb is None and client is not None:
                 # An OMDb-only candidate (The Cup, T3) still usually has a TMDB record under its tt.
                 chosen_tmdb = client.find_by_imdb(chosen_tt)
-                chosen_year = client.movie_year(chosen_tmdb) if chosen_tmdb is not None else None
             if chosen_tmdb is None:
                 warn(f"tmdb id not resolved for {chosen_tt} (no client or no TMDB record); imdb only")
         elif tt is not None:
             chosen_tt = tt
-            chosen_tmdb = client.find_by_imdb(tt) if client is not None else None
-            if chosen_tmdb is None:
+            found = None
+            tmdb_failed = False
+            if client is not None:
+                try:
+                    found = client.find_by_imdb_any(tt)
+                except (requests.RequestException, AuthError) as exc:
+                    # A dead /find call must not escape as a raw HTTP error (Dekalog rehearsal
+                    # defect): degrade to imdb-only keying, same as the "no client" convention
+                    # below, rather than aborting the whole resolution — the human's --series
+                    # flag (if given) still applies since `found` stays None either way.
+                    tmdb_failed = True
+                    warn(f"tmdb lookup failed for {tt} ({exc}); imdb only")
+            is_series = series or (found is not None and found.movie_id is None and found.tv)
+            if series and found is not None and found.movie_id is not None and not found.tv:
+                raise ValueError(f"TMDB has a movie for {tt} (id {found.movie_id}) — drop --series")
+            chosen_tmdb = None if is_series else (found.movie_id if found is not None else None)
+            if chosen_tmdb is None and not is_series and not tmdb_failed:
                 warn(f"tmdb id not resolved for {tt} (no client or no TMDB record); imdb only")
         else:
             chosen_tt = "NONE"
         if chosen_tt != "NONE":
-            try:
-                repo.set_external_id(rid, "imdb", chosen_tt, today)
-            except sqlite3.IntegrityError as exc:
+            if repo.tmdb_target(rid) is None:
+                raise ValueError(f"film {rid} not found")
+            # One identity write path with sync and the repair verbs (spec §4.1). Both branches
+            # above already asked TMDB for the id, so key_film never repeats the lookup — and a
+            # series arrives with no tmdb id at all, which is exactly how it stays keyed.
+            keyed = key_film(
+                repo, client, rid, chosen_tt, today, lambda _m: None,
+                tmdb_id=chosen_tmdb, resolve_tmdb_id=False,
+            )
+            if keyed.status == "held":
                 holder = repo.film_id_for_external("imdb", chosen_tt)
-                raise ValueError(f"{chosen_tt} is already held by film {holder}") from exc
-            if chosen_tmdb is not None:
-                target = repo.tmdb_target(rid)
-                if target is None:
-                    raise ValueError(f"film {rid} not found")
-                if pick is not None:
-                    year = chosen_year
-                else:
-                    year = client.movie_year(chosen_tmdb) if client is not None else None
-                result = record_tmdb_match(repo, target, chosen_tmdb, year, today, lambda _m: None)
-                if result == "id-conflict":
-                    raise ValueError(f"tmdb id {chosen_tmdb} is already held by another film — merge instead")
-            if repo.omdb_imdb_id(rid) not in (None, chosen_tt):
-                repo.mark_omdb_refresh(rid)  # a found-but-WRONG stub must be refetched by the new id
-            outcome = f"keyed imdb {chosen_tt} tmdb {chosen_tmdb or '-'}"
+                if holder is not None and holder != rid:
+                    raise ValueError(f"{chosen_tt} is already held by film {holder}")
+                raise ValueError(f"tmdb id {chosen_tmdb} is already held by another film — merge instead")
+            if keyed.status == "error":
+                raise ValueError(keyed.detail)
+            if is_series:
+                repo.set_film_kind(rid, "series")
+                outcome = f"keyed series imdb {chosen_tt}"
+            else:
+                outcome = f"keyed imdb {chosen_tt} tmdb {chosen_tmdb or '-'}"
         else:
             outcome = "verified unkeyed"
         if eval_csv is not None:

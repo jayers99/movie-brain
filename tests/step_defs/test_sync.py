@@ -11,8 +11,10 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.sync import SOURCE, SyncResult, sync
 from movie_brain.domain.models import Film
+from movie_brain.domain.thumbprint import Candidate
 from movie_brain.infrastructure.criterion import API_URL, BROWSE_URL
 from movie_brain.infrastructure.omdb import OMDB_URL
+from movie_brain.infrastructure.tmdb import TMDB_API
 
 scenarios("../features/sync.feature")
 
@@ -157,6 +159,38 @@ def omdb_ok(ctx):
     ctx["rs"].get(OMDB_URL, json=FOUND)
 
 
+@given("the resolver keys every film")
+def resolver_keys_all(ctx):
+    """A pool that answers any query with a synthetic keyed candidate, so the OMDb loop
+    has an IMDb id to look up (T5: no id, no OMDb record)."""
+
+    class AllFetcher:
+        def fetch(self, q):
+            tt = f"tt{abs(hash(q.title)) % 9000000:07d}"
+            tid = abs(hash(q.title)) % 90000
+            # release_date echoes the query's own year — a commerce (no-listing) film like a
+            # Metacritic promotion gets its year adopted from this TMDB response (key_film →
+            # movie_year), so a mismatched hardcoded year here would rename its key underfoot.
+            ctx["rs"].add(
+                responses.GET, f"{TMDB_API}/movie/{tid}", json={"id": tid, "release_date": f"{q.year or 1900}-01-01"}
+            )
+            return [Candidate(tt, tid, (q.title,), q.year, "Someone", 100, 5000, "movie", True, True)]
+
+    ctx["pool"] = AllFetcher()
+
+
+@given(parsers.parse('"{title_year}" is already keyed to imdb "{tt}"'))
+def already_keyed(ctx, title_year, tt):
+    """Simulates a film keyed on a prior night — --ratings-only never keys (T5: keying is
+    skipped when ratings_only), so a ratings-only scenario needs its film pre-keyed to have
+    anything for the OMDb-by-id loop to look up."""
+    m = re.fullmatch(r"(.+) \((\d{4})\)", title_year)
+    assert m
+    title, year = m.group(1), int(m.group(2))
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
+    ctx["repo"].set_external_id(fid, "imdb", tt, TODAY)
+
+
 @given("OMDb answers once then reports the request limit")
 def omdb_quota(ctx):
     ctx["rs"].get(OMDB_URL, json=FOUND)
@@ -196,7 +230,17 @@ def metacritic_archive(ctx, title, year, score, slug):
 
 
 def _run(ctx, **kw):
-    ctx["result"] = sync(ctx["repo"], "key", TODAY, session=requests.Session(), delay_s=0, log=lambda m: None, **kw)
+    ctx["result"] = sync(
+        ctx["repo"],
+        "key",
+        TODAY,
+        session=requests.Session(),
+        delay_s=0,
+        log=lambda m: None,
+        fetcher=ctx.get("pool"),
+        tmdb_token="tok" if ctx.get("pool") else None,
+        **kw,
+    )
 
 
 @when("I sync")

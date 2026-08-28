@@ -347,3 +347,73 @@ def eval_row_yearless(ctx, spec):
     with (ctx["config_dir"] / "eval.csv").open(encoding="utf-8") as f:
         rows = [r for r in csv.DictReader(f) if r["film_id"] == str(fid)]
     assert rows and rows[-1]["year_ingested"] == "", rows
+
+
+@given(parsers.parse('a commerce film "{spec}"'))
+def commerce_film(ctx, spec):
+    t, y = _split(spec)
+    ctx["repo"].create_film(Film(t, y, None, ""))
+
+
+@given(parsers.parse('TMDB finds "{tt}" only as a series'))
+def tmdb_find_series(ctx, tt):
+    ctx["rs"].add(responses.GET, f"{TMDB_API}/find/{tt}",
+                  json={"movie_results": [], "tv_results": [{"id": 2001}], "tv_episode_results": []})
+    ctx["client"] = TmdbClient("tok")
+
+
+@given(parsers.parse('TMDB finds nothing for "{tt}"'))
+def tmdb_find_nothing(ctx, tt):
+    ctx["rs"].add(responses.GET, f"{TMDB_API}/find/{tt}",
+                  json={"movie_results": [], "tv_results": [], "tv_episode_results": []})
+    ctx["client"] = TmdbClient("tok")
+
+
+@given(parsers.parse('TMDB finds "{tt}" as id {tid:d} and also as a series'))
+def tmdb_find_movie_stub_and_series(ctx, tt, tid):
+    # The Dekalog shape: /find returns BOTH a collection-style movie stub (whose /movie/{id}
+    # itself 404s) AND a tv_results hit — --series must win without ever calling /movie/{id}.
+    ctx["rs"].add(responses.GET, f"{TMDB_API}/find/{tt}",
+                  json={"movie_results": [{"id": tid}], "tv_results": [{"id": 2001}], "tv_episode_results": []})
+    ctx["client"] = TmdbClient("tok")
+
+
+@given(parsers.parse('TMDB fails to look up "{tt}"'))
+def tmdb_find_fails(ctx, tt):
+    ctx["rs"].add(responses.GET, f"{TMDB_API}/find/{tt}", status=404)
+    ctx["client"] = TmdbClient("tok")
+
+
+@when(parsers.parse('I resolve it with tt "{tt}" and --series'))
+def do_tt_series(ctx, tt):
+    _resolve(ctx, tt=tt, series=True)
+
+
+@when(parsers.parse('I resolve it with tt "{tt}" and --series it is refused'))
+def do_tt_series_refused(ctx, tt):
+    with pytest.raises(ValueError) as exc:
+        _resolve(ctx, tt=tt, series=True)
+    ctx["error"] = str(exc.value)
+
+
+@then(parsers.parse('the error mentions "{text}"'))
+def error_mentions(ctx, text):
+    assert text in ctx["error"]
+
+
+@then(parsers.parse('the film "{spec}" has kind "{kind}"'))
+def film_kind(ctx, spec, kind):
+    assert ctx["repo"].film_kind(_id(ctx["repo"], spec)) == kind
+
+
+@then(parsers.parse('the film "{spec}" is not a keying target'))
+def not_a_target(ctx, spec):
+    fid = _id(ctx["repo"], spec)
+    assert fid not in [t.film_id for t in ctx["repo"].films_needing_tmdb_match()]
+    assert fid not in [f for f, _, _ in ctx["repo"].films_tmdb_missed()]
+
+
+@then(parsers.parse("no TMDB movie lookup was made for id {tid:d}"))
+def no_movie_lookup(ctx, tid):
+    made = [c.request.url for c in ctx["rs"].calls]
+    assert not any(f"/movie/{tid}" in u for u in made), made
