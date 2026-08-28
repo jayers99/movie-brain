@@ -428,11 +428,13 @@ def already_checked(ctx, tmdb, title, year, tid):
 @given("OMDb answers only lookups by IMDb id")
 def omdb_by_id_only(ctx):
     ctx["rs"].remove(responses.GET, OMDB_URL)
+    ctx["omdb_title_calls"] = 0
 
     def cb(request):
         q = parse_qs(urlparse(request.url).query)
         if "i" in q:
             return (200, {}, json.dumps(FOUND))
+        ctx["omdb_title_calls"] += 1
         return (200, {}, json.dumps({"Response": "False", "Error": "Movie not found!"}))
 
     ctx["rs"].add_callback(responses.GET, OMDB_URL, callback=cb)
@@ -460,6 +462,11 @@ def has_omdb(ctx, title, year):
 @then(parsers.parse('"{title} ({year:d})" has no OMDb rating'))
 def has_no_omdb(ctx, title, year):
     assert not _omdb_found(ctx, title, year)
+
+
+@then("OMDb was never asked by title")
+def omdb_never_by_title(ctx):
+    assert ctx["omdb_title_calls"] == 0, f"{ctx['omdb_title_calls']} title lookups"
 
 
 @then(parsers.parse('"{title} ({year:d})" has no external id for authority "{authority}"'))

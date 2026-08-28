@@ -44,7 +44,7 @@ class SyncResult:
     mc_promoted: int = 0
     tmdb_first_checked: int = 0
     tmdb_reviewed: int = 0  # films the resolver sent to a durable A/B/C review row
-    omdb_unkeyed: int = 0  # OMDb lookups that still fell back to the title (no IMDb id)
+    omdb_unkeyed: int = 0  # films skipped by the OMDb loop for holding no IMDb id (never title-searched)
 
 
 def _resolve_imdb_id(
@@ -162,7 +162,7 @@ def sync(
         cache.save()
 
     looked_up = 0
-    omdb_unkeyed = 0
+    unkeyed = 0
     quota_hit = False
     consecutive = 0
     lookup_queue = repo.films_needing_lookup(SOURCE, today) + repo.films_needing_lookup_discovery(SOURCE, today)
@@ -171,7 +171,13 @@ def sync(
             break
         try:
             imdb_id = _resolve_imdb_id(repo, tmdb_client, film_id, today, log)
-            rating = omdb_client.lookup_by_imdb(imdb_id) if imdb_id else omdb_client.lookup(film.title, film.year)
+            if imdb_id is None:
+                # An unkeyed work is never enriched by title search (memo §1): OMDb's `t=`
+                # accepted stubs for films it did not have. The film re-enters this queue
+                # every run at zero API cost until the resolver keys it.
+                unkeyed += 1
+                continue
+            rating = omdb_client.lookup_by_imdb(imdb_id)
         except QuotaExceeded:
             quota_hit = True
             continue
@@ -186,8 +192,6 @@ def sync(
             continue
         repo.upsert_omdb(film_id, rating, today)
         looked_up += 1
-        if imdb_id is None:
-            omdb_unkeyed += 1  # keying hasn't reached this film: still a title lookup
         consecutive = 0
 
     failing = consecutive >= MAX_CONSECUTIVE_FAILURES
@@ -233,5 +237,5 @@ def sync(
         mc_promoted,
         tmdb.first_checked,
         keyed.reviewed,
-        omdb_unkeyed,
+        unkeyed,
     )

@@ -8,6 +8,7 @@ Feature: Daily sync
   Scenario: First run does a full walk and fills ratings
     Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)"
     And OMDb knows every film
+    And the resolver keys every film
     When I sync
     Then the exit code is 0
     And the catalog walk was full
@@ -75,6 +76,7 @@ Feature: Daily sync
 
   Scenario: --ratings-only skips Criterion
     Given the repository already holds "Trio (1950)" walked 2 days ago
+    And "Trio (1950)" is already keyed to imdb "tt0037800"
     And OMDb knows every film
     When I sync with --ratings-only
     Then the exit code is 0
@@ -105,6 +107,7 @@ Feature: Daily sync
   Scenario: OMDb quota stops lookups but keeps what was fetched
     Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)"
     And OMDb answers once then reports the request limit
+    And the resolver keys every film
     When I sync
     Then the exit code is 0
     And the quota flag is set
@@ -113,12 +116,14 @@ Feature: Daily sync
   Scenario: OMDb rejects the key
     Given the Criterion catalog has films "Trio (1950)"
     And OMDb rejects the API key
+    And the resolver keys every film
     When I sync
     Then the exit code is 2
 
   Scenario: Repeated OMDb failures stop lookups but keep what was fetched
     Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)" and "Third (1960)" and "Fourth (1970)" and "Fifth (1980)" and "Sixth (1990)" and "Seventh (2000)"
     And OMDb answers once then errors repeatedly
+    And the resolver keys every film
     When I sync
     Then the exit code is 0
     And the failing flag is set
@@ -144,6 +149,7 @@ Feature: Daily sync
     Given the Criterion browse page exposes a token
     And the Criterion catalog has films "Alpha (1950)"
     And OMDb knows every film
+    And the resolver keys every film
     And the metacritic archive holds "Fresh Find" (2020) scored 95 as "fresh-find"
     When I sync with a metacritic archive
     Then the film for key "fresh find (2020)" has an OMDb rating
