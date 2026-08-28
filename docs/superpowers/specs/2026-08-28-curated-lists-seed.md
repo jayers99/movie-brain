@@ -4,6 +4,12 @@
 
 **Origin:** `docs/backlog.md` item 10, which already sketched a data model and named Cahiers du Cinéma as the first list. The 2026-08-25 thumbprint handoff also anticipated this: *"Many more lists are coming: individual critics' top-100s, cult classics…"*
 
+## 0. The point of this exercise (owner, 2026-08-28 — read this before anything else)
+
+> "One of the main things that we're testing by doing this import is the accuracy of our film matching. I want to make sure these lists don't create a bunch of duplicate films — so when a foreign key to our film table is created, we want to make sure we feel real comfortable about that, and use our arduous, really accurate thumbprint and film matcher."
+
+This reframes the feature. The list data is the deliverable, but the **import is an accuracy test of the identity stack built across T1–T5**, and the failure this must not produce is duplicate films. Every design decision below yields to that: it is always better for the importer to refuse and ask than to mint a film. An under-created list costs one review row; an over-created one costs a merge. See §5.5 for the guard that enforces this and §5.6 for how the accuracy is actually measured.
+
 ## 1. What the owner asked for, in their words
 
 > "I want to be able to collect top lists — Top 100, Top 10 by different people, different organizations, of different types of film. Examples: top 20 cult classics, top 10 action films, top 5 kung fu films. Just all these definitive lists of top movies by genre. I want to import a bunch of them. Once they're in the database in a way that they can be reused for different movies: if I go into a drawer, it'll say 'Oh! That's on this top 100 list' and give the name of the list. Then once I determine which lists are really good, I might want to change my GUI just to filter out and display those on the list and put them in the right order of the list."
@@ -70,12 +76,50 @@ Per entry: `make_query(title_listed, None, "list", director=director_listed)` �
 | verdict | action |
 |---|---|
 | `match`, a film already holds that imdb (or tmdb) id | link the entry to that film — **no new film minted** |
-| `match`, nobody holds it | `create_film` + `key_film` — born keyed, exactly like Mode-B promotion |
+| `match`, nobody holds it, and the §5.5 guard passes | `create_film` + `key_film` — born keyed, exactly like Mode-B promotion, but only in the separate creation phase |
+| `match`, nobody holds it, guard BLOCKS | store the entry with `film_id` NULL and queue a review row — **never create** |
 | `review` | store the entry with `film_id` NULL and queue ONE durable `match_review` row under authority `list`, drained with the existing `review resolve --pick/--tt/--none` |
 
 Every linked film also gets a `claim` (authority `list`, value `<slug>#<rank>`, `title_ingested` = the listed title), consistent with T5's claims-at-ingest, so a later re-resolution sees what the list actually said. Re-import is idempotent: ranks update, nothing duplicates, no film is created twice.
 
 Auto matches are **never** ratified into `scripts/eval/thumbprint_eval_v1.csv` — same rule as `repair nomatch`, so the gate cannot score itself. Human `review resolve` verdicts ratify as they already do.
+
+### 5.5 The duplicate guard — three gates before any film is created
+
+This is the heart of §0 and the part to get right. Measured on the live catalog 2026-08-28: 4,547 undisposed films, of which **787 hold an imdb id and 4,475 hold a tmdb id — but 61 hold neither**, so an id-holder lookup alone is blind to those 61. Worse, id-holder lookup is *structurally* blind to a case that is known to occur:
+
+> The list resolves *Greed / von Stroheim* to `ttB`. The catalog already holds *Greed*, keyed to a **different** IMDb entry `ttA`. No film holds `ttB`, so a naive importer creates one. **Duplicate.**
+
+That shape is not hypothetical — 2026-08-28 produced two live examples: *Restless Creature: Wendy Whelan* (IMDb carries a separate working-title entry, `tt3551540` vs `tt5119264`) and *Summer of Soul* (TMDB record 776527 carries the wrong `imdb_id`, `tt7378922`). Ids genuinely differ for one work, so no id lookup can catch it.
+
+Therefore, before ANY `create_film`, all three gates must miss:
+
+| gate | what it checks | covers |
+|---|---|---|
+| 1. imdb holder | `film_id_for_external('imdb', tt)` | 787 films |
+| 2. tmdb holder | `film_id_for_external('tmdb', winner.tmdb_id)` from the winning candidate | 4,475 films — with gate 1, 98.7% of the catalog |
+| 3. **corpus title veto** | run the existing `match_candidates` / `films_for_matching` index on `title_listed`; **any** plausible candidate — even a weak or ambiguous one — BLOCKS creation | the `ttA`/`ttB` case and the 61 unkeyed films |
+
+Gate 3 deliberately inverts the ordering used by `owned import`, where the corpus matcher is a *fallback*. Here it is a **veto**: its job is not to find the right film, it is to prove the catalog has nothing resembling this title, and a tie or a weak hit is reason enough to stop. A blocked entry becomes a review row, never a film.
+
+Note the intended asymmetry: with these gates the likely failure mode becomes "refused to create something it should have", not "created a duplicate". That is the correct direction — the first costs one review row, the second costs a merge.
+
+### 5.6 Creation is a separate, confirmed phase — and links are scored too
+
+**Phase 1, `lists import <file>`:** resolve, link, record entries, queue reviews. Creates nothing. Reports what it *would* create.
+
+**Phase 2, an explicit second run:** mint the films from that reviewed list. Linking is cheap to undo; a duplicate film is a merge to clean up, so creation gets its own deliberate yes. This follows the project's standing one-at-a-time rule for live-DB writes.
+
+**The scorecard is the actual deliverable of the accuracy test.** A wrong *link* is invisible in a way a duplicate is not, so the report must make links as inspectable as creations — one line per entry, all 100, eyeballable in a single pass:
+
+```
+#3   The Rules of the Game (La Règle du jeu) / Jean Renoir
+     → LINKED  #1207 'The Rules of the Game' (1939) dir Jean Renoir   [director corroborated]
+#11  Greed / Erich von Stroheim
+     → BLOCKED gate 3: corpus candidate #832 'Greed' (1924) — review queued
+```
+
+Every line carries the resolver's reason string, which is contract text and must not be reworded. The resolver's own `review` verdicts (~8% by the gate's rate) never create anything by construction. Human verdicts reached through `review resolve` ratify into the eval CSV exactly as they already do, so draining this list's residue grows the benchmark corpus — the import feeds the very accuracy measure it is testing.
 
 ### Read model + drawer
 
@@ -95,7 +139,9 @@ Filter chip and rank-order sort; list tags/taxonomy; re-fetching a list from its
 
 ## 7. Risks to watch
 
+- **Duplicate films are THE risk** (§0). The §5.5 three-gate guard exists for this; do not weaken it for throughput, and do not let a "the resolver was confident" argument override gate 3. If the guard proves too conservative in practice, the fix is a human draining review rows, not a lowered bar.
 - **Film creation compounding.** ~30 new discovery films per list, across "a bunch of them", adds up. The dry run reports the real creation count before anything is written — check it against the §3 estimate and stop if it is wildly higher, since that would mean resolution is underperforming.
+- **A wrong link is silent.** Duplicates announce themselves; a list entry attached to the wrong existing film does not. §5.6's scorecard is the only thing that surfaces those, so it is not optional polish.
 - **`owned import` is now slow** (10+ min for 870 titles) because it resolves every title. A 100-entry list is fine; a 1,000-entry list would not be. Note the cost before importing anything large.
 - **`--none` discipline.** A canon film the indexes genuinely lack is a real film the index merely misses — per the project rule, that is NOT a `--none` candidate. Leave such entries unlinked rather than marking them verified-unkeyed.
 
