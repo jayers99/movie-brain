@@ -72,6 +72,7 @@ def owned_no_archive(ctx, title, year):
 
 @when("I run the claims backfill without --apply")
 def backfill_dry(ctx):
+    ctx["claims_before"] = _q(ctx, "SELECT COUNT(*) FROM claim")[0][0]
     ctx["report"] = backfill_claims(ctx["repo"], ctx["config_dir"], apply=False, log=ctx["log"].append)
 
 
@@ -86,11 +87,6 @@ def backfill_twice(ctx):
     backfill_apply(ctx)
 
 
-@then("the claim table is empty")
-def claim_empty(ctx):
-    assert _q(ctx, "SELECT COUNT(*) FROM claim")[0][0] == 0
-
-
 @then(parsers.parse("the backfill report says criterion {c:d}, metacritic {m:d}, apple {a:d}, editions {e:d}"))
 def report_counts(ctx, c, m, a, e):
     r = ctx["report"]
@@ -100,6 +96,12 @@ def report_counts(ctx, c, m, a, e):
 @then(parsers.parse("there are exactly {n:d} claim rows"))
 def claim_rows(ctx, n):
     assert _q(ctx, "SELECT COUNT(*) FROM claim")[0][0] == n
+
+
+@then("the dry run added no claim rows")
+def dry_run_added_none(ctx):
+    after = _q(ctx, "SELECT COUNT(*) FROM claim")[0][0]
+    assert after == ctx["claims_before"]
 
 
 @then(parsers.parse('the apple claim has edition_label "{label}", year_claimed {y:d} and runtime_min {rt:d}'))

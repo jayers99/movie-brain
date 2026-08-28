@@ -7,7 +7,7 @@ import requests
 import responses
 
 from movie_brain.domain.models import TmdbCandidate
-from movie_brain.infrastructure.tmdb import TMDB_API, AuthError, TmdbClient, watch_link
+from movie_brain.infrastructure.tmdb import TMDB_API, AuthError, FindResult, TmdbClient, watch_link
 
 
 @pytest.fixture
@@ -208,6 +208,24 @@ def test_find_by_imdb_returns_first_movie_id():
 def test_find_by_imdb_none_when_empty():
     responses.add(responses.GET, f"{TMDB_API}/find/tt1", json={"movie_results": [], "tv_results": []})
     assert TmdbClient("tok").find_by_imdb("tt1") is None
+
+
+@responses.activate
+def test_find_by_imdb_any_reports_a_tv_only_hit():
+    responses.get(
+        f"{TMDB_API}/find/tt0092337",
+        json={"movie_results": [], "tv_results": [{"id": 2001}], "tv_episode_results": []},
+    )
+    assert TmdbClient("tok").find_by_imdb_any("tt0092337") == FindResult(None, True)
+
+
+@responses.activate
+def test_find_by_imdb_any_prefers_the_movie_hit():
+    responses.get(
+        f"{TMDB_API}/find/tt0037800",
+        json={"movie_results": [{"id": 11}], "tv_results": [], "tv_episode_results": []},
+    )
+    assert TmdbClient("tok").find_by_imdb_any("tt0037800") == FindResult(11, False)
 
 
 def test_thumbprint_raw_methods_hit_the_right_endpoints(rs):

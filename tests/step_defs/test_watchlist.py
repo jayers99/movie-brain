@@ -4,7 +4,6 @@ import json
 import re
 import sqlite3
 from datetime import date, timedelta
-from urllib.parse import parse_qs, urlparse
 
 import pytest
 import responses
@@ -13,6 +12,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from movie_brain.application.availability import META_REFRESHED_AT
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.domain.models import Film
+from movie_brain.domain.thumbprint import Candidate
 from movie_brain.infrastructure.criterion import API_URL, BROWSE_URL
 from movie_brain.infrastructure.omdb import OMDB_URL
 from movie_brain.infrastructure.tmdb import TMDB_API
@@ -97,30 +97,26 @@ def omdb_ok(ctx):
     ctx["rs"].get(OMDB_URL, json=FOUND)
 
 
+class PoolFetcher:
+    """Stands in for CandidateFetcher: canned candidates per query title."""
+
+    def __init__(self):
+        self.pool: dict[str, list[Candidate]] = {}
+
+    def fetch(self, q):
+        return self.pool.get(q.title, [])
+
+
+@pytest.fixture
+def pool(ctx):
+    ctx["pool"] = PoolFetcher()
+    return ctx["pool"]
+
+
 @pytest.fixture
 def tmdb(ctx):
-    """One mutable TMDB world: search index, per-id providers, call counters."""
-    world = {
-        "search": {},
-        "providers": {},
-        "search_calls": 0,
-        "provider_calls": 0,
-        "search_mode": "index",
-        "reject": False,
-    }
-
-    def do_search(request):
-        world["search_calls"] += 1
-        if world["reject"]:
-            return (401, {}, json.dumps({"status_message": "bad token"}))
-        if world["search_mode"] == "error":
-            return (500, {}, "boom")
-        title = parse_qs(urlparse(request.url).query)["query"][0]
-        hit = world["search"].get(title)
-        results = [hit] if hit else []
-        return (200, {}, json.dumps({"results": results}))
-
-    ctx["rs"].add_callback(responses.GET, f"{TMDB_API}/search/movie", callback=do_search)
+    """One mutable TMDB world: per-id providers and the provider call counter."""
+    world = {"providers": {}, "provider_calls": 0}
 
     def provider_callback(tmdb_id):
         def cb(request):
@@ -144,14 +140,14 @@ def tmdb(ctx):
 
 
 @given(parsers.parse('TMDB knows "{title} ({year:d})" as id {tid:d}'))
-def tmdb_knows(tmdb, title, year, tid):
-    tmdb["search"][title] = {
-        "id": tid,
-        "title": title,
-        "original_title": title,
-        "release_date": f"{year}-01-01",
-        "popularity": 5.0,
-    }
+def tmdb_knows(ctx, pool, tmdb, title, year, tid):
+    """Shorthand for "the resolver keys this film to id N": one unambiguous candidate in
+    the pool (tt synthesized from the id), the `movie_year` lookup `key_film` makes, and
+    the provider callback. There is no TMDB title search any more (thumbprint T5)."""
+    pool.pool[title] = [Candidate(f"tt{tid:07d}", tid, (title,), year, "Someone", 100, 5000, "movie", True, True)]
+    if tid not in ctx["flags"].setdefault("movies_registered", set()):
+        ctx["flags"]["movies_registered"].add(tid)
+        ctx["rs"].add(responses.GET, f"{TMDB_API}/movie/{tid}", json={"id": tid, "release_date": f"{year}-01-01"})
     tmdb["register_providers"](tid)
 
 
@@ -176,7 +172,7 @@ def on_watchlist(ctx, title, year):
 
 
 @given(parsers.parse('TMDB already checked "{title} ({year:d})" as id {tid:d} once'))
-def already_checked(ctx, title, year, tid):
+def already_checked(ctx, tmdb, title, year, tid):
     # A film's FIRST-ever provider check is a quiet baseline (Task 5) — pre-match and
     # pre-check the film (dated well before TODAY) so the sync under test is not that
     # first check, and an arrival can actually be detected as a transition.
@@ -188,16 +184,19 @@ def already_checked(ctx, title, year, tid):
     ctx["repo"].set_external_id(fid, "tmdb", str(tid), prior)
     ctx["repo"].upsert_tmdb(fid, found=True, looked_up=prior)
     ctx["repo"].record_tmdb_providers(fid, prior, "{}")
+    tmdb["register_providers"](tid)
 
 
 @when("I sync with a TMDB token")
 def do_sync_tok(ctx, tmdb):
-    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok")
+    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY, tmdb_token="tok", fetcher=ctx.get("pool"))
 
 
 @when("I sync with a TMDB token again the next day")
 def do_sync_next(ctx, tmdb):
-    ctx["result"] = sync(ctx["repo"], "omdb-key", TODAY + timedelta(days=1), tmdb_token="tok")
+    ctx["result"] = sync(
+        ctx["repo"], "omdb-key", TODAY + timedelta(days=1), tmdb_token="tok", fetcher=ctx.get("pool")
+    )
 
 
 @then(parsers.parse("TMDB providers were called exactly {n:d} times"))
@@ -236,7 +235,12 @@ def do_sync_notify(ctx, tmdb):
     sent: list[tuple[str, str]] = []
     ctx["sent"] = sent
     ctx["result"] = sync(
-        ctx["repo"], "omdb-key", TODAY, tmdb_token="tok", notifier=lambda t, b: sent.append((t, b))
+        ctx["repo"],
+        "omdb-key",
+        TODAY,
+        tmdb_token="tok",
+        notifier=lambda t, b: sent.append((t, b)),
+        fetcher=ctx.get("pool"),
     )
 
 

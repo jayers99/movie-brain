@@ -24,7 +24,8 @@ from movie_brain.application.availability import (
     rebuild_no_match_queue,
     record_tmdb_match,
 )
-from movie_brain.application.thumbprint import review_detail
+from movie_brain.application.keying import key_film
+from movie_brain.application.thumbprint import film_query, review_detail
 from movie_brain.domain.models import ReviewEntry
 from movie_brain.domain.thumbprint import Query, Verdict, make_query, resolve
 from movie_brain.infrastructure.database import DisagreementFilm, NomatchFilm, Repository
@@ -334,9 +335,6 @@ def repair_disagreements(
 # --- repair nomatch (T4, memo step 4) ------------------------------------------------------
 
 NOMATCH_ACTIONABLE = ("keyed", "match", "review")
-NOMATCH_SUCCESS = ("matched", "adopted", "collision")  # record_tmdb_match results that are complete, not [partial]
-_CLAIM_PRECEDENCE = ("criterion", "metacritic", "apple-tv")
-_CLAIM_SOURCE = {"criterion": "criterion", "metacritic": "metacritic", "apple-tv": "apple"}
 
 
 @dataclass(frozen=True)
@@ -352,26 +350,6 @@ class NomatchGroup:
     query: Query | None
     verdict_obj: Verdict | None
     detail: str
-
-
-def _nomatch_query(repo: Repository, film: NomatchFilm) -> Query:
-    """What the ingester saw: the film's highest-precedence claim (criterion > metacritic >
-    apple-tv), title/year from the claim (year falls back to films.year), director from
-    films.director, the apple runtime shown but never scored (Q3)."""
-    claims = repo.claims_for_film(film.film_id)
-    by_auth = {a: next((c for c in claims if c.authority == a), None) for a in _CLAIM_PRECEDENCE}
-    chosen = next((by_auth[a] for a in _CLAIM_PRECEDENCE if by_auth[a] is not None), None)
-    apple = by_auth["apple-tv"]
-    runtime = apple.runtime_min if apple is not None else None
-    if chosen is None:
-        return make_query(film.title, film.year, "unknown", director=film.director, runtime_min=runtime)
-    return make_query(
-        chosen.title_ingested or film.title,
-        chosen.year_claimed or film.year,
-        _CLAIM_SOURCE[chosen.authority],
-        director=film.director,
-        runtime_min=runtime,
-    )
 
 
 def audit_nomatch(
@@ -426,7 +404,7 @@ def audit_nomatch(
             else:
                 out.append(mk("keyed", "imdb already keyed", tt=own_tt, tid=tid))
             continue
-        q = _nomatch_query(repo, f)
+        q = film_query(repo, f.film_id, f.title, f.year, f.director)
         if fetcher is None:
             out.append(mk("conflict", "no client", "no TMDB/OMDb clients", q=q))
             continue
@@ -532,50 +510,21 @@ def repair_nomatch(
             log("  no TMDB client — skipped")
             skipped += 1
             continue
-        # Live pre-write checks: the audit's holder maps predate this batch's own writes.
-        holder = repo.film_id_for_external("imdb", g.tt)
-        if holder is not None and holder != g.film_id:
-            log(f"  {g.tt} already held by #{holder} — skipped")
+        r = key_film(repo, tmdb, g.film_id, g.tt, today, log, tmdb_id=g.tmdb_id, resolve_tmdb_id=False)
+        if r.status == "held":
+            log(f"  {r.detail} — skipped")
             skipped += 1
             continue
-        tid = g.tmdb_id
-        winner_year: int | None = None
-        try:
-            if tid is not None:
-                th = repo.film_id_for_external(TMDB_AUTHORITY, str(tid))
-                if th is not None and th != g.film_id:
-                    log(f"  tmdb {tid} already held by #{th} — skipped")
-                    skipped += 1
-                    continue
-                winner_year = tmdb.movie_year(tid)
-        except (requests.RequestException, AuthError) as exc:
-            log(f"  TMDB error: {exc} — skipped")
+        if r.status == "error":
+            log(f"  TMDB error: {r.detail} — skipped")
             skipped += 1
             continue
-        try:
-            repo.set_external_id(g.film_id, "imdb", g.tt, today)
-        except sqlite3.IntegrityError:
-            log(f"  {g.tt} already held — skipped")
-            skipped += 1
-            continue
-        if tid is not None:
-            target = repo.tmdb_target(g.film_id)
-            if target is None:
-                raise RuntimeError(f"[partial] #{g.film_id} vanished after its imdb id was written")
-            res = record_tmdb_match(repo, target, tid, winner_year, today, log)
-            if res not in NOMATCH_SUCCESS:
-                partial = f"[partial] #{g.film_id} PARTIAL: imdb {g.tt} written but tmdb {tid} {res}"
-                log(partial)
-                raise RuntimeError(partial)
-            if res == "collision":
-                log(f"  keyed imdb {g.tt} tmdb {tid} (collision → year-collision review queued)")
-            else:
-                log(f"  keyed imdb {g.tt} tmdb {tid} ({res})")
-        else:
+        if r.tmdb_id is None:
             log(f"  keyed imdb {g.tt} (no TMDB record)")
-        if repo.omdb_imdb_id(g.film_id) != g.tt:
-            repo.mark_omdb_refresh(g.film_id)
-            log(f"  omdb refresh queued (by id {g.tt})")
+        elif r.detail == "collision":
+            log(f"  keyed imdb {g.tt} tmdb {r.tmdb_id} (collision → year-collision review queued)")
+        else:
+            log(f"  keyed imdb {g.tt} tmdb {r.tmdb_id} ({r.detail})")
         applied += 1
     if apply:
         rebuild_no_match_queue(repo, today)
