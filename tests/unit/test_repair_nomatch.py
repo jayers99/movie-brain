@@ -237,7 +237,7 @@ def test_partial_after_record_tmdb_match_raises(repo, today, monkeypatch):
     import pytest
 
     _nomatch(repo, today, "Bound", 1996, director="Lana Wachowski")
-    monkeypatch.setattr("movie_brain.application.repair_keys.record_tmdb_match", lambda *a, **k: "id-conflict")
+    monkeypatch.setattr("movie_brain.application.keying.record_tmdb_match", lambda *a, **k: "id-conflict")
     with pytest.raises(RuntimeError, match=r"\[partial\]"):
         _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1996}))
 
@@ -264,7 +264,7 @@ def test_collision_is_a_complete_state_not_partial(repo, today, monkeypatch):
         repo_arg.upsert_tmdb(target.film_id, found=True, looked_up=today_arg)
         return "collision"
 
-    monkeypatch.setattr("movie_brain.application.repair_keys.record_tmdb_match", fake_record)
+    monkeypatch.setattr("movie_brain.application.keying.record_tmdb_match", fake_record)
     rep, lines = _run(repo, today, FakeFetcher(BOUND), FakeTmdb({}, {9081: 1996}))
     assert rep.applied == 1
     ids = repo.external_ids_for(fid)
