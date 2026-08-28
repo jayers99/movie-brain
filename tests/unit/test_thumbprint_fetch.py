@@ -93,3 +93,28 @@ def test_fetcher_fetches_article_folded_hit_beyond_top_three():
         make_query("The Bride of Frankenstein", None, "criterion")
     )
     assert any(c.tt == "tt0026138" and c.in_tmdb for c in cands)
+
+
+def test_session_fetcher_needs_both_clients(tmp_path):
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
+
+    assert session_fetcher(tmp_path, None, None) == (None, None)
+    assert session_fetcher(tmp_path, object(), None) == (None, None)
+
+
+def test_session_fetcher_seeds_from_the_fixture_and_saves_only_the_session_cache(tmp_path):
+    from movie_brain.infrastructure.thumbprint_fetch import FIXTURE_PATH, session_fetcher
+
+    session = tmp_path / "nomatch-cache.json.gz"
+    with gzip.open(session, "wt", encoding="utf-8") as f:
+        json.dump({"ts:Local|1999": []}, f)
+    before = FIXTURE_PATH.read_bytes()
+    fetcher, cache = session_fetcher(tmp_path, object(), object())
+    assert fetcher is not None and cache is not None
+    assert "ts:Local|1999" in cache.data  # session entry survives
+    assert len(cache.data) > 1  # fixture data merged in
+    cache.data["ts:New|2000"] = []
+    cache.save()
+    assert FIXTURE_PATH.read_bytes() == before  # the fixture is never written
+    with gzip.open(session, "rt", encoding="utf-8") as f:
+        assert "ts:New|2000" in json.load(f)

@@ -429,23 +429,13 @@ def repair_nomatch_cmd(
     --pick/--tt/--none`. Candidates are cached per session in <config_dir>/nomatch-cache.json.gz
     (the eval fixture is never written)."""
     from movie_brain.infrastructure.omdb import OmdbClient
-    from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
 
-    root = Path(__file__).resolve().parents[2]
     repo = _repo()
     cfg = load_config()
     token, key = load_tmdb_token(cfg), load_api_key(cfg)
     tmdb = TmdbClient(token) if token else None
-    fetcher = None
-    cache = None
-    if tmdb is not None and key:
-        session_path = cfg.config_dir / "nomatch-cache.json.gz"
-        fixture = root / "scripts" / "eval" / "fixtures" / "cand_cache.json.gz"
-        data = dict(CandidateCache.load(fixture, read_only=True).data)
-        if session_path.exists():
-            data.update(CandidateCache.load(session_path).data)
-        cache = CandidateCache(data, session_path)
-        fetcher = CandidateFetcher(cache, tmdb, OmdbClient(key))
+    fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
 
     def confirm(g: NomatchGroup) -> bool:
         prompt = f"#{g.film_id} {g.title!r} [{g.verdict}] → {g.tt or 'review'}?"
