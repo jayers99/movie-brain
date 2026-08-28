@@ -510,7 +510,7 @@ def repair_nomatch(
             log("  no TMDB client — skipped")
             skipped += 1
             continue
-        r = key_film(repo, tmdb, g.film_id, g.tt, today, log, tmdb_id=g.tmdb_id)
+        r = key_film(repo, tmdb, g.film_id, g.tt, today, log, tmdb_id=g.tmdb_id, resolve_tmdb_id=False)
         if r.status == "held":
             log(f"  {r.detail} — skipped")
             skipped += 1
