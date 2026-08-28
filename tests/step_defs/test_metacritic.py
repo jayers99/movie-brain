@@ -150,6 +150,16 @@ def archive_holds_on_page(ctx, title, year, score, slug, page):
     ctx["pages"][int(page)].append((title, slug, int(year), int(score)))
 
 
+@given(
+    parsers.re(
+        r'the archive page (?P<page>\d+) has "(?P<title>[^"]+)" slug "(?P<slug>[^"]+)" '
+        r"(?P<year>\d+) score (?P<score>\d+)"
+    )
+)
+def archive_page_has(ctx, page, title, slug, year, score):
+    ctx["pages"][int(page)].append((title, slug, int(year), int(score)))
+
+
 def _write_archive(ctx):
     archive = archive_dir(ctx["config_dir"])
     if ctx["cards"]:
@@ -236,3 +246,12 @@ def repository_film_count(ctx, n):
 @then(parsers.parse("the promote report says {n:d} promoted"))
 def promote_count(ctx, n):
     assert ctx["report"].promoted == n
+
+
+@then(parsers.parse('"{title_year}" has a "{authority}" claim titled "{ingested}" for year {year:d}'))
+def has_claim(ctx, title_year, authority, ingested, year):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    claims = [c for c in ctx["repo"].claims_for_film(fid) if c.authority == authority]
+    assert claims, f"no {authority} claim on #{fid}"
+    assert (claims[0].title_ingested, claims[0].year_claimed) == (ingested, year)
+    ctx["claim"] = claims[0]

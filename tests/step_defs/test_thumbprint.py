@@ -86,11 +86,6 @@ def backfill_twice(ctx):
     backfill_apply(ctx)
 
 
-@then("the claim table is empty")
-def claim_empty(ctx):
-    assert _q(ctx, "SELECT COUNT(*) FROM claim")[0][0] == 0
-
-
 @then(parsers.parse("the backfill report says criterion {c:d}, metacritic {m:d}, apple {a:d}, editions {e:d}"))
 def report_counts(ctx, c, m, a, e):
     r = ctx["report"]

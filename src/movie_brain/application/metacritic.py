@@ -158,12 +158,21 @@ def match_archive(
             detail = f"{t.title!r} ({t.year}) vs review reason {result.reason!r}"
             reviews.append(ReviewEntry("year-gap", value=t.slug, detail=detail))
 
+    t_by_slug = {t.slug: t for t in deduped_titles}
     for film_id, slugs in sorted(slugs_by_film.items()):
         if len(slugs) > 1:
             reviews.append(ReviewEntry("film-multiple-slugs", film_id=film_id, detail=", ".join(sorted(slugs))))
             continue
         try:
             repo.set_external_id(film_id, AUTHORITY, slugs[0], today)
+            repo.add_claim(
+                film_id,
+                AUTHORITY,
+                slugs[0],
+                t_by_slug[slugs[0]].title,
+                year_claimed=t_by_slug[slugs[0]].year,
+                first_seen=today.isoformat(),
+            )
         except sqlite3.IntegrityError:
             # UNIQUE(authority, value): the slug is already another film's id. Contain and
             # queue — one conflict must never abort the run (same posture as record_catalog).
@@ -212,6 +221,7 @@ def create_from_staged(repo: Repository, t: McTitle, today: date) -> int | None:
         repo.set_external_id(film_id, AUTHORITY, t.slug, today)
     except sqlite3.IntegrityError:
         return None
+    repo.add_claim(film_id, AUTHORITY, t.slug, t.title, year_claimed=t.year, first_seen=today.isoformat())
     return film_id
 
 
@@ -268,6 +278,7 @@ def promote_top_n(
                 )
             )
             continue
+        repo.add_claim(film_id, AUTHORITY, t.slug, t.title, year_claimed=t.year, first_seen=today.isoformat())
         claimed.add(t.slug)
         promoted += 1
     if reviews:
