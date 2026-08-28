@@ -81,7 +81,7 @@ Feature: TMDB availability
     Given TMDB rejects the token
     When I sync with a TMDB token
     Then the exit code is 0
-    And 1 films have OMDb ratings
+    And 0 films have OMDb ratings
     And the sync matched 0 TMDB films
 
   Scenario: Two films matching the same TMDB id queue the second for review
@@ -102,7 +102,7 @@ Feature: TMDB availability
     Then the exit code is 0
     And the sync matched 0 TMDB films
     And the tmdb review queue holds 0 entries
-    And 6 films have OMDb ratings
+    And 0 films have OMDb ratings
 
   Scenario: A film's first provider check is baseline, not an arrival
     Given TMDB knows "Trio (1950)" as id 11
@@ -153,9 +153,22 @@ Feature: TMDB availability
     Then "Trio (1950)" has an OMDb rating
     And "Trio (1950)" has external id "tt0037800" for authority "imdb"
 
-  Scenario: A TMDB-linked film with no IMDb id falls back to the title lookup
+  Scenario: A TMDB-linked film with no IMDb id gets no OMDb record
     Given TMDB already checked "Trio (1950)" as id 11 once
     And TMDB reports id 11 as having no IMDb id
     When I sync with a TMDB token
-    Then "Trio (1950)" has an OMDb rating
+    Then "Trio (1950)" has no OMDb rating
     And "Trio (1950)" has no external id for authority "imdb"
+
+  Scenario: An unkeyed film is never looked up by title
+    Given the resolver pool is empty
+    And OMDb answers only lookups by IMDb id
+    When I sync with a TMDB token
+    Then "Trio (1950)" has no OMDb rating
+    And OMDb was never asked by title
+
+  Scenario: A film keyed tonight gets its OMDb record tonight
+    Given the resolver pool has "Trio" → tt0037800/11 1950 by "Someone"
+    And OMDb answers only lookups by IMDb id
+    When I sync with a TMDB token
+    Then "Trio (1950)" has an OMDb rating

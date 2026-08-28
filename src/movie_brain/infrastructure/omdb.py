@@ -22,15 +22,6 @@ class OmdbClient:
         self.api_key = api_key
         self.session = session or requests.Session()
 
-    def lookup(self, title: str, year: int | None) -> OmdbRating:
-        candidates = [year] if year is None else [year, year - 1, year + 1]
-        rating = OmdbRating(None, None, False)
-        for candidate in candidates:
-            rating = self._query(title, candidate)
-            if rating.found:
-                return rating
-        return rating
-
     def lookup_by_imdb(self, imdb_id: str) -> OmdbRating:
         """Exact lookup by IMDb id — immune to OMDb's US-release-year and title quirks."""
         return self._fetch({"i": imdb_id, "apikey": self.api_key})
@@ -61,12 +52,6 @@ class OmdbClient:
         if "limit" in (data.get("Error") or "").lower():
             raise QuotaExceeded(params.get("s") or params.get("i") or "")
         return data
-
-    def _query(self, title: str, year: int | None) -> OmdbRating:
-        params: dict[str, str] = {"t": title, "type": "movie", "apikey": self.api_key}
-        if year:
-            params["y"] = str(year)
-        return self._fetch(params)
 
     def _fetch(self, params: dict[str, str]) -> OmdbRating:
         resp = self.session.get(OMDB_URL, params=params, timeout=30)
