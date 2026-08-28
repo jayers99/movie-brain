@@ -6,6 +6,9 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+import requests
+
+from movie_brain.application.keying import key_film
 from movie_brain.application.review import suppress_resolved
 from movie_brain.domain.matching import (
     Candidate,
@@ -15,9 +18,12 @@ from movie_brain.domain.matching import (
     split_annotations,
 )
 from movie_brain.domain.models import Film, OwnedTitle, ReviewEntry
-from movie_brain.domain.thumbprint import edition_label
+from movie_brain.domain.thumbprint import edition_label, make_query, resolve
 from movie_brain.infrastructure import appletv
 from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.omdb import QuotaExceeded
+from movie_brain.infrastructure.thumbprint_fetch import CacheMiss, CandidateFetcher
+from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 AUTHORITY = "apple-tv"
 
@@ -34,6 +40,20 @@ class OwnedReport:
     created: int
     already_owned: int
     review_open: int
+    resolved_to_existing: int = 0
+    keyed: int = 0
+
+
+def _claim_and_mark(repo: Repository, film_id: int, t: OwnedTitle, today: date) -> bool:
+    """Record the raw-title claim and mark ownership (Task 4's block, lifted so every path
+    that lands on a film — matched, created, or resolved straight to an existing holder —
+    shares one write instead of three chances to drift or double-write."""
+    repo.add_claim(
+        film_id, AUTHORITY, t.title, t.title,
+        year_claimed=t.year, edition_label=edition_label(t.title),
+        runtime_min=t.runtime_min, first_seen=today.isoformat(),
+    )
+    return repo.mark_owned(film_id, today)
 
 
 def import_owned(
@@ -42,9 +62,19 @@ def import_owned(
     today: date,
     *,
     fetch: Callable[[], list[OwnedTitle]] | None = None,
+    fetcher: CandidateFetcher | None = None,
+    tmdb: TmdbClient | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> OwnedReport:
     """Mark or create every movie in the Apple TV library (idempotent, never deletes).
+
+    With a resolver `fetcher`, each raw title is resolved through the thumbprint
+    algorithm FIRST: a `match` whose tt (or tmdb id) some existing film already holds
+    marks THAT film owned instead of minting a twin under the edition's own title/year
+    (T5b). A resolver match nobody holds falls through to the corpus path exactly as
+    before; only when that also misses is a film created — and then keyed immediately
+    with the resolver's verdict, so it isn't born unidentified. With no `fetcher` (no
+    TMDB token or no OMDb key), behavior is unchanged from before this resolver existed.
 
     Matched films are marked owned; misses become real films (generated guid) and
     are marked; ambiguous ties queue for review, never guessed. Ownership is
@@ -59,7 +89,7 @@ def import_owned(
     index = build_candidate_index(repo.films_for_matching())
     tombstoned = repo.tombstoned_keys()
 
-    matched = created = already = 0
+    matched = created = already = resolved = keyed = 0
     reviews: list[ReviewEntry] = []
     for t in titles:
         cleaned, embedded_year = parse_apple_title(t.title)
@@ -71,6 +101,28 @@ def import_owned(
         # (a re-release/restored-version annotation excusing a commerce-year gap) isn't
         # dead code for this caller.
         rerelease_hint = bool(split_annotations(t.title)[1])
+
+        verdict = None
+        if fetcher is not None:
+            q = make_query(t.title, year, "apple", runtime_min=t.runtime_min)
+            try:
+                verdict = resolve(q, fetcher.fetch(q))
+            except (CacheMiss, requests.RequestException, AuthError, QuotaExceeded) as exc:
+                log(f"resolver lookup failed for {t.title!r}: {exc}")
+        if verdict is not None and verdict.kind == "match" and verdict.tt is not None:
+            # The work this edition belongs to may already be in the DB under its own
+            # title — landing on it is what stops the import minting a twin (T5b).
+            holder = repo.film_id_for_external("imdb", verdict.tt)
+            if holder is None:
+                winner = next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
+                if winner is not None and winner.tmdb_id is not None:
+                    holder = repo.film_id_for_external("tmdb", str(winner.tmdb_id))
+            if holder is not None:
+                film_id = repo.canonical_film_id(holder)
+                resolved += 1
+                _claim_and_mark(repo, film_id, t, today)  # the Task 4 claim + mark_owned block
+                continue
+
         result = match_owned(
             cleaned,
             year,
@@ -107,13 +159,20 @@ def import_owned(
                 film_id = new_id
                 index.add(Candidate(id=film_id, title=cleaned, year=year))
                 created += 1
-        repo.add_claim(
-            film_id, AUTHORITY, t.title, t.title,
-            year_claimed=t.year, edition_label=edition_label(t.title),
-            runtime_min=t.runtime_min, first_seen=today.isoformat(),
-        )
-        if not repo.mark_owned(film_id, today):
+                if verdict is not None and verdict.kind == "match" and verdict.tt is not None:
+                    winner = next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
+                    r = key_film(
+                        repo, tmdb, film_id, verdict.tt, today, log,
+                        tmdb_id=winner.tmdb_id if winner is not None else None,
+                    )
+                    if r.status in ("keyed", "unlinked"):
+                        keyed += 1
+                    else:
+                        log(f"created #{film_id} unkeyed ({r.status}: {r.detail}); the next sync will retry")
+        if not _claim_and_mark(repo, film_id, t, today):
             already += 1
 
     repo.replace_unresolved_reviews(AUTHORITY, suppress_resolved(repo, AUTHORITY, reviews), today)
-    return OwnedReport(0, len(titles), matched, created, already, len(repo.open_reviews(AUTHORITY)))
+    return OwnedReport(
+        0, len(titles), matched, created, already, len(repo.open_reviews(AUTHORITY)), resolved, keyed
+    )

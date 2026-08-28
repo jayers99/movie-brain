@@ -234,13 +234,28 @@ def metacritic_dial(
 
 @owned_app.command("import")
 def owned_import() -> None:
-    """Export the Apple TV library via AppleScript and mark/create owned films."""
+    """Export the Apple TV library via AppleScript and mark/create owned films.
+
+    Each raw title is resolved through the thumbprint algorithm first, so an edition
+    already held by an existing film (e.g. a "(The Final Cut)" import of a film already
+    keyed under its own title) lands on that film instead of minting a twin."""
+    from movie_brain.infrastructure.omdb import OmdbClient
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
+
     cfg = load_config()
     cfg.config_dir.mkdir(parents=True, exist_ok=True)
-    report = import_owned(_repo(), cfg.config_dir, date.today())
+    token, key = load_tmdb_token(cfg), load_api_key(cfg)
+    tmdb = TmdbClient(token) if token else None
+    fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
+    try:
+        report = import_owned(_repo(), cfg.config_dir, date.today(), fetcher=fetcher, tmdb=tmdb)
+    finally:
+        if cache is not None:
+            cache.save()  # the session cache, never the fixture
     console.print(
         f"owned: {report.total} · matched: {report.matched} · created: {report.created} · "
-        f"already: {report.already_owned} · review: {report.review_open}"
+        f"already: {report.already_owned} · review: {report.review_open} · "
+        f"resolved: {report.resolved_to_existing} · keyed: {report.keyed}"
     )
     raise typer.Exit(report.exit_code)
 
