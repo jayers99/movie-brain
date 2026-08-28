@@ -49,6 +49,8 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Repo root on sys.path so tests can `import scripts.*` (scripts/ is not a wheel package).
+pythonpath = ["."]
 
 [build-system]
 requires = ["hatchling"]
