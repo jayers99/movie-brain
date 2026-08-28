@@ -84,6 +84,12 @@ def title_norm(raw: str) -> str:
     return norm_title(parse_title(raw).base)
 
 
+def edition_label(raw: str) -> str | None:
+    """The edition annotations a title carries, joined — `None` when it carries none."""
+    eds = parse_title(raw).editions
+    return " / ".join(eds) if eds else None
+
+
 # --- query / candidates --------------------------------------------------------------------
 
 

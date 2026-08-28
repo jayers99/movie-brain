@@ -73,3 +73,10 @@ Feature: Apple TV owned films
     When I import owned films
     Then "The Leopard (1963)" is owned
     And the repository holds 1 films
+
+  Scenario: The Apple import records a claim carrying the raw title and runtime
+    Given the repository holds the film "Seven Samurai (1954)"
+    And my Apple TV library has "Seven Samurai (Unrated)" (1954) running 207 minutes
+    When I import owned films
+    Then "Seven Samurai (1954)" has an "apple-tv" claim titled "Seven Samurai (Unrated)" for year 1954
+    And that claim has runtime 207 and edition label "unrated"

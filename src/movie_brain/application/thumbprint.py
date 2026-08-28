@@ -15,7 +15,7 @@ from typing import Any, NamedTuple, TypedDict
 
 from movie_brain.domain.matching import parse_apple_title
 from movie_brain.domain.models import film_key
-from movie_brain.domain.thumbprint import Query, Verdict, make_query, parse_title, title_norm
+from movie_brain.domain.thumbprint import Query, Verdict, edition_label, make_query, title_norm
 from movie_brain.infrastructure.database import Repository
 
 
@@ -56,11 +56,6 @@ class BackfillReport:
     apple_twin_covered: int  # owned twins of a recovered raw `Title (YYYY)` line: no placeholder written
     title_norms: int
     editions: int
-
-
-def _edition_label(raw: str) -> str | None:
-    eds = parse_title(raw).editions
-    return " / ".join(eds) if eds else None
 
 
 def _apple_archive_lines(config_dir: Path) -> list[tuple[str, str, int | None, int | None]]:
@@ -136,13 +131,13 @@ def backfill_claims(
             t = titles.get(oid, str(oid))
             rows.append((oid, "apple-tv", t, t, None, None, first_imported))
     n_apple = len(owned)
-    editions = [r for r in rows if _edition_label(r[3])]
+    editions = [r for r in rows if edition_label(r[3])]
 
     unrecovered_rows = {id(r) for r in rows[n_crit + n_mc :] if r[4] is None and r[5] is None}
     shown: dict[str, int] = {}
     for r in rows:
         if shown.get(r[1], 0) < 20 or r in editions or id(r) in unrecovered_rows:
-            log(f"  {r[1]:10} #{r[0]:<5} {r[2]!r} title={r[3]!r} year={r[4]} rt={r[5]} ed={_edition_label(r[3])!r}")
+            log(f"  {r[1]:10} #{r[0]:<5} {r[2]!r} title={r[3]!r} year={r[4]} rt={r[5]} ed={edition_label(r[3])!r}")
             shown[r[1]] = shown.get(r[1], 0) + 1
     log(
         f"claims: criterion {n_crit} · metacritic {n_mc} · apple {n_apple} "
@@ -158,7 +153,7 @@ def backfill_claims(
                 value,
                 title,
                 year_claimed=year,
-                edition_label=_edition_label(title),
+                edition_label=edition_label(title),
                 runtime_min=runtime,
                 first_seen=seen,
             ):

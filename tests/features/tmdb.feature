@@ -8,6 +8,10 @@ Feature: TMDB availability
     And the Criterion catalog has films "Trio (1950)"
     And OMDb knows every film
 
+  Scenario: The Criterion walk records a claim for every film it lists
+    When I sync
+    Then "Trio (1950)" has a "criterion" claim titled "Trio" for year 1950
+
   Scenario: A new film is matched once and its TMDB id cached
     Given TMDB knows "Trio (1950)" as id 11
     And TMDB streams id 11 on providers 1899 and 258

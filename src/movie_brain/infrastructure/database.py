@@ -15,7 +15,7 @@ from typing import Any, NamedTuple
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
-from movie_brain.domain.thumbprint import title_norm
+from movie_brain.domain.thumbprint import edition_label, title_norm
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -508,6 +508,13 @@ class Repository:
                 while film_id in dispositions and dispositions[film_id][0] == "merged":
                     film_id = int(dispositions[film_id][1])  # alias → survivor (chains allowed)
                 self._write_listing(c, film_id, source, film.url, day, frontier)
+                # The resolver reads the claim, not films.title: the ingested title and the
+                # claimed year are what the ingester actually saw (thumbprint T5).
+                c.execute(
+                    "INSERT OR IGNORE INTO claim (film_id, authority, value, title_ingested, "
+                    "year_claimed, edition_label, first_seen) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (film_id, source, film.url, film.title, film.year, edition_label(film.title), day),
+                )
                 try:
                     # A catalog source is a CLAIM authority (migration 012): extra rows are
                     # legal, so a changed URL is added, never UPDATEd over the film's existing

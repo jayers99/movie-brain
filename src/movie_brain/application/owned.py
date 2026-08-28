@@ -15,6 +15,7 @@ from movie_brain.domain.matching import (
     split_annotations,
 )
 from movie_brain.domain.models import Film, OwnedTitle, ReviewEntry
+from movie_brain.domain.thumbprint import edition_label
 from movie_brain.infrastructure import appletv
 from movie_brain.infrastructure.database import Repository
 
@@ -106,6 +107,11 @@ def import_owned(
                 film_id = new_id
                 index.add(Candidate(id=film_id, title=cleaned, year=year))
                 created += 1
+        repo.add_claim(
+            film_id, AUTHORITY, t.title, t.title,
+            year_claimed=t.year, edition_label=edition_label(t.title),
+            runtime_min=t.runtime_min, first_seen=today.isoformat(),
+        )
         if not repo.mark_owned(film_id, today):
             already += 1
 

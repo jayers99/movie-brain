@@ -37,6 +37,11 @@ def library_has(ctx, title, year):
     ctx["library"].append(OwnedTitle(title, int(year)))
 
 
+@given(parsers.re(r'my Apple TV library has "(?P<title>[^"]+)" \((?P<year>\d+)\) running (?P<mins>\d+) minutes'))
+def library_has_runtime(ctx, title, year, mins):
+    ctx["library"].append(OwnedTitle(title, int(year), int(mins)))
+
+
 @given("my Apple TV library export fails")
 def library_fails(ctx):
     ctx["fail"] = True
@@ -96,3 +101,23 @@ def nothing_owned(ctx):
 @then(parsers.parse("the owned import exit code is {code:d}"))
 def import_exit(ctx, code):
     assert ctx["report"].exit_code == code
+
+
+@then(
+    parsers.re(
+        r'"(?P<title_year>.+)" has an? "(?P<authority>[^"]+)" claim titled "(?P<ingested>[^"]+)" '
+        r"for year (?P<year>\d+)"
+    ),
+    converters={"year": int},
+)
+def has_claim(ctx, title_year, authority, ingested, year):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    claims = [c for c in ctx["repo"].claims_for_film(fid) if c.authority == authority]
+    assert claims, f"no {authority} claim on #{fid}"
+    assert (claims[0].title_ingested, claims[0].year_claimed) == (ingested, year)
+    ctx["claim"] = claims[0]
+
+
+@then(parsers.parse('that claim has runtime {mins:d} and edition label "{label}"'))
+def claim_runtime(ctx, mins, label):
+    assert (ctx["claim"].runtime_min, ctx["claim"].edition_label) == (mins, label)

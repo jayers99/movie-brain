@@ -98,6 +98,11 @@ Feature: Metacritic archive
     And "Fresh Find (2020)" has metacritic slug "fresh-find"
     And the promote report says 1 promoted
 
+  Scenario: Promotion records a metacritic claim for the film it creates
+    Given the archive page 1 has "Fresh Find" slug "fresh-find" 2020 score 90
+    When I promote the top 10
+    Then "Fresh Find (2020)" has a "metacritic" claim titled "Fresh Find" for year 2020
+
   Scenario: Promotion never twins a film the matcher already linked
     Given the repository holds the film "Seven Samurai (1954)"
     And the archive holds "Seven Samurai" (1955) scored 98 as "seven-samurai-1954"

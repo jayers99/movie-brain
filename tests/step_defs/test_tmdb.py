@@ -419,3 +419,15 @@ def has_no_omdb(ctx, title, year):
 def no_external_id(ctx, title, year, authority):
     fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({year})")
     assert authority not in ctx["repo"].external_ids_for(fid)
+
+
+@then(parsers.parse('"{title_year}" has a "{authority}" claim titled "{ingested}" for year {year:d}'))
+def has_claim(ctx, title_year, authority, ingested, year):
+    m = re.fullmatch(r"(.+) \((\d{4})\)", title_year)
+    assert m
+    title, film_year = m.group(1), int(m.group(2))
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} ({film_year})")
+    claims = [c for c in ctx["repo"].claims_for_film(fid) if c.authority == authority]
+    assert claims, f"no {authority} claim on #{fid}"
+    assert (claims[0].title_ingested, claims[0].year_claimed) == (ingested, year)
+    ctx["claim"] = claims[0]
