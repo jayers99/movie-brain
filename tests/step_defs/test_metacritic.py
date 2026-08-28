@@ -11,6 +11,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.metacritic import crawl_archive, match_archive, promote_top_n
 from movie_brain.domain.models import Film, OmdbRating
+from movie_brain.domain.thumbprint import Candidate, parse_title
 from movie_brain.infrastructure.metacritic import BROWSE_URL, archive_dir, archived_pages, page_path
 
 scenarios("../features/metacritic.feature")
@@ -34,6 +35,56 @@ def ctx(repo, config_dir, nuxt_page):
     }
     rs.stop()
     rs.reset()
+
+
+class PoolFetcher:
+    """Stands in for CandidateFetcher: canned candidates per (parsed) query title."""
+
+    def __init__(self):
+        self.pool: dict[str, list[Candidate]] = {}
+
+    def fetch(self, q):
+        return self.pool.get(q.title, [])
+
+
+class FakeTmdb:
+    """`key_film` reads TMDB's own release year through `movie_year` before writing."""
+
+    def __init__(self):
+        self.years: dict[int, int] = {}
+
+    def movie_year(self, tid):
+        return self.years.get(tid)
+
+
+@pytest.fixture
+def pool(ctx):
+    ctx["pool"] = PoolFetcher()
+    return ctx["pool"]
+
+
+@pytest.fixture
+def tmdb(ctx):
+    ctx["tmdb"] = FakeTmdb()
+    return ctx["tmdb"]
+
+
+@given(parsers.re(r'the resolver pool has "(?P<title>[^"]+)" → (?P<tt>tt\d+)/(?P<tid>\d+) (?P<year>\d{4})'))
+def pool_seed(ctx, pool, tmdb, title, tt, tid, year):
+    key = parse_title(title).title
+    pool.pool[key] = [Candidate(tt, int(tid), (key,), int(year), "", 100, 5000, "movie", True, True)]
+    tmdb.years[int(tid)] = int(year)
+
+
+@given(
+    parsers.re(
+        r'the repository holds the film "(?P<title_year>[^"]+)" keyed imdb "(?P<tt>tt\d+)" tmdb "(?P<tid>\d+)"$'
+    )
+)
+def holds_film_keyed(ctx, title_year, tt, tid):
+    fid = ctx["repo"].create_film(_film(title_year))
+    ctx["repo"].set_external_id(fid, "imdb", tt, TODAY)
+    ctx["repo"].set_external_id(fid, "tmdb", tid, TODAY)
 
 
 def _page_cards(page: int) -> list[tuple[str, str, int | None, int | None]]:
@@ -117,7 +168,7 @@ def _film(title_year: str) -> Film:
     return Film(m.group(1), int(m.group(2)), "Someone", f"https://c/{m.group(1).lower()}")
 
 
-@given(parsers.parse('the repository holds the film "{title_year}"'))
+@given(parsers.re(r'the repository holds the film "(?P<title_year>[^"]+)"$'))
 def holds_film(ctx, title_year):
     ctx["repo"].upsert_film(_film(title_year))
 
@@ -184,6 +235,20 @@ def run_promote(ctx, n):
     ctx["report"] = promote_top_n(ctx["repo"], ctx["config_dir"], TODAY, n, log=lambda m: None)
 
 
+@when(parsers.parse("I promote the top {n:d} with a resolver"))
+def run_promote_with_resolver(ctx, n):
+    _write_archive(ctx)
+    ctx["report"] = promote_top_n(
+        ctx["repo"],
+        ctx["config_dir"],
+        TODAY,
+        n,
+        fetcher=ctx.get("pool"),
+        tmdb=ctx.get("tmdb"),
+        log=lambda m: None,
+    )
+
+
 @then(parsers.parse('"{title_year}" has metacritic slug "{slug}"'))
 def has_slug(ctx, title_year, slug):
     fid = ctx["repo"].film_id_by_key(_film(title_year).key)
@@ -246,6 +311,23 @@ def repository_film_count(ctx, n):
 @then(parsers.parse("the promote report says {n:d} promoted"))
 def promote_count(ctx, n):
     assert ctx["report"].promoted == n
+
+
+@then(parsers.parse("the promote report says {p:d} promoted and {k:d} linked by key"))
+def promote_linked_by_key(ctx, p, k):
+    assert (ctx["report"].promoted, ctx["report"].linked_by_key) == (p, k)
+
+
+@then(parsers.parse("the promote report says {p:d} promoted and {k:d} keyed"))
+def promote_keyed(ctx, p, k):
+    assert (ctx["report"].promoted, ctx["report"].keyed) == (p, k)
+
+
+@then(parsers.re(r'"(?P<title_year>.+)" holds imdb "(?P<tt>tt\d+)" and tmdb id "(?P<tid>\d+)"'))
+def holds_ids(ctx, title_year, tt, tid):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    ids = ctx["repo"].external_ids_for(fid)
+    assert (ids.get("imdb"), ids.get("tmdb")) == (tt, tid)
 
 
 @then(parsers.parse('"{title_year}" has a "{authority}" claim titled "{ingested}" for year {year:d}'))

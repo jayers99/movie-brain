@@ -139,7 +139,9 @@ def sync(
     if not ratings_only and config_dir is not None:
         try:
             n = int(repo.get_meta(MC_TOP_N_KEY) or DEFAULT_TOP_N)
-            promote = promote_top_n(repo, config_dir, today, n, arbiter=arbiter, log=log)
+            promote = promote_top_n(
+                repo, config_dir, today, n, arbiter=arbiter, fetcher=fetcher, tmdb=tmdb_client, log=log
+            )
             mc_promoted = promote.promoted
             if promote.exit_code == 0 and promote.available < promote.n:
                 pages = -(-promote.n // CARDS_PER_PAGE)

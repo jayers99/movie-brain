@@ -146,3 +146,19 @@ Feature: Metacritic archive
     And I promote the top 10
     Then the repository holds 1 films
     And the promote report says 0 promoted
+
+  Scenario: A staged title whose work is already keyed claims the slug instead of twinning
+    Given the repository holds the film "Bound (1996)" keyed imdb "tt0116367" tmdb "9081"
+    And the archive page 1 has "Chicago Noir" slug "bound" 1996 score 90
+    And the resolver pool has "Chicago Noir" → tt0116367/9081 1996
+    When I promote the top 10 with a resolver
+    Then "Bound (1996)" has metacritic slug "bound"
+    And the repository holds 1 films
+    And the promote report says 0 promoted and 1 linked by key
+
+  Scenario: A staged title nobody holds is promoted and keyed in one pass
+    Given the archive page 1 has "Fresh Find" slug "fresh-find" 2020 score 90
+    And the resolver pool has "Fresh Find" → tt5000000/50000 2020
+    When I promote the top 10 with a resolver
+    Then "Fresh Find (2020)" holds imdb "tt5000000" and tmdb id "50000"
+    And the promote report says 1 promoted and 1 keyed
