@@ -121,6 +121,21 @@ Note the intended asymmetry: with these gates the likely failure mode becomes "r
 
 Every line carries the resolver's reason string, which is contract text and must not be reworded. The resolver's own `review` verdicts (~8% by the gate's rate) never create anything by construction. Human verdicts reached through `review resolve` ratify into the eval CSV exactly as they already do, so draining this list's residue grows the benchmark corpus — the import feeds the very accuracy measure it is testing.
 
+### 5.7 Designed-for: the list tally (NOT v1 — but v1 must not preclude it)
+
+Owner, 2026-08-28:
+
+> "When deciding the next movie to watch it would be good information to know: oh, this movie is on three of our top-100 film lists — this one, this one and this one. That would go a long way in picking what to watch next. Part of the card maybe has a tally of those, a count of the number of top lists it's on. But as long as our implementation is friendly to that future feature."
+
+This is the feature the whole list corpus is ultimately *for*: cross-list consensus as a watch-next signal. It is explicitly out of v1, but four structural choices in v1 decide whether it stays cheap or needs a rewrite. Honour all four.
+
+1. **Fetch list membership in ONE query for the whole view, never per film.** Copy `_SERVICES_SQL` + `_services_by_film` verbatim in shape: a single `SELECT film_id, …` grouped in Python into `dict[int, list[dict]]`. The table renders ~4,600 films at once, so a per-film query is a 4,600-query page load. This is the single most important constraint in this section.
+2. **`FilmView.lists` is a list of dicts, not a count.** The drawer needs names and ranks; the card needs only a number. One fetch serves both, and the tally is simply `len(f.lists)` client-side. Do not add a parallel count field or a second query for it.
+3. **Never denormalize a count onto `films`.** What "how many lists" *means* will change — all lists, only trusted ones, weighted by curator, ordered lists only. A stored `films.list_count` column would freeze today's definition and go stale on every import. Compute it.
+4. **Leave room for list quality.** D4 locked the registry to name/curator/year/URL/ordered with no taxonomy, which is right for now — but "once I determine which lists are really good" means a `trusted` or weight column is likely later. That is a purely additive migration provided the tally is computed rather than stored. The `ordered` flag already lets a future tally distinguish "#3 on a ranked top-100" from bare membership in an unordered 1001-films list; those are different signals and should not be summed blindly.
+
+Given all four, the eventual work is: a badge in the card renderer (`app.js` is client-side and already receives the full view JSON, so no new endpoint), and — if a filter is wanted — one predicate in `domain/filters.py`, which is where every canned-filter threshold lives per CLAUDE.md.
+
 ### Read model + drawer
 
 `FilmView.lists: list[dict]` = `[{slug, name, curator, published, rank}]`, fetched per film the same way `services` already is (a separate keyed query, not a join into `_VIEW_SQL` — a film on five lists must not fan out into five view rows). Drawer gains one line beside "Also streaming on:":
@@ -135,7 +150,9 @@ Unit tests for the TSV header/row parser (odd titles, curly apostrophes, the `#`
 
 ## 6. Out of scope for v1
 
-Filter chip and rank-order sort; list tags/taxonomy; re-fetching a list from its source URL; any second list beyond Cahiers (the mechanism is what is being proven).
+Filter chip and rank-order sort; the cross-list tally badge on the card (§5.7 — designed for, deliberately not built); list tags/taxonomy or a `trusted` flag; re-fetching a list from its source URL; any second list beyond Cahiers (the mechanism is what is being proven).
+
+The tally is the eventual payoff and the reason the corpus is worth building, so v1's job is to make it a badge-and-a-predicate later rather than a re-architecture. §5.7's four constraints are how.
 
 ## 7. Risks to watch
 
