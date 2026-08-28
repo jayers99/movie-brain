@@ -10,11 +10,16 @@ from pathlib import Path
 
 import requests
 
+from movie_brain.application.keying import key_film
 from movie_brain.application.review import suppress_resolved
 from movie_brain.domain.matching import Arbiter, build_candidate_index, clean_title, match_film
 from movie_brain.domain.models import Film, McTitle, ReviewEntry
+from movie_brain.domain.thumbprint import make_query, resolve
 from movie_brain.infrastructure import metacritic as mc
 from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.omdb import QuotaExceeded
+from movie_brain.infrastructure.thumbprint_fetch import CacheMiss, CandidateFetcher
+from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 AUTHORITY = "metacritic"
 
@@ -63,6 +68,8 @@ class PromoteReport:
     skipped_anomalous: int
     key_conflicts: int
     match: MatchReport | None = None
+    linked_by_key: int = 0  # resolver landed on a film that already holds the tt — slug claimed, no twin created
+    keyed: int = 0  # newly created films keyed via the resolver in the same pass
 
 
 def crawl_archive(
@@ -232,13 +239,22 @@ def promote_top_n(
     n: int,
     *,
     arbiter: Arbiter | None = None,
+    fetcher: CandidateFetcher | None = None,
+    tmdb: TmdbClient | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> PromoteReport:
     """Mode B: turn the top-N staged titles into real films (offline, idempotent).
 
     match_archive runs first so every slug an existing film can claim is claimed —
-    the dedup guard. Promotion then only ever creates films for slugs nobody owns;
-    a film_key collision is the tripwire and queues for review, never overwrites.
+    the dedup guard. With a resolver `fetcher`, a staged title is then resolved through
+    the thumbprint algorithm BEFORE promotion creates anything: a `match` whose tt some
+    existing film already holds claims the slug on THAT film instead of minting a twin
+    under the staged title (T5's Mode-B counterpart to the Apple import's resolve-first
+    block). A resolver match nobody holds, or a resolver miss, falls through to plain
+    promotion exactly as before; a newly created film is then keyed immediately with the
+    resolver's verdict, so it isn't born unidentified. With no `fetcher`, behavior is
+    unchanged from before this resolver existed. A film_key collision is the tripwire and
+    queues for review, never overwrites.
     """
     match_report = match_archive(repo, config_dir, today, arbiter=arbiter, log=log)
     if match_report.exit_code != 0:
@@ -248,7 +264,7 @@ def promote_top_n(
     tombstoned = repo.tombstoned_keys()
     candidates = repo.top_staged_titles(n)
     reviews: list[ReviewEntry] = []
-    promoted = already_linked = skipped = conflicts = 0
+    promoted = already_linked = skipped = conflicts = linked_by_key = keyed = 0
     for t in candidates:
         if t.slug in claimed:
             already_linked += 1
@@ -262,6 +278,37 @@ def promote_top_n(
             # resurrection request. Never overwrite, never re-promote.
             skipped += 1
             continue
+
+        verdict = None
+        if fetcher is not None:
+            q = make_query(t.title, t.year, "metacritic")
+            try:
+                verdict = resolve(q, fetcher.fetch(q))
+            except (CacheMiss, requests.RequestException, AuthError, QuotaExceeded) as exc:
+                log(f"resolver lookup failed for {t.title!r}: {exc}")
+        if verdict is not None and verdict.kind == "match" and verdict.tt is not None:
+            holder = repo.film_id_for_external("imdb", verdict.tt)
+            if holder is not None:
+                # The work is already here under its own title — claim the slug, don't twin it.
+                holder = repo.canonical_film_id(holder)
+                try:
+                    repo.set_external_id(holder, AUTHORITY, t.slug, today)
+                    repo.add_claim(
+                        holder, AUTHORITY, t.slug, t.title, year_claimed=t.year, first_seen=today.isoformat()
+                    )
+                    claimed.add(t.slug)
+                    linked_by_key += 1
+                except sqlite3.IntegrityError:
+                    reviews.append(
+                        ReviewEntry(
+                            "slug-conflict",
+                            film_id=holder,
+                            value=t.slug,
+                            detail="slug already claimed by another film",
+                        )
+                    )
+                continue
+
         film_id = repo.create_film(film)
         if film_id is None:
             existing = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
@@ -281,6 +328,18 @@ def promote_top_n(
         repo.add_claim(film_id, AUTHORITY, t.slug, t.title, year_claimed=t.year, first_seen=today.isoformat())
         claimed.add(t.slug)
         promoted += 1
+        if verdict is not None and verdict.kind == "match" and verdict.tt is not None:
+            winner = next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
+            r = key_film(
+                repo, tmdb, film_id, verdict.tt, today, log,
+                tmdb_id=winner.tmdb_id if winner is not None else None,
+            )
+            if r.status in ("keyed", "unlinked"):
+                keyed += 1
+            else:
+                log(f"created #{film_id} unkeyed ({r.status}: {r.detail}); the next sync will retry")
     if reviews:
         repo.append_reviews(AUTHORITY, reviews, today)
-    return PromoteReport(0, n, len(candidates), promoted, already_linked, skipped, conflicts, match_report)
+    return PromoteReport(
+        0, n, len(candidates), promoted, already_linked, skipped, conflicts, match_report, linked_by_key, keyed
+    )
