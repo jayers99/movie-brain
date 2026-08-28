@@ -257,6 +257,22 @@ def test_review_list_shows_candidate_lines(config_dir):
     assert "A tt0083658" in r.output
 
 
+def test_review_list_marks_a_series_film(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import Film, ReviewEntry
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("Dekalog", 1988, None, ""))
+    repo.set_film_kind(fid, "series")
+    repo.append_reviews("tmdb", [ReviewEntry("no-match-reviewed", film_id=fid, detail="x")], date(2026, 8, 28))
+
+    r = runner.invoke(app, ["review", "list"])
+    assert r.exit_code == 0
+    assert "[series]" in r.output
+
+
 def test_review_resolve_reports_value_errors(monkeypatch):
     def fake(repo, review_id, **kw):
         raise ValueError("choose exactly one")

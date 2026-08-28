@@ -116,3 +116,25 @@ Feature: match_review rows are resolved by CLI and never come back
     And "King Kong (1933)" has a found OMDb payload with imdb "ttOLD"
     When I resolve it offline with tt "ttOLD"
     Then "King Kong (1933)" does not need an OMDb refresh
+
+  Scenario: --tt on a series keys it by IMDb id alone and marks the kind
+    Given a commerce film "Dekalog (1988)"
+    And an open tmdb "no-match-reviewed" review for "Dekalog (1988)"
+    And TMDB finds "tt0092337" only as a series
+    When I resolve it with tt "tt0092337"
+    Then "Dekalog (1988)" holds imdb "tt0092337" and no tmdb id
+    And the film "Dekalog (1988)" has kind "series"
+    And the film "Dekalog (1988)" is not a keying target
+
+  Scenario: --series forces the kind when TMDB knows nothing at all
+    Given a commerce film "Dekalog (1988)"
+    And an open tmdb "no-match-reviewed" review for "Dekalog (1988)"
+    And TMDB finds nothing for "tt0092337"
+    When I resolve it with tt "tt0092337" and --series
+    Then the film "Dekalog (1988)" has kind "series"
+
+  Scenario: --series is refused when TMDB says the id is a movie
+    Given an open tmdb "no-match-reviewed" review for "King Kong (1933)"
+    And TMDB finds "tt0024216" as id 244 released in 1933
+    When I resolve it with tt "tt0024216" and --series it is refused
+    Then the error mentions "TMDB has a movie"

@@ -27,7 +27,7 @@ uv run movie-brain repair dupes [--apply] [--yes]     # audit norm-title + id-co
 uv run movie-brain repair links [--film ID] [--apply]  # re-validate stored TMDB links against TMDB's title/original_title/alternative titles (one call each); --film audits/clears one link unconditionally; --apply clears suspects
 uv run movie-brain repair years [FILM_ID YEAR] [--apply]  # year worklist: open year-collisions + stale OMDb payloads; --apply marks stale rows for OMDb refetch; with FILM_ID YEAR, corrects one film's year
 uv run movie-brain review list [--authority A] [--reason R]   # open match_review rows (filterable)
-uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss | --pick A|B|C | --tt X | --none) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, dismiss, key to an A/B/C candidate, key to an IMDb id, or verify unkeyed
+uv run movie-brain review resolve ID (--film X | --tmdb-id X | --create | --dismiss | --pick A|B|C | --tt X [--series] | --none) [--note]  # standing decision on one review row: link to a film, link a TMDB id, create the staged film, dismiss, key to an A/B/C candidate, key to an IMDb id, or verify unkeyed; a --tt TMDB knows only as TV (or forced with --series) is keyed by IMDb id alone and marked kind=series
 uv run movie-brain review revisits                    # films the user flagged "needs revisit" in the drawer
 
 uv run movie-brain repair twins [--apply] [--yes] [--limit N]  # retire raw `Title (YYYY)` films into their same-year twin (contract-checked); --limit = batch size

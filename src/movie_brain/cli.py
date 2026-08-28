@@ -528,7 +528,12 @@ def review_list(
         table.add_column(col)
     parsed: dict[object, ReviewDetail] = {}
     for r in rows:
+        kind = str(r["kind"] or "movie")
         film = f"#{r['film_id']} {r['title']} ({r['year']})" if r["film_id"] is not None else ""
+        if film and kind != "movie":
+            # A series is keyed by IMDb id alone — never offer it a tmdb id. The `\[` is rich's
+            # markup escape: an unescaped "[series]" is read as a style tag and rendered as nothing.
+            film += f" \\[{kind}]"
         detail = r["detail"]
         d = parse_review_detail(str(detail)) if detail is not None else None
         detail_cell = d.reason if d is not None else str(detail or "")
@@ -570,6 +575,7 @@ def review_resolve(
     none: Annotated[
         bool, typer.Option("--none", help="Standing 'no such work' verdict: verified unkeyed.")
     ] = False,
+    series: Annotated[bool, typer.Option("--series", help="With --tt: this work is a series (IMDb id only).")] = False,
     note: Annotated[str | None, typer.Option("--note")] = None,
     eval_csv: Annotated[Path | None, typer.Option("--eval-csv", hidden=True)] = None,
 ) -> None:
@@ -592,6 +598,7 @@ def review_resolve(
             pick=pick,
             tt=tt,
             none=none,
+            series=series,
             eval_csv=eval_csv,
             warn=err.print,
         )
