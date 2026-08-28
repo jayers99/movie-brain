@@ -162,7 +162,7 @@ def sync(
             keyed = key_films(repo, fetcher, tmdb_client, today, log)
         except Exception as exc:  # noqa: BLE001 — keying must never break the rest of the sync
             log(f"keying step failed: {exc}")
-    if cache is not None:
+    if cache is not None and cache.misses:
         cache.save()
 
     looked_up = 0

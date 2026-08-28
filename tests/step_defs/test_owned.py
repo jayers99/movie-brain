@@ -88,6 +88,12 @@ def pool_seed(ctx, pool, tmdb, title, tt, tid, year):
     tmdb.years[int(tid)] = int(year)
 
 
+@given(parsers.parse('"{title_year}" is tombstoned'))
+def tombstoned(ctx, title_year):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    ctx["repo"].tombstone_film(fid, TODAY, note="test")
+
+
 @given(parsers.parse('the resolver pool has "{title}" ambiguous'))
 def pool_seed_ambiguous(ctx, pool, title):
     key = parse_title(title).title
@@ -138,6 +144,12 @@ def run_import_no_resolver(ctx):
 def film_is_owned(ctx, title_year):
     fid = ctx["repo"].film_id_by_key(_film(title_year).key)
     assert fid in ctx["repo"].owned_film_ids()
+
+
+@then(parsers.parse('"{title_year}" is not owned'))
+def film_is_not_owned(ctx, title_year):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    assert fid not in ctx["repo"].owned_film_ids()
 
 
 @then(parsers.parse('the film "{title_year}" exists with a guid'))

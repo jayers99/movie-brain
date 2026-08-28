@@ -93,6 +93,12 @@ def holds_film_keyed_tmdb_only(ctx, title_year, tid):
     ctx["repo"].set_external_id(fid, "tmdb", tid, TODAY)
 
 
+@given(parsers.parse('"{title_year}" is tombstoned'))
+def tombstoned(ctx, title_year):
+    fid = ctx["repo"].film_id_by_key(_film(title_year).key)
+    ctx["repo"].tombstone_film(fid, TODAY, note="test")
+
+
 def _page_cards(page: int) -> list[tuple[str, str, int | None, int | None]]:
     # Deterministic distinct cards per page; scores descend with page number.
     return [(f"Film P{page}", f"film-p{page}", 2000 + page, 99 - page)]

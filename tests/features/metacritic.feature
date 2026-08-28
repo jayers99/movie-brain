@@ -171,3 +171,14 @@ Feature: Metacritic archive
     Then "Bound (1996)" has metacritic slug "bound"
     And the repository holds 1 films
     And the promote report says 0 promoted and 1 linked by key
+
+  Scenario: A staged title never claims a slug on a tombstoned holder
+    Given the repository holds the film "Bound (1996)" keyed imdb "tt0116367" tmdb "9081"
+    And "Bound (1996)" is tombstoned
+    And the archive page 1 has "Chicago Noir" slug "bound" 1996 score 90
+    And the resolver pool has "Chicago Noir" → tt0116367/9081 1996
+    When I promote the top 10 with a resolver
+    Then "Bound (1996)" has no metacritic slug
+    And the film "Chicago Noir (1996)" exists with a guid
+    And "Chicago Noir (1996)" has metacritic slug "bound"
+    And the promote report says 1 promoted and 0 linked by key
