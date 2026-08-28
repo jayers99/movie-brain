@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 import requests
 
-from movie_brain.application.repair import (
+from movie_brain.application.repair_keys import (
     DisagreementContract,
     audit_disagreements,
     format_disagreement,
@@ -118,7 +118,7 @@ def _needs_refresh(repo, film_id) -> bool:
 
 
 def _run(repo, today, contract, tmdb=None, apply=True, limit=None):
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     lines = []
     rep = repair_disagreements(
@@ -238,7 +238,7 @@ def test_conflict_is_never_touched_and_limit_trims(repo, today):
 
 
 def test_declined_groups_are_counted_not_applied(repo, today):
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     fid = _split(repo, today, "Refetch", "ttA", "ttB", 1)
     rep = repair_disagreements(
@@ -295,7 +295,7 @@ def test_fetcher_failure_still_writes_an_evidence_free_review(repo, today):
             raise requests.ConnectionError("boom")
 
     fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     repair_disagreements(
         repo, today, apply=True, confirm=lambda g: True,
@@ -343,7 +343,7 @@ def test_review_detail_carries_the_live_resolver_ranking(repo, today):
             return [_cand("tt1", 11, "T", 2000), _cand("tt2", 22, "T", 2001)]
 
     fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
-    from movie_brain.application.repair import repair_disagreements
+    from movie_brain.application.repair_keys import repair_disagreements
 
     repair_disagreements(
         repo, today, apply=True, confirm=lambda g: True,
@@ -376,7 +376,7 @@ def test_applied_refetch_becomes_pending_and_is_never_re_applied(repo, today):
 
 
 def test_open_review_makes_the_film_review_open_and_never_re_queues(repo, today, monkeypatch):
-    import movie_brain.application.repair as mod
+    import movie_brain.application.repair_keys as mod
 
     fid = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
     c = {fid: _contract(fid, "ttJ", status="proposed")}
@@ -416,7 +416,7 @@ def test_resolved_key_disagreement_is_a_standing_decision_not_work(repo, today, 
     """A resolved review row closes the ticket but the film keeps disagreeing: it must NOT
     re-enter as actionable `review` (queue_review_once would refuse anyway) and must spend
     none of a --limit batch."""
-    import movie_brain.application.repair as mod
+    import movie_brain.application.repair_keys as mod
 
     stalled = _split(repo, today, "Proposed", "ttI", "ttJ", 5)
     nxt = _split(repo, today, "Refetch", "ttA", "ttB", 6)

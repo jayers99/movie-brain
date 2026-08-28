@@ -75,3 +75,28 @@ def test_record_tmdb_match_year_adoption_requeues_stale_omdb_miss(repo):
     assert outcome == "adopted"
     queued = {i for i, _ in repo.films_needing_lookup_discovery("criterion", TODAY)}
     assert fid in queued
+
+
+def test_rebuild_skips_a_film_whose_reviewed_row_was_resolved(repo, today):
+    from movie_brain.application.availability import NO_MATCH_REVIEWED, rebuild_no_match_queue
+    from movie_brain.domain.models import Film, ReviewEntry
+
+    fid = repo.create_film(Film("Bound", 1996, None, ""))
+    repo.upsert_tmdb(fid, found=False, looked_up=today)
+    repo.append_reviews("tmdb", [ReviewEntry(NO_MATCH_REVIEWED, film_id=fid, detail="{}")], today)
+    rid = int(repo.open_reviews("tmdb")[0]["id"])
+    repo.resolve_review(rid, "verified unkeyed")  # --none: a standing decision
+    rebuild_no_match_queue(repo, today)
+    assert repo.open_reviews("tmdb") == []
+
+
+def test_rebuild_leaves_an_open_reviewed_row_alone_and_does_not_double_queue(repo, today):
+    from movie_brain.application.availability import NO_MATCH_REVIEWED, rebuild_no_match_queue
+    from movie_brain.domain.models import Film, ReviewEntry
+
+    fid = repo.create_film(Film("Bound", 1996, None, ""))
+    repo.upsert_tmdb(fid, found=False, looked_up=today)
+    repo.append_reviews("tmdb", [ReviewEntry(NO_MATCH_REVIEWED, film_id=fid, detail="{}")], today)
+    rebuild_no_match_queue(repo, today)
+    rows = repo.open_reviews("tmdb")
+    assert [r["reason"] for r in rows] == [NO_MATCH_REVIEWED]

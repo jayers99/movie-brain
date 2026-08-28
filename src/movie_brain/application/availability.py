@@ -14,6 +14,7 @@ from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository, 
 from movie_brain.infrastructure.tmdb import AuthError, TmdbArbiter, TmdbClient, watch_link
 
 TMDB_AUTHORITY = "tmdb"
+NO_MATCH_REVIEWED = "no-match-reviewed"
 STORE_PROVIDER_ID = 2  # Apple TV Store (iTunes) — the only rent/buy id we record
 REFRESH_DAYS = 7
 FIRST_CHECK_BATCH = 500  # never-checked films given providers per nightly run
@@ -60,9 +61,14 @@ def rebuild_no_match_queue(repo: Repository, today: date) -> None:
     (also found=0, since it couldn't claim its id) is excluded here too, so it isn't
     double-queued under both reasons. A film whose no-match row a human already resolved
     (dismissed, or matched by hand elsewhere) is a standing decision, never re-queued.
+    A resolved `no-match-reviewed` row (T4 promotion drained with --pick/--tt/--none) is the
+    same standing decision — `--none` leaves the film found=0, and re-queueing it would rerun
+    the resolver on a verdict a human already gave.
     """
     durably_flagged = {r["film_id"] for r in repo.open_reviews(TMDB_AUTHORITY) if r["reason"] != "no-match"}
-    dismissed = {k[1] for k in repo.resolved_review_keys(TMDB_AUTHORITY) if k[0] == "no-match"}
+    dismissed = {
+        k[1] for k in repo.resolved_review_keys(TMDB_AUTHORITY) if k[0] in ("no-match", NO_MATCH_REVIEWED)
+    }
     repo.replace_unresolved_reviews(
         TMDB_AUTHORITY,
         [

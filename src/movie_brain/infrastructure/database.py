@@ -98,6 +98,16 @@ class DisagreementFilm(NamedTuple):
     criterion: bool  # has any criterion listing
 
 
+class NomatchFilm(NamedTuple):
+    """One open tmdb `no-match` row with its undisposed film — the T4 worklist."""
+
+    review_id: int
+    film_id: int
+    title: str
+    year: int | None
+    director: str | None
+
+
 class TwinFilm(NamedTuple):
     """One undisposed film's twin-audit evidence (repair twins)."""
 
@@ -919,6 +929,20 @@ class Repository:
                 (f" [{note}]", review_id),
             )
 
+    def promote_review(self, review_id: int, *, reason: str, detail: str, value: str | None = None) -> None:
+        """Rewrite an OPEN row's reason/detail/value in place — `id` and `created_at` survive.
+
+        The one way a per-run `no-match` row becomes durable: `repair nomatch` promotes it to
+        `no-match-reviewed` with the resolver's A/B/C detail instead of queueing a second row
+        the next sync's rebuild would then orphan."""
+        with self._conn() as c:
+            n = c.execute(
+                "UPDATE match_review SET reason = ?, detail = ?, value = ? WHERE id = ? AND resolved = 0",
+                (reason, detail, value, review_id),
+            ).rowcount
+        if n != 1:
+            raise ValueError(f"review {review_id} is not open")
+
     def resolved_review_keys(self, authority: str) -> set[tuple[str, int | None, str | None]]:
         """(reason, film_id, value) of every resolved row — a resolution is a standing decision."""
         with self._conn() as c:
@@ -1072,6 +1096,11 @@ class Repository:
                 "ON CONFLICT(film_id) DO UPDATE SET found=excluded.found, looked_up=excluded.looked_up",
                 (film_id, int(found), looked_up.isoformat()),
             )
+
+    def tmdb_found(self, film_id: int) -> bool:
+        with self._conn() as c:
+            row = c.execute("SELECT found FROM tmdb WHERE film_id = ?", (film_id,)).fetchone()
+            return False if row is None else bool(row["found"])
 
     def record_tmdb_providers(self, film_id: int, checked: date, payload: str) -> None:
         with self._conn() as c:
@@ -1430,6 +1459,31 @@ class Repository:
                     int(r["id"]), str(r["title"]), r["year"], str(r["o_tt"]), str(r["t_tt"]), r["t_id"], r["i_ext"],
                     bool(r["crit"]),
                 )
+                for r in rows
+            ]
+
+    def nomatch_worklist(self) -> list[NomatchFilm]:
+        """Open `no-match` rows, plus a film whose row `repair nomatch` promoted in place to
+        `no-match-reviewed` (T4) — carried so it still reports as `review-open` rather than
+        vanishing from the worklist. A film that (unusually) holds BOTH an open `no-match` row
+        and a separate open `no-match-reviewed` row counts once, via the `no-match` row."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT m.id AS review_id, f.id, f.title, f.year, f.director FROM match_review m "
+                "JOIN films f ON f.id = m.film_id "
+                "WHERE m.authority = 'tmdb' AND m.resolved = 0 AND ("
+                "  m.reason = 'no-match' OR ("
+                "    m.reason = 'no-match-reviewed' AND NOT EXISTS ("
+                "      SELECT 1 FROM match_review m2 WHERE m2.film_id = m.film_id AND m2.authority = 'tmdb' "
+                "      AND m2.reason = 'no-match' AND m2.resolved = 0"
+                "    )"
+                "  )"
+                ") AND "
+                + _NOT_DISPOSED
+                + " ORDER BY f.id"
+            ).fetchall()
+            return [
+                NomatchFilm(int(r["review_id"]), int(r["id"]), str(r["title"]), r["year"], r["director"] or None)
                 for r in rows
             ]
 

@@ -318,7 +318,39 @@ def test_repair_verbs_still_exit_2_on_a_db_that_is_behind(config_dir, tmp_path, 
 
     init_db(config_dir / "movie-brain.db")
     _pretend_one_behind(tmp_path, monkeypatch)
-    for argv in (["repair", "disagreements"], ["repair", "editions"]):
+    for argv in (["repair", "disagreements"], ["repair", "editions"], ["repair", "nomatch"]):
         r = runner.invoke(app, argv)
         assert r.exit_code == 2, (argv, r.exit_code, r.output)
         assert "movie-brain migrate --apply" in r.output, (argv, r.output)
+
+
+def test_repair_nomatch_dry_run_on_empty_db(config_dir):
+    r = runner.invoke(app, ["repair", "nomatch"])
+    assert r.exit_code == 0 and "groups: 0" in r.output and "skipped: 0" in r.output
+
+
+def test_repair_nomatch_partial_exits_1(monkeypatch):
+    def fake(repo, today, *, apply, confirm, tmdb, fetcher, limit, log):
+        raise RuntimeError("[partial] #1 PARTIAL: imdb tt1 written but tmdb 2 id-conflict")
+
+    monkeypatch.setattr("movie_brain.cli.repair_nomatch", fake)
+    r = runner.invoke(app, ["repair", "nomatch", "--apply", "--yes"])
+    assert r.exit_code == 1 and "PARTIAL" in r.output
+
+
+def test_repair_nomatch_session_cache_is_not_the_fixture(config_dir, monkeypatch, tmp_path):
+    seen = {}
+
+    def fake(repo, today, *, apply, confirm, tmdb, fetcher, limit, log):
+        seen["fetcher"] = fetcher
+        from movie_brain.application.repair_keys import NomatchReport
+
+        return NomatchReport(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+    monkeypatch.setattr("movie_brain.cli.repair_nomatch", fake)
+    (config_dir / "tmdb-read-token.txt").write_text("tok")
+    (config_dir / "omdb-api-key.txt").write_text("key")
+    r = runner.invoke(app, ["repair", "nomatch"])
+    assert r.exit_code == 0
+    cache = seen["fetcher"].cache
+    assert cache.path == config_dir / "nomatch-cache.json.gz" and not cache.read_only
