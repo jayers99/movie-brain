@@ -44,16 +44,21 @@ def key_film(
     log: Callable[[str], None] = _stderr,
     *,
     tmdb_id: int | None = None,
+    resolve_tmdb_id: bool = True,
 ) -> KeyResult:
     """Key one film to an IMDb id (plus its TMDB id when one exists). Nothing is written
-    unless every holder check passes, so `held` and `error` leave the film untouched."""
+    unless every holder check passes, so `held` and `error` leave the film untouched.
+
+    `resolve_tmdb_id`: False when the caller already attempted the `find_by_imdb` lookup
+    itself — `key_film` then trusts `tmdb_id=None` to mean TMDB has no movie for this tt, and
+    writes the imdb id alone, instead of repeating the lookup."""
     holder = repo.film_id_for_external("imdb", tt)
     if holder is not None and holder != film_id:
         return KeyResult("held", tmdb_id, f"{tt} already held by #{holder}")
     tid = tmdb_id
     winner_year: int | None = None
     try:
-        if tid is None and tmdb is not None:
+        if tid is None and tmdb is not None and resolve_tmdb_id:
             tid = tmdb.find_by_imdb(tt)
         if tid is not None:
             th = repo.film_id_for_external(TMDB_AUTHORITY, str(tid))

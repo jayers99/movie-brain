@@ -81,3 +81,21 @@ def test_key_film_leaves_a_criterion_film_year_alone(repo, today):
     fid = _film(repo, today, "Trio", 1950, commerce=False)
     key_film(repo, FakeTmdb(by_imdb={"tt0037800": 11}, years={11: 1949}), fid, "tt0037800", today, print)
     assert repo.get_view(fid, today).year == 1950
+
+
+class FindByImdbForbidden(FakeTmdb):
+    """find_by_imdb raises if called — proves resolve_tmdb_id=False skips the lookup."""
+
+    def find_by_imdb(self, tt):
+        raise AssertionError("find_by_imdb should not be called when resolve_tmdb_id=False")
+
+
+def test_key_film_with_resolve_tmdb_id_false_trusts_none_and_skips_the_lookup(repo, today):
+    fid = _film(repo, today, "Bound", 1996)
+    r = key_film(
+        repo, FindByImdbForbidden(), fid, "tt0116367", today, print, tmdb_id=None, resolve_tmdb_id=False
+    )
+    assert r.status == "unlinked"
+    ids = repo.external_ids_for(fid)
+    assert ids["imdb"] == "tt0116367"
+    assert ids.get("tmdb") is None
