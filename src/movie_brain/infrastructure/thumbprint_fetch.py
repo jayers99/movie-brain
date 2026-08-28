@@ -21,6 +21,10 @@ from movie_brain.domain.thumbprint import Candidate, Query, article_norm
 from movie_brain.infrastructure.omdb import OmdbClient
 from movie_brain.infrastructure.tmdb import TmdbClient
 
+# Same parents[3] convention as database.MIGRATIONS_DIR: <repo root>/scripts/eval/fixtures/…
+FIXTURE_PATH = Path(__file__).resolve().parents[3] / "scripts" / "eval" / "fixtures" / "cand_cache.json.gz"
+SESSION_CACHE_NAME = "nomatch-cache.json.gz"
+
 
 class CacheMiss(Exception):
     pass
@@ -281,3 +285,19 @@ class CandidateFetcher:
                 c.directors = c.directors or (o.get("Director") if o.get("Director") != "N/A" else "") or ""
                 c.runtime = c.runtime or _runtime(o.get("Runtime"))
         return [c.freeze() for c in seen.values()]
+
+
+def session_fetcher(
+    config_dir: Path, tmdb: TmdbClient | None, omdb: OmdbClient | None
+) -> tuple[CandidateFetcher | None, CandidateCache | None]:
+    """The live resolver's candidate source: fixture hits are free, misses hit the clients and
+    are saved to the per-config session cache. The eval fixture is NEVER written — the gate
+    would otherwise score itself on data the resolver just produced."""
+    if tmdb is None or omdb is None:
+        return None, None
+    data = dict(CandidateCache.load(FIXTURE_PATH, read_only=True).data)
+    session_path = config_dir / SESSION_CACHE_NAME
+    if session_path.exists():
+        data.update(CandidateCache.load(session_path).data)
+    cache = CandidateCache(data, session_path)
+    return CandidateFetcher(cache, tmdb, omdb), cache
