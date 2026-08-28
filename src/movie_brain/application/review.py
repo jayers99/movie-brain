@@ -5,6 +5,8 @@ from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
+import requests
+
 from movie_brain.application.availability import TMDB_AUTHORITY, record_tmdb_match
 from movie_brain.application.eval_log import EvalEntry, ratify
 from movie_brain.application.keying import key_film
@@ -12,7 +14,7 @@ from movie_brain.application.thumbprint import parse_review_detail
 from movie_brain.domain.matching import parse_apple_title
 from movie_brain.domain.models import Film, ReviewEntry
 from movie_brain.infrastructure.database import Repository
-from movie_brain.infrastructure.tmdb import TmdbClient
+from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 
 def suppress_resolved(repo: Repository, authority: str, entries: list[ReviewEntry]) -> list[ReviewEntry]:
@@ -69,7 +71,12 @@ def resolve_review(
     A --tt whose id TMDB knows only as TV (or one forced with --series) is a series work: it is
     keyed by its IMDb id ALONE and marked `kind = series`, which takes it out of every TMDB
     keying worklist. It can hold no TMDB id — movie and TV ids share one integer namespace and
-    the stored id drives the movie-only providers endpoint (memo Q2).
+    the stored id drives the movie-only providers endpoint (memo Q2). TMDB's `/find` sometimes
+    answers a tt with BOTH a collection-style movie stub (whose `/movie/{id}` itself 404s) AND
+    a tv hit (Dekalog: movie id 37452, tv id 42699) — a human's explicit --series wins whenever
+    TMDB knows the tt as TV at all, movie stub or not; automatic detection stays conservative
+    (tv-only) so a film that legitimately has both a theatrical cut and a TV cut isn't silently
+    mis-kinded. --series is refused only when TMDB knows the tt purely as a movie.
 
     Imports metacritic/owned locally (not at module top) — those two modules import
     `suppress_resolved` from this one at their own top level, so a module-level import here
@@ -130,12 +137,23 @@ def resolve_review(
                 warn(f"tmdb id not resolved for {chosen_tt} (no client or no TMDB record); imdb only")
         elif tt is not None:
             chosen_tt = tt
-            found = client.find_by_imdb_any(tt) if client is not None else None
+            found = None
+            tmdb_failed = False
+            if client is not None:
+                try:
+                    found = client.find_by_imdb_any(tt)
+                except (requests.RequestException, AuthError) as exc:
+                    # A dead /find call must not escape as a raw HTTP error (Dekalog rehearsal
+                    # defect): degrade to imdb-only keying, same as the "no client" convention
+                    # below, rather than aborting the whole resolution — the human's --series
+                    # flag (if given) still applies since `found` stays None either way.
+                    tmdb_failed = True
+                    warn(f"tmdb lookup failed for {tt} ({exc}); imdb only")
             is_series = series or (found is not None and found.movie_id is None and found.tv)
-            if series and found is not None and found.movie_id is not None:
+            if series and found is not None and found.movie_id is not None and not found.tv:
                 raise ValueError(f"TMDB has a movie for {tt} (id {found.movie_id}) — drop --series")
             chosen_tmdb = None if is_series else (found.movie_id if found is not None else None)
-            if chosen_tmdb is None and not is_series:
+            if chosen_tmdb is None and not is_series and not tmdb_failed:
                 warn(f"tmdb id not resolved for {tt} (no client or no TMDB record); imdb only")
         else:
             chosen_tt = "NONE"

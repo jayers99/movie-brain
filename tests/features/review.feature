@@ -138,3 +138,19 @@ Feature: match_review rows are resolved by CLI and never come back
     And TMDB finds "tt0024216" as id 244 released in 1933
     When I resolve it with tt "tt0024216" and --series it is refused
     Then the error mentions "TMDB has a movie"
+
+  Scenario: --series is honoured even when TMDB also has a movie stub for the id (Dekalog)
+    Given a commerce film "Dekalog (1988)"
+    And an open tmdb "no-match-reviewed" review for "Dekalog (1988)"
+    And TMDB finds "tt0092337" as id 37452 and also as a series
+    When I resolve it with tt "tt0092337" and --series
+    Then "Dekalog (1988)" holds imdb "tt0092337" and no tmdb id
+    And the film "Dekalog (1988)" has kind "series"
+    And no TMDB movie lookup was made for id 37452
+
+  Scenario: --tt survives a TMDB lookup failure by keying imdb-only and warning
+    Given an open tmdb "no-match" review for "King Kong (1933)"
+    And TMDB fails to look up "tt0024216"
+    When I resolve it with tt "tt0024216"
+    Then "King Kong (1933)" holds imdb "tt0024216" and no tmdb id
+    And a warning mentions "tmdb lookup failed"
