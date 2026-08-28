@@ -8,10 +8,9 @@ from datetime import date
 
 import requests
 
-from movie_brain.domain.matching import pick_tmdb_match
 from movie_brain.domain.models import ReviewEntry
 from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository, TmdbMatchTarget
-from movie_brain.infrastructure.tmdb import AuthError, TmdbArbiter, TmdbClient, watch_link
+from movie_brain.infrastructure.tmdb import AuthError, TmdbClient, watch_link
 
 TMDB_AUTHORITY = "tmdb"
 NO_MATCH_REVIEWED = "no-match-reviewed"
@@ -28,8 +27,6 @@ def _stderr(msg: str) -> None:
 
 @dataclass(frozen=True)
 class TmdbStepResult:
-    matched: int = 0
-    missed: int = 0
     refreshed: int = 0
     watchlist_refreshed: int = 0
     first_checked: int = 0
@@ -149,60 +146,16 @@ def tmdb_step(
     client: TmdbClient,
     today: date,
     *,
-    arbiter: TmdbArbiter | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> TmdbStepResult:
-    matched = missed = refreshed = 0
-    consecutive = 0
-    aborted = False
-    arbiter = arbiter if arbiter is not None else TmdbArbiter(client)
-    for target in repo.films_needing_tmdb_match():
-        if consecutive >= MAX_CONSECUTIVE_FAILURES:
-            log("TMDB searches failing repeatedly — stopping; next run resumes.")
-            aborted = True
-            break
-        try:
-            # The year retry is only safe on an original year; a commerce year may be a re-release.
-            candidates = client.search(target.title, None if target.commerce else target.year)
-        except AuthError as exc:
-            log(f"TMDB rejected the token: {exc}")
-            return TmdbStepResult(matched, missed, refreshed)
-        except requests.RequestException as exc:
-            log(f"TMDB search failed for {target.title!r}: {exc}")
-            consecutive += 1
-            continue
-        consecutive = 0
-        arbiter.seed(target.title, candidates)
-        winner = pick_tmdb_match(
-            target.title,
-            target.year,
-            candidates,
-            commerce_year=target.commerce,
-            arbiter=arbiter if target.commerce else None,
-        )
-        if winner is None:
-            repo.upsert_tmdb(target.film_id, found=False, looked_up=today)
-            missed += 1
-        else:
-            winner_year = next((c.year for c in candidates if c.tmdb_id == winner), None)
-            if record_tmdb_match(repo, target, winner, winner_year, today, log) != "id-conflict":
-                matched += 1
-            else:
-                missed += 1
-
-    # Recomputed from found=0 rows each run, so a tripwired match pass never loses entries.
-    rebuild_no_match_queue(repo, today)
-
-    # A tripwired match pass means TMDB is unhealthy right now — don't start (or stamp) a
-    # refresh pass that would then gate for a week having refreshed nothing.
-    if aborted:
-        return TmdbStepResult(matched, missed, refreshed)
+    """Provider passes only — keying moved to `application.keying.key_films` (thumbprint T5)."""
+    refreshed = 0
     pmap = repo.provider_map()
     # Watchlist pass — every run, gate or no gate: the whole point is ≤1-day lag
     # for the ~50 films worth alerting on. Never touches the weekly stamp.
     wl_refreshed, wl_aborted = _refresh_pass(repo, client, repo.films_for_watchlist_refresh(), pmap, today, log)
     if wl_aborted:
-        return TmdbStepResult(matched, missed, refreshed, wl_refreshed)
+        return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed)
     # First-check pass — every run, gate or no gate: a film matched after the weekly refresh
     # otherwise waits up to a week with no listings at all (invisible to the reachable scope).
     # Bounded per night; the full refresh below skips anything checked today.
@@ -210,17 +163,17 @@ def tmdb_step(
         repo, client, repo.films_for_first_check(FIRST_CHECK_BATCH), pmap, today, log
     )
     if fc_aborted:
-        return TmdbStepResult(matched, missed, refreshed, wl_refreshed, first_checked)
+        return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed, first_checked=first_checked)
     stamp = repo.get_meta(META_REFRESHED_AT)
     if stamp is not None and 0 <= (today - date.fromisoformat(stamp)).days <= REFRESH_DAYS:
-        return TmdbStepResult(matched, missed, refreshed, wl_refreshed, first_checked)
+        return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed, first_checked=first_checked)
     refreshed, full_aborted = _refresh_pass(
         repo, client, repo.films_for_provider_refresh(skip_checked_on=today), pmap, today, log
     )
     if full_aborted:
-        return TmdbStepResult(matched, missed, refreshed, wl_refreshed, first_checked)
+        return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed, first_checked=first_checked)
     repo.set_meta(META_REFRESHED_AT, today.isoformat())
-    return TmdbStepResult(matched, missed, refreshed, wl_refreshed, first_checked)
+    return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed, first_checked=first_checked)
 
 
 def _refresh_pass(
