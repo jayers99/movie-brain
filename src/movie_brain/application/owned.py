@@ -119,9 +119,14 @@ def import_owned(
                     holder = repo.film_id_for_external("tmdb", str(winner.tmdb_id))
             if holder is not None:
                 film_id = repo.canonical_film_id(holder)
-                resolved += 1
-                _claim_and_mark(repo, film_id, t, today)  # the Task 4 claim + mark_owned block
-                continue
+                d = repo.disposition_of(film_id)
+                if d is not None and d[0] == "tombstoned":
+                    holder = None   # fall through to the corpus / create path
+                else:
+                    resolved += 1
+                    if not _claim_and_mark(repo, film_id, t, today):  # the Task 4 claim + mark_owned block
+                        already += 1
+                    continue
 
         result = match_owned(
             cleaned,

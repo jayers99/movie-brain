@@ -295,23 +295,27 @@ def promote_top_n(
             if holder is not None:
                 # The work is already here under its own title — claim the slug, don't twin it.
                 holder = repo.canonical_film_id(holder)
-                try:
-                    repo.set_external_id(holder, AUTHORITY, t.slug, today)
-                    repo.add_claim(
-                        holder, AUTHORITY, t.slug, t.title, year_claimed=t.year, first_seen=today.isoformat()
-                    )
-                    claimed.add(t.slug)
-                    linked_by_key += 1
-                except sqlite3.IntegrityError:
-                    reviews.append(
-                        ReviewEntry(
-                            "slug-conflict",
-                            film_id=holder,
-                            value=t.slug,
-                            detail="slug already claimed by another film",
+                d = repo.disposition_of(holder)
+                if d is not None and d[0] == "tombstoned":
+                    holder = None   # fall through to the corpus / create path
+                else:
+                    try:
+                        repo.set_external_id(holder, AUTHORITY, t.slug, today)
+                        repo.add_claim(
+                            holder, AUTHORITY, t.slug, t.title, year_claimed=t.year, first_seen=today.isoformat()
                         )
-                    )
-                continue
+                        claimed.add(t.slug)
+                        linked_by_key += 1
+                    except sqlite3.IntegrityError:
+                        reviews.append(
+                            ReviewEntry(
+                                "slug-conflict",
+                                film_id=holder,
+                                value=t.slug,
+                                detail="slug already claimed by another film",
+                            )
+                        )
+                    continue
 
         film_id = repo.create_film(film)
         if film_id is None:

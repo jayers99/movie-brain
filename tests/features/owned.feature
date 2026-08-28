@@ -111,3 +111,23 @@ Feature: Apple TV owned films
     When I import owned films without a resolver
     Then the film "Step Brothers (2008)" exists with a guid
     And the owned report says 1 created and 0 keyed
+
+  Scenario: Re-running an import that lands on an existing holder is idempotent
+    Given the repository holds the film "Blade Runner (1982)" keyed imdb "tt0083658" tmdb "78"
+    And my Apple TV library has "Blade Runner (Director's Cut)" (2007)
+    And the resolver pool has "Blade Runner (Director's Cut)" → tt0083658/78 1982
+    When I import owned films
+    And I import owned films
+    Then the owned report says 1 already owned
+    And the repository holds 1 films
+
+  Scenario: An owned edition never binds to a tombstoned holder
+    Given the repository holds the film "Blade Runner (1982)" keyed imdb "tt0083658" tmdb "78"
+    And "Blade Runner (1982)" is tombstoned
+    And my Apple TV library has "Blade Runner (Director's Cut)" (2007)
+    And the resolver pool has "Blade Runner (Director's Cut)" → tt0083658/78 1982
+    When I import owned films
+    Then "Blade Runner (1982)" is not owned
+    And the film "Blade Runner (2007)" exists with a guid
+    And "Blade Runner (2007)" is owned
+    And the owned report says 1 created and 0 keyed
