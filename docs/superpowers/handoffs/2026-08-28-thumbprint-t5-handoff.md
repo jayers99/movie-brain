@@ -23,15 +23,14 @@ pending owner's word). **Live DB:** schema v12; snapshot `movie-brain.db.bak-pre
 | external ids imdb / tmdb | 661 / 4,347 | 778 / 4,476 |
 | `tmdb.found=0` | 211 | ~80 |
 | eval CSV | 529 rows | 558 rows (+29 `F-human`: 9 `--pick`, 8 `--tt`, 12 `--none`) |
-| gate | n=528 / 0 / 92.0 % | n=557 / 0 / **87.3 % — FAILS the 90 % auto floor** (selection bias: ratified rows are the resolver's residue by construction; owner decision pending — see below) |
+| gate | n=528 / 0 / 92.0 % | n=557 / 0 / 92.0 % over 526 non-F-human rows (F-human rows now score WRONG only — owner decision 2026-08-28) |
 
 Auto matches (99) were spot-checked by the owner from a table (all approved); 6 commerce films
 adopted TMDB's original year (Apple/MC years were re-release dates).
 
-## Open decision: the auto-rate floor
-Proposed: score `F-human` rows for WRONG only and exclude them from the auto-rate denominator
-(auto rate over believed/verified rows = 92.0 %); alternatively lower the floor. Whatever is
-chosen, update `.claude/rules/thumbprint.md`'s baseline line and `scripts/thumbprint_benchmark.py`.
+## Gate rule change (owner decision 2026-08-28)
+`F-human` rows are the resolver's residue by construction, so they are scored for WRONG only and
+excluded from the auto-rate denominator (`scripts/thumbprint_benchmark.py`, rule bullet updated).
 
 ## The 48 open `no-match-reviewed` rows (step-5 material)
 - Series / episodes (Q2 `kind=series`, key by IMDb series id): Dekalog #3082, Small Axe ×3

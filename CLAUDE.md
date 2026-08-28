@@ -43,7 +43,7 @@ uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py
 uv run ruff check . && uv run mypy                   # lint + types (mypy also runs as a pre-commit hook)
 uv run python scripts/matching_benchmark.py [--assert-dominance]  # matcher regression gate: ground truth + archive replays
-uv run python scripts/thumbprint_benchmark.py --assert  # thumbprint resolver gate (offline fixture): 0 wrong + auto ≥ 90%
+uv run python scripts/thumbprint_benchmark.py --assert  # thumbprint resolver gate (offline fixture): 0 wrong on every row + auto ≥ 90% on non-F-human rows
 ```
 
 ## Architecture (hexagonal — dependencies point inward)

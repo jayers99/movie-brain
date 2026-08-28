@@ -4,7 +4,11 @@
                                                 [--refresh] [--limit N]
 
 Scored population = rows with status verified|believed and a non-empty expected_tt.
-Gate: WRONG == 0, then auto-correct >= 90%. `proposed` rows are reported, never scored.
+Gate: WRONG == 0 over EVERY scored row, then auto-correct >= 90% over the non-`F-human` rows.
+`F-human` rows are the owner's verdicts on the resolver's own residue (cases it could not
+auto-match by construction), so they test for wrongness only — counting them in the auto rate
+would drop it after every drain regardless of resolver quality. `proposed` rows are reported,
+never scored.
 --refresh fetches missing cache keys with the real clients and rewrites the fixture.
 """
 
@@ -106,11 +110,16 @@ def main() -> None:
         print(f"fixture refreshed: {cache.misses} new keys")
     print(f"   fixture soft misses (detail/by-id never fetched): {cache.soft_misses}")
     n = sum(tally.values())
-    auto = tally["correct"] / n if n else 0.0
+    auto_tally = Counter()
+    for g, t in bygroup.items():
+        if not g.startswith("F-human"):
+            auto_tally.update(t)
+    auto_n = sum(auto_tally.values())
+    auto = auto_tally["correct"] / auto_n if auto_n else 0.0
     rev = tally["review"] + tally["review-none-ok"]
     print(
-        f"thumbprint gate  n={n}  WRONG={tally['WRONG']}  auto-correct={tally['correct']} ({100 * auto:.1f}%)  "
-        f"review={rev} ({100 * rev / n if n else 0:.1f}%)"
+        f"thumbprint gate  n={n}  WRONG={tally['WRONG']}  auto-correct={tally['correct']} "
+        f"(auto rate {100 * auto:.1f}% over {auto_n} non-F-human rows)  review={rev} ({100 * rev / n if n else 0:.1f}%)"
     )
     for g, t in sorted(bygroup.items()):
         print(f"   {g:22} {dict(t)}")

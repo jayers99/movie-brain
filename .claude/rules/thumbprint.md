@@ -16,7 +16,7 @@ paths:
   ingester (Criterion walk, Mode-B promotion, `owned import`) uses it until the ingester switch
   (memo step 5). Don't wire it into sync as a side effect of other work.
 - Gate before change: `uv run python scripts/thumbprint_benchmark.py --assert` must exit 0
-  (0 wrong on `verified`+`believed`, auto ≥ 90%; baseline n=528 / 0 / 92.0% since the T3 drain ratified 44 rows on 2026-08-27) after ANY edit to
+  (0 wrong on `verified`+`believed`, auto ≥ 90% over the non-`F-human` rows — `F-human` rows are the resolver's own residue, scored for WRONG only; baseline n=557 / 0 / 92.0% over 526 since the T4 drain on 2026-08-28) after ANY edit to
   `domain/thumbprint.py`, `thumbprint_fetch.py`, or the fixture. Never edit
   `scripts/eval/thumbprint_eval_v1.csv` to make the gate green — a wrong expectation is
   corrected with a `note` and `verified_by`; `proposed` rows are reported, never scored.
