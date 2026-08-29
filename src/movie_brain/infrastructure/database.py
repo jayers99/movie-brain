@@ -81,6 +81,7 @@ class ListEntryRow(NamedTuple):
     title_listed: str
     director_listed: str | None
     tt_listed: str | None
+    rank_label: str | None
 
 
 class EditionFilm(NamedTuple):
@@ -1845,15 +1846,24 @@ class Repository:
             )
 
     def upsert_list_entry(self, slug: str, entry: ListEntry) -> None:
-        """ON CONFLICT(list_slug, rank) DO UPDATE of title/director/tt only — never clears film_id."""
+        """ON CONFLICT(list_slug, rank) DO UPDATE of title/director/tt/rank_label only —
+        never clears film_id."""
         with self._conn() as c:
             c.execute(
-                "INSERT INTO film_list_entry (list_slug, rank, film_id, title_listed, director_listed, tt_listed) "
-                "VALUES (?, ?, NULL, ?, ?, ?) "
+                "INSERT INTO film_list_entry "
+                "(list_slug, rank, film_id, title_listed, director_listed, tt_listed, rank_label) "
+                "VALUES (?, ?, NULL, ?, ?, ?, ?) "
                 "ON CONFLICT(list_slug, rank) DO UPDATE SET "
                 "title_listed=excluded.title_listed, director_listed=excluded.director_listed, "
-                "tt_listed=excluded.tt_listed",
-                (slug, entry.rank, entry.title_listed, entry.director_listed, entry.tt_listed),
+                "tt_listed=excluded.tt_listed, rank_label=excluded.rank_label",
+                (
+                    slug,
+                    entry.rank,
+                    entry.title_listed,
+                    entry.director_listed,
+                    entry.tt_listed,
+                    entry.rank_label,
+                ),
             )
 
     def link_list_entry(self, slug: str, rank: int, film_id: int) -> None:
@@ -1866,8 +1876,8 @@ class Repository:
     def list_entries(self, slug: str) -> list[ListEntryRow]:
         with self._conn() as c:
             rows = c.execute(
-                "SELECT rank, film_id, title_listed, director_listed, tt_listed FROM film_list_entry "
-                "WHERE list_slug = ? ORDER BY rank",
+                "SELECT rank, film_id, title_listed, director_listed, tt_listed, rank_label "
+                "FROM film_list_entry WHERE list_slug = ? ORDER BY rank",
                 (slug,),
             ).fetchall()
             return [ListEntryRow(*r) for r in rows]
