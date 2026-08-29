@@ -40,13 +40,15 @@ This keeps the verbatim principle the format already follows for titles and dire
 
 ### The check that replaces contiguity
 
-Deriving position from line order gives up the current parser's real safety net — contiguous unique ranks catch a shuffled or truncated file. It is replaced by a stricter rule:
+Deriving position from line order gives up something. The old parser's only column-one guard was a duplicate-rank check, which contiguity now makes redundant — but rank coming FROM column one also meant a dropped line left every remaining entry at its printed rank. Position was stable under truncation; now it is not. Two rules replace what is lost:
 
 **The numeric part of the labels must be non-decreasing down the file.**
 
 `1, 2, 3, …` passes. `=243, =243, =225` fails. This permits ties, forbids shuffling, and catches the specific mistake this feature invites: the BFI page defaults to listing **250 → 1**, so an extraction that forgets to reverse comes out backwards and is rejected rather than imported upside down.
 
 A label parses as an optional leading `=`, then a positive integer, then nothing else. Anything else is a `ListFileError`, same as a malformed id.
+
+And the second rule, because the non-decreasing check cannot see a dropped line: **a list file is append-only once imported.** `upsert_list_entry` never clears `film_id` and `import_list` short-circuits on the stored rank, so re-importing a mid-file correction after entries have linked would re-point links silently. `import_list` therefore refuses: when a stored entry's `title_listed` no longer matches the file's at the same rank, the entry is not treated as settled — it queues an `entry-changed` review row naming both titles, so a renumbered file announces itself instead of quietly rewriting 200 links.
 
 ## 4. Read model and display
 
