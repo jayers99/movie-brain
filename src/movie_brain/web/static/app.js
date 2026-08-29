@@ -41,9 +41,7 @@
     needs_revisit: (f) => f.needs_revisit,
     suspect: (f) => f.audit != null,
     multi_list: (f) => (f.lists || []).length >= state.cfg.canned_thresholds.multi_list,
-    acquire: (f) => !f.owned && f.my_rating == null
-      && !(f.criterion && !f.departed)
-      && !(f.services || []).some((s) => s.subscribed && s.kind === 'svod')
+    acquire: (f) => !f.owned
       && (isCanon(f) || (f.metacritic != null && f.metacritic >= state.cfg.canned_thresholds.top_mc)),
   };
 
