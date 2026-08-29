@@ -500,6 +500,20 @@ def test_drawer_without_services_hides_the_line(dash):
     expect(dash.locator("#drawer-body")).not_to_contain_text("Also streaming on")
 
 
+def test_drawer_names_the_best_source(dash: Page):
+    # Alpha carries a current Criterion listing plus max/mubi svod listings — Criterion Channel
+    # and HBO Max are both subscribed with equal (default) quality, so the name tiebreak picks
+    # Criterion Channel ("Criterion Channel" < "HBO Max"). Named here so the assertion proves
+    # the real ranking rather than merely that some line rendered.
+    dash.locator("tbody tr", has_text="Alpha").first.click()
+    expect(dash.locator("#drawer .best-source")).to_contain_text("Best source: Criterion Channel")
+
+
+def test_a_reachable_film_carries_a_watch_badge(dash: Page):
+    row = dash.locator('tr[data-id]', has_text="Alpha")
+    expect(row.locator(".badge-watch")).to_have_text("Criterion Channel")
+
+
 def test_empty_db_shows_import_hint(empty_dash: Page):
     assert count(empty_dash) == 0
     expect(empty_dash.locator("#films tbody")).to_contain_text("movie-brain import-legacy")

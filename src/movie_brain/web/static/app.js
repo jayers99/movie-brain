@@ -130,9 +130,13 @@
   function rowHtml(f) {
     const link = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
     const listCount = (f.lists || []).length;
+    const best = f.best_source;
+    const watchBadge = best && best.subscribed
+      ? ` <span class="badge-watch" title="Best source: ${esc(best.name)}">${esc(best.name)}</span>` : '';
     const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '')
       + (f.owned ? ' <span class="badge-owned" title="Owned on Apple TV">owned</span>' : '')
-      + (listCount > 0 ? ` <span class="badge-lists" title="on ${listCount} curated list${listCount === 1 ? '' : 's'}">${listCount} list${listCount === 1 ? '' : 's'}</span>` : '');
+      + (listCount > 0 ? ` <span class="badge-lists" title="on ${listCount} curated list${listCount === 1 ? '' : 's'}">${listCount} list${listCount === 1 ? '' : 's'}</span>` : '')
+      + watchBadge;
     return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
@@ -368,6 +372,9 @@
       const label = l.published ? `${esc(l.curator || l.name)} ${esc(l.published)}` : esc(l.curator || l.name);
       return l.ordered ? `${label} #${esc(l.rank_label ?? l.rank)}` : label;
     }).join(', ');
+    const bestLine = d.best_source
+      ? `<p class="meta best-source">Best source: <b>${esc(d.best_source.name)}</b>${d.best_source.subscribed ? '' : ' (not subscribed)'}</p>`
+      : '';
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       ${renderAudit(d)}
@@ -381,6 +388,7 @@
         ${buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}
         &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
+      ${bestLine}
       ${streaming ? `<p class="meta">Also streaming on: ${streaming}</p>` : ''}
       ${buyable ? `<p class="meta">Buy on: ${buyable}</p>` : ''}
       ${lists ? `<p class="meta">On lists: ${lists}</p>` : ''}
