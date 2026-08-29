@@ -305,7 +305,10 @@ def lists_import_cmd(
     finally:
         if cache is not None:
             cache.save()  # the session cache, never the fixture
-    console.print(scorecard(report.rows), markup=False, highlight=False)
+    # markup=False: a resolver reason in [brackets] is text, not Rich markup. soft_wrap=True:
+    # the scorecard is read as a file as often as on a terminal, and an 80-column wrap would
+    # break the two-line-per-entry block the owner scans.
+    console.print(scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(report.exit_code)
 
 
@@ -324,25 +327,29 @@ def lists_create_cmd(
     repo = _repo()  # outside the try below: typer.Exit subclasses RuntimeError, so the migrate guard would be swallowed
     cfg = load_config()
     token, key = load_tmdb_token(cfg), load_api_key(cfg)
-    if apply and not yes and not typer.confirm(f"create missing films for list {slug!r}?", default=False):
-        raise typer.Exit(0)
     tmdb = TmdbClient(token) if token else None
     fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
     if fetcher is None or tmdb is None:
         # Both are hard requirements here (session_fetcher needs both to build a fetcher at
         # all) — and a caller silently forgetting `tmdb` would disable gate 2b, so this is one
-        # accurate message for both failure shapes.
+        # accurate message for both failure shapes. Checked BEFORE the confirmation prompt: a
+        # run that cannot happen must not first ask the owner to authorise it.
         err.print(
             f"no OMDb key and/or TMDB token: set OMDB_API_KEY/{cfg.key_file} and "
             f"MOVIE_BRAIN_TMDB_TOKEN/{cfg.tmdb_token_file}"
         )
         raise typer.Exit(2)
+    if apply and not yes and not typer.confirm(f"create missing films for list {slug!r}?", default=False):
+        raise typer.Exit(0)
     try:
         report = create_films(repo, slug, date.today(), fetcher=fetcher, tmdb=tmdb, apply=apply, log=_plain)
     finally:
         if cache is not None:
             cache.save()  # the session cache, never the fixture
-    console.print(scorecard(report.rows), markup=False, highlight=False)
+    # markup=False: a resolver reason in [brackets] is text, not Rich markup. soft_wrap=True:
+    # the scorecard is read as a file as often as on a terminal, and an 80-column wrap would
+    # break the two-line-per-entry block the owner scans.
+    console.print(scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(report.exit_code)
 
 
