@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Callable
 from datetime import date
@@ -32,6 +33,7 @@ def suppress_resolved(repo: Repository, authority: str, entries: list[ReviewEntr
 
 SLUG_REASONS = {"year-gap", "ambiguous-title"}  # metacritic rows keyed by slug, no film_id
 MERGE_REASONS = {"id-conflict", "year-collision"}  # tmdb rows whose "match to X" means "X is my twin"
+_IMDB_ID = re.compile(r"^tt\d+$")
 
 
 def resolve_review(
@@ -237,8 +239,11 @@ def resolve_review(
         elif film_id is not None and reason in MERGE_REASONS and rid is not None:
             if reason == "id-conflict":
                 if value is None:
-                    raise ValueError(f"id-conflict review {review_id} has no claimed tmdb id")
-                holder = repo.film_id_for_external(TMDB_AUTHORITY, value)
+                    raise ValueError(f"id-conflict review {review_id} has no claimed id")
+                # The value is whichever id was contested: `key_films` queues a TMDB id,
+                # `repair imdb` an IMDb id. Re-derive the holder under the matching authority.
+                authority = "imdb" if _IMDB_ID.match(value) else TMDB_AUTHORITY
+                holder = repo.film_id_for_external(authority, value)
             else:
                 holder = int(value) if value else None
             if holder != film_id:

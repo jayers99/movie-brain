@@ -85,6 +85,20 @@ def holds_tmdb(ctx, spec, tid):
     ctx["repo"].upsert_tmdb(fid, found=True, looked_up=TODAY)
 
 
+@given(parsers.parse('"{spec}" holds imdb id "{tt}"'))
+def holds_imdb(ctx, spec, tt):
+    fid = _id(ctx["repo"], spec)
+    ctx["repo"].set_external_id(fid, "imdb", tt, TODAY)
+
+
+@given(parsers.parse('an open tmdb "id-conflict" review for "{spec}" claiming imdb id "{tt}"'))
+def open_conflict_imdb(ctx, spec, tt):
+    fid = _id(ctx["repo"], spec)
+    ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
+    ctx["repo"].append_reviews("tmdb", [ReviewEntry("id-conflict", film_id=fid, value=tt, detail=spec)], TODAY)
+    ctx["review_id"] = ctx["repo"].open_reviews("tmdb")[-1]["id"]
+
+
 @given(parsers.parse('"{loser}" is merged into "{survivor}"'))
 def merge_before(ctx, loser, survivor):
     ctx["repo"].merge_film(_id(ctx["repo"], loser), _id(ctx["repo"], survivor), TODAY, note="test")
