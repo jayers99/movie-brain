@@ -14,7 +14,17 @@ from typing import Any, NamedTuple
 
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
-from movie_brain.domain.models import Film, FilmView, ListEntry, ListMeta, McTitle, OmdbRating, ReviewEntry, film_key
+from movie_brain.domain.models import (
+    Film,
+    FilmView,
+    ImdbBackfillTarget,
+    ListEntry,
+    ListMeta,
+    McTitle,
+    OmdbRating,
+    ReviewEntry,
+    film_key,
+)
 from movie_brain.domain.thumbprint import edition_label, title_norm
 
 MISS_RETRY_DAYS = 30
@@ -1048,6 +1058,25 @@ class Repository:
                 + " AND NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
             ).fetchall()
             return [_tmdb_target(r) for r in rows]
+
+    def films_needing_imdb_backfill(self, limit: int | None = None) -> list[ImdbBackfillTarget]:
+        """Films holding a TMDB id and no IMDb id. A series is excluded for the same reason
+        the TMDB keying worklist excludes one: its integer id is not a movie id."""
+        sql = (
+            "SELECT f.id, f.title, f.year, x.value AS tmdb_id FROM films f "
+            "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
+            "WHERE " + _NOT_DISPOSED + _IS_MOVIE +
+            " AND NOT EXISTS (SELECT 1 FROM external_ids i WHERE i.film_id = f.id AND i.authority = 'imdb')"
+            " ORDER BY f.id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+        with self._conn() as c:
+            rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
+        return [
+            ImdbBackfillTarget(int(r["id"]), str(r["title"]), r["year"], int(r["tmdb_id"]))
+            for r in rows
+        ]
 
     def films_tmdb_missed_targets(self) -> list[TmdbMatchTarget]:
         with self._conn() as c:

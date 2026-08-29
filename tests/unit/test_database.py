@@ -1456,3 +1456,34 @@ def test_promote_review_refuses_a_resolved_row(repo, today):
         repo.promote_review(rid, reason="no-match-reviewed", detail="y")
     with pytest.raises(ValueError):
         repo.promote_review(rid + 999, reason="no-match-reviewed", detail="y")
+
+
+def test_films_needing_imdb_backfill_finds_tmdb_only_films(repo, today):
+    fid = repo.create_film(Film("Rio Bravo", 1959, None, ""))
+    repo.set_external_id(fid, "tmdb", "10767", today)
+    targets = repo.films_needing_imdb_backfill()
+    assert [(t.film_id, t.tmdb_id, t.title) for t in targets] == [(fid, 10767, "Rio Bravo")]
+
+
+def test_films_needing_imdb_backfill_skips_films_that_already_have_one(repo, today):
+    fid = repo.create_film(Film("Rio Bravo", 1959, None, ""))
+    repo.set_external_id(fid, "tmdb", "10767", today)
+    repo.set_external_id(fid, "imdb", "tt0053221", today)
+    assert repo.films_needing_imdb_backfill() == []
+
+
+def test_films_needing_imdb_backfill_skips_disposed_films(repo, today):
+    # tombstone_film leaves the film's own external_ids row in place (unlike merge_film,
+    # which moves it to the survivor) — the only real disposition verb that isolates the
+    # _NOT_DISPOSED guard rather than incidentally emptying the row the query joins on.
+    fid = repo.create_film(Film("Rio Bravo", 1959, None, ""))
+    repo.set_external_id(fid, "tmdb", "10767", today)
+    repo.tombstone_film(fid, today, "test")
+    assert repo.films_needing_imdb_backfill() == []
+
+
+def test_films_needing_imdb_backfill_respects_limit(repo, today):
+    for i, title in enumerate(("A", "B", "C")):
+        fid = repo.create_film(Film(title, 1959 + i, None, ""))
+        repo.set_external_id(fid, "tmdb", str(100 + i), today)
+    assert len(repo.films_needing_imdb_backfill(limit=2)) == 2
