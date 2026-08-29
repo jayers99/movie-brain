@@ -536,7 +536,19 @@ def create_films(
 
     Nothing here writes to the eval CSV: an auto match is never ratified, or the benchmark
     would be scoring itself.
+
+    `tmdb=None` refuses the whole run (exit 1, nothing touched): gate 2b is not optional on
+    the creating path, and the invariant belongs here rather than only in the CLI.
     """
+    if tmdb is None:
+        # Gate 2b is not optional on the creating path: without a client `find_holder` answers
+        # "no holder" for every OMDb-only winner and this verb would mint a twin beside a film
+        # TMDB could have found. The CLI already refuses, but the invariant belongs in the
+        # module that does the creating. `import_list` is deliberately left alone — linking
+        # without gate 2b is degraded, not dangerous.
+        log("no TMDB client — gate 2b cannot run, so creation would be unguarded; refusing")
+        return ListCreateReport(1, 0, 0, 0, 0, 0, 0, [])
+
     if repo.film_list(slug) is None:
         log(f"no list {slug!r} — import it first")
         return ListCreateReport(1, 0, 0, 0, 0, 0, 0, [])
@@ -627,17 +639,26 @@ def create_films(
                 )
                 continue
 
-            hits = corpus_veto(index, forms)
+            # The film is minted under the WINNER's title and year (below) — TMDB's own — so
+            # the row looks like the rest of the catalog and lands on the right year; the
+            # listed title survives verbatim in the claim.
+            winner = _winner(verdict)
+            # Gate 3 therefore asks about BOTH title sets, deliberately breaking `entry_forms`'
+            # otherwise-shared definition: the ladder asks "what might this entry be called?",
+            # the veto asks "what will the catalog GAIN?", and once the film is minted under
+            # TMDB's title those are different questions. A legacy unkeyed row titled like the
+            # winner holds no ids (gates 1/2/2b all miss it) and is titled nothing like the
+            # curator's entry (the listed forms miss it too); `films.key` is then the only
+            # backstop and it refuses solely when title AND year match. Strictly refusing —
+            # the same argument design §1 A4 makes for gate 2b.
+            veto_forms = forms + [t for t in (winner.titles if winner is not None else ()) if t not in forms]
+            hits = corpus_veto(index, veto_forms)
             if hits:
                 detail = f"{CORPUS_VETO}  {_veto_label(hits)}  [{verdict.reason}]"
                 rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
                 reviews.append(ReviewEntry(CORPUS_VETO, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
-            # Every gate green. The film is minted under the WINNER's title and year — TMDB's
-            # own — so the row looks like the rest of the catalog and lands on the right year;
-            # the listed title survives verbatim in the claim.
-            winner = _winner(verdict)
             title = winner.titles[0] if winner is not None and winner.titles else entry.title_listed
             year = winner.year if winner is not None else None
             film = Film(title, year, entry.director_listed, "")

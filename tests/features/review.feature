@@ -168,6 +168,24 @@ Feature: match_review rows are resolved by CLI and never come back
     And an open list "unresolved" review for "cahiers" rank 1
     Then resolving it with film "Alpha (1950)" fails
 
+  Scenario: An entry that is already linked refuses --film for a different film
+    # One entry can carry TWO open rows: queue_list_review_once dedups on reason + value, so
+    # an `unresolved` row and a later `corpus-veto` row for the same rank both stay open.
+    # Resolving the second one would silently MOVE the link — add_claim is INSERT OR IGNORE
+    # on UNIQUE(authority, value), so the first film keeps the claim for an entry it no
+    # longer holds and nothing records the move. This is the one refusal standing between
+    # the feature and a wrong link made after the scorecard was printed.
+    Given list "cahiers" entry 1 "Alpha" by "Ann" is already linked to "Alpha (1950)"
+    And an open list "corpus-veto" review for "cahiers" rank 1
+    Then resolving it with film "King Kong (1933)" fails
+    And list "cahiers" rank 1 is linked to "Alpha (1950)"
+
+  Scenario: An entry that is already linked refuses --create too
+    Given list "cahiers" entry 3 "Nashville" by "Robert Altman" is already linked to "Alpha (1950)"
+    And an open list "corpus-veto" review for "cahiers" rank 3
+    Then resolving it with create fails
+    And list "cahiers" rank 3 is linked to "Alpha (1950)"
+
   Scenario: A list entry creates a new unkeyed film
     Given a list "cahiers" with entry 5 "Nashville" by "Robert Altman"
     And an open list "unresolved" review for "cahiers" rank 5

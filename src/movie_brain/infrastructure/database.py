@@ -1888,10 +1888,15 @@ class Repository:
             )
 
     def film_rank_on_list(self, slug: str, film_id: int) -> int | None:
-        """The duplicate-entry guard: is this film already linked at some rank on this list?"""
+        """The duplicate-entry guard: is this film already linked at some rank on this list?
+
+        ORDER BY because one film CAN hold two ranks: `merge_film` re-points a loser's
+        `film_list_entry` rows onto the survivor, and two ranks of one list can land there.
+        The lowest rank is then a stable answer rather than whatever the planner returns.
+        """
         with self._conn() as c:
             row = c.execute(
-                "SELECT rank FROM film_list_entry WHERE list_slug = ? AND film_id = ?",
+                "SELECT rank FROM film_list_entry WHERE list_slug = ? AND film_id = ? ORDER BY rank",
                 (slug, film_id),
             ).fetchone()
             return None if row is None else int(row["rank"])

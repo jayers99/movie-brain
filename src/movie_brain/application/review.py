@@ -87,7 +87,10 @@ def resolve_review(
     entry's own `title_listed`/`director_listed` — the next sync's keying step keys it, the
     same deferred-keying precedent as an apple-tv `--create` film — and a `films.key` collision
     canonicalizes to the existing film and links to it instead, exactly as the apple-tv branch
-    does; `--dismiss` leaves the entry unlinked forever.
+    does; `--dismiss` leaves the entry unlinked forever. `--film` and `--create` BOTH refuse
+    when the entry already carries a link to some other film: one entry can hold two open rows
+    (`queue_list_review_once` dedups on reason + value), and resolving the second would move
+    the link while `add_claim`'s `INSERT OR IGNORE` left the claim on the first film.
 
     Imports metacritic/owned/lists locally (not at module top) — metacritic.py and owned.py
     import `suppress_resolved` from this one at their own top level, so a module-level import
@@ -274,6 +277,15 @@ def resolve_review(
         entry = next((e for e in repo.list_entries(slug) if e.rank == rank), None)
         if entry is None:
             raise ValueError(f"list {slug!r} rank {rank} not found")
+        # An entry that already carries a link is settled, and ONE entry can hold two open
+        # rows: `queue_list_review_once` dedups on reason + value, so an `unresolved` row and
+        # a later `corpus-veto` row for the same rank both stay open. Resolving the second
+        # would silently MOVE the link — `add_claim` is INSERT OR IGNORE on
+        # UNIQUE(authority, value), so the first film keeps the `list` claim for an entry it
+        # no longer holds and nothing anywhere records the move. Guards --create too, whose
+        # own `film_id` is not bound until after `create_film` below.
+        if entry.film_id is not None and entry.film_id != film_id:
+            raise ValueError(f"list {slug!r} rank {rank} is already linked to film {entry.film_id}")
         if film_id is not None:
             twin_rank = repo.film_rank_on_list(slug, film_id)
             if twin_rank is not None and twin_rank != rank:
