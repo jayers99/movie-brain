@@ -62,6 +62,7 @@ DUPLICATE_ENTRY = "duplicate-entry"
 TOMBSTONED_HOLDER = "tombstoned-holder"
 KEY_COLLISION = "key-collision"
 ID_DISAGREEMENT = "id-disagreement"
+ENTRY_CHANGED = "entry-changed"
 
 # `EntryOutcome.agreement`: how the resolver's verdict stood against the curator's id.
 # "" is "the entry carried no id", not "we did not check".
@@ -501,11 +502,13 @@ def import_list(
     `exit_code` is reserved for a whole-run failure. A per-entry exception logs, counts as
     `error`, and never aborts the run.
     """
-    prior = {row.rank: row.film_id for row in repo.list_entries(meta.slug)}
+    # Read BEFORE the upsert below, so `was` is what the PREVIOUS import stored — which is
+    # the only thing that can reveal a renumbered file (see the entry-changed guard).
+    prior = {row.rank: (row.film_id, row.title_listed) for row in repo.list_entries(meta.slug)}
     # film_id -> the rank already holding it. Seeded from the stored links and extended as
     # this run links, so the duplicate-entry guard sees this run's own work too — which the
     # stored-state query `film_rank_on_list` cannot, since a dry run writes nothing.
-    linked_at = {fid: rank for rank, fid in prior.items() if fid is not None}
+    linked_at = {fid: rank for rank, (fid, _t) in prior.items() if fid is not None}
 
     if apply:
         repo.upsert_film_list(meta, today)
@@ -522,7 +525,20 @@ def import_list(
     for entry in entries:
         value = f"{meta.slug}#{entry.rank}"
         try:
-            settled = prior.get(entry.rank)
+            settled, was_titled = prior.get(entry.rank, (None, None))
+            if settled is not None and was_titled != entry.title_listed:
+                # Position is line order now, so ONE dropped line renumbers every entry below
+                # it. `upsert_list_entry` never clears `film_id`, so re-importing a corrected
+                # file would keep each stale link while overwriting its title — a silent
+                # mislink reported as "already linked". Refuse: queue, and leave the link
+                # exactly where it is. A list file is append-only once imported.
+                detail = (
+                    f"rank {entry.rank}: stored {was_titled!r}, file {entry.title_listed!r} — "
+                    f"the link to {_film_label(catalog, settled)} is untouched"
+                )
+                reviews.append(ReviewEntry(ENTRY_CHANGED, value=value, detail=detail))
+                rows.append(_outcome(entry, "review", f"{ENTRY_CHANGED}: {detail}"))
+                continue
             if settled is not None:
                 detail = f"{_film_label(catalog, settled)}  already linked"
                 rows.append(_outcome(entry, "linked", detail, film_id=settled))

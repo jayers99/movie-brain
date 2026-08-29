@@ -246,3 +246,19 @@ def test_checked_in_real_lists_still_parse_byte_identically(slug: str):
     assert len(parsed.entries) == 100
     assert [e.rank for e in parsed.entries] == list(range(1, 101))
     assert all(e.rank_label is None for e in parsed.entries)
+
+
+HEADER_ONLY = "# slug: s\n# name: n\n"
+
+
+def test_a_label_that_equals_the_position_but_carries_an_equals_sign_is_still_a_label():
+    """`=3` at position 3 differs from `"3"`, so it is stored — the file said `=3`, not `3`."""
+    parsed = parse_list_file(HEADER_ONLY + "1\tA\tdir\n2\tB\tdir\n=3\tC\tdir\n")
+    assert [e.rank_label for e in parsed.entries] == [None, None, "=3"]
+
+
+def test_a_file_whose_first_label_is_not_one_still_starts_at_position_one():
+    """The other shape a bad extraction takes: a slice starting mid-poll. The non-decreasing
+    check cannot see it, so this pins the behaviour rather than claiming to catch it."""
+    parsed = parse_list_file(HEADER_ONLY + "=5\tA\tdir\n=5\tB\tdir\n=7\tC\tdir\n")
+    assert [(e.rank, e.rank_label) for e in parsed.entries] == [(1, "=5"), (2, "=5"), (3, "=7")]

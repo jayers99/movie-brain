@@ -167,6 +167,62 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the film "Intolerance" carries a list claim "cahiers-100#69" ingested as "Intolerance"
     And no film was created
 
+  Scenario: a re-import of an unchanged file still reports already linked and queues nothing
+    # The behaviour the entry-changed guard must NOT regress. Both checked-in lists are
+    # already imported and linked in the owner's database, so re-running either import has
+    # to stay the no-op it is today.
+    Given a film "Intolerance" (1916) holding imdb "tt0006864"
+    And the candidate pool has "Intolerance" → tt0006864/3059 1916 by "David Wark Griffith"
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith"
+    When I import the list with --apply
+    Then the report says linked 1, would-create 0, review 0, blocked 0, error 0
+    And entry 69 is linked to "Intolerance"
+    And the scorecard line for entry 69 contains "already linked"
+    And there are no open list review rows
+    And no film was created
+
+  Scenario: a title that changed at a linked rank queues entry-changed and leaves the link alone
+    # Position is line order now, so one dropped line renumbers every entry below it. Since
+    # `upsert_list_entry` never clears `film_id` and the short-circuit reports "already
+    # linked", a corrected file re-imported after linking would silently re-title every link
+    # past the edit — the wrong-link failure this feature exists to make impossible.
+    Given a film "Intolerance" (1916) holding imdb "tt0006864"
+    And the candidate pool has "Intolerance" → tt0006864/3059 1916 by "David Wark Griffith"
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith"
+    And the list entry 69 is now "The Birth of a Nation" by "David Wark Griffith"
+    When I import the list with --apply
+    Then the report says linked 0, would-create 0, review 1, blocked 0, error 0
+    And entry 69 still links to "Intolerance"
+    And there is one open list review row for "cahiers-100#69" with reason "entry-changed"
+    And that review detail mentions "stored 'Intolerance'"
+    And that review detail mentions "file 'The Birth of a Nation'"
+    And the scorecard line for entry 69 contains "→ REVIEW entry-changed"
+    And no film was created
+
+  Scenario: a further change at the same rank does not queue a duplicate entry-changed row
+    Given a film "Intolerance" (1916) holding imdb "tt0006864"
+    And the candidate pool has "Intolerance" → tt0006864/3059 1916 by "David Wark Griffith"
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith"
+    And the list entry 69 is now "The Birth of a Nation" by "David Wark Griffith"
+    And I imported the list with --apply
+    And the list entry 69 is now "Broken Blossoms" by "David Wark Griffith"
+    When I import the list with --apply
+    Then the report says linked 0, would-create 0, review 1, blocked 0, error 0
+    And there is one open list review row for "cahiers-100#69" with reason "entry-changed"
+    And there are 1 open list review rows
+
+  Scenario: a resolved entry-changed row is a standing decision and is never re-queued
+    Given a film "Intolerance" (1916) holding imdb "tt0006864"
+    And the candidate pool has "Intolerance" → tt0006864/3059 1916 by "David Wark Griffith"
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith"
+    And the list entry 69 is now "The Birth of a Nation" by "David Wark Griffith"
+    And I imported the list with --apply
+    And the "cahiers-100#69" review row is resolved
+    And the list entry 69 is now "Broken Blossoms" by "David Wark Griffith"
+    When I import the list with --apply
+    Then the report says linked 0, would-create 0, review 1, blocked 0, error 0
+    And there are no open list review rows
+
   Scenario: a gate 2b lookup failure is an error, not a would-create
     Given the candidate pool has "Intolerance" → tt0006864 1916 by "David Wark Griffith" known only to OMDb
     And tmdb lookups fail
