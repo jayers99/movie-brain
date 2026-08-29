@@ -79,12 +79,18 @@ def parse_list_file(text: str) -> ParsedList:
         parts = line.split("\t")
         if len(parts) < 2:
             raise ListFileError(f"malformed data row (need at least rank and title): {line!r}")
+        if len(parts) > 4:
+            # This file is hand-checked-in and a typo in it is silent forever, which is the
+            # whole reason this parser refuses rather than shrugs. A future fifth column
+            # should be a deliberate change here, not a stray cell nobody notices.
+            raise ListFileError(f"too many columns (rank, title, director, tt id): {line!r}")
         rank_raw, title_listed = parts[0], parts[1]
         director_listed = parts[2] if len(parts) >= 3 and parts[2] else None
-        tt_raw = parts[3] if len(parts) >= 4 and parts[3] else None
-        if tt_raw is not None and not _TT_RE.match(tt_raw):
-            raise ListFileError(f"malformed tt id: {tt_raw!r}")
-        tt_listed = tt_raw
+        # A cell of spaces is an EMPTY cell, exactly as the header values read one. Whitespace
+        # AROUND a value stays malformed: the id is stored verbatim, so a padded one is a typo.
+        tt_listed = parts[3] if len(parts) >= 4 and parts[3].strip() else None
+        if tt_listed is not None and not _TT_RE.match(tt_listed):
+            raise ListFileError(f"malformed tt id: {tt_listed!r}")
 
         try:
             rank = int(rank_raw)
