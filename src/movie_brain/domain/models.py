@@ -98,6 +98,7 @@ class ListEntry:
     title_listed: str
     director_listed: str | None
     tt_listed: str | None = None
+    rank_label: str | None = None
 
 
 @dataclass(frozen=True)
