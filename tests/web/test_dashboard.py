@@ -495,7 +495,12 @@ def test_drawer_shows_also_streaming(dash):
 def test_drawer_without_services_hides_the_line(dash):
     # Echo, not Bravo: Bravo now carries five services to exercise the overflow disclosure.
     dash.locator("tbody tr", has_text="Echo").first.click()
-    expect(dash.locator("#drawer-body")).not_to_contain_text("Also streaming on")
+    body = dash.locator("#drawer-body")
+    # Wait for the drawer to actually POPULATE before asserting an absence. A negative
+    # Playwright assertion passes the instant it holds, so on an empty drawer it passes
+    # before the fetch returns — which would make this test green no matter what renders.
+    expect(body).to_contain_text("Echo")
+    expect(body).not_to_contain_text("Also streaming on")
 
 
 def test_drawer_collapses_services_past_the_cap(dash):
