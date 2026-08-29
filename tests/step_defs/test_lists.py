@@ -174,6 +174,27 @@ def pool_one_named(ctx, form, tt, tid, year, director, name):
     ctx["tmdb"].years[tid] = year
 
 
+@given(
+    parsers.parse(
+        'the candidate pool has "{form}" → {tta}/{ida:d} {ya:d} titled "{na}" '
+        'and {ttb}/{idb:d} {yb:d} titled "{nb}"'
+    )
+)
+def pool_two_named(ctx, form, tta, ida, ya, na, ttb, idb, yb, nb):
+    """Two DIFFERENT works, each also known by the listed title, neither corroborated by a
+    director: the resolver refuses to pick one.
+
+    Both score identically, so `ranked` keeps this insertion order — the FIRST is `ranked[0]`
+    and the second is the one a scenario supplies an id for. That is what makes such a
+    scenario a real test of `_winner`, which selects on tt.
+    """
+    ctx["fetcher"].by_title[form] = [
+        candidate(tta, ida, (na, form), ya, "", votes=50),
+        candidate(ttb, idb, (nb, form), yb, "", votes=60),
+    ]
+    ctx["tmdb"].years.update({ida: ya, idb: yb})
+
+
 @given(parsers.parse('the candidate pool has nothing for "{form}"'))
 def pool_empty(ctx, form):
     """The resolver answers `review`/`no candidates` — a verdict, not a failure. Stated
@@ -414,6 +435,13 @@ def film_holds_ids(ctx, title, tt, tid):
     film_id = _film_id(ctx, title)
     assert ctx["repo"].film_id_for_external("imdb", tt) == film_id
     assert ctx["repo"].film_id_for_external("tmdb", tid) == film_id
+
+
+@then("gate 2b was never asked")
+def gate_2b_not_asked(ctx):
+    # Gate 2 answered with the WINNING candidate's own tmdb id, so `find_by_imdb` was
+    # unnecessary — which is only true if the winner is the candidate the id names.
+    assert ctx["tmdb"].calls == [], ctx["tmdb"].calls
 
 
 @then(parsers.parse('the film "{title}" holds imdb "{tt}"'))

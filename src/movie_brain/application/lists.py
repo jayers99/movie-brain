@@ -135,7 +135,7 @@ def resolve_entry(
 
 
 # The comparison policy, spec §5, as a table rather than as nested conditionals: it is a
-# short contract and it should read like one — these five rows ARE the spec's table.
+# short contract and it should read like one — the first five rows ARE the spec's table.
 #   (what the resolver said, what the curator supplied) -> (whose tt to proceed on, agreement)
 # "differs" against a "no match" means "differs from what the resolver produced", and the
 # resolver produced nothing — there is no third id state to invent for that row.
@@ -145,6 +145,11 @@ _POLICY: dict[tuple[str, str], tuple[str, str]] = {
     ("match", "differs"): ("neither", DISAGREE),  # never link, never create
     ("no match", "absent"): ("neither", ""),  # today's behaviour, untouched
     ("no match", "differs"): ("listed", SUPPLIED),  # the id is evidence the resolver lacked
+    # Unreachable, and listed anyway so the table is total over its own key space rather than
+    # total by argument: with no resolver tt there is nothing a supplied id can be "same" as,
+    # so `reconcile` classifies every id under a non-match as "differs". Same answer as the row
+    # above, because it is the same situation.
+    ("no match", "same"): ("listed", SUPPLIED),
 }
 
 
@@ -322,6 +327,10 @@ def _id_tally(rows: Sequence[EntryOutcome]) -> tuple[int, int, int, int]:
     that was already linked (settled before the fetcher is touched) or whose every lookup
     failed never reaches `reconcile`, and an entry the resolver never spoke about cannot be
     scored against its id.
+
+    So the measurement is meaningful on the FIRST import of a list: a re-import skips every
+    entry it already linked before the fetcher is touched, and its tally collapses toward zero.
+    That is the counters working, not a regression.
 
     Both report dataclasses and the scorecard read this one function, so the printed card and
     the machine tally can never drift apart.
@@ -513,6 +522,8 @@ def import_list(
                 rows.append(_outcome(entry, "error", "resolver lookup failed for every form", form=form))
                 continue
 
+            # `reconcile` also answers for a None verdict; no verb reaches that row — an
+            # every-lookup-failure is the `error` above, not a verdict to proceed from.
             tt, agreement = reconcile(verdict, entry.tt_listed)
             if agreement == DISAGREE:
                 # Two independent sources disagree about identity — never link, never create,
@@ -774,6 +785,8 @@ def create_films(
                 rows.append(_outcome(entry, "error", "resolver lookup failed for every form", form=form))
                 continue
 
+            # `reconcile` also answers for a None verdict; no verb reaches that row — an
+            # every-lookup-failure is the `error` above, not a verdict to proceed from.
             tt, agreement = reconcile(verdict, entry.tt_listed)
             if agreement == DISAGREE:
                 # Re-reconciled here, never inherited from phase 1: the resolver may reach a
