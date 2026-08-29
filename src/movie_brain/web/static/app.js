@@ -14,6 +14,16 @@
 
   // ---- canned predicates (mirror domain/filters.py; thresholds come from /api/config) ----
   const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+  const printedRank = (e) => {
+    const m = /^=?(\d+)$/.exec(e.rank_label ?? '');
+    return m ? Number(m[1]) : e.rank;
+  };
+  // mirrors domain/filters.py::canon_score — no membership floor (design D12)
+  const canonScore = (f) => (f.lists || []).reduce((t, e) => {
+    if (!e.ordered || !e.size) return t + e.trust;
+    return t + e.trust * (1 - (printedRank(e) - 1) / e.size);
+  }, 0);
+  const isCanon = (f) => (f.lists || []).length > 0;
   const CHIP_PREDICATES = {
     leaving: (f) => f.leaving_date != null,
     unrated: (f) => f.my_rating == null,
@@ -31,6 +41,10 @@
     needs_revisit: (f) => f.needs_revisit,
     suspect: (f) => f.audit != null,
     multi_list: (f) => (f.lists || []).length >= state.cfg.canned_thresholds.multi_list,
+    acquire: (f) => !f.owned && f.my_rating == null
+      && !(f.criterion && !f.departed)
+      && !(f.services || []).some((s) => s.subscribed && s.kind === 'svod')
+      && (isCanon(f) || (f.metacritic != null && f.metacritic >= state.cfg.canned_thresholds.top_mc)),
   };
 
   // ---- scope ----
@@ -64,6 +78,12 @@
   const byTitle = (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
   function compare(a, b) {
     if (!state.sort) {  // default hierarchy: metacritic, ties → rt, ties → imdb (each desc, missing after present), then title
+      if (state.chips.has('acquire')) {  // tier 1 (on a list) above tier 2 (metacritic only), then canon score desc
+        const ta = isCanon(a) ? 1 : 0, tb = isCanon(b) ? 1 : 0;
+        if (ta !== tb) return tb - ta;
+        const c = canonScore(b) - canonScore(a);
+        if (c !== 0) return c;
+      }
       if (state.chips.has('suspect')) {  // suspect chip active: audit score desc leads, then the usual hierarchy
         const c = (b.audit?.score ?? 0) - (a.audit?.score ?? 0);
         if (c !== 0) return c;
