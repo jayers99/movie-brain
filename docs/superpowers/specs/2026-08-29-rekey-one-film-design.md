@@ -40,7 +40,8 @@ AFTER   imdb=tt0075915  tmdb=162505  year=1977
 | `--apply`, `key_film` returns `keyed`/`unlinked` | report the before/after ids and that an OMDb refetch is queued when the stored id differed |
 | `key_film` returns `held` | report which film holds the id and exit non-zero — never steal an id from another film |
 | `key_film` returns `error` | report the TMDB failure and exit non-zero, film untouched |
-| film id unknown, tombstoned, or merged away | error, exit 2. `--film` is canonicalized first, as `review resolve` already does |
+| film id unknown | error, exit 2 |
+| film id tombstoned, or merged away into a survivor | error, exit 2, **naming the survivor id to re-run with**. Deliberately unlike `review resolve --film`, which canonicalizes silently: there the human names a target to link TO, and the survivor is that target's canonical identity, so retargeting is what they meant. Here the human names a film to RE-KEY, and if their mental model of it is stale the survivor may be a visibly different film. Writing identity onto a film the human did not mean to name is the failure this verb exists to undo. Refuse and let them re-run deliberately. |
 
 `key_film`'s own contract is unchanged and carries the safety: every holder check runs **before** any write, so `held` and `error` leave the film untouched; a post-`record_tmdb_match` failure logs `[partial]` and raises, which is the established loud-stop rule.
 
