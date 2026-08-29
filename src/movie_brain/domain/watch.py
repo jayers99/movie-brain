@@ -46,7 +46,20 @@ def watch_options(view: FilmView, criterion: WatchOption | None) -> list[WatchOp
     return sorted(options, key=rank_key)
 
 
-def best_source(view: FilmView, criterion: WatchOption | None) -> WatchOption | None:
-    """The single best place to watch this film, or None when nowhere streams it."""
+def best_source(
+    view: FilmView, criterion: WatchOption | None, store: WatchOption | None = None
+) -> WatchOption | None:
+    """The single best place to watch this film, or None when nowhere streams it.
+
+    POSSESSION SHORT-CIRCUITS THE RANKING (owner decision, 2026-08-29): a film already owned
+    is the best access there is, so it answers with the store it was bought from and never
+    competes on the four keys. `store` is the `apple-tv-store` registry row, passed rather
+    than hardcoded so the drawer shows the registry's own name — and it is used even when the
+    film carries no store LISTING, which matters: measured over the live catalogue, 38 of 858
+    owned films have none. A `store` of None falls through to the ordinary ranking rather than
+    returning nothing, so a caller that does not supply one is degraded, never broken.
+    """
+    if view.owned and store is not None:
+        return dict(store)
     options = watch_options(view, criterion)
     return options[0] if options else None

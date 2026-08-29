@@ -519,17 +519,33 @@ def test_drawer_collapses_services_past_the_cap(dash):
 
 
 def test_drawer_names_the_best_source(dash: Page):
-    # Alpha carries a current Criterion listing plus max/mubi svod listings — Criterion Channel
-    # and HBO Max are both subscribed with equal (default) quality, so the name tiebreak picks
-    # Criterion Channel ("Criterion Channel" < "HBO Max"). Named here so the assertion proves
-    # the real ranking rather than merely that some line rendered.
+    # Bravo is UNOWNED and carries five svod services, all subscribed except MUBI, all at the
+    # default quality — so the name tiebreak picks Apple TV+. Named here so the assertion
+    # proves the real ranking rather than merely that some line rendered. Alpha can no longer
+    # serve this test: it is the seed's owned film, and possession short-circuits the ranking.
+    clear_lang(dash)  # Bravo is French; the default English filter hides its row
+    dash.locator("tbody tr", has_text="Bravo").first.click()
+    expect(dash.locator("#drawer .best-source")).to_contain_text("Best source: Apple TV+")
+
+
+def test_an_owned_film_answers_with_the_store_it_was_bought_from(dash: Page):
+    """Possession short-circuits the ranking: Alpha streams on Criterion and HBO Max, and
+    still answers iTunes, because the owner already has it."""
     dash.locator("tbody tr", has_text="Alpha").first.click()
-    expect(dash.locator("#drawer .best-source")).to_contain_text("Best source: Criterion Channel")
+    expect(dash.locator("#drawer .best-source")).to_contain_text("Best source: Apple TV Store (iTunes)")
 
 
 def test_a_reachable_film_carries_a_watch_badge(dash: Page):
+    clear_lang(dash)
+    row = dash.locator('tr[data-id]', has_text="Bravo")
+    expect(row.locator(".badge-watch")).to_have_text("Apple TV+")
+
+
+def test_an_owned_row_is_not_badged_with_its_source(dash: Page):
+    """The row already says "owned"; badging the purchase again states it twice."""
     row = dash.locator('tr[data-id]', has_text="Alpha")
-    expect(row.locator(".badge-watch")).to_have_text("Criterion Channel")
+    expect(row.locator(".badge-owned")).to_be_visible()
+    expect(row.locator(".badge-watch")).to_have_count(0)
 
 
 def test_empty_db_shows_import_hint(empty_dash: Page):

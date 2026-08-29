@@ -91,3 +91,40 @@ def test_a_zero_quality_option_loses_to_a_positive_one():
     v = view(services=[svc("Alpha", quality=0), svc("Zed", quality=1)])
     assert best_source(v, None)["name"] == "Zed"
     assert [o["name"] for o in watch_options(v, None)] == ["Zed", "Alpha"]
+
+STORE = {"name": "Apple TV Store (iTunes)", "subscribed": True, "kind": "store", "quality": 1, "has_apple_app": True}
+
+
+def test_owning_a_film_short_circuits_the_ranking():
+    """Possession is the best access there is: an owned film answers with the store."""
+    v = view(services=[svc("Kanopy", quality=9)], criterion=True, departed=False, owned=True)
+    assert best_source(v, CRITERION, STORE)["name"] == "Apple TV Store (iTunes)"
+
+
+def test_an_unowned_film_ignores_the_store_entirely():
+    v = view(services=[svc("Kanopy", quality=9)], criterion=False, owned=False)
+    assert best_source(v, CRITERION, STORE)["name"] == "Kanopy"
+
+
+def test_an_owned_film_with_no_store_row_falls_back_to_the_ranking():
+    """A caller that supplies no store option is degraded, never broken."""
+    v = view(services=[svc("Kanopy", quality=9)], criterion=False, owned=True)
+    assert best_source(v, CRITERION, None)["name"] == "Kanopy"
+
+
+def test_the_store_answer_does_not_need_a_store_listing():
+    """38 of 858 owned films carry no apple-tv-store listing; they still answer iTunes."""
+    v = view(services=[], criterion=False, owned=True)
+    assert best_source(v, CRITERION, STORE)["name"] == "Apple TV Store (iTunes)"
+
+
+def test_the_store_answer_is_a_copy_not_the_callers_dict():
+    v = view(services=[], criterion=False, owned=True)
+    best_source(v, CRITERION, STORE)["name"] = "mutated"
+    assert STORE["name"] == "Apple TV Store (iTunes)"
+
+
+def test_owned_does_not_leak_into_watch_options():
+    """The store is the BEST-SOURCE answer only; it is never a streaming option."""
+    v = view(services=[svc("Kanopy")], criterion=False, owned=True)
+    assert [o["name"] for o in watch_options(v, CRITERION)] == ["Kanopy"]

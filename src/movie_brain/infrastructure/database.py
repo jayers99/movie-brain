@@ -315,9 +315,14 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
 _SERVICE_SELECT = "SELECT slug, name, kind, subscribed, region, quality, has_apple_app FROM movie_service "
 
 
-def _criterion_option(c: sqlite3.Connection) -> dict[str, object] | None:
-    """The `criterion` registry row as a watch option — read ONCE per view build, not per film."""
-    row = c.execute(_SERVICE_SELECT + "WHERE slug = 'criterion'").fetchone()
+def _service_option(c: sqlite3.Connection, slug: str) -> dict[str, object] | None:
+    """One registry row as a watch option — read ONCE per view build, never per film.
+
+    Two services reach the ranking outside `FilmView.services`: `criterion`, which
+    `_SERVICES_SQL` filters out, and `apple-tv-store`, which answers for an owned film whether
+    or not that film carries a store listing.
+    """
+    row = c.execute(_SERVICE_SELECT + "WHERE slug = ?", (slug,)).fetchone()
     if row is None:
         return None
     return {
@@ -467,6 +472,7 @@ def _row_to_view(
     revisit: tuple[bool, str | None] = (False, None),
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
+    store_option: dict[str, object] | None = None,
 ) -> FilmView:
     view = FilmView(
         id=row["id"],
@@ -496,7 +502,7 @@ def _row_to_view(
         audit=audit[0],
         verdict=audit[1],
     )
-    return replace(view, best_source=best_source(view, criterion_option))
+    return replace(view, best_source=best_source(view, criterion_option, store_option))
 
 
 class Repository:
@@ -2114,7 +2120,8 @@ class Repository:
             ow = _owned_ids(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
-            criterion_option = _criterion_option(c)
+            criterion_option = _service_option(c, 'criterion')
+            store_option = _service_option(c, 'apple-tv-store')
             return [
                 _row_to_view(
                     r,
@@ -2126,6 +2133,7 @@ class Repository:
                     revisit=(r["id"] in rv, rv.get(r["id"])),
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
+                    store_option=store_option,
                 )
                 for r in rows
             ]
@@ -2147,7 +2155,8 @@ class Repository:
                 owned=row["id"] in _owned_ids(c),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
                 audit=au.get(row["id"], (None, None)),
-                criterion_option=_criterion_option(c),
+                criterion_option=_service_option(c, 'criterion'),
+                store_option=_service_option(c, 'apple-tv-store'),
             )
 
     def get_payload(self, film_id: int) -> str | None:

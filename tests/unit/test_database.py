@@ -1698,6 +1698,13 @@ def test_view_best_source_is_none_when_nothing_streams(repo, bare_film):
     assert repo.get_view(bare_film).best_source is None
 
 
+def test_view_best_source_of_an_owned_film_is_the_store(repo, film_with_two_listings):
+    """The read model must actually PASS the store option down — the domain rule is inert
+    without it, and a film with no apple-tv-store listing still has to answer iTunes."""
+    repo.mark_owned(film_with_two_listings, date(2026, 8, 29))
+    assert repo.get_view(film_with_two_listings).best_source["name"] == "Apple TV Store (iTunes)"
+
+
 def test_services_sql_order_matches_the_domain_ranking(repo, film_with_two_listings):
     """The lockstep guard: _SERVICES_SQL and domain/watch.py must agree, or the drawer's list
     and the badged winner would disagree with each other."""
