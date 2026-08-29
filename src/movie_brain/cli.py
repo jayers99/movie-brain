@@ -353,6 +353,40 @@ def lists_create_cmd(
     raise typer.Exit(report.exit_code)
 
 
+@lists_app.command("trust")
+def lists_trust_cmd(
+    slug: Annotated[str | None, typer.Argument(help="List slug (e.g. cahiers-100); omit to show every list.")] = None,
+    n: Annotated[int | None, typer.Argument(min=0, help="New trust; 0 is legal (visible, scores nothing).")] = None,
+) -> None:
+    """Show every list's trust, show one list's trust, or set one list's trust (the cross-list
+    tally's weight).
+
+    Nothing but this verb writes `film_list.trust` — `lists import` never touches it, so
+    re-importing a list can't reset the owner's judgement of it."""
+    repo = _repo()
+    if slug is None:
+        lists = repo.film_lists()
+        if not lists:
+            console.print("no lists registered")
+            return
+        for m in lists:
+            console.print(f"{m.slug:<24} trust {m.trust}   {m.name}")
+        return
+    if n is None:
+        meta = repo.film_list(slug)
+        if meta is None:
+            known = ", ".join(m.slug for m in repo.film_lists()) or "no lists registered"
+            err.print(f"unknown list {slug!r} — known lists: {known}")
+            raise typer.Exit(2)
+        console.print(f"{meta.slug:<24} trust {meta.trust}   {meta.name}")
+        return
+    if not repo.set_list_trust(slug, n):
+        known = ", ".join(m.slug for m in repo.film_lists()) or "no lists registered"
+        err.print(f"unknown list {slug!r} — known lists: {known}")
+        raise typer.Exit(2)
+    console.print(f"{slug}: trust set to {n}")
+
+
 @app.command("rematch")
 def rematch_cmd() -> None:
     """One-shot repair: rematch TMDB misses, reconcile non-Criterion years (idempotent)."""

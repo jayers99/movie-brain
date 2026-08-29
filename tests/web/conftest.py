@@ -116,6 +116,19 @@ def seed(repo: Repository) -> None:
     repo.upsert_film_list(ss_meta, TODAY)
     repo.upsert_list_entry(ss_meta.slug, ListEntry(1, "Charlie", "Cy", rank_label="=243"))
     repo.link_list_entry(ss_meta.slug, 1, ids["charlie (1970)"])
+    # Alpha is ALSO on backlog-10 and sight-sound-2022 — three lists total, the one seeded film
+    # the "N lists" card badge and the "on 2+ lists" chip (2026-08-29 design §6/§7) exercise.
+    # Trust is deliberately UNEQUAL and set so trust order disagrees with name order (cahiers-100
+    # would sort first alphabetically at "100 Films...", but is left at the default trust 1, the
+    # lowest of the three) — proving the drawer's "On lists:" line orders by trust descending
+    # rather than merely falling back to name. This is why test_drawer_shows_on_lists_line was
+    # updated to expect Backlog Ten first instead of Cahiers (see that test's comment).
+    repo.set_list_trust(backlog_meta.slug, 7)
+    repo.set_list_trust(ss_meta.slug, 5)
+    repo.upsert_list_entry(backlog_meta.slug, ListEntry(1, "Alpha", "Ann"))
+    repo.link_list_entry(backlog_meta.slug, 1, ids["alpha (1950)"])
+    repo.upsert_list_entry(ss_meta.slug, ListEntry(2, "Alpha", "Ann"))
+    repo.link_list_entry(ss_meta.slug, 2, ids["alpha (1950)"])
     # Hotel: a discovery film with no Criterion listing but buyable on the Apple TV store —
     # reachable (default scope) shows it, criterion scope hides it. Hungarian + no scores keep it
     # out of the default-English counts and at the tail of the default sort.

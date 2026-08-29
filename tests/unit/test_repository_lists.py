@@ -159,7 +159,8 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
     assert len(seen) == 1, f"expected exactly one query, got {seen}"
     assert "film_list_entry" in seen[0]
     assert result == {
-        # ordered by l.name — "100 Films..." sorts before "Backlog Ten" (ASCII '1' < 'B')
+        # both at default trust 1 — tie-broken by l.name: "100 Films..." sorts before
+        # "Backlog Ten" (ASCII '1' < 'B')
         fid: [
             {
                 "slug": "cahiers-100",
@@ -167,6 +168,7 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "curator": "Cahiers du Cinéma",
                 "published": 2008,
                 "ordered": True,
+                "trust": 1,
                 "rank": 1,
                 "rank_label": None,
             },
@@ -176,11 +178,37 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "curator": None,
                 "published": None,
                 "ordered": False,
+                "trust": 1,
                 "rank": 5,
                 "rank_label": None,
             },
         ]
     }
+
+
+def test_lists_by_film_carries_trust_and_orders_by_trust_desc_then_name(repo, today):
+    """The read model's own ordering — trust descending, then name — is the ONLY place trust
+    is visible in the UI (the drawer renders `d.lists` verbatim, in this order)."""
+    repo.upsert_film_list(CAHIERS, today)  # name "100 Films..." sorts alphabetically first
+    repo.upsert_film_list(BACKLOG, today)  # name "Backlog Ten"
+    repo.set_list_trust("backlog-10", 9)  # lower-trust list nonetheless is named ("100 Films...")
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Vertigo", "Alfred Hitchcock"))
+    repo.upsert_list_entry("backlog-10", ListEntry(1, "Vertigo", "Alfred Hitchcock"))
+    fid = repo.create_film(Film("Vertigo", 1958, "Alfred Hitchcock", ""))
+    assert fid is not None
+    repo.link_list_entry("cahiers-100", 1, fid)
+    repo.link_list_entry("backlog-10", 1, fid)
+
+    conn = sqlite3.connect(repo.db_path)
+    conn.row_factory = sqlite3.Row
+    result = _lists_by_film(conn)
+    conn.close()
+
+    slugs = [entry["slug"] for entry in result[fid]]
+    trusts = [entry["trust"] for entry in result[fid]]
+    # backlog-10 (trust 9) sorts ahead of cahiers-100 (trust 1) despite naming alphabetically last.
+    assert slugs == ["backlog-10", "cahiers-100"]
+    assert trusts == [9, 1]
 
 
 def test_lists_by_film_carries_rank_label(repo, today):
@@ -214,6 +242,7 @@ def test_list_views_populates_lists(repo, today):
             "curator": "Cahiers du Cinéma",
             "published": 2008,
             "ordered": True,
+            "trust": 1,
             "rank": 1,
             "rank_label": None,
         }
@@ -236,6 +265,7 @@ def test_get_view_populates_lists(repo, today):
             "curator": "Cahiers du Cinéma",
             "published": 2008,
             "ordered": True,
+            "trust": 1,
             "rank": 1,
             "rank_label": None,
         }
@@ -262,3 +292,69 @@ def test_merge_film_moves_film_list_entry_to_survivor(repo, today):
     assert report.moved.get("film_list_entry") == 1
     assert repo.film_rank_on_list("cahiers-100", survivor) == 7
     assert repo.film_rank_on_list("cahiers-100", loser) is None
+
+
+# trust (design docs/superpowers/specs/2026-08-29-list-trust-and-tally-design.md) -----------
+
+
+def test_new_list_defaults_to_trust_1(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.film_list("cahiers-100").trust == 1
+
+
+def test_set_list_trust_updates_and_returns_true(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.set_list_trust("cahiers-100", 9) is True
+    assert repo.film_list("cahiers-100").trust == 9
+
+
+def test_set_list_trust_accepts_zero(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.set_list_trust("cahiers-100", 0) is True
+    assert repo.film_list("cahiers-100").trust == 0
+
+
+def test_set_list_trust_returns_false_for_unknown_slug(repo):
+    assert repo.set_list_trust("nope", 9) is False
+
+
+def test_film_lists_orders_by_trust_desc_then_slug(repo, today):
+    repo.upsert_film_list(CAHIERS, today)  # slug "cahiers-100"
+    repo.upsert_film_list(BACKLOG, today)  # slug "backlog-10"
+    repo.set_list_trust("cahiers-100", 5)
+    # both still at default trust 1: backlog-10 sorts before cahiers-100 by slug...
+    repo.upsert_film_list(
+        ListMeta(
+            slug="alpha-list",
+            name="Alpha",
+            curator=None,
+            published_year=None,
+            source_url=None,
+            ordered=False,
+        ),
+        today,
+    )
+    slugs = [m.slug for m in repo.film_lists()]
+    # trust 5 first (cahiers-100), then the two trust-1 lists ordered by slug
+    assert slugs == ["cahiers-100", "alpha-list", "backlog-10"]
+
+
+def test_reimporting_a_list_preserves_a_previously_set_trust(repo, today):
+    """The trap this task exists to close: `upsert_film_list` runs on every `lists import`,
+    and a re-import (e.g. to pick up newly created films) must never reset the owner's
+    trust judgement back to the default."""
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.set_list_trust("cahiers-100", 9) is True
+
+    later = date(2026, 8, 20)
+    refreshed = ListMeta(
+        slug="cahiers-100",
+        name=CAHIERS.name,
+        curator=CAHIERS.curator,
+        published_year=CAHIERS.published_year,
+        source_url=CAHIERS.source_url,
+        ordered=CAHIERS.ordered,
+    )
+    repo.upsert_film_list(refreshed, later)
+
+    assert repo.film_list("cahiers-100").trust == 9
