@@ -272,6 +272,13 @@ def rekey_link(
         # The dry run is the only branch that asks who holds an id: on --apply the answer comes
         # from `key_film`'s own pre-write checks, which are never duplicated or second-guessed
         # here. Without it a dry run would print "would key" for a re-key that cannot happen.
+        # Ask who holds the imdb id BEFORE spending a TMDB call, so a dry run refuses for the
+        # same reason --apply would (`key_film` checks the imdb holder first) rather than
+        # reporting a lookup failure when TMDB happens to be down.
+        held = _rekey_holder(repo, film_id, tt, None)
+        if held is not None:
+            log(f"  refused: {held} — merge those two instead, never steal an id")
+            return LinksReport(1, 0, 0, 0)
         try:
             proposed = client.find_by_imdb(tt)
         except (requests.RequestException, AuthError) as exc:
@@ -293,6 +300,15 @@ def rekey_link(
         return LinksReport(1, 0, 0, 0)
     after = repo.external_ids_for(film_id)
     log(f"  keyed: imdb {after.get('imdb', '-')} / tmdb {after.get('tmdb', '-')} ({result.detail})")
+    if result.status == "unlinked" and after.get("tmdb"):
+        # `key_film` writes the imdb id alone when TMDB has no movie for the tt, and it never
+        # clears a stale tmdb row. So a film that already held one now disagrees with itself.
+        # Say so: clearing it here is the stranding this verb exists to avoid, and the next
+        # sync's OMDb refetch makes it visible to `repair disagreements` anyway.
+        log(
+            f"  WARNING: TMDB has no movie for {tt}, so tmdb {after['tmdb']} is left in place and now"
+            " disagrees with the imdb id — `repair disagreements` will see it after the next sync"
+        )
     return LinksReport(0, 0, 0, 0, 1)
 
 
