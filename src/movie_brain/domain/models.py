@@ -88,6 +88,9 @@ class ListMeta:
     published_year: int | None
     source_url: str | None
     ordered: bool
+    # Owner's judgement of the list, set only via `lists trust` (design 2026-08-29 §4).
+    # `upsert_film_list` never writes this column, so a re-import can't reset it.
+    trust: int = 1
 
 
 @dataclass(frozen=True)
