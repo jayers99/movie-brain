@@ -22,7 +22,7 @@ Running list of ideas for movie-brain. Add new items at the bottom; strike or ch
    pass can drain it (resolving clears the flag). Optional nicety: pre-fill the note with
    what looks wrong ("year suspect", "wrong film"). — shipped in M3 (2026-08-24)
 
-10. [ ] **Curated top-N lists** — import named ranked lists (top 100 / top N) and show in
+10. [x] **Curated top-N lists** — import named ranked lists (top 100 / top N) and show in
     the drawer, per list, whether the film is on it and at what rank. Data model on the
     external-authority pattern: a `lists` registry (slug PK, name, source URL, size, ordered
     or unordered) plus `list_entries` (list_slug + film_id + rank + raw title/year as listed),
@@ -31,6 +31,6 @@ Running list of ideas for movie-brain. Add new items at the bottom; strike or ch
     resolves them, and entries with no film in the DB become discovery films via the Mode-B
     promotion path. Drawer shows a "Lists" row of `<list name> #<rank>` badges; later, a
     filter chip / sort per list. First list to build: **Cahiers du Cinéma's 100 Ideal
-    Cinematheque Films** (Cahiers' 2008 "100 films pour une cinémathèque idéale").
+    Cinematheque Films** (Cahiers' 2008 "100 films pour une cinémathèque idéale"). — shipped 2026-08-28: checked-in list files at `lists/<slug>.tsv`, `lists import` (links, never creates) + `lists create` (the one creating path, three gates plus 2b), `list` review rows, and the drawer's "On lists:" row; `lists/cahiers-100.tsv` is the first list
 
 Items 1 and 2 have grown into a feature of their own — discovery lives in [multiple-movie-services.md](multiple-movie-services.md); items 4–7 in [cinema-companion.md](cinema-companion.md).

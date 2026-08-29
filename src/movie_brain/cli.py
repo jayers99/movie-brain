@@ -12,6 +12,7 @@ from rich.table import Table
 from movie_brain.application.audit import run_audit
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
+from movie_brain.application.lists import create_films, import_list, scorecard
 from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, crawl_archive, match_archive
 from movie_brain.application.owned import import_owned
 from movie_brain.application.rematch import rematch
@@ -52,6 +53,8 @@ metacritic_app = typer.Typer(help="Metacritic browse archive: crawl pages, match
 app.add_typer(metacritic_app, name="metacritic")
 owned_app = typer.Typer(help="Apple TV owned films: import the library, mark ownership.")
 app.add_typer(owned_app, name="owned")
+lists_app = typer.Typer(help="Curated top-N lists: import a checked-in list file, create its missing films.")
+app.add_typer(lists_app, name="lists")
 repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong TMDB links, fix years.")
 app.add_typer(repair_app, name="repair")
 review_app = typer.Typer(help="Resolve match_review anomalies: match to a film, create, or dismiss.")
@@ -257,6 +260,96 @@ def owned_import() -> None:
         f"already: {report.already_owned} · review: {report.review_open} · "
         f"resolved: {report.resolved_to_existing} · keyed: {report.keyed}"
     )
+    raise typer.Exit(report.exit_code)
+
+
+@lists_app.command("import")
+def lists_import_cmd(
+    path: Annotated[Path, typer.Argument(help="Path to the checked-in list file (e.g. lists/cahiers-100.tsv).")],
+    apply: Annotated[
+        bool,
+        typer.Option("--apply", help="Write the registry row, entries, claims and review rows (default: dry-run)."),
+    ] = False,
+) -> None:
+    """Parse a checked-in list file and link its entries to films the catalog already holds.
+
+    Never creates a film on any path — `lists create` is the separate, confirmed step for that."""
+    from movie_brain.infrastructure.listfile import ListFileError, read_list_file
+    from movie_brain.infrastructure.omdb import OmdbClient
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
+
+    try:
+        parsed = read_list_file(path)
+    except (ListFileError, OSError) as exc:
+        err.print(str(exc))
+        raise typer.Exit(2) from exc
+
+    repo = _repo()  # outside the try below: typer.Exit subclasses RuntimeError, so the migrate guard would be swallowed
+    cfg = load_config()
+    token, key = load_tmdb_token(cfg), load_api_key(cfg)
+    tmdb = TmdbClient(token) if token else None
+    fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
+    if fetcher is None or tmdb is None:
+        # Both are hard requirements here (session_fetcher needs both to build a fetcher at
+        # all), unlike sync's OMDb-only fallback — and a caller silently forgetting `tmdb`
+        # would disable gate 2b, so this is one accurate message for both failure shapes.
+        err.print(
+            f"no OMDb key and/or TMDB token: set OMDB_API_KEY/{cfg.key_file} and "
+            f"MOVIE_BRAIN_TMDB_TOKEN/{cfg.tmdb_token_file}"
+        )
+        raise typer.Exit(2)
+    try:
+        report = import_list(
+            repo, parsed.meta, parsed.entries, date.today(), fetcher=fetcher, tmdb=tmdb, apply=apply, log=_plain
+        )
+    finally:
+        if cache is not None:
+            cache.save()  # the session cache, never the fixture
+    # markup=False: a resolver reason in [brackets] is text, not Rich markup. soft_wrap=True:
+    # the scorecard is read as a file as often as on a terminal, and an 80-column wrap would
+    # break the two-line-per-entry block the owner scans.
+    console.print(scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
+    raise typer.Exit(report.exit_code)
+
+
+@lists_app.command("create")
+def lists_create_cmd(
+    slug: Annotated[str, typer.Argument(help="Slug of an already-imported list (see `lists import`).")],
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Create, link and key the list's unresolved entries (default: dry-run).")
+    ] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="With --apply: skip the confirmation prompt.")] = False,
+) -> None:
+    """Create the films a list's still-unresolved entries would mint; re-resolves and re-gates every entry."""
+    from movie_brain.infrastructure.omdb import OmdbClient
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
+
+    repo = _repo()  # outside the try below: typer.Exit subclasses RuntimeError, so the migrate guard would be swallowed
+    cfg = load_config()
+    token, key = load_tmdb_token(cfg), load_api_key(cfg)
+    tmdb = TmdbClient(token) if token else None
+    fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
+    if fetcher is None or tmdb is None:
+        # Both are hard requirements here (session_fetcher needs both to build a fetcher at
+        # all) — and a caller silently forgetting `tmdb` would disable gate 2b, so this is one
+        # accurate message for both failure shapes. Checked BEFORE the confirmation prompt: a
+        # run that cannot happen must not first ask the owner to authorise it.
+        err.print(
+            f"no OMDb key and/or TMDB token: set OMDB_API_KEY/{cfg.key_file} and "
+            f"MOVIE_BRAIN_TMDB_TOKEN/{cfg.tmdb_token_file}"
+        )
+        raise typer.Exit(2)
+    if apply and not yes and not typer.confirm(f"create missing films for list {slug!r}?", default=False):
+        raise typer.Exit(0)
+    try:
+        report = create_films(repo, slug, date.today(), fetcher=fetcher, tmdb=tmdb, apply=apply, log=_plain)
+    finally:
+        if cache is not None:
+            cache.save()  # the session cache, never the fixture
+    # markup=False: a resolver reason in [brackets] is text, not Rich markup. soft_wrap=True:
+    # the scorecard is read as a file as often as on a terminal, and an 80-column wrap would
+    # break the two-line-per-entry block the owner scans.
+    console.print(scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(report.exit_code)
 
 

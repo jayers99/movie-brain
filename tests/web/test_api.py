@@ -144,6 +144,27 @@ def test_services_in_payloads(repo):
     assert tc.get("/api/films").get_json()[0]["services"] == expected
 
 
+def test_lists_in_payloads(repo):
+    from movie_brain.domain.models import ListEntry, ListMeta
+
+    films = [Film("Trio", 1950, "Ken", "https://c/trio")]
+    repo.record_catalog("criterion", films, D)
+    fid = repo.film_id_by_key("trio (1950)")
+    meta = ListMeta("cahiers-100", "100 Films for an Ideal Cinematheque", "Cahiers du Cinéma", 2008, None, True)
+    repo.upsert_film_list(meta, D)
+    repo.upsert_list_entry(meta.slug, ListEntry(3, "Trio", "Ken"))
+    repo.link_list_entry(meta.slug, 3, fid)
+    app = create_app(repo, today=lambda: D)
+    app.testing = True
+    tc = app.test_client()
+    expected = [
+        {"slug": "cahiers-100", "name": "100 Films for an Ideal Cinematheque", "curator": "Cahiers du Cinéma",
+         "published": 2008, "ordered": True, "rank": 3}
+    ]
+    assert tc.get(f"/api/films/{fid}").get_json()["lists"] == expected
+    assert tc.get("/api/films").get_json()[0]["lists"] == expected
+
+
 def test_stale_service_listing_is_not_current(repo):
     films = [Film("Trio", 1950, "Ken", "https://c/trio"), Film("Quartet", 1948, None, "https://c/quartet")]
     repo.record_catalog("criterion", films, D)

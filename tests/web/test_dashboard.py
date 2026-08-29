@@ -410,6 +410,25 @@ def test_drawer_shows_new_on_line(dash):
     assert "New on" in dash.locator("#drawer-body").inner_text()
 
 
+def test_drawer_shows_on_lists_line(dash):
+    dash.locator("#films tbody tr", has_text="Alpha").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    expect(dash.locator("#drawer-body")).to_contain_text("On lists: Cahiers du Cinéma 2008 #3")
+
+
+def test_drawer_without_lists_hides_the_line(dash):
+    clear_lang(dash)  # Bravo is French; the default English filter hides its row
+    dash.locator("tbody tr", has_text="Bravo").first.click()
+    expect(dash.locator("#drawer-body")).not_to_contain_text("On lists")
+
+
+def test_drawer_shows_unordered_list_without_rank(dash):
+    dash.locator("#films tbody tr", has_text="Echo").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    expect(dash.locator("#drawer-body")).to_contain_text("On lists: Backlog Ten")
+    expect(dash.locator("#drawer-body")).not_to_contain_text("Backlog Ten #5")
+
+
 def test_default_scope_is_reachable_hides_unreachable_discovery(dash):
     clear_lang(dash)  # Hotel is Hungarian
     assert dash.locator("tr[data-id]", has_text="Golf").count() == 0  # no listing, unowned, unrated

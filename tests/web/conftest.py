@@ -9,7 +9,7 @@ from datetime import date
 import pytest
 from playwright.sync_api import Page
 
-from movie_brain.domain.models import Film, McTitle, OmdbRating
+from movie_brain.domain.models import Film, ListEntry, ListMeta, McTitle, OmdbRating
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
 
@@ -99,6 +99,17 @@ def seed(repo: Repository) -> None:
     repo.upsert_mc_titles([McTitle("golf-2020", "Golf", 2020, 88, 1, 1)], TODAY)
     # Alpha is the one owned film — English keeps it visible in the default view.
     repo.mark_owned(ids["alpha (1950)"], TODAY)
+    # Alpha is also on one curated (ordered) list — the drawer's "On lists" line shows #rank.
+    list_meta = ListMeta("cahiers-100", "100 Films for an Ideal Cinematheque", "Cahiers du Cinéma", 2008, None, True)
+    repo.upsert_film_list(list_meta, TODAY)
+    repo.upsert_list_entry(list_meta.slug, ListEntry(3, "Alpha", "Ann"))
+    repo.link_list_entry(list_meta.slug, 3, ids["alpha (1950)"])
+    # Echo is on one unordered list (no curator either) — the drawer must render its name alone,
+    # with no #rank, proving the ordered/unordered branch rather than assuming it.
+    backlog_meta = ListMeta("backlog-10", "Backlog Ten", None, None, None, False)
+    repo.upsert_film_list(backlog_meta, TODAY)
+    repo.upsert_list_entry(backlog_meta.slug, ListEntry(5, "Echo", "Ann"))
+    repo.link_list_entry(backlog_meta.slug, 5, ids["echo (1990)"])
     # Hotel: a discovery film with no Criterion listing but buyable on the Apple TV store —
     # reachable (default scope) shows it, criterion scope hides it. Hungarian + no scores keep it
     # out of the default-English counts and at the tail of the default sort.

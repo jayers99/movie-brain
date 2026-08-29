@@ -370,3 +370,40 @@ def test_repair_nomatch_session_cache_is_not_the_fixture(config_dir, monkeypatch
     assert r.exit_code == 0
     cache = seen["fetcher"].cache
     assert cache.path == config_dir / "nomatch-cache.json.gz" and not cache.read_only
+
+
+def test_scorecard_rendering_keeps_bracketed_resolver_reasons_intact(config_dir, tmp_path, monkeypatch):
+    """The scorecard is the artifact the owner reads before authorising a live run.
+
+    Rich would read `[director corroborated]` as markup and an 80-column non-terminal would
+    fold the entry's two-line block, both silently — and both would leave the string the
+    other tests assert on untouched. This pins the CLI's own rendering of the card, which is
+    where `markup=False, highlight=False, soft_wrap=True` lives.
+    """
+    from movie_brain.application.lists import EntryOutcome, ListImportReport
+
+    detail = "gate 2b: tmdb lookup failed — holder unknown  [director corroborated]"
+    row = EntryOutcome(
+        rank=1,
+        title_listed="Citizen Kane",
+        director_listed="Orson Welles",
+        kind="would-create",
+        film_id=None,
+        tt="tt0033467",
+        reason="director corroborated",
+        form_used="Citizen Kane",
+        detail=detail,
+    )
+    monkeypatch.setattr(
+        "movie_brain.cli.import_list", lambda *a, **kw: ListImportReport(0, 1, 0, 1, 0, 0, 0, [row])
+    )
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    (config_dir / "tmdb-read-token.txt").write_text("t")
+    path = tmp_path / "x.tsv"
+    path.write_text("# slug: x\n# name: X\n1\tCitizen Kane\tOrson Welles\n")
+
+    r = runner.invoke(app, ["lists", "import", str(path)])
+
+    assert r.exit_code == 0
+    # verbatim and unfolded: the reason is intact and still on its entry's own line.
+    assert any(line.endswith(detail) for line in r.output.splitlines())
