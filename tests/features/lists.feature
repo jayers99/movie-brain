@@ -279,6 +279,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And a film "Greed" (1924)
     When I create films without --apply
     Then the create report says created 1, keyed 0, linked 0, blocked 1, error 0
+    And the scorecard line for entry 68 contains "→ WOULD-CREATE tt0028950"
     And no film was created
     And entry 68 is unlinked
     And there are no list claims
@@ -298,4 +299,43 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     When I create films for "no-such-list"
     Then the create report exits 1
     And the create report considered 0 entries
+    And no film was created
+
+  Scenario: a second rank landing on a creation this run could not key still blocks
+    Given the candidate pool has "Greed" → tt0016654/613 1924 by "Erich von Stroheim"
+    And the candidate pool has "Avarice" → tt0016654/613 1924 by "Erich von Stroheim"
+    And the list entry 11 is "Greed" by "Erich von Stroheim"
+    And the list entry 90 is "Avarice" by "Erich von Stroheim"
+    And I imported the list with --apply
+    # keying fails, so the new film carries no ids for gates 1/2/2b, and it is indexed under
+    # the winner's title, not "Avarice" — the verdict's tt is the only surviving identity
+    And tmdb lookups fail
+    When I create films with --apply
+    Then the create report says created 1, keyed 0, linked 0, blocked 1, error 0
+    And exactly 1 film exists
+    And entry 11 is linked to "Greed"
+    And entry 90 is unlinked
+    And there is one open list review row for "cahiers-100#90" with reason "duplicate-entry"
+    And that review detail mentions "already linked at rank 11"
+
+  Scenario: a gate 2b lookup failure refuses to create — the holder is unknown, not disproved
+    Given the candidate pool has "Intolerance" → tt0006864 1916 by "David Wark Griffith" known only to OMDb
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith"
+    And tmdb lookups fail
+    When I create films with --apply
+    Then the create report says created 0, keyed 0, linked 0, blocked 0, error 1
+    And entry 69 is unlinked
+    And there are no open list review rows
+    And no film was created
+
+  Scenario: a tombstoned holder found by gate 1 blocks the creation verb too
+    Given the candidate pool has "Intolerance" → tt0006864/3059 1916 by "David Wark Griffith"
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith"
+    And a film "Intolerance" (1916) holding imdb "tt0006864"
+    And the film "Intolerance" is tombstoned
+    When I create films with --apply
+    Then the create report says created 0, keyed 0, linked 0, blocked 1, error 0
+    And there is one open list review row for "cahiers-100#69" with reason "tombstoned-holder"
+    And that review detail mentions "tombstoned #1"
+    And entry 69 is unlinked
     And no film was created

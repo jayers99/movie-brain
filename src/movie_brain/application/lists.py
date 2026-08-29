@@ -528,9 +528,11 @@ def create_films(
     blocks. Refusing costs one review row; creating a twin costs a merge.
 
     Dry run by default: with `apply=False` **nothing at all** is written — no film, no link,
-    no claim, no review row — and the report says what would have happened. One consequence
-    worth knowing before the live run: a dry run never calls `create_film`, so it cannot see a
-    `films.key` collision, and a rehearsal can report a create the confirmed run then blocks.
+    no claim, no review row — and the report says what would have happened. Two consequences
+    worth knowing before the live run, both of which make a rehearsal report a create the
+    confirmed run then blocks: a dry run never calls `create_film`, so it cannot see a
+    `films.key` collision, and it mints nothing, so it cannot see the `duplicate-entry` block
+    between two ranks that would both mint the same work.
 
     Nothing here writes to the eval CSV: an auto match is never ratified, or the benchmark
     would be scoring itself.
@@ -561,6 +563,11 @@ def create_films(
 
     rows: list[EntryOutcome] = []
     reviews: list[ReviewEntry] = []
+    # tt -> the film this run minted for it. The gates cannot stand in for this: a film whose
+    # keying failed carries NO external ids (gates 1, 2 and 2b all miss it), and it is indexed
+    # under the winner's title, not the next rank's listed one (gate 3 misses it too). The
+    # verdict's tt is the one identity that survives every one of those failures.
+    minted: dict[str, int] = {}
     keyed = 0
     for entry in worklist:
         value = f"{slug}#{entry.rank}"
@@ -581,7 +588,9 @@ def create_films(
                 reviews.append(ReviewEntry(UNRESOLVED, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
-            holder, label = find_holder(repo, tmdb, verdict, log)
+            holder, label = minted.get(verdict.tt), "minted this run"
+            if holder is None:
+                holder, label = find_holder(repo, tmdb, verdict, log)
             if label == "tmdb lookup failed":
                 # Gate 2b raised: the holder is unknown, NOT disproved. Creating now is
                 # exactly the failure this verb exists to avoid; retry when TMDB is back.
@@ -641,8 +650,10 @@ def create_films(
                 continue
 
             if not apply:
+                # The owner reads this card before authorising the live run, so it must not
+                # claim a creation that has not happened; `created` still counts the row.
                 detail = f"{_would_create_label(verdict)}  [{verdict.reason}]"
-                rows.append(_outcome(entry, "created", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(_outcome(entry, "would-create", detail, tt=verdict.tt, reason=verdict.reason, form=form))
                 continue
 
             film_id = repo.create_film(film)
@@ -660,6 +671,7 @@ def create_films(
 
             index.add(Candidate(id=film_id, title=title, year=year))
             catalog[film_id] = (title, year, entry.director_listed)
+            minted[verdict.tt] = film_id
             repo.link_list_entry(slug, entry.rank, film_id)
             repo.add_claim(film_id, AUTHORITY, value, entry.title_listed, first_seen=today.isoformat())
             linked_at[film_id] = entry.rank
@@ -685,7 +697,7 @@ def create_films(
     return ListCreateReport(
         exit_code=0,
         total=len(worklist),
-        created=tally["created"],
+        created=tally["created"] + tally["would-create"],  # a dry run's would-creates ARE its creates
         keyed=keyed,
         linked=tally["linked"],
         blocked=tally["blocked"],
