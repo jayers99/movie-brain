@@ -395,8 +395,8 @@ def lists_trust_cmd(
 def _service_line(m: ServiceMeta) -> str:
     return (
         f"{m.slug:<24} quality {m.quality}   "
-        f"apple-app {'yes' if m.has_apple_app else 'no ':<3}   "
-        f"subscribed {'yes' if m.subscribed else 'no ':<3}   {m.kind:<5} {m.name}"
+        f"apple-app {'yes' if m.has_apple_app else 'no':<3}   "
+        f"subscribed {'yes' if m.subscribed else 'no':<3}   {m.kind:<5} {m.name}"
     )
 
 
