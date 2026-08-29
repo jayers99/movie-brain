@@ -216,7 +216,21 @@ def _refresh_pass(
             consecutive += 1
             continue
         consecutive = 0
-        slugs = {pmap[p] for p in providers.flatrate if p in pmap and pmap[p] != "criterion"}
+        # C2: flatrate, free and ads all mean "I can watch this" — union them rather than
+        # choosing. An unregistered provider auto-registers at subscribed=0 instead of being
+        # discarded; `subscribed` is what decides everything downstream.
+        streaming = (*providers.flatrate, *providers.free, *providers.ads)
+        slugs = set()
+        for pid in streaming:
+            slug = pmap.get(pid)
+            if slug is None:
+                name = providers.names.get(pid)
+                if name is None:
+                    continue
+                slug = repo.register_provider(pid, name)
+                pmap[pid] = slug
+            if slug != "criterion":
+                slugs.add(slug)
         if STORE_PROVIDER_ID in pmap and STORE_PROVIDER_ID in (*providers.rent, *providers.buy):
             slugs.add(pmap[STORE_PROVIDER_ID])
         url = providers.link or watch_link(numeric_tmdb_id)

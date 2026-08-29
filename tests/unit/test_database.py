@@ -1571,3 +1571,36 @@ def test_movie_services_orders_best_first(repo):
     repo.set_service_subscribed("mubi", True)
     slugs = [s.slug for s in repo.movie_services()]
     assert slugs[0] == "mubi"
+
+
+def test_register_provider_creates_an_unsubscribed_service(repo):
+    slug = repo.register_provider(191, "Kanopy")
+    assert slug == "kanopy"
+    meta = repo.movie_service("kanopy")
+    assert meta.subscribed is False and meta.kind == "svod"
+    assert repo.provider_map()[191] == "kanopy"
+
+
+def test_register_provider_is_idempotent_and_never_resets_the_owners_values(repo):
+    repo.register_provider(191, "Kanopy")
+    repo.set_service_quality("kanopy", 7)
+    repo.set_service_subscribed("kanopy", True)
+    assert repo.register_provider(191, "Kanopy") == "kanopy"
+    meta = repo.movie_service("kanopy")
+    assert meta.quality == 7 and meta.subscribed is True
+
+
+def test_register_provider_maps_a_second_id_onto_an_existing_service(repo):
+    # Two TMDB ids, one service — the shape migration 003 already uses for Peacock. Use ids the
+    # seeded registry does NOT hold (it maps 2, 9, 11, 258, 350, 386, 387, 1899), because an
+    # already-mapped id never reaches register_provider at all.
+    assert repo.register_provider(1770, "Paramount Plus") == "paramount-plus"
+    assert repo.register_provider(1853, "Paramount Plus") == "paramount-plus"
+    assert repo.provider_map()[1770] == "paramount-plus"
+    assert repo.provider_map()[1853] == "paramount-plus"
+    assert len([s for s in repo.movie_services() if s.slug == "paramount-plus"]) == 1
+
+
+def test_register_provider_slugifies_punctuation(repo):
+    assert repo.register_provider(999, "Plex Channel") == "plex-channel"
+    assert repo.register_provider(998, "AMC+ / Shudder") == "amc-shudder"
