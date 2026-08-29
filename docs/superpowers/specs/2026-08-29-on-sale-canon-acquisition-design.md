@@ -190,7 +190,7 @@ Alerting from movie-brain (CheapCharts owns that) · buying anything · rental p
 
 **Why those two arguments (D10).** `resolve_tmdb_id=False` tells `key_film` not to repeat a `find_by_imdb` lookup; `tmdb_id=None` then means it writes the IMDb id and stops. The film's TMDB link already exists and is not rewritten, so `record_tmdb_match` never runs — and neither does its year canonicalization, which would otherwise move `films.year` on up to **1,236 commerce-created films** (measured: that is how many of the 3,699 have no Criterion listing). Writing a missing id must not be a year migration in disguise. This is a documented use of the existing signature, not a new path.
 
-**What still happens, and should.** `key_film` ends by comparing the film's OMDb `imdbID` to the new `tt` and calling `mark_omdb_refresh` when they differ — so every backfilled film is queued for an OMDb refetch **by id** on the next manual sync, filling in director and ratings for Mode-B films. That is a benefit, not a side effect to suppress.
+**What still happens, and should.** `key_film` ends by comparing the film's OMDb `imdbID` to the new `tt` and calling `mark_omdb_refresh` when they differ. **Corrected 2026-08-29 by the live run.** This section originally claimed every backfilled film gets queued for an OMDb refetch, "filling in director and ratings for Mode-B films," and called that the benefit. Measured on the live run, that is false: of the 4,347 backfilled films that already held an OMDb row, only **3** had a payload `imdbID` differing from the id just written — OMDb had already matched these films correctly by title, so almost nothing was left to refresh. The backfill's value is identity, not OMDb enrichment: it turns a title-matched OMDb row into one keyed by id, and gives the 128 films OMDb never matched at all a durable id to be looked up by on the next sync. The comparison-and-refresh mechanism above is real and still fires for the rare disagreement; it was just never the point.
 
 **Failure shapes, none of them silent.**
 
@@ -204,6 +204,8 @@ Alerting from movie-brain (CheapCharts owns that) · buying anything · rental p
 **Shape.** A CLI verb, dry run by default, `--apply` to write, `--limit N` to batch — the established shape of every `repair` verb. Never scheduled (D6 generalises: syncs are manual by choice).
 
 **Rehearsal is mandatory.** Every run — including subagent runs — sets `MOVIE_BRAIN_CONFIG_DIR` to a scratch copy of the live DB. The owner sees the full result, including a `films.year` diff proving zero years moved, before anything runs live.
+
+**Live outcome, 2026-08-29.** `repair imdb --apply` ran live: scanned 3,699, backfilled 3,571, no-imdb 128, held 0, failed 0; the `films.year` diff across all 4,735 films came back empty, confirming the rehearsal's promise. IMDb ids on the catalogue went from 850 to 4,421 films; curated-list films holding an IMDb id went from 110 to 342 of 348. Schema stayed v16 throughout. Both 1992 lists then imported live with 22/22 entries linked, 0 created, 0 review rows — the outcome §11 predicted from the pre-check that all nineteen films were already in the catalogue.
 
 ## 10. Build scope (D9)
 
