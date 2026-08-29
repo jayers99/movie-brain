@@ -228,6 +228,51 @@ def test_repair_links_tt_held_exits_nonzero(monkeypatch):
     assert r.exit_code == 1
 
 
+def test_repair_imdb_requires_token(config_dir):
+    r = runner.invoke(app, ["repair", "imdb"])
+    assert r.exit_code == 2 and "TMDB" in r.output
+
+
+def test_repair_imdb_help():
+    r = runner.invoke(app, ["repair", "imdb", "--help"])
+    assert r.exit_code == 0
+    assert "--apply" in r.output and "--limit" in r.output
+
+
+def test_repair_imdb_dry_run_reports_and_writes_nothing(monkeypatch):
+    from movie_brain.application.backfill_imdb import BackfillReport
+
+    calls = {}
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, apply=False, limit=None, log):
+        calls.update(apply=apply, limit=limit)
+        return BackfillReport(3, 0, 1, 1, 1)
+
+    monkeypatch.setattr("movie_brain.cli.backfill_imdb", fake)
+    r = runner.invoke(app, ["repair", "imdb"])
+    assert r.exit_code == 0
+    assert calls == {"apply": False, "limit": None}
+    assert "scanned: 3" in r.output and "backfilled: 0" in r.output
+    assert "no imdb id: 1" in r.output and "held: 1" in r.output and "failed: 1" in r.output
+
+
+def test_repair_imdb_apply_and_limit_pass_through(monkeypatch):
+    from movie_brain.application.backfill_imdb import BackfillReport
+
+    calls = {}
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, apply=False, limit=None, log):
+        calls.update(apply=apply, limit=limit)
+        return BackfillReport()
+
+    monkeypatch.setattr("movie_brain.cli.backfill_imdb", fake)
+    r = runner.invoke(app, ["repair", "imdb", "--apply", "--limit", "25"])
+    assert r.exit_code == 0
+    assert calls == {"apply": True, "limit": 25}
+
+
 def test_repair_years_args_pair(monkeypatch):
     calls = {}
 
