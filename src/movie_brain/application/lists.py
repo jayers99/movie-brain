@@ -11,7 +11,8 @@ costs a merge. So the four helpers here are deliberately timid.
 - `corpus_veto` — gate 3: does the catalog hold anything *resembling* any of these titles?
 
 `import_list` is phase 1 (design §5): it links, it asks, and it **never creates a film**.
-`scorecard` renders its result, and is the deliverable of the accuracy test — a wrong *link*
+`create_films` is phase 2 (design §6) and is the ONLY path in this feature that creates one.
+`scorecard` renders either result, and is the deliverable of the accuracy test — a wrong *link*
 is silent in a way a duplicate film is not, so every entry gets a printed line.
 
 `find_holder` is the third sibling of the resolve-first block in `owned.py::import_owned` and
@@ -20,7 +21,7 @@ that exists only in OMDb carries no TMDB id, so the plain gate 2 asks nothing at
 TMDB for the mapping — the same `find_by_imdb` call `key_film` already trusts on every keying
 path — can only find *more* holders, so it strictly reduces creations.
 
-The creation verb (`lists create`) lives in a later task; the four helpers write nothing.
+The four helpers write nothing; the two verbs write, and only with `apply=True`.
 """
 
 from __future__ import annotations
@@ -33,25 +34,40 @@ from datetime import date
 
 import requests
 
+from movie_brain.application.keying import key_film
 from movie_brain.domain.matching import Candidate, CandidateIndex, build_candidate_index
-from movie_brain.domain.models import ListEntry, ListMeta, ReviewEntry
+from movie_brain.domain.models import Film, ListEntry, ListMeta, ReviewEntry
+from movie_brain.domain.thumbprint import Candidate as WorkCandidate
 from movie_brain.domain.thumbprint import Verdict, make_query, parse_title, resolve
-from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.database import FilmRow, Repository
 from movie_brain.infrastructure.omdb import QuotaExceeded
 from movie_brain.infrastructure.thumbprint_fetch import CacheMiss, CandidateFetcher
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 AUTHORITY = "list"
 
-# match_review reasons this importer queues, all under AUTHORITY with film_id NULL.
+# match_review reasons these verbs queue, all under AUTHORITY with film_id NULL.
 UNRESOLVED = "unresolved"
 CORPUS_VETO = "corpus-veto"
 DUPLICATE_ENTRY = "duplicate-entry"
 TOMBSTONED_HOLDER = "tombstoned-holder"
+KEY_COLLISION = "key-collision"
+
+# key_film results that leave the new film identified; anything else waits for the next sync.
+KEYED_OK = ("keyed", "unlinked")
 
 
 def _stderr(msg: str) -> None:
     print(msg, file=sys.stderr)
+
+
+def _winner(verdict: Verdict) -> WorkCandidate | None:
+    """The candidate the verdict actually chose — `None` when it fell outside the top three.
+
+    `resolve` truncates `ranked` to three, so a match can carry a `tt` no listed candidate
+    holds. Every caller must cope with that instead of assuming the winner is present.
+    """
+    return next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
 
 
 def entry_forms(title_listed: str) -> list[str]:
@@ -130,7 +146,7 @@ def find_holder(
     label = f"imdb {verdict.tt}"
 
     if holder is None:
-        winner = next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
+        winner = _winner(verdict)
         if winner is not None and winner.tmdb_id is not None:
             # Gate 2 — the winning candidate's own TMDB id.
             holder = repo.film_id_for_external("tmdb", str(winner.tmdb_id))
@@ -188,7 +204,7 @@ class EntryOutcome:
     rank: int
     title_listed: str
     director_listed: str | None
-    kind: str  # linked | would-create | review | blocked | error
+    kind: str  # linked | created | would-create | review | blocked | error
     film_id: int | None
     tt: str | None
     reason: str
@@ -257,10 +273,9 @@ def _review_detail(entry: ListEntry, form: str, detail: str) -> str:
 def _would_create_label(verdict: Verdict) -> str:
     """`tt0028950 'Grand Illusion' (1937)` — the work phase 2 would mint, named by the winner.
 
-    `resolve` truncates `ranked` to the top three, so the winner can be missing from it; the
-    tt alone is still the honest answer then.
+    With no winner in `ranked`, the tt alone is still the honest answer.
     """
-    winner = next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
+    winner = _winner(verdict)
     if winner is None or not winner.titles:
         return str(verdict.tt)
     return f"{verdict.tt} {winner.titles[0]!r} ({winner.year or '-'})"
@@ -286,6 +301,24 @@ def _film_label(catalog: dict[int, tuple[str, int | None, str | None]], film_id:
     return f"#{film_id} {title!r} ({year or '-'})" + (f" dir {director}" if director else "")
 
 
+def _catalog(repo: Repository, film_rows: Sequence[FilmRow]) -> dict[int, tuple[str, int | None, str | None]]:
+    """film_id -> (title, year, director) for `_film_label`, one read of the catalog per run.
+
+    films_for_matching aliases a merged loser's evidence under its SURVIVOR's id, so one id
+    can carry several rows and none of them says which is the film's own. films_for_repair is
+    one authoritative row per film; the matching row whose title agrees with it is the
+    survivor's own, and only that one may lend its director to the scorecard label.
+    """
+    catalog: dict[int, tuple[str, int | None, str | None]] = {
+        f.id: (f.title, f.year, None) for f in repo.films_for_repair()
+    }
+    for f in film_rows:
+        row = catalog.get(f.id)
+        if row is not None and f.title == row[0]:
+            catalog[f.id] = (row[0], row[1], f.director)
+    return catalog
+
+
 def _veto_label(hits: list[Candidate]) -> str:
     shown = "; ".join(f"#{c.id} {c.title!r} ({c.year or '-'})" for c in hits[:3])
     return shown + (f"; +{len(hits) - 3} more" if len(hits) > 3 else "")
@@ -298,7 +331,7 @@ def import_list(
     today: date,
     *,
     fetcher: CandidateFetcher,
-    tmdb: TmdbClient | None = None,
+    tmdb: TmdbClient | None,
     apply: bool = False,
     log: Callable[[str], None] = _stderr,
 ) -> ListImportReport:
@@ -334,17 +367,7 @@ def import_list(
     # Once, before the loop — never per entry: these read the whole catalog.
     film_rows = repo.films_for_matching()
     index = build_candidate_index(film_rows)
-    # films_for_matching aliases a merged loser's evidence under its SURVIVOR's id, so one id
-    # can carry several rows and none of them says which is the film's own. films_for_repair
-    # is one authoritative row per film; the matching row whose title agrees with it is the
-    # survivor's own, and only that one may lend its director to the scorecard label.
-    catalog: dict[int, tuple[str, int | None, str | None]] = {
-        f.id: (f.title, f.year, None) for f in repo.films_for_repair()
-    }
-    for f in film_rows:
-        row = catalog.get(f.id)
-        if row is not None and f.title == row[0]:
-            catalog[f.id] = (row[0], row[1], f.director)
+    catalog = _catalog(repo, film_rows)
 
     rows: list[EntryOutcome] = []
     reviews: list[ReviewEntry] = []
@@ -443,14 +466,245 @@ def import_list(
     )
 
 
+@dataclass(frozen=True)
+class ListCreateReport:
+    exit_code: int
+    total: int
+    created: int
+    keyed: int
+    linked: int
+    blocked: int
+    errors: int
+    rows: list[EntryOutcome]
+
+
+def _key_new_film(
+    repo: Repository,
+    tmdb: TmdbClient | None,
+    film_id: int,
+    tt: str,
+    tmdb_id: int | None,
+    today: date,
+    log: Callable[[str], None],
+) -> str:
+    """Key a just-created film through the one identity write path, and never re-raise.
+
+    Born keyed is the point (design §6, exactly as Mode-B promotion does it), but a keying
+    failure must not undo a creation that already happened: `key_film` leaves the film
+    untouched on `held`/`error`, and the next `sync` keying step picks it up. The returned
+    status is scorecard text.
+    """
+    try:
+        result = key_film(repo, tmdb, film_id, tt, today, log, tmdb_id=tmdb_id)
+    except Exception as exc:  # includes key_film's own [partial] RuntimeError
+        log(f"created #{film_id} unkeyed (key_film failed: {exc}); the next sync will retry")
+        return "keying failed"
+    if result.status not in KEYED_OK:
+        log(f"created #{film_id} unkeyed ({result.status}: {result.detail}); the next sync will retry")
+    return result.status
+
+
+def create_films(
+    repo: Repository,
+    slug: str,
+    today: date,
+    *,
+    fetcher: CandidateFetcher,
+    tmdb: TmdbClient | None,
+    apply: bool = False,
+    log: Callable[[str], None] = _stderr,
+) -> ListCreateReport:
+    """Phase 2 (design §6): the ONE path in this feature that creates a film.
+
+    The worklist is every entry with no `film_id` and **no `list` review row at all** for its
+    `<slug>#<rank>` — open or resolved. Either kind means a human owns that entry: an open row
+    is work in progress, a resolved one is a standing decision, exactly as resolved rows are
+    treated everywhere else in this project.
+
+    Every entry is **re-resolved and re-gated** here; phase 1's verdict is never trusted,
+    because the world may have moved since the import (the same re-derive-at-resolution-time
+    rule the repair verbs follow). So a holder that has appeared since is linked rather than
+    twinned, a look-alike that has appeared since vetoes, and a verdict that no longer matches
+    blocks. Refusing costs one review row; creating a twin costs a merge.
+
+    Dry run by default: with `apply=False` **nothing at all** is written — no film, no link,
+    no claim, no review row — and the report says what would have happened. One consequence
+    worth knowing before the live run: a dry run never calls `create_film`, so it cannot see a
+    `films.key` collision, and a rehearsal can report a create the confirmed run then blocks.
+
+    Nothing here writes to the eval CSV: an auto match is never ratified, or the benchmark
+    would be scoring itself.
+    """
+    if repo.film_list(slug) is None:
+        log(f"no list {slug!r} — import it first")
+        return ListCreateReport(1, 0, 0, 0, 0, 0, 0, [])
+
+    stored = repo.list_entries(slug)
+    # A row of EITHER kind means a human owns that entry: an open one is work in progress, a
+    # resolved one is a standing decision. Neither is an invitation to create.
+    human_owned: set[str] = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
+    human_owned |= {str(v) for _reason, _film_id, v in repo.resolved_review_keys(AUTHORITY) if v}
+    worklist = [
+        ListEntry(row.rank, row.title_listed, row.director_listed)
+        for row in stored
+        if row.film_id is None and f"{slug}#{row.rank}" not in human_owned
+    ]
+    # film_id -> the rank already holding it, seeded from the stored links and extended as
+    # this run links AND creates, so the duplicate-entry guard sees this run's own work.
+    linked_at = {row.film_id: row.rank for row in stored if row.film_id is not None}
+
+    # Once, before the loop — never per entry: these read the whole catalog.
+    film_rows = repo.films_for_matching()
+    index = build_candidate_index(film_rows)
+    catalog = _catalog(repo, film_rows)
+    tombstoned = repo.tombstoned_keys()
+
+    rows: list[EntryOutcome] = []
+    reviews: list[ReviewEntry] = []
+    keyed = 0
+    for entry in worklist:
+        value = f"{slug}#{entry.rank}"
+        try:
+            forms = entry_forms(entry.title_listed)
+            verdict, form = resolve_entry(fetcher, entry, log)
+            if verdict is None:
+                # Every form's lookup failed. A transient failure is not a verdict, so it
+                # must not become a durable review row a human has to dismiss.
+                rows.append(_outcome(entry, "error", "resolver lookup failed for every form", form=form))
+                continue
+
+            if verdict.kind != "match" or verdict.tt is None:
+                # Phase 1 said would-create; today's resolver does not. Creation needs a
+                # standing yes, so the disagreement goes to a human, not to `films`.
+                detail = f"{UNRESOLVED}  resolver {verdict.reason!r}  cands: {_candidates(verdict)}"
+                rows.append(_outcome(entry, "blocked", detail, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(UNRESOLVED, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            holder, label = find_holder(repo, tmdb, verdict, log)
+            if label == "tmdb lookup failed":
+                # Gate 2b raised: the holder is unknown, NOT disproved. Creating now is
+                # exactly the failure this verb exists to avoid; retry when TMDB is back.
+                detail = f"gate 2b: tmdb lookup failed — holder unknown  [{verdict.reason}]"
+                rows.append(_outcome(entry, "error", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                continue
+
+            if holder is None and label.startswith("tombstoned"):
+                detail = f"{TOMBSTONED_HOLDER}  {label}  [{verdict.reason}]"
+                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(TOMBSTONED_HOLDER, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            if holder is not None:
+                # The world moved since the import: link what exists, create nothing.
+                twin_rank = linked_at.get(holder)
+                if twin_rank is not None:
+                    detail = (
+                        f"{DUPLICATE_ENTRY}  {_film_label(catalog, holder)} is already linked "
+                        f"at rank {twin_rank}  [{verdict.reason}]"
+                    )
+                    rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                    reviews.append(
+                        ReviewEntry(DUPLICATE_ENTRY, value=value, detail=_review_detail(entry, form, detail))
+                    )
+                    continue
+                if apply:
+                    repo.link_list_entry(slug, entry.rank, holder)
+                    repo.add_claim(holder, AUTHORITY, value, entry.title_listed, first_seen=today.isoformat())
+                linked_at[holder] = entry.rank
+                detail = f"{_film_label(catalog, holder)}  via {label}  [{verdict.reason}]"
+                rows.append(
+                    _outcome(entry, "linked", detail, film_id=holder, tt=verdict.tt, reason=verdict.reason, form=form)
+                )
+                continue
+
+            hits = corpus_veto(index, forms)
+            if hits:
+                detail = f"{CORPUS_VETO}  {_veto_label(hits)}  [{verdict.reason}]"
+                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(CORPUS_VETO, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            # Every gate green. The film is minted under the WINNER's title and year — TMDB's
+            # own — so the row looks like the rest of the catalog and lands on the right year;
+            # the listed title survives verbatim in the claim.
+            winner = _winner(verdict)
+            title = winner.titles[0] if winner is not None and winner.titles else entry.title_listed
+            year = winner.year if winner is not None else None
+            film = Film(title, year, entry.director_listed, "")
+            if film.key in tombstoned:
+                # A human hid that identity; a curator listing its title is not a
+                # resurrection request, and a twin beside it is worse still.
+                detail = f"{TOMBSTONED_HOLDER}  key {film.key!r} is tombstoned  [{verdict.reason}]"
+                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(TOMBSTONED_HOLDER, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            if not apply:
+                detail = f"{_would_create_label(verdict)}  [{verdict.reason}]"
+                rows.append(_outcome(entry, "created", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                continue
+
+            film_id = repo.create_film(film)
+            if film_id is None:
+                # A `films.key` holder the gates did not surface — the world moved in a way
+                # nothing here can explain. Never adopt it: that is how a wrong link is made.
+                clash = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
+                detail = (
+                    f"{KEY_COLLISION}  {film.key!r} is held by {_film_label(catalog, clash)}"
+                    f"  [{verdict.reason}]"
+                )
+                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(KEY_COLLISION, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            index.add(Candidate(id=film_id, title=title, year=year))
+            catalog[film_id] = (title, year, entry.director_listed)
+            repo.link_list_entry(slug, entry.rank, film_id)
+            repo.add_claim(film_id, AUTHORITY, value, entry.title_listed, first_seen=today.isoformat())
+            linked_at[film_id] = entry.rank
+            status = _key_new_film(repo, tmdb, film_id, verdict.tt, winner.tmdb_id if winner else None, today, log)
+            if status in KEYED_OK:
+                keyed += 1
+            detail = (
+                f"{_film_label(catalog, film_id)}  {status}  from {_would_create_label(verdict)}"
+                f"  [{verdict.reason}]"
+            )
+            rows.append(
+                _outcome(entry, "created", detail, film_id=film_id, tt=verdict.tt, reason=verdict.reason, form=form)
+            )
+        except Exception as exc:  # one bad entry must never abort the run
+            log(f"list entry {value} failed: {exc}")
+            rows.append(_outcome(entry, "error", f"unexpected failure: {exc}"))
+
+    if apply:
+        for review in reviews:
+            queue_list_review_once(repo, review, today)
+
+    tally = Counter(r.kind for r in rows)
+    return ListCreateReport(
+        exit_code=0,
+        total=len(worklist),
+        created=tally["created"],
+        keyed=keyed,
+        linked=tally["linked"],
+        blocked=tally["blocked"],
+        errors=tally["error"],
+        rows=rows,
+    )
+
+
 _LABELS = {
     "linked": "LINKED",
+    "created": "CREATED",
     "would-create": "WOULD-CREATE",
     "review": "REVIEW",
     "blocked": "BLOCKED",
     "error": "ERROR",
 }
-_TALLY_ORDER = ("linked", "would-create", "review", "blocked", "error")
+# Both verbs print the same tally, so phase 1's `created 0` is a standing restatement of its
+# one hard promise: the import never mints a film.
+_TALLY_ORDER = ("linked", "created", "would-create", "review", "blocked", "error")
 
 
 def scorecard(rows: Sequence[EntryOutcome]) -> str:
@@ -465,7 +719,7 @@ def scorecard(rows: Sequence[EntryOutcome]) -> str:
     for r in rows:
         who = f"{r.title_listed} / {r.director_listed}" if r.director_listed else r.title_listed
         out.append(f"{f'#{r.rank}'.ljust(6)}{who}")
-        line = f"→ {_LABELS.get(r.kind, r.kind.upper())}  {r.detail}".rstrip()
+        line = f"→ {_LABELS.get(r.kind, r.kind.upper())} {r.detail}".rstrip()
         if r.form_used and r.form_used != r.title_listed:
             line += f"  [via form {r.form_used!r}]"
         out.append(f"      {line}")
