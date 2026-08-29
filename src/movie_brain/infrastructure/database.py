@@ -312,6 +312,9 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
     return out
 
 
+_SERVICE_SELECT = "SELECT slug, name, kind, subscribed, region, quality, has_apple_app FROM movie_service "
+
+
 def _criterion_option(c: sqlite3.Connection) -> dict[str, object] | None:
     """The `criterion` registry row as a watch option — read ONCE per view build, not per film."""
     row = c.execute(_SERVICE_SELECT + "WHERE slug = 'criterion'").fetchone()
@@ -348,9 +351,6 @@ def _row_to_list_meta(row: sqlite3.Row) -> ListMeta:
         ordered=bool(row["ordered"]),
         trust=int(row["trust"]),
     )
-
-
-_SERVICE_SELECT = "SELECT slug, name, kind, subscribed, region, quality, has_apple_app FROM movie_service "
 
 
 def _row_to_service(row: sqlite3.Row) -> ServiceMeta:
@@ -393,7 +393,11 @@ def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
 _NEW_ON_SQL = """
 SELECT t.film_id, t.source, s.name, MAX(t.appeared_on) AS appeared_on
 FROM availability_transitions t
-JOIN movie_service s ON s.slug = t.source AND s.kind = 'svod'
+-- subscribed only: provider auto-registration lands hundreds of services at subscribed=0,
+-- and each one's first listing write fires a transition. Without this filter the first sync
+-- after rollout swamps the new-arrival chip for NEW_ARRIVAL_DAYS with services the owner
+-- cannot watch. `subscribed` decides everything downstream (design §4).
+JOIN movie_service s ON s.slug = t.source AND s.kind = 'svod' AND s.subscribed = 1
 WHERE t.appeared_on >= ?
 GROUP BY t.film_id, t.source
 ORDER BY t.film_id, t.source
@@ -591,12 +595,15 @@ class Repository:
         with self._conn() as c:
             rows = c.execute(
                 # svod only: a film becoming *purchasable* (apple-tv-store) is recorded
-                # as a transition but is never an arrival worth alerting on.
+                # as a transition but is never an arrival worth alerting on. Subscribed only,
+                # for the same reason as _NEW_ON_SQL: auto-registered providers arrive at
+                # subscribed=0 and their first listing write fires a transition, which would
+                # otherwise notify the owner about services they cannot watch on.
                 "SELECT f.title, s.name AS service "
                 "FROM availability_transitions t "
                 "JOIN watchlist w ON w.film_id = t.film_id "
                 "JOIN films f ON f.id = t.film_id "
-                "JOIN movie_service s ON s.slug = t.source AND s.kind = 'svod' "
+                "JOIN movie_service s ON s.slug = t.source AND s.kind = 'svod' AND s.subscribed = 1 "
                 "WHERE t.appeared_on = ? ORDER BY t.id",
                 (day.isoformat(),),
             ).fetchall()
@@ -881,11 +888,6 @@ class Repository:
                 )
                 for r in rows
             ]
-
-    def services(self) -> list[dict[str, object]]:
-        with self._conn() as c:
-            rows = c.execute("SELECT slug, name, kind, subscribed, region FROM movie_service ORDER BY slug").fetchall()
-            return [dict(r) for r in rows]
 
     # metacritic -------------------------------------------------------
     def upsert_mc_titles(self, titles: list[McTitle], fetched_at: date) -> None:

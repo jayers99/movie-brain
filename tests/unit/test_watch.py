@@ -78,3 +78,16 @@ def test_watch_options_does_not_mutate_the_view():
 
 def test_rank_key_is_ascending_best_first():
     assert rank_key(svc("A", quality=9)) < rank_key(svc("A", quality=1))
+
+
+def test_quality_zero_ranks_below_quality_one():
+    """0 is a legal quality (`services quality SLUG 0`), not an absent one — it must rank
+    last rather than fold into the default."""
+    assert rank_key(svc("A", quality=0)) > rank_key(svc("A", quality=1))
+
+
+def test_a_zero_quality_option_loses_to_a_positive_one():
+    # "Alpha" would win the name tiebreak, so only quality can decide this.
+    v = view(services=[svc("Alpha", quality=0), svc("Zed", quality=1)])
+    assert best_source(v, None)["name"] == "Zed"
+    assert [o["name"] for o in watch_options(v, None)] == ["Zed", "Alpha"]
