@@ -217,6 +217,12 @@ class FilmView:
     audit: dict[str, object] | None = None  # {score, reasons:[{code, detail}]} from audit_flags; None = not a suspect
     verdict: dict[str, object] | None = None  # latest audit_verdict row; the dashboard endpoint is its only writer
     # verdict["reasons"] is a comma-joined sorted string (asymmetric with audit["reasons"] above, a list of dicts)
+    # The single best place to watch this film today, or None when nowhere streams it —
+    # {name, subscribed, kind, quality, has_apple_app}. Computed on every read by
+    # domain/watch.py::best_source and NEVER denormalized onto films (design C11): a stored
+    # winner would go stale the moment a merge re-points a listing, the same argument that
+    # keeps the cross-list tally computed.
+    best_source: dict[str, object] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
