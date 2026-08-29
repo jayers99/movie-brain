@@ -129,7 +129,9 @@
   function rowHtml(f) {
     const link = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
     const listCount = (f.lists || []).length;
-    const best = f.best_source;
+    // An owned film already carries the "owned" badge, and its best source IS that purchase —
+    // a second badge saying so would state the same fact twice on the same row.
+    const best = f.owned ? null : f.best_source;
     const watchBadge = best && best.subscribed
       ? ` <span class="badge-watch" title="Best source: ${esc(best.name)}">${esc(best.name)}</span>` : '';
     const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '')
