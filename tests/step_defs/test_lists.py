@@ -124,6 +124,22 @@ def film_with_tmdb(ctx, title, year, tid):
     ctx["repo"].set_external_id(_film(ctx, title, year), "tmdb", tid, TODAY)
 
 
+@given(parsers.parse('a film "{title}" ({year:d}) appears mid-run, after the gates read the catalog'))
+def film_mid_run(ctx, title, year):
+    """The one shape the gates structurally cannot see.
+
+    `create_films` reads the catalog ONCE, before its loop, so a film another process writes
+    after that read is invisible to gate 3 and holds no ids for gates 1/2/2b. `films.key` is
+    the only thing left — which is exactly the residual race the key-collision branch is for.
+    """
+
+    def once():
+        if title not in ctx["films"]:
+            _film(ctx, title, year)
+
+    ctx["fetcher"].on_fetch = once
+
+
 @given(parsers.parse('the film "{title}" is tombstoned'))
 def tombstoned(ctx, title):
     ctx["repo"].tombstone_film(ctx["films"][title], TODAY)
@@ -171,6 +187,11 @@ def pool_blows_up(ctx, form):
 @given("tmdb lookups fail")
 def tmdb_offline(ctx):
     ctx["tmdb"].raises = True
+
+
+@given("there is no TMDB token")
+def no_tmdb(ctx):
+    ctx["tmdb"] = None
 
 
 @given(parsers.parse('tmdb maps "{tt}" to {tid:d}'))

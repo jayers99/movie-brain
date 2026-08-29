@@ -196,6 +196,22 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the film "Grand Illusion" carries a list claim "cahiers-100#68" ingested as "La Grande Illusion"
     And no film was created
 
+  Scenario: a catalog film titled like the WINNER, not like the listed title, still vetoes
+    # The reviewer's traced twin: a legacy unkeyed row holds no ids (gates 1/2/2b all miss),
+    # and it is titled nothing like the curator's entry, so a veto asked only about the LISTED
+    # forms misses it too. `films.key` is the last backstop and it only refuses when title AND
+    # year match — 1938 vs the winner's 1937 slips past. The veto must ask what the catalog
+    # will GAIN, which is the winner's own title. Phase 1 reported this entry would-create.
+    Given a film "Grand Illusion" (1938)
+    And the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir" titled "Grand Illusion"
+    And I imported the list with --apply for entry 68 "La Grande Illusion" by "Jean Renoir"
+    When I create films with --apply
+    Then the create report says created 0, keyed 0, linked 0, blocked 1, error 0
+    And there is one open list review row for "cahiers-100#68" with reason "corpus-veto"
+    And that review detail mentions "#1 'Grand Illusion' (1938)"
+    And entry 68 is unlinked
+    And no film was created
+
   Scenario: a look-alike that appeared since the import vetoes creation
     Given the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir"
     And I imported the list with --apply for entry 68 "La Grande Illusion" by "Jean Renoir"
@@ -230,12 +246,16 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
   Scenario: a films.key collision blocks and queues — the colliding film is never adopted
     Given the candidate pool has "Pleasure" → tt0044943/60426 1952 by "Max Ophüls" titled "Le Plaisir"
     And I imported the list with --apply for entry 34 "Pleasure" by "Max Ophüls"
-    # gate 3 misses: nothing in the catalog resembles the LISTED title "Pleasure"
-    And a film "Le Plaisir" (1952)
+    # The gates read the catalog ONCE, before the loop, so a film written after that read is
+    # invisible to gate 3 and holds no ids for gates 1/2/2b — `films.key` is all that is left.
+    # That race is the only way past gate 3 now that the veto also asks the WINNER's title:
+    # a key collision means the same lower-cased title and year, which `norm_title` can only
+    # fold further, so any collision against a film the index HAS is caught one gate earlier.
+    And a film "Le Plaisir" (1952) appears mid-run, after the gates read the catalog
     When I create films with --apply
     Then the create report says created 0, keyed 0, linked 0, blocked 1, error 0
     And there is one open list review row for "cahiers-100#34" with reason "key-collision"
-    And that review detail mentions "'le plaisir (1952)' is held by #1 'Le Plaisir' (1952)"
+    And that review detail mentions "'le plaisir (1952)' is held by #1"
     And entry 34 is unlinked
     And no film was created
 
@@ -338,4 +358,15 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And there is one open list review row for "cahiers-100#69" with reason "tombstoned-holder"
     And that review detail mentions "tombstoned #1"
     And entry 69 is unlinked
+    And no film was created
+
+  Scenario: creating with no TMDB token refuses the whole run rather than minting unguarded
+    # gate 2b is not optional: without it `find_holder` answers "no holder" for every
+    # OMDb-only winner and this verb would mint a twin beside a film TMDB could have found.
+    Given the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir"
+    And I imported the list with --apply for entry 68 "La Grande Illusion" by "Jean Renoir"
+    And there is no TMDB token
+    When I create films with --apply
+    Then the create report exits 1
+    And the create report considered 0 entries
     And no film was created

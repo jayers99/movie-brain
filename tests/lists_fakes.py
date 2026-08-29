@@ -27,8 +27,11 @@ class RecordingFetcher:
     entry that already carries a film_id.
     """
 
-    def __init__(self, by_title=None, offline=(), broken=()):
+    def __init__(self, by_title=None, offline=(), broken=(), on_fetch=None):
         self.by_title = by_title or {}
+        # Fired at the top of every fetch — the one hook a test has into the middle of a run,
+        # used to model the catalog changing UNDER a verb that read it once before its loop.
+        self.on_fetch = on_fetch
         self.offline = set(offline)
         # Titles whose lookup raises something the resolver does NOT catch — the importer's
         # own per-entry guard is the only thing standing between one bad entry and the run.
@@ -40,6 +43,8 @@ class RecordingFetcher:
         return [q.title for q in self.queries]
 
     def fetch(self, q):
+        if self.on_fetch is not None:
+            self.on_fetch()
         self.queries.append(q)
         if q.title in self.offline:
             raise requests.ConnectionError("offline")
