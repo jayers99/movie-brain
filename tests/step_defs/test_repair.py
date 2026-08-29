@@ -290,6 +290,95 @@ def still_holds(ctx, spec, tid):
     assert ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))["tmdb"] == tid
 
 
+@given(parsers.parse('"{spec}" holds imdb id "{tt}"'))
+def holds_imdb(ctx, spec, tt):
+    ctx["repo"].set_external_id(ctx["repo"].film_id_by_key(_key(spec)), "imdb", tt, TODAY)
+
+
+@given(parsers.parse('"{spec}" has an OMDb payload for imdb "{tt}"'))
+def omdb_payload_for(ctx, spec, tt):
+    from movie_brain.domain.models import OmdbRating
+
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    ctx["repo"].upsert_omdb(fid, OmdbRating(6.0, 50, True, "English", json.dumps({"imdbID": tt})), TODAY)
+
+
+@given(parsers.parse('TMDB finds movie {tid:d} for imdb "{tt}"'))
+def find_by_imdb(ctx, tid, tt):
+    ctx["rs"].get(f"{TMDB_API}/find/{tt}", json={"movie_results": [{"id": tid}]})
+
+
+@given(parsers.parse('TMDB is down for imdb "{tt}"'))
+def find_by_imdb_down(ctx, tt):
+    ctx["rs"].get(f"{TMDB_API}/find/{tt}", status=503)
+
+
+def _rekey(ctx, film_id: int | None, tt: str, *, apply: bool) -> None:
+    # Capture the log rather than discard it: a refusal's REASON is the thing worth pinning —
+    # `held` and `error` are indistinguishable by their side effects, since both leave the
+    # film untouched and exit 1.
+    log: list[str] = ctx.setdefault("log", [])
+    try:
+        ctx["links"] = repair.repair_links(
+            ctx["repo"], TmdbClient("tok"), TODAY, film_id=film_id, tt=tt, apply=apply, log=log.append
+        )
+    except (LookupError, ValueError) as exc:
+        ctx["links_error"] = str(exc)
+
+
+@when(parsers.parse('I re-key film "{spec}" to imdb "{tt}"'))
+def rekey_film(ctx, spec, tt):
+    _rekey(ctx, ctx["repo"].film_id_by_key(_key(spec)), tt, apply=True)
+
+
+@when(parsers.parse('I re-key film {fid:d} to imdb "{tt}"'))
+def rekey_film_id(ctx, fid, tt):
+    _rekey(ctx, fid, tt, apply=True)
+
+
+@when(parsers.parse('I re-key every film to imdb "{tt}"'))
+def rekey_no_film(ctx, tt):
+    _rekey(ctx, None, tt, apply=True)
+
+
+@when(parsers.parse('I dry-run a re-key of film "{spec}" to imdb "{tt}"'))
+def rekey_dry_run(ctx, spec, tt):
+    _rekey(ctx, ctx["repo"].film_id_by_key(_key(spec)), tt, apply=False)
+
+
+@then(parsers.parse('"{spec}" holds imdb id "{tt}" and tmdb id "{tid}"'))
+def holds_both(ctx, spec, tt, tid):
+    ids = ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))
+    assert ids.get("imdb") == tt and ids.get("tmdb") == tid
+
+
+@then(parsers.parse('"{spec}" holds imdb id "{tt}" and no tmdb id'))
+def holds_imdb_only(ctx, spec, tt):
+    ids = ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))
+    assert ids.get("imdb") == tt and "tmdb" not in ids
+
+
+@then(parsers.parse('"{spec}" holds imdb id "{tt}"'))
+def still_holds_imdb(ctx, spec, tt):
+    ids = ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))
+    assert ids.get("imdb") == tt
+
+
+@then(parsers.parse('the re-key log says "{text}"'))
+def rekey_log_says(ctx, text):
+    assert any(text in line for line in ctx["log"]), ctx["log"]
+
+
+@then(parsers.parse("the re-key repair re-keyed {n:d} films and exits {code:d}"))
+def rekey_report(ctx, n, code):
+    assert ctx["links"].rekeyed == n and ctx["links"].exit_code == code
+
+
+@then(parsers.parse('"{spec}" does not need an OMDb refresh'))
+def no_refresh(ctx, spec):
+    assert not _omdb_needs_refresh(ctx, ctx["repo"].film_id_by_key(_key(spec)))
+
+
 @given(parsers.parse('"{spec}" has an OMDb payload fetched for year {year:d}'))
 def stale_payload(ctx, spec, year):
     from movie_brain.domain.models import OmdbRating

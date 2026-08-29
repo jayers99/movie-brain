@@ -119,6 +119,74 @@ Feature: Dispositioned films stay out of every collector's way
     When I apply links for film "Alpha (1950)"
     Then the links repair fails with "no TMDB link"
 
+  Scenario: Re-keying a confidently-wrong film swaps both ids and queues an OMDb refetch
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1950)" holds imdb id "tt0075335"
+    And "Alpha (1950)" has an OMDb payload for imdb "tt0075335"
+    And TMDB finds movie 162505 for imdb "tt0075915"
+    And TMDB describes id 162505 as "One Way or Another" / "De cierta manera" from 1977
+    When I re-key film "Alpha (1950)" to imdb "tt0075915"
+    Then "Alpha (1950)" holds imdb id "tt0075915" and tmdb id "162505"
+    And "Alpha (1950)" needs an OMDb refresh
+    And the re-key repair re-keyed 1 films and exits 0
+
+  Scenario: A re-key of a film that holds no TMDB link keys it instead of erroring
+    Given TMDB finds movie 162505 for imdb "tt0075915"
+    And TMDB describes id 162505 as "One Way or Another" / "De cierta manera" from 1977
+    When I re-key film "Alpha (1950)" to imdb "tt0075915"
+    Then "Alpha (1950)" holds imdb id "tt0075915" and tmdb id "162505"
+
+  Scenario: A re-key dry run writes nothing
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1950)" holds imdb id "tt0075335"
+    And "Alpha (1950)" has an OMDb payload for imdb "tt0075335"
+    And TMDB finds movie 162505 for imdb "tt0075915"
+    When I dry-run a re-key of film "Alpha (1950)" to imdb "tt0075915"
+    Then "Alpha (1950)" holds imdb id "tt0075335" and tmdb id "5"
+    And "Alpha (1950)" does not need an OMDb refresh
+    And the re-key repair re-keyed 0 films and exits 0
+
+  Scenario: A re-key never steals an IMDb id another film holds
+    Given "Alpha (1951)" holds imdb id "tt0075915"
+    And "Alpha (1950)" holds imdb id "tt0075335"
+    When I re-key film "Alpha (1950)" to imdb "tt0075915"
+    Then "Alpha (1950)" holds imdb id "tt0075335" and no tmdb id
+    And the re-key repair re-keyed 0 films and exits 1
+    # Without this the scenario cannot tell `held` from `error`: a regression that made
+    # key_film fetch before its holder check would raise, and every assertion above would
+    # still pass. Pin the REASON, and that the id stayed with its rightful owner.
+    And the re-key log says "already held"
+    And "Alpha (1951)" holds imdb id "tt0075915"
+
+  Scenario: A re-key leaves the film untouched when TMDB fails
+    Given "Alpha (1950)" holds imdb id "tt0075335"
+    And TMDB is down for imdb "tt0075915"
+    When I re-key film "Alpha (1950)" to imdb "tt0075915"
+    Then "Alpha (1950)" holds imdb id "tt0075335" and no tmdb id
+    And the re-key repair re-keyed 0 films and exits 1
+
+  Scenario: A malformed IMDb id is refused before anything is read
+    When I re-key film "Alpha (1950)" to imdb "0075915"
+    Then the links repair fails with "malformed"
+
+  Scenario: A re-key without a film is refused
+    When I re-key every film to imdb "tt0075915"
+    Then the links repair fails with "requires --film"
+
+  Scenario: A re-key of an unknown film is refused
+    When I re-key film 9999 to imdb "tt0075915"
+    Then the links repair fails with "not found"
+
+  Scenario: A re-key of a tombstoned film is refused
+    Given "Alpha (1951)" is tombstoned
+    When I re-key film "Alpha (1951)" to imdb "tt0075915"
+    Then the links repair fails with "tombstoned"
+
+  Scenario: A re-key of a merged-away film names its survivor instead
+    When I merge "Alpha (1951)" into "Alpha (1950)"
+    And I re-key film "Alpha (1951)" to imdb "tt0075915"
+    Then the links repair fails with "merged into"
+
   Scenario: The years worklist lists stale OMDb payloads and applying marks them for refetch
     Given "Alpha (1951)" has an OMDb payload fetched for year 1953
     When I audit years
