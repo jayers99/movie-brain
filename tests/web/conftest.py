@@ -74,6 +74,12 @@ def seed(repo: Repository) -> None:
     repo.record_listing_with_transition(ids["alpha (1950)"], "max", "https://tmdb/w/1", TODAY)
     repo.record_listing_with_transition(ids["alpha (1950)"], "mubi", "https://tmdb/w/1", TODAY)
     repo.record_listing_with_transition(ids["alpha (1950)"], "apple-tv-store", "https://tmdb/w/1", TODAY)
+    # Bravo carries five svod services so the drawer's "Also streaming on" line overflows the
+    # TOP_SERVICES cap and renders the "⋯ N more" disclosure. record_listing (not
+    # record_listing_with_transition) on purpose: these must not register as new arrivals, or
+    # they would change what the new-arrivals chip counts.
+    for slug in ("max", "mubi", "peacock", "prime-video", "apple-tv-plus"):
+        repo.record_listing(ids["bravo (1960)"], slug, "https://tmdb/w/2", TODAY)
     # Bravo is the one seeded watchlist film (Charlie stays free for the toggle test).
     repo.toggle_watchlist(ids["bravo (1960)"], TODAY)
     # Two seeded audit suspects for the Suspect chip + drawer verdict + score-sort tests. Bravo

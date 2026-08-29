@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const ROW_H = 36, OVERSCAN = 10;
+  const TOP_SERVICES = 3;  // drawer: services shown before the ⋯ more disclosure
   const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
   const DEFAULT_LANG = 'English';
   const state = {
@@ -362,9 +363,15 @@
       .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
     const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
     const svc = d.services || [];
-    const streaming = svc.filter((s) => s.kind !== 'store')
-      .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`).join(', ');
-    const buyable = svc.filter((s) => s.kind === 'store').map((s) => esc(s.name)).join(', ');
+    // Services arrive already ranked (subscribed, quality, Apple TV app, name — see
+    // domain/watch.py). A film can carry dozens of them, so show the best few and put the
+    // rest behind a native <details> disclosure: no filtering, because a service you rate
+    // badly is still the answer when it is the only place a film exists.
+    const collapse = (names) => names.length <= TOP_SERVICES ? names.join(', ')
+      : `${names.slice(0, TOP_SERVICES).join(', ')} <details class="svc-more"><summary>⋯ ${names.length - TOP_SERVICES} more</summary><span class="svc-rest">, ${names.slice(TOP_SERVICES).join(', ')}</span></details>`;
+    const streaming = collapse(svc.filter((s) => s.kind !== 'store')
+      .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`));
+    const buyable = collapse(svc.filter((s) => s.kind === 'store').map((s) => esc(s.name)));
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     const lists = (d.lists || []).map((l) => {
       const label = l.published ? `${esc(l.curator || l.name)} ${esc(l.published)}` : esc(l.curator || l.name);
