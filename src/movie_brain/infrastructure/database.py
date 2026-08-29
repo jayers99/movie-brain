@@ -7,7 +7,7 @@ import sys
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -28,6 +28,7 @@ from movie_brain.domain.models import (
     film_key,
 )
 from movie_brain.domain.thumbprint import edition_label, title_norm
+from movie_brain.domain.watch import best_source
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -286,13 +287,13 @@ LEFT JOIN metacritic mc ON mc.slug = x.value
 
 
 _SERVICES_SQL = f"""
-SELECT l.film_id, s.name, s.subscribed, s.kind FROM listings l
+SELECT l.film_id, s.name, s.subscribed, s.kind, s.quality, s.has_apple_app FROM listings l
 JOIN movie_service s ON s.slug = l.source
 WHERE l.source != 'criterion'
   AND l.last_seen >= COALESCE(
       (SELECT value FROM meta WHERE key = '{TMDB_REFRESH_STAMP}'),
       (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = l.source))
-ORDER BY l.film_id, s.subscribed DESC, s.kind DESC, s.name
+ORDER BY l.film_id, s.subscribed DESC, s.quality DESC, s.has_apple_app DESC, s.name
 """
 
 
@@ -300,9 +301,29 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
     out: dict[int, list[dict[str, object]]] = {}
     for r in c.execute(_SERVICES_SQL):
         out.setdefault(int(r["film_id"]), []).append(
-            {"name": str(r["name"]), "subscribed": bool(r["subscribed"]), "kind": str(r["kind"])}
+            {
+                "name": str(r["name"]),
+                "subscribed": bool(r["subscribed"]),
+                "kind": str(r["kind"]),
+                "quality": int(r["quality"]),
+                "has_apple_app": bool(r["has_apple_app"]),
+            }
         )
     return out
+
+
+def _criterion_option(c: sqlite3.Connection) -> dict[str, object] | None:
+    """The `criterion` registry row as a watch option — read ONCE per view build, not per film."""
+    row = c.execute(_SERVICE_SELECT + "WHERE slug = 'criterion'").fetchone()
+    if row is None:
+        return None
+    return {
+        "name": str(row["name"]),
+        "subscribed": bool(row["subscribed"]),
+        "kind": str(row["kind"]),
+        "quality": int(row["quality"]),
+        "has_apple_app": bool(row["has_apple_app"]),
+    }
 
 
 _LISTS_SQL = """
@@ -441,8 +462,9 @@ def _row_to_view(
     owned: bool = False,
     revisit: tuple[bool, str | None] = (False, None),
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
+    criterion_option: dict[str, object] | None = None,
 ) -> FilmView:
-    return FilmView(
+    view = FilmView(
         id=row["id"],
         title=row["title"],
         year=row["year"],
@@ -470,6 +492,7 @@ def _row_to_view(
         audit=audit[0],
         verdict=audit[1],
     )
+    return replace(view, best_source=best_source(view, criterion_option))
 
 
 class Repository:
@@ -2089,6 +2112,7 @@ class Repository:
             ow = _owned_ids(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
+            criterion_option = _criterion_option(c)
             return [
                 _row_to_view(
                     r,
@@ -2099,6 +2123,7 @@ class Repository:
                     owned=r["id"] in ow,
                     revisit=(r["id"] in rv, rv.get(r["id"])),
                     audit=au.get(r["id"], (None, None)),
+                    criterion_option=criterion_option,
                 )
                 for r in rows
             ]
@@ -2120,6 +2145,7 @@ class Repository:
                 owned=row["id"] in _owned_ids(c),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
                 audit=au.get(row["id"], (None, None)),
+                criterion_option=_criterion_option(c),
             )
 
     def get_payload(self, film_id: int) -> str | None:

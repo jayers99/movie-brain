@@ -1613,3 +1613,68 @@ def test_register_provider_refuses_a_name_with_no_usable_slug(repo):
     after = {s.slug for s in repo.movie_services()}
     assert after == before
     assert 997 not in repo.provider_map()
+
+
+# ---- FilmView.best_source (design 2026-08-29-canon-best-source, task 6) ----------------
+
+
+@pytest.fixture
+def film_with_two_listings(repo, today):
+    """A film streaming on max and mubi (the pair `test_view_best_source_prefers_a_subscribed_service`
+    manipulates directly) plus peacock/prime-video/apple-tv-plus, pinned unsubscribed so they never
+    outrank a subscribed max, but shaped to give the lockstep test genuine 4-key discrimination:
+    peacock/prime-video/apple-tv-plus tie on subscribed(False) and quality(3); prime-video's
+    has_apple_app=True splits it from the other two; apple-tv-plus and peacock then tie on all
+    three earlier keys and split only on name ("Apple TV+" < "Peacock").
+    """
+    fid = repo.create_film(Film("Two Listings", 2020, None, ""))
+    for slug in ("max", "mubi", "peacock", "prime-video", "apple-tv-plus"):
+        repo.record_listing_with_transition(fid, slug, f"https://tmdb/w/{slug}", today)
+    repo.set_service_subscribed("peacock", False)
+    repo.set_service_subscribed("prime-video", False)
+    repo.set_service_subscribed("apple-tv-plus", False)
+    repo.set_service_quality("peacock", 3)
+    repo.set_service_quality("prime-video", 3)
+    repo.set_service_quality("apple-tv-plus", 3)
+    repo.set_service_apple_app("prime-video", True)
+    return fid
+
+
+@pytest.fixture
+def criterion_film(repo, today):
+    repo.record_catalog("criterion", [Film("Criterion Film", 1960, None, "https://c/criterion-film")], today)
+    return repo.film_id_by_key("criterion film (1960)")
+
+
+@pytest.fixture
+def bare_film(repo):
+    return repo.create_film(Film("Bare Film", 2021, None, ""))
+
+
+def test_view_best_source_prefers_a_subscribed_service(repo, film_with_two_listings):
+    repo.set_service_subscribed("max", True)
+    repo.set_service_subscribed("mubi", False)
+    view = repo.get_view(film_with_two_listings)
+    assert view.best_source["name"] == "HBO Max"
+
+
+def test_view_best_source_includes_a_current_criterion_listing(repo, criterion_film):
+    repo.set_service_quality("criterion", 9)
+    view = repo.get_view(criterion_film)
+    assert view.best_source["name"] == "Criterion Channel"
+
+
+def test_view_best_source_is_none_when_nothing_streams(repo, bare_film):
+    assert repo.get_view(bare_film).best_source is None
+
+
+def test_services_sql_order_matches_the_domain_ranking(repo, film_with_two_listings):
+    """The lockstep guard: _SERVICES_SQL and domain/watch.py must agree, or the drawer's list
+    and the badged winner would disagree with each other."""
+    from movie_brain.domain.watch import rank_key
+
+    repo.set_service_quality("max", 5)
+    repo.set_service_quality("mubi", 9)
+    repo.set_service_subscribed("mubi", True)
+    services = repo.get_view(film_with_two_listings).services
+    assert [s["name"] for s in services] == [s["name"] for s in sorted(services, key=rank_key)]

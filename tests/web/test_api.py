@@ -26,6 +26,11 @@ def test_index_serves_html(client):
     assert r.status_code == 200 and b"<table" in r.data
 
 
+def test_film_json_carries_best_source(client):
+    films = client.get("/api/films").get_json()
+    assert "best_source" in films[0]
+
+
 def test_list_films(client):
     r = client.get("/api/films")
     assert r.status_code == 200
@@ -143,9 +148,12 @@ def test_services_in_payloads(repo):
     app.testing = True
     tc = app.test_client()
     expected = [
-        {"name": "HBO Max", "subscribed": True, "kind": "svod"},
-        {"name": "Apple TV Store (iTunes)", "subscribed": True, "kind": "store"},
-        {"name": "MUBI", "subscribed": False, "kind": "svod"},
+        # Both max and apple-tv-store tie on subscribed(True)/quality(1)/has_apple_app(False), so
+        # the ORDER BY's now-dropped `kind` key no longer separates them — name decides, and
+        # "Apple TV Store (iTunes)" sorts before "HBO Max".
+        {"name": "Apple TV Store (iTunes)", "subscribed": True, "kind": "store", "quality": 1, "has_apple_app": False},
+        {"name": "HBO Max", "subscribed": True, "kind": "svod", "quality": 1, "has_apple_app": False},
+        {"name": "MUBI", "subscribed": False, "kind": "svod", "quality": 1, "has_apple_app": False},
     ]
     assert tc.get(f"/api/films/{fid}").get_json()["services"] == expected  # store rows surfaced with their kind
     assert tc.get("/api/films").get_json()[0]["services"] == expected
@@ -199,7 +207,9 @@ def test_stale_service_listing_is_not_current(repo):
     app = create_app(repo, today=lambda: D)
     app.testing = True
     body = {v["title"]: v["services"] for v in app.test_client().get("/api/films").get_json()}
-    assert body["Trio"] == [] and body["Quartet"] == [{"name": "HBO Max", "subscribed": True, "kind": "svod"}]
+    assert body["Trio"] == [] and body["Quartet"] == [
+        {"name": "HBO Max", "subscribed": True, "kind": "svod", "quality": 1, "has_apple_app": False}
+    ]
 
 
 def test_watchlist_toggle_round_trip(client):
