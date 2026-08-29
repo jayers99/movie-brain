@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from movie_brain.application.repair import DupesReport, LinksReport, YearsReport
+from movie_brain.application.repair import DupesReport, LinksReport, YearsFromTmdbReport, YearsReport
 from movie_brain.application.sync import SyncResult
 from movie_brain.cli import app
 
@@ -283,6 +283,71 @@ def test_repair_years_args_pair(monkeypatch):
     monkeypatch.setattr("movie_brain.cli.repair_years", fake)
     r = runner.invoke(app, ["repair", "years", "12", "1927", "--apply"])
     assert r.exit_code == 0 and calls == {"film_id": 12, "year": 1927, "apply": True}
+
+
+def test_repair_years_from_tmdb_requires_token(config_dir):
+    r = runner.invoke(app, ["repair", "years", "--from-tmdb"])
+    assert r.exit_code == 2 and "TMDB" in r.output
+
+
+def test_repair_years_from_tmdb_help():
+    r = runner.invoke(app, ["repair", "years", "--help"])
+    assert r.exit_code == 0
+    assert "--from-tmdb" in r.output and "--apply" in r.output and "--limit" in r.output
+
+
+def test_repair_years_from_tmdb_dry_run_passes_the_flag_through_and_reports(monkeypatch):
+    calls = {}
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, apply=False, limit=None, log):
+        calls.update(apply=apply, limit=limit)
+        return YearsFromTmdbReport(3, 1, 1, 1)
+
+    monkeypatch.setattr("movie_brain.cli.repair_years_from_tmdb", fake)
+    r = runner.invoke(app, ["repair", "years", "--from-tmdb"])
+    assert r.exit_code == 0
+    assert calls == {"apply": False, "limit": None}
+    assert "filled: 3" in r.output and "no year: 1" in r.output
+    assert "collision: 1" in r.output and "failed: 1" in r.output
+
+
+def test_repair_years_from_tmdb_apply_and_limit_pass_through(monkeypatch):
+    calls = {}
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, apply=False, limit=None, log):
+        calls.update(apply=apply, limit=limit)
+        return YearsFromTmdbReport()
+
+    monkeypatch.setattr("movie_brain.cli.repair_years_from_tmdb", fake)
+    r = runner.invoke(app, ["repair", "years", "--from-tmdb", "--apply", "--limit", "25"])
+    assert r.exit_code == 0
+    assert calls == {"apply": True, "limit": 25}
+
+
+def test_repair_years_from_tmdb_reports_aborted(monkeypatch):
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, apply=False, limit=None, log):
+        return YearsFromTmdbReport(0, 0, 0, 5, True)
+
+    monkeypatch.setattr("movie_brain.cli.repair_years_from_tmdb", fake)
+    r = runner.invoke(app, ["repair", "years", "--from-tmdb", "--apply"])
+    assert r.exit_code == 0
+    assert "ABORTED" in r.output
+
+
+def test_repair_years_from_tmdb_cannot_combine_with_manual_correction(config_dir):
+    r = runner.invoke(app, ["repair", "years", "12", "1927", "--from-tmdb"])
+    assert r.exit_code == 2
+    assert "--from-tmdb" in r.output
+
+
+def test_repair_years_limit_requires_from_tmdb(config_dir):
+    r = runner.invoke(app, ["repair", "years", "--limit", "10"])
+    assert r.exit_code == 2
+    assert "--limit" in r.output
 
 
 def test_repair_editions_dry_run_lists_zero_groups(config_dir):

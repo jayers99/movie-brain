@@ -127,7 +127,7 @@ def record_tmdb_match(
     # The OMDb loop runs before this step: a title lookup that already missed can now
     # be retried by IMDb id (resolved through this TMDB link) instead of waiting 30 days.
     repo.mark_omdb_refresh_if_missed(target.film_id)
-    if target.commerce and winner_year is not None and winner_year != target.year:
+    if winner_year is not None and (target.year is None or (target.commerce and winner_year != target.year)):
         clash = repo.update_film_year(target.film_id, winner_year)
         if clash is not None:
             queue_review_once(

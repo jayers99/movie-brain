@@ -1490,3 +1490,45 @@ def test_films_needing_imdb_backfill_respects_limit(repo, today):
         fids.append(fid)
     targets = repo.films_needing_imdb_backfill(limit=2)
     assert [t.film_id for t in targets] == fids[:2]
+
+
+def test_films_needing_year_backfill_finds_yearless_tmdb_films(repo, today):
+    fid = repo.create_film(Film("Army of Shadows", None, None, ""))
+    repo.set_external_id(fid, "tmdb", "15383", today)
+    targets = repo.films_needing_year_backfill()
+    assert [(t.film_id, t.tmdb_id, t.title) for t in targets] == [(fid, 15383, "Army of Shadows")]
+
+
+def test_films_needing_year_backfill_never_touches_a_film_that_already_has_a_year(repo, today):
+    fid = repo.create_film(Film("Army of Shadows", 2006, None, ""))
+    repo.set_external_id(fid, "tmdb", "15383", today)
+    assert repo.films_needing_year_backfill() == []
+
+
+def test_films_needing_year_backfill_skips_films_with_no_tmdb_id(repo, today):
+    repo.create_film(Film("Army of Shadows", None, None, ""))
+    assert repo.films_needing_year_backfill() == []
+
+
+def test_films_needing_year_backfill_skips_disposed_films(repo, today):
+    fid = repo.create_film(Film("Army of Shadows", None, None, ""))
+    repo.set_external_id(fid, "tmdb", "15383", today)
+    repo.tombstone_film(fid, today, "test")
+    assert repo.films_needing_year_backfill() == []
+
+
+def test_films_needing_year_backfill_skips_series(repo, today):
+    fid = repo.create_film(Film("Some Show", None, None, ""))
+    repo.set_film_kind(fid, "series")
+    repo.set_external_id(fid, "tmdb", "999", today)
+    assert repo.films_needing_year_backfill() == []
+
+
+def test_films_needing_year_backfill_respects_limit(repo, today):
+    fids = []
+    for i, title in enumerate(("A", "B", "C")):
+        fid = repo.create_film(Film(title, None, None, ""))
+        repo.set_external_id(fid, "tmdb", str(100 + i), today)
+        fids.append(fid)
+    targets = repo.films_needing_year_backfill(limit=2)
+    assert [t.film_id for t in targets] == fids[:2]

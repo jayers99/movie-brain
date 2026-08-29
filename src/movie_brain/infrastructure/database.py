@@ -23,6 +23,7 @@ from movie_brain.domain.models import (
     McTitle,
     OmdbRating,
     ReviewEntry,
+    YearBackfillTarget,
     film_key,
 )
 from movie_brain.domain.thumbprint import edition_label, title_norm
@@ -1078,6 +1079,25 @@ class Repository:
             rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
         return [
             ImdbBackfillTarget(int(r["id"]), str(r["title"]), r["year"], int(r["tmdb_id"]))
+            for r in rows
+        ]
+
+    def films_needing_year_backfill(self, limit: int | None = None) -> list[YearBackfillTarget]:
+        """Films with no year at all, holding a TMDB id — the worklist of `repair years
+        --from-tmdb`. A series is excluded for the same reason `films_needing_imdb_backfill`
+        excludes one: its integer id is not a movie id, so `movie_year` cannot be trusted."""
+        sql = (
+            "SELECT f.id, f.title, x.value AS tmdb_id FROM films f "
+            "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
+            "WHERE f.year IS NULL AND " + _NOT_DISPOSED + _IS_MOVIE +
+            " ORDER BY f.id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+        with self._conn() as c:
+            rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
+        return [
+            YearBackfillTarget(int(r["id"]), str(r["title"]), int(r["tmdb_id"]))
             for r in rows
         ]
 

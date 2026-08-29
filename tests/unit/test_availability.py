@@ -77,6 +77,68 @@ def test_record_tmdb_match_year_adoption_requeues_stale_omdb_miss(repo):
     assert fid in queued
 
 
+def test_record_tmdb_match_fills_a_missing_year_for_a_criterion_film(repo):
+    """A missing year is not a value worth protecting: precedence only applies between
+    two values that both exist. A Criterion film (commerce=False) with no year at all
+    must still adopt TMDB's year — this is the bug fix, and must fail before it."""
+    fid = repo.upsert_film(Film("Army of Shadows", None, None, "https://c/army-of-shadows"))
+    target = TmdbMatchTarget(fid, "Army of Shadows", None, False)
+
+    outcome = record_tmdb_match(repo, target, 15383, 1969, TODAY, lambda msg: None)
+
+    assert outcome == "adopted"
+    view = repo.get_view(fid)
+    assert view is not None
+    assert view.year == 1969
+
+
+def test_record_tmdb_match_never_overwrites_a_criterion_films_existing_year(repo):
+    """The protection that must not regress: a Criterion film that already HAS a year
+    keeps it even when TMDB disagrees — precedence between two real values, unchanged
+    by the fix."""
+    fid = repo.upsert_film(Film("Army of Shadows", 2006, None, "https://c/army-of-shadows"))
+    target = TmdbMatchTarget(fid, "Army of Shadows", 2006, False)
+
+    outcome = record_tmdb_match(repo, target, 15383, 1969, TODAY, lambda msg: None)
+
+    assert outcome == "matched"
+    view = repo.get_view(fid)
+    assert view is not None
+    assert view.year == 2006
+
+
+def test_record_tmdb_match_commerce_film_still_adopts_a_differing_year(repo):
+    """Existing behaviour, unchanged: a commerce (no-Criterion-listing) film with a
+    differing year still adopts TMDB's year."""
+    fid = repo.upsert_film(Film("Army of Shadows", 2006, None, "https://mc/army-of-shadows"))
+    target = TmdbMatchTarget(fid, "Army of Shadows", 2006, True)
+
+    outcome = record_tmdb_match(repo, target, 15383, 1969, TODAY, lambda msg: None)
+
+    assert outcome == "adopted"
+    view = repo.get_view(fid)
+    assert view is not None
+    assert view.year == 1969
+
+
+def test_record_tmdb_match_null_year_key_collision_queues_review(repo):
+    """A film with no year at all can still collide on the recomputed key with an
+    existing film holding the same title+TMDB-year — the collision path must still
+    queue year-collision rather than overwrite, even on this new NULL-year branch."""
+    repo.upsert_film(Film("Nosferatu", 1922, None, "https://c/nosferatu"))
+    fid = repo.upsert_film(Film("Nosferatu", None, None, "https://c/nosferatu-2"))
+    target = TmdbMatchTarget(fid, "Nosferatu", None, False)
+
+    outcome = record_tmdb_match(repo, target, 653, 1922, TODAY, lambda msg: None)
+
+    assert outcome == "collision"
+    view = repo.get_view(fid)
+    assert view is not None
+    assert view.year is None
+    reviews = [r for r in repo.open_reviews("tmdb") if r["reason"] == "year-collision" and r["film_id"] == fid]
+    assert len(reviews) == 1
+
+
 def test_rebuild_skips_a_film_whose_reviewed_row_was_resolved(repo, today):
     from movie_brain.application.availability import NO_MATCH_REVIEWED, rebuild_no_match_queue
     from movie_brain.domain.models import Film, ReviewEntry
