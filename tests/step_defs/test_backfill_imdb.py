@@ -5,9 +5,9 @@ import sqlite3
 from dataclasses import dataclass, field
 
 import pytest
-from movie_brain.application.backfill_imdb import backfill_imdb
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.domain.models import Film, OmdbRating
 
 scenarios("../features/backfill_imdb.feature")
