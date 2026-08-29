@@ -1,6 +1,6 @@
 # On Sale — working through the canon, with price as the acquisition trigger
 
-**Date:** 2026-08-29 · **Status:** designed with the owner across a long conversation; every decision below is theirs and recorded with its reasoning. Ready to plan.
+**Date:** 2026-08-29 · **Status:** designed with the owner across a long conversation; every decision below is theirs and recorded with its reasoning. **Amended 2026-08-29 (build session)** — the probe evidence in the handoff arrived after this spec was written, and the owner has since chosen a build scope (D9) and a backfill shape (D10). Amendments are §2's Criterion clause, §3's list-size note, §5, §6, §8, and the new §9 and §10. §1's D1–D8 are untouched.
 
 ## 0. What this actually is
 
@@ -27,18 +27,21 @@ Two earlier framings were tried and discarded, both by the owner:
 | D6 | **Price refresh is on demand, never scheduled** | Standing preference: syncs are run manually, deliberately. The controller repeatedly said "nightly sync" and was wrong to |
 | D7 | **Correct the target price on existing watchlist entries** | Owner overrode the controller's report-only recommendation. Noted consequence: correcting a target DOWNWARD stops alerts at the higher price |
 | D8 | **The watchlist itself lives on CheapCharts** | See §0 |
+| D9 | **Build the IMDb backfill and the canon ranking now; defer all price and watchlist work** | The ranking works for 100% of the catalogue; the price half reaches only the 57% Apple actually sells, and the browse view is empty most days (handoff §2c). Deferring the price work also means **no schema change at all** — see §10 |
+| D10 | **The backfill writes the IMDb id alone — a "quiet" backfill, no year canonicalization** | These films already hold their TMDB id, so a full re-key would re-run `record_tmdb_match` and move `films.year` on up to **1,236 commerce-created films** as a side effect of writing a missing id. The quiet form uses the same sanctioned `key_film` path and moves no years — see §9 |
 
 ## 2. The gate — which films are worth buying
 
 A film is a candidate when **all** hold:
 
 - it is **not currently streamable** on any service where `movie_service.subscribed = 1 AND kind = 'svod'`. The `kind` test matters: `apple-tv-store` is marked subscribed but is a shop, and a shop must never suppress a film. Currency uses the existing rule — `last_seen >= tmdb_providers_refreshed_at`, or `MAX(last_seen)` for criterion.
+- **The Criterion Channel needs its own clause** (found in the code, 2026-08-29). `criterion` *is* a subscribed `svod` row in `movie_service`, but `_SERVICES_SQL` filters it out (`l.source != 'criterion'`), so it never reaches `FilmView.services`. Testing `services` alone would therefore offer to buy films that are streaming on the Channel right now. On a `FilmView` the test is `criterion AND NOT departed`; in SQL it is a current `listings` row for source `criterion`.
 - it is **not owned** (`owned` table)
 - it is **not already rated** (`my_ratings`)
 - it is not disposed
 - and it is **either on at least one curated list, or scores ≥ 90 on Metacritic**
 
-**263 candidates today.** 84 list-only, 22 both, 160 Metacritic-only.
+**263 candidates today.** 84 list-only, 22 both, 160 Metacritic-only. *Re-measured against the live DB on 2026-08-29 with the Criterion clause above in place: 263 total — 84 list-only, 21 both, 158 Metacritic-only. The gate reproduces; the small drift is films rated since.*
 
 Note the self-deepening property: rating a film removes it from the set, so the same dial reaches one film further down. The dial exists to outpace that, not to keep up with it.
 
@@ -51,6 +54,11 @@ canon_score = Σ over lists ( trust × (1 − (printed_rank − 1) / list_size) 
 ```
 
 so #1 on a list contributes its full trust and the last entry contributes ~0. Position matters, not just membership: Cahiers #12 outweighs Sight & Sound #243. The original curated-lists spec §5.7 warned against summing ranked and unranked membership blindly; this honours it. A tied `rank_label` (`=196`) uses the printed rank, which is the poll's own judgement.
+
+Two mechanics the formula needs and the code does not yet supply (found 2026-08-29):
+
+- **`list_size` is not on `FilmView`.** `_LISTS_SQL` carries slug, name, curator, published, ordered, trust, rank and `rank_label` — not the entry count of the list. The score's denominator needs it, so each `FilmView.lists` entry gains a `size`.
+- **`rank_label` is the printed cell and may carry a tie marker.** The score reads `rank_label` when present and falls back to `rank`, parsing a leading `=` off (`"=196"` → 196). An **unordered** list (`ordered = 0`) has no meaningful position; such a list contributes its full trust, since membership is all it asserts.
 
 **Tier 2 — acclaimed but uncanonised.** MC ≥ 90 and on no list, ranked among themselves by score, **always below every tier-1 film**.
 
@@ -110,9 +118,11 @@ A new table holds, per film: the iTunes id, current price, computed historical l
 
 ## 5. The view
 
-The dashboard list is **quality-sorted** (tier 1 then tier 2), not filtered to on-sale. Each row shows the historical low, flags films currently at it, and carries a button to that film's CheapCharts page. An `On Sale` chip narrows to the at-the-low ones.
+**Amended by D9.** The price half of this section is deferred; what ships now is the ranked queue itself.
 
-Two states, and the price data exists to tell them apart:
+**Ships now.** A canned filter chip — `acquire` — carrying the §2 gate, and a **canon rank** sort that orders tier 1 by `canon_score` descending and puts every tier-2 film below every tier-1 film. Both live where the existing ones live: the predicate and the sort key in `domain/filters.py` (the only home for chip names and thresholds), the chip button in `index.html`, `CHIP_PREDICATES` in `static/app.js` kept in lockstep, thresholds read from `/api/config`. The drawer's existing "On lists:" row already shows the evidence behind a film's rank, so no new drawer section is needed.
+
+**Deferred with the price work.** Each row showing the historical low, the at-the-low flag, the button to the film's CheapCharts page, and the `On Sale` chip that narrows to the at-the-low ones. Two states the price data exists to tell apart:
 
 | state | meaning |
 |---|---|
@@ -121,7 +131,9 @@ Two states, and the price data exists to tell them apart:
 
 ## 6. The CheapCharts batch — driving the browser
 
-The owner asked whether the watchlist entries could be created automatically. They can, within limits that are part of this design and not negotiable by a future implementer:
+**Deferred by D9 — nothing in this section is built in this pass.** The limits below stand unchanged for whenever it is, and are not negotiable by a future implementer.
+
+The owner asked whether the watchlist entries could be created automatically. They can, within limits that are part of this design:
 
 - **Never log in, never handle credentials.** If the session has expired, stop and hand back to the owner.
 - **Read the existing wishlist first**, in the owner's logged-in session. Anything already present is not re-added. This read also produces the watch-listed snapshot the dashboard displays — answering the owner's original *"I would like to know in the GUI whether I had it watch listed yet."*
@@ -134,6 +146,54 @@ The owner asked whether the watchlist entries could be created automatically. Th
 
 Alerting from movie-brain (CheapCharts owns that) · buying anything · rental prices · non-US stores · services other than Apple · a weighted variant of the `on 2+ lists` chip · any change to how trust is set.
 
+**Out of scope for this build, deferred by D9, not abandoned:** the `price` table and migration 017 · `prices refresh` / `prices dial` · every CheapCharts HTTP call · all browser automation (§6) · the price columns and `On Sale` chip in §5.
+
 ## 8. Gates
 
-`uv run pytest` · `uv run ruff check .` · `uv run mypy` · `uv run python scripts/thumbprint_benchmark.py --assert` (baseline **n=571 / WRONG=0 / 92.0% over 526**) · `uv run python scripts/matching_benchmark.py --assert-dominance`. Nothing here touches the resolver, the fixture or the identity write path — the iTunes id is confirmed against an IMDb id we already hold, and no film is ever created, keyed or merged by this feature.
+`uv run pytest` · `uv run ruff check .` · `uv run mypy` · `uv run python scripts/thumbprint_benchmark.py --assert` (baseline **n=571 / WRONG=0 / 92.0% over 526**) · `uv run python scripts/matching_benchmark.py --assert-dominance`.
+
+**Corrected 2026-08-29.** The original claim here — *"nothing here touches the resolver, the fixture or the identity write path"* — was true of the price feature alone and is **false** now that the backfill (§9) is in scope. The accurate statement:
+
+- The backfill **is** an identity write and goes through `application/keying.py::key_film`, the one identity write path, never `set_external_id` directly.
+- It **keys films** — 3,699 of them. It still creates no film and merges none.
+- It does **not** touch the resolver: no `resolve()` call, no candidate scoring. The id comes from TMDB's own `movie_detail` for a TMDB id the film already holds.
+- `scripts/eval/thumbprint_eval_v1.csv` and the resolver fixture are **never written**. A backfilled id is TMDB's assertion, not resolver ground truth.
+- The ranking work (§3, §5) touches none of this and is pure read-model plus domain predicate.
+
+## 9. The IMDb backfill (build item 1)
+
+**Why it is worth doing on its own.** 4,538 films hold a TMDB id, 850 hold an IMDb id, **3,699 hold TMDB but no IMDb** (verified against the live DB, 2026-08-29, schema v16, 4,735 films). That gap is what forced gate 2b during the list imports, what left *Black Narcissus* and *Melancholia* unresolvable by machine, and what held the CheapCharts probe to 10/30 until it was resolved in memory — after which the same probe reached 23/40. It is also a prerequisite for §4 whenever the price work is built.
+
+**The write, exactly.** For each film holding a `tmdb` external id and no `imdb` one, and not disposed:
+
+1. `TmdbClient.imdb_id(tmdb_id)` — one `movie_detail` call, the id TMDB itself publishes for a TMDB id this film already holds. No search, no scoring, no ambiguity to resolve.
+2. `key_film(repo, tmdb, film_id, tt, today, tmdb_id=None, resolve_tmdb_id=False)`.
+
+**Why those two arguments (D10).** `resolve_tmdb_id=False` tells `key_film` not to repeat a `find_by_imdb` lookup; `tmdb_id=None` then means it writes the IMDb id and stops. The film's TMDB link already exists and is not rewritten, so `record_tmdb_match` never runs — and neither does its year canonicalization, which would otherwise move `films.year` on up to **1,236 commerce-created films** (measured: that is how many of the 3,699 have no Criterion listing). Writing a missing id must not be a year migration in disguise. This is a documented use of the existing signature, not a new path.
+
+**What still happens, and should.** `key_film` ends by comparing the film's OMDb `imdbID` to the new `tt` and calling `mark_omdb_refresh` when they differ — so every backfilled film is queued for an OMDb refetch **by id** on the next manual sync, filling in director and ratings for Mode-B films. That is a benefit, not a side effect to suppress.
+
+**Failure shapes, none of them silent.**
+
+| result | meaning | handling |
+|---|---|---|
+| `unlinked` | id written | counted as backfilled |
+| `held` | another film already holds that `tt` | a twin. Queue **one durable review row** (`queue_review_once`, authority `imdb`); never overwrite, never guess |
+| TMDB has no `imdb_id` for the id | genuine absence | counted and reported; no write |
+| network / auth error | transient | counted; consecutive-failure abort like `key_films`, so a re-run resumes |
+
+**Shape.** A CLI verb, dry run by default, `--apply` to write, `--limit N` to batch — the established shape of every `repair` verb. Never scheduled (D6 generalises: syncs are manual by choice).
+
+**Rehearsal is mandatory.** Every run — including subagent runs — sets `MOVIE_BRAIN_CONFIG_DIR` to a scratch copy of the live DB. The owner sees the full result, including a `films.year` diff proving zero years moved, before anything runs live.
+
+## 10. Build scope (D9)
+
+| item | this pass | note |
+|---|---|---|
+| 1. IMDb backfill | **yes** | §9 |
+| 2. Canon ranking + candidate view | **yes** | §2, §3, §5 "ships now" |
+| 3. Price + watchlist automation | **no** | §4, §5 "deferred", §6 |
+
+**No migration.** The backfill writes `external_ids` rows; `canon_score` is computed from data already in `film_list` / `film_list_entry` and is never denormalized onto `films` (the curated-lists rule). Nothing in this pass changes the schema — the live DB stays at v16 and **017 remains unwritten**.
+
+**Known state to clear first.** Films `#4763 Histoire(s) du Cinéma` (`tt6677224`) and `#4764 Twin Peaks: The Return` (`tt4093826`) are deliberately unkeyed pending a sync and `review resolve <row> --tt <id> --series`. Both hold no TMDB id, so the backfill does not touch them; they will appear in the ranked queue with no year until they are keyed.
