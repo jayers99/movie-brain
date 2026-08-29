@@ -343,7 +343,7 @@
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     const lists = (d.lists || []).map((l) => {
       const label = l.published ? `${esc(l.curator || l.name)} ${esc(l.published)}` : esc(l.curator || l.name);
-      return l.ordered ? `${label} #${l.rank}` : label;
+      return l.ordered ? `${label} #${esc(l.rank_label ?? l.rank)}` : label;
     }).join(', ');
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}

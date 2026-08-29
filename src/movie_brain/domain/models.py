@@ -152,7 +152,10 @@ class FilmView:
     metacritic: int | None = None
     metacritic_url: str | None = None
     services: list[dict[str, object]] = field(default_factory=list)
-    lists: list[dict[str, object]] = field(default_factory=list)  # [{slug, name, curator, published, ordered, rank}]
+    # [{slug, name, curator, published, ordered, rank, rank_label}] — rank_label is the rank AS
+    # PRINTED (may be None, may carry a tie marker like "=243"); rank is always the 1-based line
+    # position. The drawer renders rank_label ?? rank.
+    lists: list[dict[str, object]] = field(default_factory=list)
     watchlisted: bool = False
     new_on: list[dict[str, object]] = field(default_factory=list)  # [{source, name, appeared_on}], arrivals window only
     criterion: bool = True  # has a Criterion listing (current or departed); False = discovery-only
