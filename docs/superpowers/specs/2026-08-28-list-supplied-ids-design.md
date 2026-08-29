@@ -81,8 +81,10 @@ Every entry keeps its two-line block. The supplied-id state is one suffix on the
 
 The tally gains one trailing line on a supplied-id import, and it is the deliverable of §2:
 
+The denominator is entries **compared** (`agree + disagree + supplied`), not ids present in the file: an entry already linked from an earlier import, or one whose every lookup failed, is never scored. The measurement is therefore meaningful on the FIRST import of a list — a re-import skips what it already linked before the fetcher is touched, and its tally collapses toward zero, which is the counters working rather than a regression.
+
 ```
-resolver vs supplied id:  agree 91 · disagree 2 · resolver had no verdict 7  (of 100 with ids)
+resolver vs supplied id:  agree 91 · disagree 2 · resolver had no verdict 7  (of 100 compared)
 ```
 
 ## 7. Expected shape for Bergan (measured read-only, 2026-08-28)
