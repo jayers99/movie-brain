@@ -9,6 +9,7 @@ exactly what the curator wrote.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from movie_brain.domain.models import ListEntry, ListMeta
 
 _TRUE = {"true", "1", "yes"}
 _FALSE = {"false", "0", "no"}
+_TT_RE = re.compile(r"^tt\d+$")
 
 
 class ListFileError(Exception):
@@ -79,6 +81,10 @@ def parse_list_file(text: str) -> ParsedList:
             raise ListFileError(f"malformed data row (need at least rank and title): {line!r}")
         rank_raw, title_listed = parts[0], parts[1]
         director_listed = parts[2] if len(parts) >= 3 and parts[2] else None
+        tt_raw = parts[3] if len(parts) >= 4 and parts[3] else None
+        if tt_raw is not None and not _TT_RE.match(tt_raw):
+            raise ListFileError(f"malformed tt id: {tt_raw!r}")
+        tt_listed = tt_raw
 
         try:
             rank = int(rank_raw)
@@ -91,7 +97,7 @@ def parse_list_file(text: str) -> ParsedList:
         if not title_listed:
             raise ListFileError(f"empty title at rank {rank}")
 
-        entries.append(ListEntry(rank, title_listed, director_listed))
+        entries.append(ListEntry(rank, title_listed, director_listed, tt_listed))
 
     return ParsedList(meta=meta, entries=tuple(entries))
 
