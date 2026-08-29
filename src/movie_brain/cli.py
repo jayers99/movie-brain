@@ -10,6 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from movie_brain.application.audit import run_audit
+from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.lists import create_films, import_list, scorecard
@@ -657,6 +658,28 @@ def repair_links_cmd(
     else:
         console.print(f"checked: {report.checked} · suspects: {report.suspects} · cleared: {report.cleared}")
     raise typer.Exit(report.exit_code)
+
+
+@repair_app.command("imdb")
+def repair_imdb_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Write the imdb ids (default: dry-run).")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the worklist.")] = None,
+) -> None:
+    """Fill in the IMDb id TMDB already publishes, for films holding a TMDB id and no IMDb one.
+
+    The IMDb id is written ALONE: the film's existing TMDB link is left exactly as it is, so no
+    film's year moves. One TMDB call per film; dry-run by default.
+    """
+    cfg = load_config()
+    token = load_tmdb_token(cfg)
+    if not token:
+        err.print(f"no TMDB token: set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}")
+        raise typer.Exit(2)
+    report = backfill_imdb(_repo(), TmdbClient(token), date.today(), apply=apply, limit=limit, log=_plain)
+    console.print(
+        f"scanned: {report.scanned} · backfilled: {report.backfilled} · no imdb id: {report.no_imdb} · "
+        f"held: {report.held} · failed: {report.failed}" + (" · ABORTED" if report.aborted else "")
+    )
 
 
 @repair_app.command("years")

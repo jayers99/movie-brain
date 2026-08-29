@@ -66,7 +66,12 @@ def key_film(
 
     `resolve_tmdb_id`: False when the caller already attempted the `find_by_imdb` lookup
     itself — `key_film` then trusts `tmdb_id=None` to mean TMDB has no movie for this tt, and
-    writes the imdb id alone, instead of repeating the lookup."""
+    writes the imdb id alone, instead of repeating the lookup. WARNING: `repair imdb`
+    (`backfill_imdb.py`) passes this exact same pair, `tmdb_id=None, resolve_tmdb_id=False`,
+    to mean the opposite thing — "the film already holds a working TMDB link, leave it
+    alone" — relying on the fact that `tid` then stays `None` throughout this call, so the
+    `record_tmdb_match`/`upsert_tmdb` branch below never runs and the film's existing TMDB
+    row is untouched. Do not "fix" that caller to match this docstring's meaning."""
     holder = repo.film_id_for_external("imdb", tt)
     if holder is not None and holder != film_id:
         return KeyResult("held", tmdb_id, f"{tt} already held by #{holder}")

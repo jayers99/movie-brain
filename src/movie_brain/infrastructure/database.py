@@ -14,7 +14,17 @@ from typing import Any, NamedTuple
 
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
-from movie_brain.domain.models import Film, FilmView, ListEntry, ListMeta, McTitle, OmdbRating, ReviewEntry, film_key
+from movie_brain.domain.models import (
+    Film,
+    FilmView,
+    ImdbBackfillTarget,
+    ListEntry,
+    ListMeta,
+    McTitle,
+    OmdbRating,
+    ReviewEntry,
+    film_key,
+)
 from movie_brain.domain.thumbprint import edition_label, title_norm
 
 MISS_RETRY_DAYS = 30
@@ -294,7 +304,9 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
 
 
 _LISTS_SQL = """
-SELECT e.film_id, e.list_slug, l.name, l.curator, l.published_year, l.ordered, l.trust, e.rank, e.rank_label
+SELECT e.film_id, e.list_slug, l.name, l.curator, l.published_year, l.ordered, l.trust,
+       e.rank, e.rank_label,
+       (SELECT COUNT(*) FROM film_list_entry e2 WHERE e2.list_slug = e.list_slug) AS size
 FROM film_list_entry e JOIN film_list l ON l.slug = e.list_slug
 WHERE e.film_id IS NOT NULL
 ORDER BY e.film_id, l.trust DESC, l.name, e.rank
@@ -328,6 +340,7 @@ def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
                 "trust": int(r["trust"]),
                 "rank": int(r["rank"]),
                 "rank_label": r["rank_label"],
+                "size": int(r["size"]),
             }
         )
     return out
@@ -1048,6 +1061,25 @@ class Repository:
                 + " AND NOT EXISTS (SELECT 1 FROM tmdb t WHERE t.film_id = f.id) ORDER BY f.id"
             ).fetchall()
             return [_tmdb_target(r) for r in rows]
+
+    def films_needing_imdb_backfill(self, limit: int | None = None) -> list[ImdbBackfillTarget]:
+        """Films holding a TMDB id and no IMDb id. A series is excluded for the same reason
+        the TMDB keying worklist excludes one: its integer id is not a movie id."""
+        sql = (
+            "SELECT f.id, f.title, f.year, x.value AS tmdb_id FROM films f "
+            "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
+            "WHERE " + _NOT_DISPOSED + _IS_MOVIE +
+            " AND NOT EXISTS (SELECT 1 FROM external_ids i WHERE i.film_id = f.id AND i.authority = 'imdb')"
+            " ORDER BY f.id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+        with self._conn() as c:
+            rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
+        return [
+            ImdbBackfillTarget(int(r["id"]), str(r["title"]), r["year"], int(r["tmdb_id"]))
+            for r in rows
+        ]
 
     def films_tmdb_missed_targets(self) -> list[TmdbMatchTarget]:
         with self._conn() as c:

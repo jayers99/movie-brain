@@ -4,11 +4,13 @@ import tempfile
 import threading
 import time
 from collections.abc import Generator
+from datetime import date
 from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page, expect
 
+from movie_brain.domain.models import Film, ListEntry, ListMeta, OmdbRating
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
 
@@ -135,6 +137,7 @@ def test_chip_labels_and_order(dash: Page):
         "Needs revisit",
         "Suspect",
         "on 2+ lists",
+        "Worth buying",
         "Clear",
     ]
 
@@ -372,6 +375,118 @@ def empty_dash(page: Page, empty_server: str) -> Page:
     page.goto(empty_server)
     page.wait_for_selector("#films tbody[data-count]")
     return page
+
+
+# ---- acquire chip: another separate repo/server/page so the shared seed above (none of
+# whose films are eligible: every ratings-only film sits on the current Criterion listing,
+# and the two discovery films (Golf, Hotel) carry no list membership and too-low/no
+# metacritic) stays untouched. ----
+
+ACQUIRE_TODAY = date(2026, 8, 19)
+
+
+def seed_acquire(repo: Repository) -> None:
+    # Yankee and Xray: unowned, unrated, no listings anywhere (unreachable discovery films),
+    # both on one ordered 3-entry list at ranks 1 and 3 — Yankee's #1 gives it the higher
+    # canonScore (10.0 vs 3.33), proving the tier-1 canon-score-desc ordering.
+    yankee = repo.create_film(Film("Yankee", 2001, "Yolanda", ""))
+    xray = repo.create_film(Film("Xray", 2002, "Xena", ""))
+    assert yankee is not None and xray is not None
+    # Whiskey: same list (rank 2, so it would score BETWEEN Yankee and Xray if it counted) but
+    # currently on the Criterion Channel — proves the criterion clause suppresses even a
+    # canon-list film, ahead of the isCanon/metacritic test.
+    repo.record_catalog("criterion", [Film("Whiskey", 2003, "Walt", "https://c/whiskey")], ACQUIRE_TODAY)
+    whiskey = repo.film_id_by_key("whiskey (2003)")
+    assert whiskey is not None
+    # Zulu: unowned, unrated, no listing, no list membership at all — qualifies for the chip on
+    # Metacritic alone (91 >= top_mc). Tier 1 (on a list) must still outrank tier 2
+    # (Metacritic-only) even though Zulu's raw Metascore (91) dwarfs Xray's canon_score (3.33) —
+    # this is the ordering check the tier-then-canon_score `compare()` clause promises.
+    zulu = repo.create_film(Film("Zulu", 2004, "Zora", ""))
+    assert zulu is not None
+    repo.upsert_omdb(zulu, OmdbRating(8.0, 90, True, "English", '{"Title":"Zulu"}', metacritic=91), ACQUIRE_TODAY)
+
+    # Victor: unowned, unrated, no listing, no Metacritic — its ONLY qualification for the chip
+    # is membership on a list whose trust the owner has set to 0 ("visible, scores nothing"),
+    # so canon_score(Victor) == 0.0, exactly TIED with canon_score(Zulu) == 0.0 (Zulu carries no
+    # list at all). A score-only comparator would leave this tie to the metacritic/rt/imdb
+    # fallback below, where Zulu's 91 would wrongly sort it ahead of listless Victor — only the
+    # tier check (isCanon) breaks the tie correctly in Victor's favor.
+    victor = repo.create_film(Film("Victor", 2005, "Vera", ""))
+    assert victor is not None
+
+    meta = ListMeta("acquire-test", "Acquire Test List", None, None, None, True)
+    repo.upsert_film_list(meta, ACQUIRE_TODAY)
+    repo.upsert_list_entry("acquire-test", ListEntry(1, "Yankee", "Yolanda"))
+    repo.link_list_entry("acquire-test", 1, yankee)
+    repo.upsert_list_entry("acquire-test", ListEntry(2, "Whiskey", "Walt"))
+    repo.link_list_entry("acquire-test", 2, whiskey)
+    repo.upsert_list_entry("acquire-test", ListEntry(3, "Xray", "Xena"))
+    repo.link_list_entry("acquire-test", 3, xray)
+    repo.set_list_trust("acquire-test", 10)
+
+    victor_meta = ListMeta("victor-test", "Victor Test List", None, None, None, True)
+    repo.upsert_film_list(victor_meta, ACQUIRE_TODAY)
+    repo.upsert_list_entry("victor-test", ListEntry(1, "Victor", "Vera"))
+    repo.link_list_entry("victor-test", 1, victor)
+    repo.set_list_trust("victor-test", 0)
+
+
+@pytest.fixture
+def acquire_server() -> Generator[str, None, None]:
+    sock = socket.socket()
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    sock.close()
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = Repository(Path(tmp) / "acquire-movie-brain.db")
+        seed_acquire(repo)
+        app = create_app(repo, today=lambda: ACQUIRE_TODAY)
+        threading.Thread(target=lambda: app.run(host="127.0.0.1", port=port, use_reloader=False), daemon=True).start()
+        time.sleep(0.5)
+        yield f"http://127.0.0.1:{port}"
+
+
+@pytest.fixture
+def acquire_dash(page: Page, acquire_server: str) -> Page:
+    # scope=all: none of these films are "reachable" (list membership alone doesn't count),
+    # and lang=any: none carry OMDb language metadata, so the default English filter would
+    # hide every one of them.
+    page.goto(f"{acquire_server}/?scope=all&lang=any")
+    page.wait_for_selector("#films tbody[data-count]")
+    return page
+
+
+def test_acquire_chip_shows_canon_film_with_no_subscribed_listing(acquire_dash: Page):
+    acquire_dash.click('.chip[data-chip="acquire"]')
+    assert acquire_dash.locator("tr[data-id]", has_text="Yankee").count() == 1
+
+
+def test_acquire_chip_excludes_film_currently_on_criterion(acquire_dash: Page):
+    acquire_dash.click('.chip[data-chip="acquire"]')
+    assert count(acquire_dash) == 4  # Yankee, Xray, Victor, Zulu — Whiskey stays off despite its list rank
+    assert acquire_dash.locator("tr[data-id]", has_text="Whiskey").count() == 0
+
+
+def test_acquire_chip_orders_by_canon_score_desc(acquire_dash: Page):
+    # Yankee/Xray have no listing anywhere, so `f.url` is None and `.c-title` renders no <a>
+    # (first_titles assumes one) — read the plain title text instead.
+    acquire_dash.click('.chip[data-chip="acquire"]')
+    titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()[:2]]
+    assert titles == ["Yankee", "Xray"]  # #1/3 (score 10.0) before #3/3 (score 3.33)
+
+
+def test_acquire_chip_tier_1_outranks_tier_2_even_with_a_lower_raw_score(acquire_dash: Page):
+    # Zulu is Metacritic-only (91, no list membership) — its raw score dwarfs Xray's
+    # canon_score (3.33), but tier 1 (on a curated list) must still sort above tier 2
+    # (Metacritic-only) per the spec: on-a-list beats Metacritic-only, full stop. Victor sits
+    # on a trust-0 list, so canon_score(Victor) == 0.0 exactly TIES canon_score(Zulu) == 0.0 —
+    # only the tier check (not a score-magnitude comparison) can break that tie correctly, so
+    # this also proves the tier check is load-bearing, not merely a shortcut a nonneg
+    # canon_score comparison would already have produced on its own.
+    acquire_dash.click('.chip[data-chip="acquire"]')
+    titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()]
+    assert titles == ["Yankee", "Xray", "Victor", "Zulu"]
 
 
 def test_drawer_shows_also_streaming(dash):
