@@ -197,7 +197,7 @@ Alerting from movie-brain (CheapCharts owns that) · buying anything · rental p
 | result | meaning | handling |
 |---|---|---|
 | `unlinked` | id written | counted as backfilled |
-| `held` | another film already holds that `tt` | a twin. Queue **one durable review row** (`queue_review_once`, authority `imdb`); never overwrite, never guess |
+| `held` | another film already holds that `tt` | a twin. Queue **one durable review row** (`queue_review_once`, authority `tmdb`, not `imdb` — that authority is what puts the row on the `repair dupes` scan and on `review resolve --film`'s branch); never overwrite, never guess |
 | TMDB has no `imdb_id` for the id | genuine absence | counted and reported; no write |
 | network / auth error | transient | counted; consecutive-failure abort like `key_films`, so a re-run resumes |
 
