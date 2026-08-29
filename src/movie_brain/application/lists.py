@@ -10,25 +10,31 @@ costs a merge. So the four helpers here are deliberately timid.
 - `find_holder` — gates 1 / 2 / 2b: does a film in the catalog already hold this work's ids?
 - `corpus_veto` — gate 3: does the catalog hold anything *resembling* any of these titles?
 
+`import_list` is phase 1 (design §5): it links, it asks, and it **never creates a film**.
+`scorecard` renders its result, and is the deliverable of the accuracy test — a wrong *link*
+is silent in a way a duplicate film is not, so every entry gets a printed line.
+
 `find_holder` is the third sibling of the resolve-first block in `owned.py::import_owned` and
 `metacritic.py::promote_top_n`, with one addition — gate 2b (design §1 A4): a resolver winner
 that exists only in OMDb carries no TMDB id, so the plain gate 2 asks nothing at all. Asking
 TMDB for the mapping — the same `find_by_imdb` call `key_film` already trusts on every keying
 path — can only find *more* holders, so it strictly reduces creations.
 
-The verbs that use these (`lists import`, `lists create`) live in later tasks. Nothing here
-writes anything.
+The creation verb (`lists create`) lives in a later task; the four helpers write nothing.
 """
 
 from __future__ import annotations
 
 import sys
-from collections.abc import Callable
+from collections import Counter
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from datetime import date
 
 import requests
 
-from movie_brain.domain.matching import Candidate, CandidateIndex
-from movie_brain.domain.models import ListEntry
+from movie_brain.domain.matching import Candidate, CandidateIndex, build_candidate_index
+from movie_brain.domain.models import ListEntry, ListMeta, ReviewEntry
 from movie_brain.domain.thumbprint import Verdict, make_query, parse_title, resolve
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.omdb import QuotaExceeded
@@ -36,6 +42,12 @@ from movie_brain.infrastructure.thumbprint_fetch import CacheMiss, CandidateFetc
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 AUTHORITY = "list"
+
+# match_review reasons this importer queues, all under AUTHORITY with film_id NULL.
+UNRESOLVED = "unresolved"
+CORPUS_VETO = "corpus-veto"
+DUPLICATE_ENTRY = "duplicate-entry"
+TOMBSTONED_HOLDER = "tombstoned-holder"
 
 
 def _stderr(msg: str) -> None:
@@ -162,3 +174,301 @@ def corpus_veto(index: CandidateIndex, forms: list[str]) -> list[Candidate]:
         for c in index.lookup(form)[1]:
             hits.setdefault(c.id, c)
     return list(hits.values())
+
+
+@dataclass(frozen=True)
+class EntryOutcome:
+    """One entry's fate, plus everything the scorecard needs to render it.
+
+    `reason` is the resolver's own reason string — contract text, carried verbatim and never
+    reworded — and `detail` is the rendered tail of the entry's scorecard line, reused as the
+    body of its review row so the printed page and the queued row can never disagree.
+    """
+
+    rank: int
+    title_listed: str
+    director_listed: str | None
+    kind: str  # linked | would-create | review | blocked | error
+    film_id: int | None
+    tt: str | None
+    reason: str
+    form_used: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class ListImportReport:
+    exit_code: int
+    total: int
+    linked: int
+    would_create: int
+    review: int
+    blocked: int
+    errors: int
+    rows: list[EntryOutcome]
+
+
+def queue_list_review_once(repo: Repository, entry: ReviewEntry, today: date) -> bool:
+    """Append one durable `list` review row unless that entry's row already exists.
+
+    **Dedup is on reason + value, NOT reason + film_id** — the difference matters. The shared
+    `application/availability.py::queue_review_once` keys on reason + film_id, and every list
+    row carries `film_id = NULL`, so under that helper the first open `unresolved` row would
+    silently suppress the `unresolved` row of every later entry on the list. `value` is
+    `<slug>#<rank>`, which is exactly one entry, so it is the right key here.
+
+    A resolved row is a standing decision, consulted the same way every other authority does
+    it: a `--dismiss` is permanent and is never re-queued by a later import.
+    """
+    for r in repo.open_reviews(AUTHORITY):
+        if r["reason"] == entry.reason and r["value"] == entry.value:
+            return False
+    if (entry.reason, entry.film_id, entry.value) in repo.resolved_review_keys(AUTHORITY):
+        return False  # a human already decided this one
+    repo.append_reviews(AUTHORITY, [entry], today)
+    return True
+
+
+def _outcome(
+    entry: ListEntry,
+    kind: str,
+    detail: str,
+    *,
+    film_id: int | None = None,
+    tt: str | None = None,
+    reason: str = "",
+    form: str = "",
+) -> EntryOutcome:
+    return EntryOutcome(
+        entry.rank, entry.title_listed, entry.director_listed, kind, film_id, tt, reason, form, detail
+    )
+
+
+def _listed(entry: ListEntry) -> str:
+    return f"{entry.title_listed!r} / {entry.director_listed or '?'}"
+
+
+def _review_detail(entry: ListEntry, form: str, detail: str) -> str:
+    """What a human draining this row sees: the listed title/director, then the entry's own
+    scorecard tail (resolver reason plus candidates or vetoing films), then the form asked."""
+    return f"{_listed(entry)} — {detail} [form {form!r}]"
+
+
+def _would_create_label(verdict: Verdict) -> str:
+    """`tt0028950 'Grand Illusion' (1937)` — the work phase 2 would mint, named by the winner.
+
+    `resolve` truncates `ranked` to the top three, so the winner can be missing from it; the
+    tt alone is still the honest answer then.
+    """
+    winner = next((s.candidate for s in verdict.ranked if s.candidate.tt == verdict.tt), None)
+    if winner is None or not winner.titles:
+        return str(verdict.tt)
+    return f"{verdict.tt} {winner.titles[0]!r} ({winner.year or '-'})"
+
+
+def _candidates(verdict: Verdict) -> str:
+    """The resolver's top three, in the `repair nomatch` shape a reviewer already reads."""
+    if not verdict.ranked:
+        return "none"
+    return " / ".join(
+        f"{letter} {s.candidate.tt} {(s.candidate.titles[0] if s.candidate.titles else '')!r} "
+        f"({s.candidate.year or '-'}) dir {s.candidate.directors or '-'}"
+        for letter, s in zip("ABC", verdict.ranked, strict=False)
+    )
+
+
+def _film_label(catalog: dict[int, tuple[str, int | None, str | None]], film_id: int) -> str:
+    """`#1207 'The Rules of the Game' (1939) dir Jean Renoir` — enough to eyeball a link."""
+    row = catalog.get(film_id)
+    if row is None:
+        return f"#{film_id}"
+    title, year, director = row
+    return f"#{film_id} {title!r} ({year or '-'})" + (f" dir {director}" if director else "")
+
+
+def _veto_label(hits: list[Candidate]) -> str:
+    shown = "; ".join(f"#{c.id} {c.title!r} ({c.year or '-'})" for c in hits[:3])
+    return shown + (f"; +{len(hits) - 3} more" if len(hits) > 3 else "")
+
+
+def import_list(
+    repo: Repository,
+    meta: ListMeta,
+    entries: Sequence[ListEntry],
+    today: date,
+    *,
+    fetcher: CandidateFetcher,
+    tmdb: TmdbClient | None = None,
+    apply: bool = False,
+    log: Callable[[str], None] = _stderr,
+) -> ListImportReport:
+    """Phase 1 (design §5): resolve every entry, link what the catalog already holds, ask about the rest.
+
+    A third sibling of `owned.py::import_owned` and `metacritic.py::promote_top_n`, with one
+    hard difference: **it never creates a film — not on any path, not with `apply=True`**.
+    Creation is `lists create`'s own confirmed run, because a link is cheap to undo and a
+    duplicate film is a merge to clean up (seed §0). Every gate that cannot prove a link
+    refuses and queues a durable review row for a human.
+
+    Dry run by default: with `apply=False` **nothing at all** is written — no registry row, no
+    entries, no claims, no review rows — and the report says what would have happened.
+
+    Re-import is idempotent: an entry that already carries a `film_id` is settled and is
+    skipped before the fetcher is touched, so a re-run costs no API calls for the links it
+    already made; `upsert_list_entry` refreshes title/director without clearing a link.
+
+    `exit_code` is reserved for a whole-run failure. A per-entry exception logs, counts as
+    `error`, and never aborts the run.
+    """
+    prior = {row.rank: row.film_id for row in repo.list_entries(meta.slug)}
+    # film_id -> the rank already holding it. Seeded from the stored links and extended as
+    # this run links, so the duplicate-entry guard sees this run's own work too — which the
+    # stored-state query `film_rank_on_list` cannot, since a dry run writes nothing.
+    linked_at = {fid: rank for rank, fid in prior.items() if fid is not None}
+
+    if apply:
+        repo.upsert_film_list(meta, today)
+        for entry in entries:
+            repo.upsert_list_entry(meta.slug, entry)
+
+    # Once, before the loop — never per entry: these read the whole catalog.
+    film_rows = repo.films_for_matching()
+    index = build_candidate_index(film_rows)
+    # films_for_matching aliases a merged loser's evidence under its SURVIVOR's id, so one id
+    # can carry several rows and none of them says which is the film's own. films_for_repair
+    # is one authoritative row per film; the matching row whose title agrees with it is the
+    # survivor's own, and only that one may lend its director to the scorecard label.
+    catalog: dict[int, tuple[str, int | None, str | None]] = {
+        f.id: (f.title, f.year, None) for f in repo.films_for_repair()
+    }
+    for f in film_rows:
+        row = catalog.get(f.id)
+        if row is not None and f.title == row[0]:
+            catalog[f.id] = (row[0], row[1], f.director)
+
+    rows: list[EntryOutcome] = []
+    reviews: list[ReviewEntry] = []
+    for entry in entries:
+        value = f"{meta.slug}#{entry.rank}"
+        try:
+            settled = prior.get(entry.rank)
+            if settled is not None:
+                detail = f"{_film_label(catalog, settled)}  already linked"
+                rows.append(_outcome(entry, "linked", detail, film_id=settled))
+                continue
+
+            forms = entry_forms(entry.title_listed)
+            verdict, form = resolve_entry(fetcher, entry, log)
+            if verdict is None:
+                # Every form's lookup failed. That is a transient failure, not a verdict, so
+                # it must not become a durable review row a human has to dismiss.
+                rows.append(_outcome(entry, "error", "resolver lookup failed for every form", form=form))
+                continue
+
+            if verdict.kind != "match" or verdict.tt is None:
+                detail = f"resolver {verdict.reason!r}  cands: {_candidates(verdict)}"
+                rows.append(_outcome(entry, "review", detail, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(UNRESOLVED, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            holder, label = find_holder(repo, tmdb, verdict, log)
+            if label == "tmdb lookup failed":
+                # Gate 2b raised: the holder is unknown, NOT disproved. Calling this a
+                # would-create would point phase 2 at a film that may already exist.
+                detail = f"gate 2b: tmdb lookup failed — holder unknown  [{verdict.reason}]"
+                rows.append(_outcome(entry, "error", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                continue
+
+            if holder is None and label.startswith("tombstoned"):
+                # A human hid that film; the list re-surfacing its title is not a
+                # resurrection request, and creating a twin beside it is worse still.
+                detail = f"{TOMBSTONED_HOLDER}  {label}  [{verdict.reason}]"
+                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(TOMBSTONED_HOLDER, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            if holder is not None:
+                twin_rank = linked_at.get(holder)
+                if twin_rank is not None:
+                    # Two ranks on one list resolving to one film is the list-shaped mirror
+                    # of the duplicate-film risk: block, never silently double-link.
+                    detail = (
+                        f"{DUPLICATE_ENTRY}  {_film_label(catalog, holder)} is already linked "
+                        f"at rank {twin_rank}  [{verdict.reason}]"
+                    )
+                    rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                    reviews.append(
+                        ReviewEntry(DUPLICATE_ENTRY, value=value, detail=_review_detail(entry, form, detail))
+                    )
+                    continue
+                if apply:
+                    repo.link_list_entry(meta.slug, entry.rank, holder)
+                    repo.add_claim(holder, AUTHORITY, value, entry.title_listed, first_seen=today.isoformat())
+                linked_at[holder] = entry.rank
+                detail = f"{_film_label(catalog, holder)}  via {label}  [{verdict.reason}]"
+                rows.append(
+                    _outcome(entry, "linked", detail, film_id=holder, tt=verdict.tt, reason=verdict.reason, form=form)
+                )
+                continue
+
+            hits = corpus_veto(index, forms)
+            if hits:
+                # Gate 3 is a veto, not a matcher: a weak or ambiguous look-alike is reason
+                # enough to stop, because ids genuinely differ for one work (design §5.5).
+                detail = f"{CORPUS_VETO}  {_veto_label(hits)}  [{verdict.reason}]"
+                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                reviews.append(ReviewEntry(CORPUS_VETO, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            detail = f"{_would_create_label(verdict)}  [{verdict.reason}]"
+            rows.append(_outcome(entry, "would-create", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+        except Exception as exc:  # one bad entry must never abort the run
+            log(f"list entry {value} failed: {exc}")
+            rows.append(_outcome(entry, "error", f"unexpected failure: {exc}"))
+
+    if apply:
+        for review in reviews:
+            queue_list_review_once(repo, review, today)
+
+    tally = Counter(r.kind for r in rows)
+    return ListImportReport(
+        exit_code=0,
+        total=len(entries),
+        linked=tally["linked"],
+        would_create=tally["would-create"],
+        review=tally["review"],
+        blocked=tally["blocked"],
+        errors=tally["error"],
+        rows=rows,
+    )
+
+
+_LABELS = {
+    "linked": "LINKED",
+    "would-create": "WOULD-CREATE",
+    "review": "REVIEW",
+    "blocked": "BLOCKED",
+    "error": "ERROR",
+}
+_TALLY_ORDER = ("linked", "would-create", "review", "blocked", "error")
+
+
+def scorecard(rows: Sequence[EntryOutcome]) -> str:
+    """Design §7: one two-line block per entry, EVERY entry, eyeballable in a single pass.
+
+    This is the deliverable of the accuracy test, not optional polish: a duplicate film
+    announces itself, but a list entry attached to the wrong existing film does not, so a
+    link is printed as fully as a would-create — the film it landed on, the gate that found
+    it, and the resolver's own reason verbatim.
+    """
+    out: list[str] = []
+    for r in rows:
+        who = f"{r.title_listed} / {r.director_listed}" if r.director_listed else r.title_listed
+        out.append(f"{f'#{r.rank}'.ljust(6)}{who}")
+        line = f"→ {_LABELS.get(r.kind, r.kind.upper())}  {r.detail}".rstrip()
+        if r.form_used and r.form_used != r.title_listed:
+            line += f"  [via form {r.form_used!r}]"
+        out.append(f"      {line}")
+    tally = Counter(r.kind for r in rows)
+    out.append(" · ".join(f"{k} {tally[k]}" for k in _TALLY_ORDER))
+    return "\n".join(out)
