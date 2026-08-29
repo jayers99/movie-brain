@@ -776,3 +776,39 @@ def test_lists_trust_no_args_on_an_empty_registry_says_so(tmp_path, monkeypatch)
     result = CliRunner().invoke(app, ["lists", "trust"])
     assert result.exit_code == 0, result.output
     assert "no lists registered" in result.output
+
+
+def test_services_list_prints_every_service(config_dir):
+    result = runner.invoke(app, ["services", "list"])
+    assert result.exit_code == 0
+    assert "criterion" in result.output
+    assert "quality 1" in result.output
+
+
+def test_services_quality_sets_and_shows_one_service(config_dir):
+    assert runner.invoke(app, ["services", "quality", "criterion", "5"]).exit_code == 0
+    shown = runner.invoke(app, ["services", "quality", "criterion"])
+    assert shown.exit_code == 0
+    assert "quality 5" in shown.output
+
+
+def test_services_quality_accepts_zero(config_dir):
+    assert runner.invoke(app, ["services", "quality", "mubi", "0"]).exit_code == 0
+    assert "quality 0" in runner.invoke(app, ["services", "quality", "mubi"]).output
+
+
+def test_services_rejects_a_negative_quality(config_dir):
+    assert runner.invoke(app, ["services", "quality", "mubi", "-1"]).exit_code != 0
+
+
+def test_services_apple_and_subscribe_round_trip(config_dir):
+    assert runner.invoke(app, ["services", "apple", "criterion", "1"]).exit_code == 0
+    assert runner.invoke(app, ["services", "subscribe", "mubi", "1"]).exit_code == 0
+    listed = runner.invoke(app, ["services", "list"]).output
+    assert "apple-app yes" in listed
+    assert "subscribed yes" in listed
+
+
+def test_services_unknown_slug_exits_two(config_dir):
+    result = runner.invoke(app, ["services", "quality", "nope", "3"])
+    assert result.exit_code == 2
