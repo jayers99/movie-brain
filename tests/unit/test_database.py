@@ -418,7 +418,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 16
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 17
     finally:
         conn.close()
 
@@ -1150,7 +1150,7 @@ def test_migration_011_claims_and_film_columns(tmp_path):
     repo.set_title_norm(fid, "bladerunner")
     assert repo.films_missing_title_norm() == []
     with sqlite3.connect(tmp_path / "t.db") as c:
-        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 16
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 17
         assert c.execute("SELECT kind FROM films WHERE id = ?", (fid,)).fetchone()[0] == "movie"
 
 
@@ -1532,3 +1532,42 @@ def test_films_needing_year_backfill_respects_limit(repo, today):
         fids.append(fid)
     targets = repo.films_needing_year_backfill(limit=2)
     assert [t.film_id for t in targets] == fids[:2]
+
+
+def test_migration_017_adds_service_constants_with_inert_defaults(repo):
+    services = {s.slug: s for s in repo.movie_services()}
+    assert services["criterion"].quality == 1
+    assert services["criterion"].has_apple_app is False
+    assert services["mubi"].quality == 1
+
+
+def test_set_service_quality_writes_one_service_only(repo):
+    assert repo.set_service_quality("criterion", 5) is True
+    assert repo.movie_service("criterion").quality == 5
+    assert repo.movie_service("mubi").quality == 1
+
+
+def test_set_service_quality_accepts_zero(repo):
+    assert repo.set_service_quality("mubi", 0) is True
+    assert repo.movie_service("mubi").quality == 0
+
+
+def test_set_service_apple_app_and_subscribed_round_trip(repo):
+    assert repo.set_service_apple_app("criterion", True) is True
+    assert repo.set_service_subscribed("mubi", True) is True
+    assert repo.movie_service("criterion").has_apple_app is True
+    assert repo.movie_service("mubi").subscribed is True
+
+
+def test_setters_report_an_unknown_slug(repo):
+    assert repo.set_service_quality("nope", 3) is False
+    assert repo.set_service_apple_app("nope", True) is False
+    assert repo.set_service_subscribed("nope", True) is False
+    assert repo.movie_service("nope") is None
+
+
+def test_movie_services_orders_best_first(repo):
+    repo.set_service_quality("mubi", 9)
+    repo.set_service_subscribed("mubi", True)
+    slugs = [s.slug for s in repo.movie_services()]
+    assert slugs[0] == "mubi"

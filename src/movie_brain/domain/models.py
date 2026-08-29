@@ -124,6 +124,20 @@ class ListEntry:
 
 
 @dataclass(frozen=True)
+class ServiceMeta:
+    """One row of the service registry. `quality` and `has_apple_app` are owner-set constants
+    written only by `movie-brain services` — see the canon-best-source design §5."""
+
+    slug: str
+    name: str
+    kind: str
+    subscribed: bool
+    region: str
+    quality: int
+    has_apple_app: bool
+
+
+@dataclass(frozen=True)
 class TmdbCandidate:
     """One TMDB search result, reduced to what matching needs."""
 

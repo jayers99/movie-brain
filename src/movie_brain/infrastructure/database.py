@@ -23,6 +23,7 @@ from movie_brain.domain.models import (
     McTitle,
     OmdbRating,
     ReviewEntry,
+    ServiceMeta,
     YearBackfillTarget,
     film_key,
 )
@@ -325,6 +326,21 @@ def _row_to_list_meta(row: sqlite3.Row) -> ListMeta:
         source_url=row["source_url"],
         ordered=bool(row["ordered"]),
         trust=int(row["trust"]),
+    )
+
+
+_SERVICE_SELECT = "SELECT slug, name, kind, subscribed, region, quality, has_apple_app FROM movie_service "
+
+
+def _row_to_service(row: sqlite3.Row) -> ServiceMeta:
+    return ServiceMeta(
+        slug=str(row["slug"]),
+        name=str(row["name"]),
+        kind=str(row["kind"]),
+        subscribed=bool(row["subscribed"]),
+        region=str(row["region"]),
+        quality=int(row["quality"]),
+        has_apple_app=bool(row["has_apple_app"]),
     )
 
 
@@ -1289,6 +1305,38 @@ class Repository:
                 "WHERE t.found = 0 AND " + _NOT_DISPOSED + _IS_MOVIE + " ORDER BY f.id"
             ).fetchall()
             return [(int(r["id"]), str(r["title"]), r["year"]) for r in rows]
+
+    def movie_services(self) -> list[ServiceMeta]:
+        """Every registered service, best first — the display order for `movie-brain services`
+        and the same four keys `domain/watch.py` ranks a film's options on."""
+        with self._conn() as c:
+            rows = c.execute(
+                _SERVICE_SELECT + "ORDER BY subscribed DESC, quality DESC, has_apple_app DESC, name"
+            ).fetchall()
+            return [_row_to_service(r) for r in rows]
+
+    def movie_service(self, slug: str) -> ServiceMeta | None:
+        with self._conn() as c:
+            row = c.execute(_SERVICE_SELECT + "WHERE slug = ?", (slug,)).fetchone()
+            return None if row is None else _row_to_service(row)
+
+    def _set_service_column(self, slug: str, column: str, value: int) -> bool:
+        # column is never user input — the three public setters below name it literally.
+        with self._conn() as c:
+            cur = c.execute(f"UPDATE movie_service SET {column} = ? WHERE slug = ?", (value, slug))
+            return cur.rowcount > 0
+
+    def set_service_quality(self, slug: str, quality: int) -> bool:
+        """The ONLY writer of `movie_service.quality`. False when the slug is unknown."""
+        return self._set_service_column(slug, "quality", quality)
+
+    def set_service_apple_app(self, slug: str, has_app: bool) -> bool:
+        """The ONLY writer of `movie_service.has_apple_app`. False when the slug is unknown."""
+        return self._set_service_column(slug, "has_apple_app", 1 if has_app else 0)
+
+    def set_service_subscribed(self, slug: str, subscribed: bool) -> bool:
+        """The ONLY writer of `movie_service.subscribed`. False when the slug is unknown."""
+        return self._set_service_column(slug, "subscribed", 1 if subscribed else 0)
 
     def provider_map(self) -> dict[int, str]:
         with self._conn() as c:
