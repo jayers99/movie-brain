@@ -3,12 +3,14 @@
 A list entry is a curator's title plus, usually, a director — no year, no id, no url. Turning
 that into a film id is the accuracy test of the T1-T5 identity stack, and **duplicate films
 are the failure it must not produce**: under-creating costs one review row, over-creating
-costs a merge. So the four helpers here are deliberately timid.
+costs a merge. So the five helpers here are deliberately timid.
 
 - `entry_forms` — every title string one entry could be known by, primary first.
 - `resolve_entry` — the fallback-only form ladder over those forms (design §1 A2).
 - `find_holder` — gates 1 / 2 / 2b: does a film in the catalog already hold this work's ids?
 - `corpus_veto` — gate 3: does the catalog hold anything *resembling* any of these titles?
+- `veto_forms` — the titles gate 3 asks about: the entry's forms plus the winner's own, shared
+  by both verbs so the rehearsal card predicts the confirmed run.
 
 `import_list` is phase 1 (design §5): it links, it asks, and it **never creates a film**.
 `create_films` is phase 2 (design §6) and is the ONLY path in this feature that creates one.
@@ -21,7 +23,7 @@ that exists only in OMDb carries no TMDB id, so the plain gate 2 asks nothing at
 TMDB for the mapping — the same `find_by_imdb` call `key_film` already trusts on every keying
 path — can only find *more* holders, so it strictly reduces creations.
 
-The four helpers write nothing; the two verbs write, and only with `apply=True`.
+The five helpers write nothing; the two verbs write, and only with `apply=True`.
 """
 
 from __future__ import annotations
@@ -190,6 +192,24 @@ def corpus_veto(index: CandidateIndex, forms: list[str]) -> list[Candidate]:
         for c in index.lookup(form)[1]:
             hits.setdefault(c.id, c)
     return list(hits.values())
+
+
+def veto_forms(forms: list[str], winner: WorkCandidate | None) -> list[str]:
+    """The titles gate 3 asks about: the entry's own forms PLUS the winning candidate's own.
+
+    This is the ONE place the two questions are joined, and both verbs go through it so the
+    rehearsal card can never predict a would-create the confirmed run turns into a block.
+
+    It deliberately widens `entry_forms`, which stays the one definition of "what might this
+    entry be called?" for the resolver ladder. The veto asks a different question — "what
+    will the catalog GAIN?" — and once phase 2 mints the film under the WINNER's title rather
+    than the curator's, the two stop having the same answer. A legacy unkeyed row titled like
+    the winner holds no ids (gates 1/2/2b all miss it) and is titled nothing like the listed
+    entry (the listed forms miss it too), leaving `films.key` — which refuses only when title
+    AND year both match — as the sole backstop. Strictly in the refusing direction, the same
+    argument design §1 A4 makes for gate 2b.
+    """
+    return forms + [t for t in (winner.titles if winner is not None else ()) if t not in forms]
 
 
 @dataclass(frozen=True)
@@ -434,10 +454,14 @@ def import_list(
                 )
                 continue
 
-            hits = corpus_veto(index, forms)
+            hits = corpus_veto(index, veto_forms(forms, _winner(verdict)))
             if hits:
                 # Gate 3 is a veto, not a matcher: a weak or ambiguous look-alike is reason
                 # enough to stop, because ids genuinely differ for one work (design §5.5).
+                # It asks about the winner's titles too, exactly as phase 2's veto does: this
+                # import creates nothing either way, so the only effect here is that an entry
+                # phase 2 would block is reported blocked on the card the owner authorises
+                # from, instead of being promised as a would-create and refused later.
                 detail = f"{CORPUS_VETO}  {_veto_label(hits)}  [{verdict.reason}]"
                 rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
                 reviews.append(ReviewEntry(CORPUS_VETO, value=value, detail=_review_detail(entry, form, detail)))
@@ -641,18 +665,11 @@ def create_films(
 
             # The film is minted under the WINNER's title and year (below) — TMDB's own — so
             # the row looks like the rest of the catalog and lands on the right year; the
-            # listed title survives verbatim in the claim.
+            # listed title survives verbatim in the claim. Gate 3 therefore asks about the
+            # winner's titles as well as the listed forms (`veto_forms`), which is what makes
+            # the veto ask about the title the catalog will actually gain.
             winner = _winner(verdict)
-            # Gate 3 therefore asks about BOTH title sets, deliberately breaking `entry_forms`'
-            # otherwise-shared definition: the ladder asks "what might this entry be called?",
-            # the veto asks "what will the catalog GAIN?", and once the film is minted under
-            # TMDB's title those are different questions. A legacy unkeyed row titled like the
-            # winner holds no ids (gates 1/2/2b all miss it) and is titled nothing like the
-            # curator's entry (the listed forms miss it too); `films.key` is then the only
-            # backstop and it refuses solely when title AND year match. Strictly refusing —
-            # the same argument design §1 A4 makes for gate 2b.
-            veto_forms = forms + [t for t in (winner.titles if winner is not None else ()) if t not in forms]
-            hits = corpus_veto(index, veto_forms)
+            hits = corpus_veto(index, veto_forms(forms, winner))
             if hits:
                 detail = f"{CORPUS_VETO}  {_veto_label(hits)}  [{verdict.reason}]"
                 rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
