@@ -262,3 +262,27 @@ def test_a_file_whose_first_label_is_not_one_still_starts_at_position_one():
     check cannot see it, so this pins the behaviour rather than claiming to catch it."""
     parsed = parse_list_file(HEADER_ONLY + "=5\tA\tdir\n=5\tB\tdir\n=7\tC\tdir\n")
     assert [(e.rank, e.rank_label) for e in parsed.entries] == [(1, "=5"), (2, "=5"), (3, "=7")]
+
+
+# --- the checked-in 1992 Sight & Sound lists (owner-trusted over the 2022 poll) ---
+
+
+def test_parses_the_1992_critics_list():
+    parsed = read_list_file(REPO_ROOT / "lists" / "sight-and-sound-1992-critics.tsv")
+    assert parsed.meta.slug == "sight-and-sound-1992-critics"
+    assert parsed.meta.ordered is True
+    assert len(parsed.entries) == 10
+    assert parsed.entries[0].title_listed == "Citizen Kane"
+    assert parsed.entries[5].rank_label == "=6"  # four-way tie, printed form preserved
+    assert parsed.entries[5].rank == 6  # line order is what stays addressable
+    assert parsed.entries[9].rank == 10
+    assert parsed.entries[9].title_listed == "2001: A Space Odyssey"
+
+
+def test_parses_the_1992_directors_list():
+    parsed = read_list_file(REPO_ROOT / "lists" / "sight-and-sound-1992-directors.tsv")
+    assert parsed.meta.slug == "sight-and-sound-1992-directors"
+    assert parsed.meta.ordered is True
+    assert len(parsed.entries) == 12
+    assert parsed.entries[1].rank_label == "=2"
+    assert parsed.entries[11].title_listed == "Seven Samurai"
