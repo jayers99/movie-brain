@@ -365,7 +365,11 @@ def lists_trust_cmd(
     re-importing a list can't reset the owner's judgement of it."""
     repo = _repo()
     if slug is None:
-        for m in repo.film_lists():
+        lists = repo.film_lists()
+        if not lists:
+            console.print("no lists registered")
+            return
+        for m in lists:
             console.print(f"{m.slug:<24} trust {m.trust}   {m.name}")
         return
     if n is None:

@@ -621,3 +621,12 @@ def test_lists_trust_reimport_preserves_trust(config_dir, tmp_path, monkeypatch)
     assert r.exit_code == 0, r.output
 
     assert repo.film_list("cahiers-100").trust == 9
+
+
+def test_lists_trust_no_args_on_an_empty_registry_says_so(tmp_path, monkeypatch):
+    """Silence reads as a failure. The two slug branches already have this fallback; the
+    no-argument branch did not, so an empty registry printed nothing at all."""
+    monkeypatch.setenv("MOVIE_BRAIN_CONFIG_DIR", str(tmp_path))
+    result = CliRunner().invoke(app, ["lists", "trust"])
+    assert result.exit_code == 0, result.output
+    assert "no lists registered" in result.output
