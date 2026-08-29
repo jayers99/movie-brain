@@ -245,7 +245,7 @@ Everything in seed §6, plus: `--pick/--tt/--none` on list rows (A1), a `--refre
 Mirrors the layers, per CLAUDE.md.
 
 - `tests/unit/test_listfile.py` — the parser: full header block, missing required header, `ordered: false`, two-column rows, empty director cell, blank/comment lines, curly apostrophes and `…`, non-integer rank, duplicate rank, empty title.
-- `tests/unit/test_lists_ladder.py` — the form ladder: single-form title queries once; a parenthetical title falls back base-then-alt; the ladder stops at the first `match`; a primary `match` is never overridden.
+- `tests/unit/test_lists_resolution.py` — the form ladder and the four gates: single-form title queries once; a parenthetical title falls back base-then-alt; the ladder stops at the first `match`; a primary `match` is never overridden.
 - `tests/features/lists.feature` + `tests/step_defs/test_lists.py` — an injected `_PoolFetcher`-style fake (not HTTP mocks), following `tests/step_defs/test_thumbprint.py`: link via gate 1, link via gate 2, link via gate 2b (OMDb-only winner), gate-3 veto blocks, duplicate-entry blocks, tombstoned holder blocks, resolver `review` queues, would-create is reported and **nothing is created**, dry run writes nothing at all, re-import is idempotent and makes no API call for linked entries, `lists create` creates + keys, `lists create` links instead when a holder appeared, `review resolve --film/--create/--dismiss` on a list row, `merge_film` re-points entries.
 - `tests/web/` — `/api/films/<id>` carries `lists`; a Playwright assertion that the drawer's "On lists:" row renders.
 
