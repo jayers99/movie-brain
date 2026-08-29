@@ -432,6 +432,71 @@ def repair_years(
     return YearsReport(len(audit.collisions), len(audit.stale), marked)
 
 
+@dataclass(frozen=True)
+class YearsFromTmdbReport:
+    filled: int = 0
+    no_year: int = 0
+    collision: int = 0
+    failed: int = 0
+    aborted: bool = False
+
+
+def repair_years_from_tmdb(
+    repo: Repository,
+    tmdb: TmdbClient,
+    today: date,
+    *,
+    apply: bool = False,
+    limit: int | None = None,
+    log: Callable[[str], None] = _stderr,
+) -> YearsFromTmdbReport:
+    """Fill in the original release year TMDB already knows, for films that hold a TMDB id
+    and have no year at all (root-cause backlog left by the record_tmdb_match commerce-only
+    guard, before it was fixed to also fill a missing year). Never touches a film that
+    already has a year — the worklist itself excludes one. Writes through
+    `repo.update_film_year`, the same path `record_tmdb_match` uses, so the key recompute
+    and the year-collision review path are shared, not reimplemented."""
+    filled = no_year = collision = failed = 0
+    consecutive = 0
+    aborted = False
+    for target in repo.films_needing_year_backfill(limit):
+        if consecutive >= MAX_CONSECUTIVE_FAILURES:
+            log("TMDB year lookups failing repeatedly — stopping; the next run resumes.")
+            aborted = True
+            break
+        try:
+            year = tmdb.movie_year(target.tmdb_id)
+        except (requests.RequestException, AuthError) as exc:
+            log(f"  #{target.film_id} {target.title!r}: TMDB lookup failed: {exc}")
+            consecutive += 1
+            failed += 1
+            continue
+        consecutive = 0
+        if year is None:
+            log(f"  #{target.film_id} {target.title!r}: TMDB publishes no year for {target.tmdb_id}")
+            no_year += 1
+            continue
+        log(f"  #{target.film_id} {target.title!r} → {year}" + ("" if apply else " (dry-run)"))
+        if not apply:
+            filled += 1
+            continue
+        clash = repo.update_film_year(target.film_id, year)
+        if clash is not None:
+            detail = f"{target.title!r}: adopting {year} collides with film {clash} — merge candidate"
+            queue_review_once(
+                repo,
+                TMDB_AUTHORITY,
+                ReviewEntry("year-collision", film_id=target.film_id, value=str(clash), detail=detail),
+                today,
+            )
+            log(f"  collides with film {clash} — queued year-collision, nothing written")
+            collision += 1
+            continue
+        repo.mark_omdb_refresh(target.film_id)
+        filled += 1
+    return YearsFromTmdbReport(filled, no_year, collision, failed, aborted)
+
+
 # --- twins: raw `Title (YYYY)` films → their same-year clean twin (thumbprint step 1) ---------
 
 
