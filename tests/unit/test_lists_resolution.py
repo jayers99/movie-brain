@@ -104,6 +104,17 @@ def test_the_query_carries_the_listed_director_and_never_a_year():
     assert (q.year, q.source, q.director) == (None, "list", "Erich von Stroheim")
 
 
+def test_an_embedded_year_never_reaches_the_query():
+    # "the year is always None" is a governing constraint: a year in the listed title would
+    # otherwise flip the query to YearClass.DATABASE and let a wrong year decide the verdict.
+    fetcher = RecordingFetcher()
+
+    resolve_entry(fetcher, ListEntry(1, "Napoléon (1927)", "Abel Gance"))
+
+    (q,) = fetcher.queries
+    assert (q.title, q.year, q.year_class.value) == ("Napoléon", None, "apple-field")
+
+
 def test_a_parenthetical_whose_primary_misses_falls_back_to_base_then_alt():
     fetcher = RecordingFetcher({"Madame de…": [_cand("tt0046022", 18183, "Madame de…", director=OPHULS)]})
 
@@ -221,8 +232,23 @@ def test_gate_2b_is_not_asked_when_the_winner_already_carries_a_tmdb_id(repo):
 
     verdict = _match("tt0006864", _cand("tt0006864", 111, "Intolerance"))
 
-    assert find_holder(repo, tmdb, verdict) == (None, "")
+    assert find_holder(repo, tmdb, verdict) == (None, "no holder")
     assert tmdb.calls == []
+
+
+def test_gate_2b_still_runs_when_the_winner_is_absent_from_ranked(repo, today):
+    # `resolve` truncates `ranked` to the top three, so the winning tt can be missing from it
+    # entirely. Gate 2 cannot run then — but gate 2b needs only verdict.tt, and refusing to
+    # ask would fail in the creating direction.
+    fid = _film(repo, "Intolerance", 1916)
+    repo.set_external_id(fid, "tmdb", "3059", today)
+    tmdb = StubTmdb({"tt0006864": 3059})
+
+    verdict = _match("tt0006864", _cand("tt1111111", 111, "Intolerance"), _cand("tt2222222", 222, "Intolerance"))
+    assert all(s.candidate.tt != verdict.tt for s in verdict.ranked)
+
+    assert find_holder(repo, tmdb, verdict) == (fid, "tmdb(find 3059)")
+    assert tmdb.calls == ["tt0006864"]
 
 
 def test_gate_2b_is_skipped_without_a_tmdb_client(repo, today):
@@ -231,16 +257,18 @@ def test_gate_2b_is_skipped_without_a_tmdb_client(repo, today):
 
     verdict = _match("tt0006864", _cand("tt0006864", None, "Intolerance", in_tmdb=False))
 
-    assert find_holder(repo, None, verdict) == (None, "")
+    assert find_holder(repo, None, verdict) == (None, "no holder")
 
 
-def test_a_failing_gate_2b_lookup_is_logged_and_treated_as_no_holder(repo):
+def test_a_failing_gate_2b_lookup_is_logged_and_labelled_as_a_failure_not_a_miss(repo):
+    # "the holder is unknown" must not read like "nobody holds this work" — the scorecard
+    # has to be able to say so, because the caller's next move is creation.
     tmdb = StubTmdb(raises=True)
     logs = []
 
     verdict = _match("tt0006864", _cand("tt0006864", None, "Intolerance", in_tmdb=False))
 
-    assert find_holder(repo, tmdb, verdict, log=logs.append) == (None, "")
+    assert find_holder(repo, tmdb, verdict, log=logs.append) == (None, "tmdb lookup failed")
     assert len(logs) == 1
 
 
@@ -249,7 +277,7 @@ def test_no_gate_answers_when_nobody_holds_either_id(repo):
 
     verdict = _match("tt0006864", _cand("tt0006864", 3059, "Intolerance"))
 
-    assert find_holder(repo, None, verdict) == (None, "")
+    assert find_holder(repo, None, verdict) == (None, "no holder")
 
 
 def test_a_tombstoned_holder_is_reported_as_tombstoned_not_as_a_miss(repo, today):

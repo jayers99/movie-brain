@@ -74,7 +74,10 @@ def resolve_entry(
     forms = entry_forms(entry.title_listed)
     answered: tuple[Verdict, str] | None = None
     for form in forms:
-        q = make_query(form, None, AUTHORITY, director=entry.director_listed)
+        # The literal, not AUTHORITY: the resolver's `source` and the claim/review authority
+        # are different concepts that happen to share a string. Renaming one must not move
+        # the query's YearClass.
+        q = make_query(form, None, "list", director=entry.director_listed)
         try:
             verdict = resolve(q, fetcher.fetch(q))
         except (CacheMiss, requests.RequestException, AuthError, QuotaExceeded) as exc:
@@ -95,9 +98,17 @@ def find_holder(
 ) -> tuple[int | None, str]:
     """Gates 1, 2 and 2b: the film already holding this work, and the gate that found it.
 
-    Returns `(film_id, label)` for a live holder, `(None, "tombstoned #N")` when the holder
-    is a film a human deliberately hid — the caller must never create over that — and
-    `(None, "")` when no gate answered.
+    The label is contract text the scorecard reads; a caller may branch on it. Seven values:
+
+    | label | film_id | meaning |
+    |---|---|---|
+    | `imdb tt0006864`     | set  | gate 1 — a film is already keyed to this IMDb id |
+    | `tmdb 3059`          | set  | gate 2 — a film holds the winning candidate's TMDB id |
+    | `tmdb(find 3059)`    | set  | gate 2b — a film holds the TMDB id `find_by_imdb` maps this tt to |
+    | `tombstoned #412`    | None | a holder exists but a human hid it: never create over it |
+    | `no holder`          | None | every gate ran and missed — the would-create path |
+    | `tmdb lookup failed` | None | gate 2b raised: the holder is unknown, NOT disproved |
+    | `""`                 | None | the verdict is not a match, so nothing was asked |
     """
     if verdict.kind != "match" or verdict.tt is None:
         return None, ""
@@ -112,20 +123,24 @@ def find_holder(
             # Gate 2 — the winning candidate's own TMDB id.
             holder = repo.film_id_for_external("tmdb", str(winner.tmdb_id))
             label = f"tmdb {winner.tmdb_id}"
-        elif winner is not None and tmdb is not None:
-            # Gate 2b — an OMDb-only winner carries no TMDB id, so gate 2 asked nothing. Ask
-            # TMDB for the mapping instead (design §1 A4, live case #69 Intolerance).
+        elif tmdb is not None:
+            # Gate 2b — gate 2 asked nothing, either because the winner is OMDb-only and
+            # carries no TMDB id, or because `resolve` truncates `ranked` to the top three
+            # and the winner fell outside it. Both are the same question here, and gate 2b's
+            # only input is `verdict.tt` — never the winner (design §1 A4, live case #69
+            # Intolerance). Failing to ask fails in the CREATING direction, which is the one
+            # failure this import must not make.
             try:
                 tmdb_id = tmdb.find_by_imdb(verdict.tt)
             except (requests.RequestException, AuthError) as exc:
                 log(f"tmdb find_by_imdb failed for {verdict.tt}: {exc}")
-                tmdb_id = None
+                return None, "tmdb lookup failed"
             if tmdb_id is not None:
                 holder = repo.film_id_for_external("tmdb", str(tmdb_id))
                 label = f"tmdb(find {tmdb_id})"
 
     if holder is None:
-        return None, ""
+        return None, "no holder"
     film_id = repo.canonical_film_id(holder)
     d = repo.disposition_of(film_id)
     if d is not None and d[0] == "tombstoned":
