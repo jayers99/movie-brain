@@ -28,6 +28,7 @@ from movie_brain.application.repair import (
     repair_links,
     repair_twins,
     repair_years,
+    repair_years_from_tmdb,
 )
 from movie_brain.application.repair_keys import (
     DisagreementGroup,
@@ -686,9 +687,36 @@ def repair_imdb_cmd(
 def repair_years_cmd(
     film_id: Annotated[int | None, typer.Argument(help="Film id to correct.")] = None,
     year: Annotated[int | None, typer.Argument(help="New original release year.")] = None,
-    apply: Annotated[bool, typer.Option("--apply", help="Write the correction / mark stale OMDb rows.")] = False,
+    from_tmdb: Annotated[
+        bool, typer.Option("--from-tmdb", help="Fill years for films with none at all, from TMDB.")
+    ] = False,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Write the correction / mark stale OMDb rows / fill years.")
+    ] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the --from-tmdb worklist.")] = None,
 ) -> None:
-    """List the year worklist, or dry-run/apply one manual year correction."""
+    """List the year worklist, dry-run/apply one manual year correction, or (--from-tmdb) fill
+    in years TMDB already knows for films that have no year at all."""
+    if from_tmdb and (film_id is not None or year is not None):
+        err.print("--from-tmdb cannot be combined with FILM_ID YEAR")
+        raise typer.Exit(2)
+    if limit is not None and not from_tmdb:
+        err.print("--limit only applies to --from-tmdb")
+        raise typer.Exit(2)
+    if from_tmdb:
+        cfg = load_config()
+        token = load_tmdb_token(cfg)
+        if not token:
+            err.print(f"no TMDB token: set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}")
+            raise typer.Exit(2)
+        tmdb_report = repair_years_from_tmdb(
+            _repo(), TmdbClient(token), date.today(), apply=apply, limit=limit, log=err.print
+        )
+        console.print(
+            f"filled: {tmdb_report.filled} · no year: {tmdb_report.no_year} · collision: {tmdb_report.collision} · "
+            f"failed: {tmdb_report.failed}" + (" · ABORTED" if tmdb_report.aborted else "")
+        )
+        return
     try:
         report = repair_years(_repo(), date.today(), film_id=film_id, year=year, apply=apply, log=err.print)
     except (ValueError, LookupError) as exc:
