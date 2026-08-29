@@ -9,62 +9,23 @@ from __future__ import annotations
 
 import sqlite3
 
-import requests
+from lists_fakes import RecordingFetcher, StubTmdb
+from lists_fakes import candidate as _cand
 
 from movie_brain.application.lists import AUTHORITY, corpus_veto, entry_forms, find_holder, resolve_entry
 from movie_brain.domain.matching import Candidate as CorpusCandidate
 from movie_brain.domain.matching import CandidateIndex
 from movie_brain.domain.models import Film, ListEntry
-from movie_brain.domain.thumbprint import Candidate, Scored, Verdict
+from movie_brain.domain.thumbprint import Scored, Verdict
 
 DIAMOND = "Diamond Earrings (Madame de…)"
 OPHULS = "Max Ophüls"
-
-
-def _cand(tt, tmdb_id, title, year=None, director="", votes=5000, in_tmdb=True, in_omdb=True):
-    return Candidate(tt, tmdb_id, (title,), year, director, None, votes, "movie", in_tmdb, in_omdb)
 
 
 def _match(tt, *cands):
     """A `match` verdict whose `ranked` carries `cands` — the shape find_holder reads."""
     ranked = tuple(Scored(c, 9, 3, 0, 3, c.in_tmdb and c.in_omdb, False) for c in cands)
     return Verdict("match", tt, "director corroborated", ranked)
-
-
-class RecordingFetcher:
-    """`fetch(q)` returns the canned pool for `q.title` and records every query, in order.
-
-    The order is the point: it is what proves the ladder stops at the first match instead
-    of quietly asking every form.
-    """
-
-    def __init__(self, by_title=None, offline=()):
-        self.by_title = by_title or {}
-        self.offline = set(offline)
-        self.queries = []
-
-    @property
-    def queried(self):
-        return [q.title for q in self.queries]
-
-    def fetch(self, q):
-        self.queries.append(q)
-        if q.title in self.offline:
-            raise requests.ConnectionError("offline")
-        return self.by_title.get(q.title, [])
-
-
-class StubTmdb:
-    def __init__(self, by_imdb=None, raises=False):
-        self.by_imdb = by_imdb or {}
-        self.raises = raises
-        self.calls = []
-
-    def find_by_imdb(self, tt):
-        self.calls.append(tt)
-        if self.raises:
-            raise requests.ConnectionError("offline")
-        return self.by_imdb.get(tt)
 
 
 # --- entry_forms ---------------------------------------------------------------------------
