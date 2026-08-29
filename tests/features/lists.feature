@@ -642,3 +642,19 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the film "Le Plaisir" carries a list claim "cahiers-100#34" ingested as "Pleasure"
     And the id tally says agree 0, disagree 0, supplied 1, of 1 compared
     And the eval CSV is byte-identical
+
+  Scenario: an open entry-changed row keeps firing until a human resolves it
+    # The upsert rewrites title_listed on the run that queues the row, so without the
+    # open-row check a second --apply of the SAME corrected file would compare the file
+    # against itself and go quiet while the link is still stale. The card is the
+    # deliverable; it must keep saying so until the row is resolved.
+    Given a film "Intolerance" (1916) holding imdb "tt0006864"
+    And the candidate pool has "Intolerance" → tt0006864/3059 1916 by "David Wark Griffith"
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith"
+    And the list entry 69 is now "The Birth of a Nation" by "David Wark Griffith"
+    And I imported the list with --apply
+    When I import the list with --apply
+    Then the report says linked 0, would-create 0, review 1, blocked 0, error 0
+    And entry 69 still links to "Intolerance"
+    And there is one open list review row for "cahiers-100#69" with reason "entry-changed"
+    And no film was created
