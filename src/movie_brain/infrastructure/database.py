@@ -1357,6 +1357,12 @@ class Repository:
         sync for every provider TMDB reports.
         """
         slug = service_slug(name)
+        if slug == "":
+            # An empty slug is an invalid PRIMARY KEY, and every later provider name that
+            # also slugifies to "" would silently fold onto that same malformed row via
+            # INSERT OR IGNORE — the invariant belongs here, at the point of creation, not
+            # only in the caller that happens to skip it today.
+            raise ValueError(f"provider name {name!r} has no usable slug")
         with self._conn() as c:
             c.execute(
                 "INSERT OR IGNORE INTO movie_service (slug, name, kind, subscribed) VALUES (?, ?, 'svod', 0)",

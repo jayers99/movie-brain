@@ -10,7 +10,7 @@ from datetime import date
 import requests
 
 from movie_brain.domain.models import ReviewEntry
-from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository, TmdbMatchTarget
+from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository, TmdbMatchTarget, service_slug
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient, watch_link
 
 TMDB_AUTHORITY = "tmdb"
@@ -226,6 +226,11 @@ def _refresh_pass(
             if slug is None:
                 name = providers.names.get(pid)
                 if name is None:
+                    continue
+                # A name that slugifies to "" (e.g. all punctuation) can't be registered —
+                # skip it rather than let one malformed provider name abort the whole pass.
+                if service_slug(name) == "":
+                    log(f"provider {pid} ({name!r}) has no usable slug — skipping")
                     continue
                 slug = repo.register_provider(pid, name)
                 pmap[pid] = slug
