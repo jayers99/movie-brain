@@ -739,13 +739,31 @@ Resolve each with `review resolve <id> --film <film_id>`, reporting each decisio
 
 ```python
 def test_list_entries_carry_their_list_size(repo, today):
-    # seed a two-entry list, link one film to it, then read the view
-    ...
+    fid = repo.create_film("Citizen Kane", 1941)
+    other = repo.create_film("The Rules of the Game", 1939)
+    repo.upsert_film_list(ListMeta(slug="poll", name="A Poll", curator=None, published_year=1992,
+                                   source_url=None, ordered=True, trust=1))
+    repo.upsert_list_entry("poll", rank=1, title_listed="Citizen Kane",
+                           director_listed="Orson Welles", film_id=fid)
+    repo.upsert_list_entry("poll", rank=2, title_listed="The Rules of the Game",
+                           director_listed="Jean Renoir", film_id=other)
     entry = next(v for v in repo.list_views() if v.id == fid).lists[0]
-    assert entry["size"] == 2
+    assert entry["size"] == 2          # the list's length, not our coverage of it
+    assert entry["rank"] == 1
+
+
+def test_list_size_counts_entries_that_are_not_linked_yet(repo, today):
+    fid = repo.create_film("Citizen Kane", 1941)
+    repo.upsert_film_list(ListMeta(slug="poll", name="A Poll", curator=None, published_year=1992,
+                                   source_url=None, ordered=True, trust=1))
+    repo.upsert_list_entry("poll", rank=1, title_listed="Citizen Kane",
+                           director_listed="Orson Welles", film_id=fid)
+    repo.upsert_list_entry("poll", rank=2, title_listed="Something Unlinked",
+                           director_listed=None, film_id=None)
+    assert next(v for v in repo.list_views() if v.id == fid).lists[0]["size"] == 2
 ```
 
-Fill in the seeding from the existing tests in this file — they already build lists and entries.
+`upsert_film_list` and `upsert_list_entry` are the existing seeding helpers used throughout this file — read their real signatures first and match them exactly; the calls above show intent, not copied source. `ListMeta` comes from `domain/models.py`.
 
 - [ ] **Step 2: Run to verify failure**
 
@@ -816,9 +834,17 @@ canon_score = Σ over the film's lists ( trust × (1 − (printed_rank − 1) / 
 from movie_brain.domain.filters import acquisition_candidate, canon_score, is_canon
 
 
-def _view(**kw):
-    """A FilmView with only the fields these tests care about set."""
-    ...  # build on the existing helper in this file
+def _view(**kw) -> FilmView:
+    """A FilmView with only the fields these tests care about set; every other field takes a
+    harmless default, so each test reads as the one condition it is about."""
+    base = dict(
+        id=1, title="A Film", year=1959, director=None, url=None, language=None,
+        imdb=None, rt=None, found=True, pending=False, leaving_date=None,
+        first_seen="2026-01-01", my_rating=None, metacritic=None, lists=[], services=[],
+        criterion=False, departed=False, owned=False,
+    )
+    base.update(kw)
+    return FilmView(**base)
 
 
 def test_canon_score_gives_a_list_leader_the_full_trust():
@@ -962,7 +988,9 @@ def acquisition_candidate(view: FilmView, _today: date) -> bool:
     return is_canon(view) or (view.metacritic is not None and view.metacritic >= TOP_MC)
 ```
 
-Register it: `"acquire": acquisition_candidate,` in `_PREDICATES`. It takes `(view, today)` like every other predicate, so it needs no special casing.
+Register it: `"acquire": acquisition_candidate,` in `_PREDICATES`. It takes `(view, today)` like every other predicate, so it needs no special casing, and adding it there is what puts it in `CHIPS` and therefore in `/api/config`.
+
+Add `import re` at the top of `filters.py` — the module does not import it today. `canon_score` and `is_canon` are exported for the tests and to keep Python the canonical definition of the formula; nothing in `src/` calls them at runtime, exactly as `_PREDICATES` itself is mirrored by `app.js` rather than executed by the dashboard.
 
 - [ ] **Step 4: Run the tests**
 
@@ -1093,6 +1121,13 @@ git commit -m "record where the canon score lives and why the Criterion clause i
 ```
 
 ---
+
+## Not in this plan (and why)
+
+- **Item 3 — price fetch, the `prices` table, `prices refresh` / `prices dial`, every CheapCharts HTTP call, and all browser automation.** Deferred by decision D9. Do not build any of it, even if a task seems to invite it.
+- **BFI Player as a suppressing service.** Shelved by D13. Its provider findings are recorded in spec §11 so nobody re-derives them.
+- **Films #4763 (`Histoire(s) du Cinéma`, `tt6677224`) and #4764 (`Twin Peaks: The Return`, `tt4093826`).** Deliberately unkeyed, awaiting a manual sync then `review resolve <row> --tt <id> --series`. Neither holds a TMDB id, so the backfill does not touch them; both will show in the queue with no year until keyed. Syncs are manual by the owner's choice — never schedule one, and never run one as part of a task.
+
 
 ## Done means
 
