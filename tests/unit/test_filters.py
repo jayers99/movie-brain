@@ -10,6 +10,9 @@ from movie_brain.domain.filters import (
     TOP_IMDB,
     TOP_MC,
     TOP_RT,
+    acquisition_candidate,
+    canon_score,
+    is_canon,
     matches,
     thresholds,
 )
@@ -54,6 +57,7 @@ def test_chip_names_are_stable():
         "needs_revisit",
         "suspect",
         "multi_list",
+        "acquire",
     )
 
 
@@ -144,6 +148,99 @@ def test_multi_list_chip_matches_two_or_more_lists():
     assert matches(two, ["multi_list"], TODAY)
     assert not matches(one, ["multi_list"], TODAY)
     assert not matches(none, ["multi_list"], TODAY)
+
+
+def test_canon_score_gives_a_list_leader_the_full_trust():
+    v = view(lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}])
+    assert canon_score(v) == pytest.approx(10.0)
+
+
+def test_canon_score_decays_to_near_zero_at_the_end_of_a_list():
+    v = view(lists=[{"trust": 10, "rank": 100, "rank_label": None, "size": 100, "ordered": True}])
+    assert canon_score(v) == pytest.approx(0.1)
+
+
+def test_canon_score_sums_across_lists():
+    v = view(
+        lists=[
+            {"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True},
+            {"trust": 8, "rank": 1, "rank_label": None, "size": 10, "ordered": True},
+        ]
+    )
+    assert canon_score(v) == pytest.approx(18.0)
+
+
+def test_canon_score_reads_a_tied_rank_label_not_the_line_position():
+    v = view(lists=[{"trust": 8, "rank": 8, "rank_label": "=6", "size": 10, "ordered": True}])
+    assert canon_score(v) == pytest.approx(8 * (1 - 5 / 10))
+
+
+def test_an_unordered_list_contributes_its_full_trust():
+    v = view(lists=[{"trust": 5, "rank": 40, "rank_label": None, "size": 50, "ordered": False}])
+    assert canon_score(v) == pytest.approx(5.0)
+
+
+def test_a_film_on_no_list_scores_zero_and_is_not_canon():
+    v = view(lists=[])
+    assert canon_score(v) == 0.0
+    assert is_canon(v) is False
+
+
+def test_a_film_streaming_on_a_subscribed_svod_is_not_a_candidate(today):
+    v = view(
+        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
+        services=[{"name": "HBO Max", "subscribed": True, "kind": "svod"}],
+        criterion=False,
+    )
+    assert acquisition_candidate(v, today) is False
+
+
+def test_a_subscribed_STORE_does_not_suppress_a_candidate(today):
+    v = view(
+        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
+        services=[{"name": "Apple TV Store", "subscribed": True, "kind": "store"}],
+        criterion=False,
+    )
+    assert acquisition_candidate(v, today) is True
+
+
+def test_a_film_on_the_criterion_channel_right_now_is_not_a_candidate(today):
+    v = view(
+        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
+        criterion=True,
+        departed=False,
+    )
+    assert acquisition_candidate(v, today) is False
+
+
+def test_a_DEPARTED_criterion_film_is_a_candidate_again(today):
+    v = view(
+        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
+        criterion=True,
+        departed=True,
+    )
+    assert acquisition_candidate(v, today) is True
+
+
+def test_owned_and_rated_films_are_not_candidates(today):
+    base = {
+        "lists": [{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
+        "criterion": False,
+    }
+    assert acquisition_candidate(view(**base, owned=True), today) is False
+    assert acquisition_candidate(view(**base, my_rating=7), today) is False
+
+
+def test_a_high_metacritic_film_on_no_list_is_a_candidate(today):
+    assert acquisition_candidate(view(lists=[], metacritic=93, criterion=False), today) is True
+
+
+def test_a_mediocre_film_on_no_list_is_not_a_candidate(today):
+    assert acquisition_candidate(view(lists=[], metacritic=72, criterion=False), today) is False
+
+
+def test_acquire_is_a_registered_chip():
+    assert "acquire" in CHIPS
 
 
 def test_needs_revisit_chip():
