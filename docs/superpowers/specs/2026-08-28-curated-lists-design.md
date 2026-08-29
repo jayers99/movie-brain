@@ -213,7 +213,7 @@ Followed by the tally: `linked · would-create · review · blocked · error`.
 
 ## 8. Read model + drawer
 
-`FilmView.lists: list[dict]` = `[{slug, name, curator, published, rank}]`, `field(default_factory=list)`.
+`FilmView.lists: list[dict]` = `[{slug, name, curator, published, ordered, rank}]`, `field(default_factory=list)`.
 
 Fetched by **one query for the whole view**, `_LISTS_SQL` + `_lists_by_film`, copied verbatim in shape from `_SERVICES_SQL` + `_services_by_film` (§5.7 constraint 1 — the table renders ~4,600 films at once; a per-film query is a 4,600-query page load):
 
