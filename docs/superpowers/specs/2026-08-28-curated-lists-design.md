@@ -202,7 +202,7 @@ Both verbs print one two-line block per entry, every entry, eyeballable in one p
 #3    The Rules of the Game (La Règle du jeu) / Jean Renoir
       → LINKED  #1207 'The Rules of the Game' (1939) dir Jean Renoir  via imdb tt0031885  [director corroborated]
 #33   Diamond Earrings (Madame de…) / Max Ophüls
-      → LINKED  #2973 'The Earrings of Madame de . . .' (1953) dir Max Ophuls  via tmdb tt0046022  [director corroborated]  [via form 'Madame de…']
+      → LINKED  #2973 'The Earrings of Madame de . . .' (1953) dir Max Ophuls  via tmdb 18183 (tt0046022)  [director corroborated]  [via form 'Madame de…']
 #36   The Adventure / Michelangelo Antonioni
       → REVIEW  resolver 'director conflicts only'  cands: none
 #68   La Grande Illusion / Jean Renoir
