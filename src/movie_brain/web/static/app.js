@@ -341,6 +341,10 @@
       .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`).join(', ');
     const buyable = svc.filter((s) => s.kind === 'store').map((s) => esc(s.name)).join(', ');
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
+    const lists = (d.lists || []).map((l) => {
+      const label = l.published ? `${esc(l.curator || l.name)} ${esc(l.published)}` : esc(l.curator || l.name);
+      return l.ordered ? `${label} #${l.rank}` : label;
+    }).join(', ');
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       ${renderAudit(d)}
@@ -356,6 +360,7 @@
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
       ${streaming ? `<p class="meta">Also streaming on: ${streaming}</p>` : ''}
       ${buyable ? `<p class="meta">Buy on: ${buyable}</p>` : ''}
+      ${lists ? `<p class="meta">On lists: ${lists}</p>` : ''}
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
   }

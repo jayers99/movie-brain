@@ -14,7 +14,7 @@ from movie_brain.application.availability import TMDB_AUTHORITY
 from movie_brain.application.metacritic import match_archive
 from movie_brain.application.owned import import_owned
 from movie_brain.application.thumbprint import review_detail
-from movie_brain.domain.models import Film, McTitle, OmdbRating, OwnedTitle, ReviewEntry
+from movie_brain.domain.models import Film, ListEntry, ListMeta, McTitle, OmdbRating, OwnedTitle, ReviewEntry
 from movie_brain.domain.thumbprint import Candidate, Scored, Verdict, make_query
 from movie_brain.infrastructure.tmdb import TMDB_API, TmdbClient
 
@@ -417,3 +417,78 @@ def not_a_target(ctx, spec):
 def no_movie_lookup(ctx, tid):
     made = [c.request.url for c in ctx["rs"].calls]
     assert not any(f"/movie/{tid}" in u for u in made), made
+
+
+@given(parsers.parse('a list "{slug}" with entry {rank:d} "{title}" by "{director}"'))
+def list_entry(ctx, slug, rank, title, director):
+    ctx["repo"].upsert_film_list(ListMeta(slug, slug, None, None, None, True), TODAY)
+    ctx["repo"].upsert_list_entry(slug, ListEntry(rank, title, director))
+
+
+@given(parsers.parse('list "{slug}" entry {rank:d} "{title}" by "{director}" is already linked to "{spec}"'))
+def list_entry_linked(ctx, slug, rank, title, director, spec):
+    ctx["repo"].upsert_film_list(ListMeta(slug, slug, None, None, None, True), TODAY)
+    ctx["repo"].upsert_list_entry(slug, ListEntry(rank, title, director))
+    ctx["repo"].link_list_entry(slug, rank, _id(ctx["repo"], spec))
+
+
+@given(parsers.parse('an open list "{reason}" review for "{slug}" rank {rank:d}'))
+def open_list_review(ctx, reason, slug, rank):
+    value = f"{slug}#{rank}"
+    ctx["repo"].append_reviews("list", [ReviewEntry(reason, value=value, detail=value)], TODAY)
+    ctx["review_id"] = ctx["repo"].open_reviews("list")[-1]["id"]
+
+
+@then(parsers.parse('list "{slug}" rank {rank:d} is linked to "{spec}"'))
+def list_linked_to(ctx, slug, rank, spec):
+    entries = {e.rank: e.film_id for e in ctx["repo"].list_entries(slug)}
+    assert entries[rank] == _id(ctx["repo"], spec)
+
+
+@then(parsers.parse('list "{slug}" rank {rank:d} is not linked'))
+def list_not_linked(ctx, slug, rank):
+    entries = {e.rank: e.film_id for e in ctx["repo"].list_entries(slug)}
+    assert entries[rank] is None
+
+
+@then(parsers.parse('"{spec}" holds a list claim "{value}"'))
+def holds_list_claim(ctx, spec, value):
+    fid = _id(ctx["repo"], spec)
+    claims = ctx["repo"].claims_for_film(fid)
+    assert any(c.authority == "list" and c.value == value for c in claims), claims
+
+
+@then(parsers.parse('a film "{title}" exists unkeyed and list "{slug}" rank {rank:d} is linked to it'))
+def film_unkeyed_and_linked(ctx, title, slug, rank):
+    entries = {e.rank: e.film_id for e in ctx["repo"].list_entries(slug)}
+    fid = entries[rank]
+    assert fid is not None
+    view = ctx["repo"].get_view(fid, TODAY)
+    assert view is not None and view.title == title
+    assert ctx["repo"].external_ids_for(fid) == {}
+    ctx["last_created_film_id"] = fid
+
+
+@then(parsers.parse('that film holds a list claim "{value}"'))
+def that_film_claim(ctx, value):
+    claims = ctx["repo"].claims_for_film(ctx["last_created_film_id"])
+    assert any(c.authority == "list" and c.value == value for c in claims), claims
+
+
+@given(parsers.parse('an unkeyed film "{title}" with no year exists'))
+def unkeyed_film(ctx, title):
+    ctx["repo"].create_film(Film(title, None, None, ""))
+
+
+@then(parsers.parse('list "{slug}" rank {rank:d} is linked to the yearless film "{title}"'))
+def linked_to_yearless(ctx, slug, rank, title):
+    fid = ctx["repo"].film_id_by_key(f"{title.lower()} (None)")
+    entries = {e.rank: e.film_id for e in ctx["repo"].list_entries(slug)}
+    assert fid is not None and entries[rank] == fid
+
+
+@then(parsers.parse('resolving it with pick "{letter}" fails mentioning "{text}"'))
+def pick_fails_mentioning(ctx, letter, text):
+    with pytest.raises(ValueError) as exc:
+        _resolve(ctx, pick=letter)
+    assert text in str(exc.value)

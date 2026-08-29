@@ -79,6 +79,27 @@ class OwnedTitle:
 
 
 @dataclass(frozen=True)
+class ListMeta:
+    """Header block of one checked-in curated list file (lists/<slug>.tsv)."""
+
+    slug: str
+    name: str
+    curator: str | None
+    published_year: int | None
+    source_url: str | None
+    ordered: bool
+
+
+@dataclass(frozen=True)
+class ListEntry:
+    """One ranked row of a curated list; title/director are verbatim forever."""
+
+    rank: int
+    title_listed: str
+    director_listed: str | None
+
+
+@dataclass(frozen=True)
 class TmdbCandidate:
     """One TMDB search result, reduced to what matching needs."""
 
@@ -129,6 +150,7 @@ class FilmView:
     metacritic: int | None = None
     metacritic_url: str | None = None
     services: list[dict[str, object]] = field(default_factory=list)
+    lists: list[dict[str, object]] = field(default_factory=list)  # [{slug, name, curator, published, ordered, rank}]
     watchlisted: bool = False
     new_on: list[dict[str, object]] = field(default_factory=list)  # [{source, name, appeared_on}], arrivals window only
     criterion: bool = True  # has a Criterion listing (current or departed); False = discovery-only
