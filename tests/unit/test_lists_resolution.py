@@ -9,10 +9,19 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
 from lists_fakes import RecordingFetcher, StubTmdb
 from lists_fakes import candidate as _cand
 
-from movie_brain.application.lists import AUTHORITY, corpus_veto, entry_forms, find_holder, resolve_entry
+from movie_brain.application.lists import (
+    AUTHORITY,
+    ID_DISAGREEMENT,
+    corpus_veto,
+    entry_forms,
+    find_holder,
+    reconcile,
+    resolve_entry,
+)
 from movie_brain.domain.matching import Candidate as CorpusCandidate
 from movie_brain.domain.matching import CandidateIndex
 from movie_brain.domain.models import Film, ListEntry
@@ -304,3 +313,49 @@ def test_corpus_veto_is_empty_when_the_catalog_has_nothing_alike():
     index = CandidateIndex([CorpusCandidate(1, "Greed", 1924)])
 
     assert corpus_veto(index, entry_forms(DIAMOND)) == []
+
+
+# --- reconcile: the comparison policy (supplied-id spec §5) ----------------------------------
+
+MATCHED = _match("tt0016654", _cand("tt0016654", 613, "Greed"))
+NO_MATCH = Verdict("review", None, "no candidates", ())
+
+
+@pytest.mark.parametrize(
+    ("verdict", "tt_listed", "expected"),
+    [
+        (MATCHED, "tt0016654", ("tt0016654", "agree")),
+        (MATCHED, "tt9999999", (None, "disagree")),
+        (NO_MATCH, "tt9999999", ("tt9999999", "supplied")),
+        (MATCHED, None, ("tt0016654", "")),
+        (NO_MATCH, None, (None, "")),
+        (None, "tt9999999", ("tt9999999", "supplied")),
+    ],
+    ids=[
+        "match-same-id",
+        "match-different-id",
+        "no-match-with-id",
+        "match-no-id",
+        "no-match-no-id",
+        "no-verdict-with-id",
+    ],
+)
+def test_reconcile_is_the_policy_table(verdict, tt_listed, expected):
+    # Spec §5, one row per case. Pure: no repo, no fetcher, no clock.
+    assert reconcile(verdict, tt_listed) == expected
+
+
+def test_a_disagreement_offers_no_tt_at_all_to_proceed_on():
+    # Never link, never create: the tt is withheld, so a caller that forgot to branch on the
+    # agreement cannot accidentally proceed on either source's id.
+    tt, agreement = reconcile(MATCHED, "tt9999999")
+    assert tt is None and agreement == "disagree"
+
+
+def test_a_match_with_no_supplied_id_is_untouched_by_the_policy():
+    # ~40 existing scenarios depend on this row being today's behaviour, exactly.
+    assert reconcile(MATCHED, None) == (MATCHED.tt, "")
+
+
+def test_the_disagreement_reason_is_the_sixth_list_reason():
+    assert ID_DISAGREEMENT == "id-disagreement"
