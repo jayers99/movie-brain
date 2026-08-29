@@ -16,6 +16,7 @@ from movie_brain.application.availability import (
     TMDB_AUTHORITY,
     queue_review_once,
 )
+from movie_brain.application.keying import key_film
 from movie_brain.domain.matching import norm_title, split_annotations
 from movie_brain.domain.models import ReviewEntry, film_key
 from movie_brain.domain.thumbprint import parse_title, title_norm
@@ -171,6 +172,7 @@ class LinksReport:
     checked: int
     suspects: int
     cleared: int
+    rekeyed: int = 0
 
 
 def _same_title(ours: str, theirs: str) -> bool:
@@ -211,16 +213,106 @@ def audit_links(
     return suspects, checked, False
 
 
+_TT = re.compile(r"tt\d+")
+
+
+def _rekey_holder(repo: Repository, film_id: int, tt: str, tmdb_id: int | None) -> str | None:
+    """Who (other than ``film_id``) already holds the ids a dry run proposes, if anyone."""
+    imdb_holder = repo.film_id_for_external("imdb", tt)
+    if imdb_holder is not None and imdb_holder != film_id:
+        return f"{tt} is already held by #{imdb_holder}"
+    tmdb_holder = None if tmdb_id is None else repo.film_id_for_external(TMDB_AUTHORITY, str(tmdb_id))
+    if tmdb_holder is not None and tmdb_holder != film_id:
+        return f"tmdb {tmdb_id} is already held by #{tmdb_holder}"
+    return None
+
+
+def rekey_link(
+    repo: Repository,
+    client: TmdbClient,
+    today: date,
+    *,
+    film_id: int | None,
+    tt: str,
+    apply: bool,
+    log: Callable[[str], None] = _stderr,
+) -> LinksReport:
+    """Re-key ONE film to an IMDb id a human knows is right (spec 2026-08-29).
+
+    The film this exists for (#493, Criterion's *One Way or Another*) is cleanly keyed to the
+    WRONG work: its imdb and tmdb ids agree with each other, so no audit — link, disagreement
+    or no-match — can see it. Only a human can. `key_film` alone is the whole repair: it
+    replaces BOTH ids (migration 012 makes imdb/tmdb single-per-film) and queues the OMDb
+    refetch. The link is deliberately NOT cleared first — clearing drops the film out of both
+    `films_needing_tmdb_match` and `nomatch_worklist`, stranding it with no route back.
+    """
+    if film_id is None:
+        raise ValueError("--tt requires --film: re-keying is a single-film repair")
+    if not _TT.fullmatch(tt):
+        raise ValueError(f"malformed IMDb id {tt!r} — expected ttNNNNNNN")
+    # A human-typed id can be stale by the time it runs (merged away, tombstoned), so it is
+    # canonicalized first, as `review resolve --film` does. Unlike that path we refuse a
+    # merged-away id rather than silently re-keying its survivor: naming the survivor makes
+    # the human confirm which identity they meant before an identity write.
+    canonical = repo.canonical_film_id(film_id)
+    disposition = repo.disposition_of(canonical)
+    if disposition is not None and disposition[0] == "tombstoned":
+        raise ValueError(f"film {film_id} is tombstoned")
+    view = repo.get_view(canonical, today)
+    if view is None:
+        raise ValueError(f"film {film_id} not found")
+    if canonical != film_id:
+        raise ValueError(f"film {film_id} was merged into film {canonical} — re-key {canonical} instead")
+    before = repo.external_ids_for(film_id)
+    log(
+        f"#{film_id:<5} {view.title!r} ({view.year}) → imdb {before.get('imdb', '-')} / "
+        f"tmdb {before.get('tmdb', '-')}"
+    )
+    if not apply:
+        # The dry run is the only branch that asks who holds an id: on --apply the answer comes
+        # from `key_film`'s own pre-write checks, which are never duplicated or second-guessed
+        # here. Without it a dry run would print "would key" for a re-key that cannot happen.
+        try:
+            proposed = client.find_by_imdb(tt)
+        except (requests.RequestException, AuthError) as exc:
+            log(f"  TMDB lookup failed for {tt}: {exc}")
+            return LinksReport(1, 0, 0, 0)
+        held = _rekey_holder(repo, film_id, tt, proposed)
+        if held is not None:
+            log(f"  refused: {held} — merge those two instead, never steal an id")
+            return LinksReport(1, 0, 0, 0)
+        log(f"  would key to imdb {tt} / tmdb {proposed if proposed is not None else '-'} (dry run, nothing written)")
+        if repo.omdb_imdb_id(film_id) != tt:
+            log("  would queue an OMDb refetch")
+        return LinksReport(0, 0, 0, 0)
+    # The one identity write path, unmodified: every holder check inside it runs before any
+    # write, so `held` and `error` leave the film exactly as it was.
+    result = key_film(repo, client, film_id, tt, today, log)
+    if result.status in ("held", "error"):
+        log(f"  {result.status}: {result.detail} — film untouched")
+        return LinksReport(1, 0, 0, 0)
+    after = repo.external_ids_for(film_id)
+    log(f"  keyed: imdb {after.get('imdb', '-')} / tmdb {after.get('tmdb', '-')} ({result.detail})")
+    return LinksReport(0, 0, 0, 0, 1)
+
+
 def repair_links(
     repo: Repository,
     client: TmdbClient,
     today: date,
     *,
     film_id: int | None = None,
+    tt: str | None = None,
     apply: bool,
     log: Callable[[str], None] = _stderr,
 ) -> LinksReport:
-    """Audit every link (or one film with ``film_id``); --apply clears the suspects for rematch."""
+    """Audit every link (or one film with ``film_id``); --apply clears the suspects for rematch.
+
+    With ``tt`` the verb is the single-film re-key instead (``rekey_link``) — it audits and
+    clears nothing.
+    """
+    if tt is not None:
+        return rekey_link(repo, client, today, film_id=film_id, tt=tt, apply=apply, log=log)
     suspects, checked, tripwired = audit_links(repo, client, film_id=film_id, log=log)
     for s in suspects:
         log(

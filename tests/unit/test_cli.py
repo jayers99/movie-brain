@@ -172,24 +172,60 @@ def test_repair_links_film_option(monkeypatch):
     calls = {}
     monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
 
-    def fake(repo, client, today, *, film_id=None, apply, log):
-        calls.update(film_id=film_id, apply=apply)
+    def fake(repo, client, today, *, film_id=None, tt=None, apply, log):
+        calls.update(film_id=film_id, tt=tt, apply=apply)
         return LinksReport(0, 1, 1, 1)
 
     monkeypatch.setattr("movie_brain.cli.repair_links", fake)
     r = runner.invoke(app, ["repair", "links", "--film", "1689", "--apply"])
-    assert r.exit_code == 0 and calls == {"film_id": 1689, "apply": True}
+    assert r.exit_code == 0 and calls == {"film_id": 1689, "tt": None, "apply": True}
 
 
 def test_repair_links_film_without_link_exits_1(monkeypatch):
     monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
 
-    def fake(repo, client, today, *, film_id=None, apply, log):
+    def fake(repo, client, today, *, film_id=None, tt=None, apply, log):
         raise LookupError("film 1689 holds no TMDB link")
 
     monkeypatch.setattr("movie_brain.cli.repair_links", fake)
     r = runner.invoke(app, ["repair", "links", "--film", "1689"])
     assert r.exit_code == 1 and "no TMDB link" in r.output
+
+
+def test_repair_links_tt_passes_through_and_reports_rekeys(monkeypatch):
+    calls = {}
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, film_id=None, tt=None, apply, log):
+        calls.update(film_id=film_id, tt=tt, apply=apply)
+        return LinksReport(0, 0, 0, 0, 1)
+
+    monkeypatch.setattr("movie_brain.cli.repair_links", fake)
+    r = runner.invoke(app, ["repair", "links", "--film", "493", "--tt", "tt0075915", "--apply"])
+    assert r.exit_code == 0 and calls == {"film_id": 493, "tt": "tt0075915", "apply": True}
+    assert "re-keyed: 1" in r.output
+
+
+def test_repair_links_tt_misuse_exits_2(monkeypatch):
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, film_id=None, tt=None, apply, log):
+        raise ValueError("--tt requires --film")
+
+    monkeypatch.setattr("movie_brain.cli.repair_links", fake)
+    r = runner.invoke(app, ["repair", "links", "--tt", "tt0075915"])
+    assert r.exit_code == 2 and "requires --film" in r.output
+
+
+def test_repair_links_tt_held_exits_nonzero(monkeypatch):
+    monkeypatch.setenv("MOVIE_BRAIN_TMDB_TOKEN", "tok")
+
+    def fake(repo, client, today, *, film_id=None, tt=None, apply, log):
+        return LinksReport(1, 0, 0, 0, 0)
+
+    monkeypatch.setattr("movie_brain.cli.repair_links", fake)
+    r = runner.invoke(app, ["repair", "links", "--film", "493", "--tt", "tt0075915", "--apply"])
+    assert r.exit_code == 1
 
 
 def test_repair_years_args_pair(monkeypatch):
