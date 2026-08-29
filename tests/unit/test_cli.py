@@ -567,6 +567,15 @@ def test_lists_trust_no_n_on_unknown_slug_errors(config_dir):
     assert "cahiers-100" in r.output
 
 
+def test_lists_trust_no_n_on_unknown_slug_and_empty_registry_says_so(config_dir):
+    # The other empty-registry test (test_lists_trust_unknown_slug_on_empty_registry_says_so)
+    # passes an N and hits the SET branch; this one omits N to hit the show-one branch's own
+    # "no lists registered" fallback, which had no direct test.
+    r = runner.invoke(app, ["lists", "trust", "no-such-list"])
+    assert r.exit_code == 2
+    assert "no lists registered" in r.output
+
+
 def test_lists_trust_reimport_preserves_trust(config_dir, tmp_path, monkeypatch):
     """Pins the trap this task exists to close: `lists import`'s own registry write
     (`upsert_film_list`) must never reset a trust the owner set with `lists trust`.

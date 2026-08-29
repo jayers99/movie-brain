@@ -412,9 +412,26 @@ def test_drawer_shows_new_on_line(dash):
 
 
 def test_drawer_shows_on_lists_line(dash):
+    # Alpha is on three lists at unequal trust (backlog-10 7, sight-sound-2022 5, cahiers-100
+    # the default 1) — the line leads with Backlog Ten, not the alphabetically-first Cahiers,
+    # because it orders by trust descending. See test_drawer_on_lists_line_orders_by_trust for
+    # the full-order assertion; this one is deliberately updated from its earlier
+    # name-order-only expectation.
     dash.locator("#films tbody tr", has_text="Alpha").first.click()
     dash.wait_for_selector("#drawer:not([hidden])")
-    expect(dash.locator("#drawer-body")).to_contain_text("On lists: Cahiers du Cinéma 2008 #3")
+    expect(dash.locator("#drawer-body")).to_contain_text("On lists: Backlog Ten")
+
+
+def test_drawer_on_lists_line_orders_by_trust_descending(dash):
+    # Trust order (backlog-10 7, sight-sound-2022 5, cahiers-100 1) disagrees with name order
+    # (cahiers-100's "100 Films..." would sort first alphabetically) — this is the only seed
+    # arrangement that lets the rendered page prove trust-desc ordering rather than a name
+    # fallback that happens to look the same.
+    dash.locator("#films tbody tr", has_text="Alpha").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    expect(dash.locator("#drawer-body")).to_contain_text(
+        "On lists: Backlog Ten, Sight & Sound 2022 #2, Cahiers du Cinéma 2008 #3"
+    )
 
 
 def test_drawer_without_lists_hides_the_line(dash):
@@ -440,6 +457,13 @@ def test_card_badge_absent_when_no_lists(dash):
     clear_lang(dash)  # Bravo is French; the default English filter would hide its row
     row = dash.locator("#films tbody tr[data-id]", has_text="Bravo")
     expect(row.locator(".badge-lists")).to_have_count(0)
+
+
+def test_card_badge_shows_singular_for_one_list(dash):
+    # Echo is on exactly one list (backlog-10) — pins the "1 list" singular against a
+    # regression to "1 lists".
+    row = dash.locator("#films tbody tr[data-id]", has_text="Echo")
+    expect(row.locator(".badge-lists")).to_have_text("1 list")
 
 
 def test_multi_list_chip_narrows_to_films_on_two_or_more_lists(dash):
