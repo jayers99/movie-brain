@@ -448,3 +448,185 @@ def test_scorecard_rendering_keeps_the_agreement_tally_line_intact(config_dir, t
     )
     # verbatim, on its own line and unfolded — not split across an 80-column wrap.
     assert expected in r.output.splitlines()
+
+
+def test_lists_trust_shows_every_list_ordered_desc_then_slug(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    today = date(2026, 8, 29)
+    repo.upsert_film_list(
+        ListMeta("cahiers-100", "100 Films for an Ideal Cinematheque", "Cahiers du Cinéma", 2008, None, True), today
+    )
+    repo.upsert_film_list(ListMeta("bergan-100", "Bergan 100", None, None, None, True), today)
+    repo.set_list_trust("bergan-100", 5)
+
+    r = runner.invoke(app, ["lists", "trust"])
+    assert r.exit_code == 0
+    lines = [ln for ln in r.output.splitlines() if ln.strip()]
+    assert lines[0].startswith("bergan-100") and "trust 5" in lines[0]
+    assert lines[1].startswith("cahiers-100") and "trust 1" in lines[1]
+
+
+def test_lists_trust_sets_and_persists(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "9"])
+    assert r.exit_code == 0
+    assert "9" in r.output
+
+    assert repo.film_list("cahiers-100").trust == 9
+
+
+def test_lists_trust_accepts_zero(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "0"])
+    assert r.exit_code == 0
+    assert repo.film_list("cahiers-100").trust == 0
+
+
+def test_lists_trust_rejects_negative_value(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "-1"])
+    assert r.exit_code != 0
+    assert repo.film_list("cahiers-100").trust == 1  # unchanged
+
+
+def test_lists_trust_unknown_slug_errors_and_names_known_lists(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "no-such-list", "5"])
+    assert r.exit_code == 2
+    assert "no-such-list" in r.output
+    assert "cahiers-100" in r.output
+
+
+def test_lists_trust_unknown_slug_on_empty_registry_says_so(config_dir):
+    r = runner.invoke(app, ["lists", "trust", "no-such-list", "5"])
+    assert r.exit_code == 2
+    assert "no lists registered" in r.output
+
+
+def test_lists_trust_no_n_shows_one_lists_trust(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+    repo.set_list_trust("cahiers-100", 7)
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100"])
+    assert r.exit_code == 0
+    assert r.output.strip().startswith("cahiers-100")
+    assert "trust 7" in r.output
+
+
+def test_lists_trust_no_n_on_unknown_slug_errors(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "no-such-list"])
+    assert r.exit_code == 2
+    assert "no-such-list" in r.output
+    assert "cahiers-100" in r.output
+
+
+def test_lists_trust_no_n_on_unknown_slug_and_empty_registry_says_so(config_dir):
+    # The other empty-registry test (test_lists_trust_unknown_slug_on_empty_registry_says_so)
+    # passes an N and hits the SET branch; this one omits N to hit the show-one branch's own
+    # "no lists registered" fallback, which had no direct test.
+    r = runner.invoke(app, ["lists", "trust", "no-such-list"])
+    assert r.exit_code == 2
+    assert "no lists registered" in r.output
+
+
+def test_lists_trust_reimport_preserves_trust(config_dir, tmp_path, monkeypatch):
+    """Pins the trap this task exists to close: `lists import`'s own registry write
+    (`upsert_film_list`) must never reset a trust the owner set with `lists trust`.
+
+    A genuine round trip through the real `lists import` CLI verb — not a direct call to
+    `repo.upsert_film_list` — so a future refactor of `import_list`'s registry write would
+    actually be caught here."""
+    from datetime import date
+
+    from lists_fakes import RecordingFetcher, StubTmdb, candidate
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    today = date(2026, 8, 29)
+    fid = repo.create_film(Film("Citizen Kane", 1941, "Orson Welles", ""))
+    assert fid is not None
+    repo.set_external_id(fid, "imdb", "tt0033467", today)
+
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    (config_dir / "tmdb-read-token.txt").write_text("t")
+    monkeypatch.setattr("movie_brain.cli.TmdbClient", lambda token: StubTmdb())
+    fetcher = RecordingFetcher(by_title={"Citizen Kane": [candidate("tt0033467", 100, "Citizen Kane", 1941, "Orson Welles")]})
+    monkeypatch.setattr(
+        "movie_brain.infrastructure.thumbprint_fetch.session_fetcher", lambda *a, **kw: (fetcher, None)
+    )
+
+    path = tmp_path / "cahiers-100.tsv"
+    path.write_text("# slug: cahiers-100\n# name: Cahiers\n1\tCitizen Kane\tOrson Welles\n")
+
+    r = runner.invoke(app, ["lists", "import", str(path), "--apply"])
+    assert r.exit_code == 0, r.output
+    assert repo.film_list("cahiers-100").trust == 1  # default, un-set
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "9"])
+    assert r.exit_code == 0
+    assert repo.film_list("cahiers-100").trust == 9
+
+    # The re-import — same file, same slug — is the trap: `import_list` calls
+    # `upsert_film_list` again on every run, e.g. to pick up newly created films.
+    r = runner.invoke(app, ["lists", "import", str(path), "--apply"])
+    assert r.exit_code == 0, r.output
+
+    assert repo.film_list("cahiers-100").trust == 9
+
+
+def test_lists_trust_no_args_on_an_empty_registry_says_so(tmp_path, monkeypatch):
+    """Silence reads as a failure. The two slug branches already have this fallback; the
+    no-argument branch did not, so an empty registry printed nothing at all."""
+    monkeypatch.setenv("MOVIE_BRAIN_CONFIG_DIR", str(tmp_path))
+    result = CliRunner().invoke(app, ["lists", "trust"])
+    assert result.exit_code == 0, result.output
+    assert "no lists registered" in result.output

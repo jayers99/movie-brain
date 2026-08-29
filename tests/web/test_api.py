@@ -94,8 +94,15 @@ def test_summary_and_config(client):
         "top_imdb": 7.5,
         "recent_days": 30,
         "new_arrival_days": 14,
+        "multi_list": 2,
     }
     assert cfg["today"] == "2026-08-19" and "leaving" in cfg["chips"]
+
+
+def test_config_exposes_multi_list_threshold_and_chip(client):
+    cfg = client.get("/api/config").get_json()
+    assert cfg["canned_thresholds"]["multi_list"] == 2
+    assert "multi_list" in cfg["chips"]
 
 
 def test_scraped_metascore_is_authoritative_with_omdb_fallback(tmp_path):
@@ -159,7 +166,7 @@ def test_lists_in_payloads(repo):
     tc = app.test_client()
     expected = [
         {"slug": "cahiers-100", "name": "100 Films for an Ideal Cinematheque", "curator": "Cahiers du Cinéma",
-         "published": 2008, "ordered": True, "rank": 3, "rank_label": None}
+         "published": 2008, "ordered": True, "trust": 1, "rank": 3, "rank_label": None}
     ]
     assert tc.get(f"/api/films/{fid}").get_json()["lists"] == expected
     assert tc.get("/api/films").get_json()[0]["lists"] == expected

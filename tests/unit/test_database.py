@@ -418,7 +418,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 15
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 16
     finally:
         conn.close()
 
@@ -1150,7 +1150,7 @@ def test_migration_011_claims_and_film_columns(tmp_path):
     repo.set_title_norm(fid, "bladerunner")
     assert repo.films_missing_title_norm() == []
     with sqlite3.connect(tmp_path / "t.db") as c:
-        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 15
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 16
         assert c.execute("SELECT kind FROM films WHERE id = ?", (fid,)).fetchone()[0] == "movie"
 
 

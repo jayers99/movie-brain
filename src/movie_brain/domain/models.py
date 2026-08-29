@@ -88,6 +88,9 @@ class ListMeta:
     published_year: int | None
     source_url: str | None
     ordered: bool
+    # Owner's judgement of the list, set only via `lists trust` (design 2026-08-29 §4).
+    # `upsert_film_list` never writes this column, so a re-import can't reset it.
+    trust: int = 1
 
 
 @dataclass(frozen=True)
@@ -152,9 +155,13 @@ class FilmView:
     metacritic: int | None = None
     metacritic_url: str | None = None
     services: list[dict[str, object]] = field(default_factory=list)
-    # [{slug, name, curator, published, ordered, rank, rank_label}] — rank_label is the rank AS
-    # PRINTED (may be None, may carry a tie marker like "=243"); rank is always the 1-based line
-    # position. The drawer renders rank_label ?? rank.
+    # [{slug, name, curator, published, ordered, trust, rank, rank_label}] — rank_label is the
+    # rank AS PRINTED (may be None, may carry a tie marker like "=243"); rank is always the
+    # 1-based line position. The drawer renders rank_label ?? rank. Entries arrive pre-ordered
+    # by trust descending then name (the query's own ORDER BY) — trust is otherwise invisible
+    # in the UI, so this ordering is the only place it shows (design 2026-08-29 §5/§6); the
+    # cross-list tally (the "N lists" card badge, the "on 2+ lists" chip) is len(lists), derived
+    # client-side and never denormalized onto films.
     lists: list[dict[str, object]] = field(default_factory=list)
     watchlisted: bool = False
     new_on: list[dict[str, object]] = field(default_factory=list)  # [{source, name, appeared_on}], arrivals window only
