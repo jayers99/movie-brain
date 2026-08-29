@@ -1483,7 +1483,10 @@ def test_films_needing_imdb_backfill_skips_disposed_films(repo, today):
 
 
 def test_films_needing_imdb_backfill_respects_limit(repo, today):
+    fids = []
     for i, title in enumerate(("A", "B", "C")):
         fid = repo.create_film(Film(title, 1959 + i, None, ""))
         repo.set_external_id(fid, "tmdb", str(100 + i), today)
-    assert len(repo.films_needing_imdb_backfill(limit=2)) == 2
+        fids.append(fid)
+    targets = repo.films_needing_imdb_backfill(limit=2)
+    assert [t.film_id for t in targets] == fids[:2]
