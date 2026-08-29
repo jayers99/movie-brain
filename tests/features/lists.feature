@@ -535,3 +535,36 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And there is one open list review row for "cahiers-100#8" with reason "corpus-veto"
     And entry 8 is unlinked
     And no film was created
+
+  Scenario: a supplied id among the resolver's own candidates hands gate 2 THAT candidate's tmdb id
+    # The shape the id column exists to settle: an ambiguous tie in which the curator's id names
+    # one of the tied works. `_gate_verdict` re-points the review verdict at the supplied tt and
+    # `_winner` selects on tt — never `ranked[0]`, which here is the OTHER work. Simplify
+    # `_winner` to `ranked[0]` and this entry silently links to the wrong film.
+    Given a film "Le Plaisir" (1962) holding tmdb "2"
+    And the candidate pool has "Pleasure" → tt1/1 1952 titled "House of Pleasure" and tt2/2 1962 titled "Le Plaisir"
+    And the list entry 34 is "Pleasure" by "Max Ophüls" with id "tt2"
+    When I import the list with --apply
+    Then the report says linked 1, would-create 0, review 0, blocked 0, error 0
+    And entry 34 is linked to "Le Plaisir"
+    And the scorecard line for entry 34 contains "via tmdb 2"
+    And the scorecard line for entry 34 contains "[weak]"
+    And the scorecard line for entry 34 contains "[id supplied]"
+    And gate 2b was never asked
+    And the id tally says agree 0, disagree 0, supplied 1, of 1 with ids
+
+  Scenario: phase 2 mints a supplied-id entry under THAT candidate's title and year
+    # The creating half of the same branch: title, year and tmdb id all come from the candidate
+    # the SUPPLIED id names, so the row the catalog gains describes the work the curator meant.
+    # `ranked[0]` here is 'House of Pleasure' (1952) — a different work entirely.
+    Given the candidate pool has "Pleasure" → tt1/1 1952 titled "House of Pleasure" and tt2/2 1962 titled "Le Plaisir"
+    And I imported the list with --apply for entry 34 "Pleasure" by "Max Ophüls" with id "tt2"
+    When I create films with --apply
+    Then the create report says created 1, keyed 1, linked 0, blocked 0, error 0
+    And exactly 1 film exists
+    And the film "Le Plaisir" is dated 1962 and directed by "Max Ophüls"
+    And the film "Le Plaisir" holds imdb "tt2" and tmdb "2"
+    And entry 34 is linked to "Le Plaisir"
+    And the film "Le Plaisir" carries a list claim "cahiers-100#34" ingested as "Pleasure"
+    And the id tally says agree 0, disagree 0, supplied 1, of 1 with ids
+    And the eval CSV is byte-identical
