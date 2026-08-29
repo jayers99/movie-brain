@@ -166,7 +166,7 @@ def test_lists_in_payloads(repo):
     tc = app.test_client()
     expected = [
         {"slug": "cahiers-100", "name": "100 Films for an Ideal Cinematheque", "curator": "Cahiers du Cinéma",
-         "published": 2008, "ordered": True, "trust": 1, "rank": 3, "rank_label": None}
+         "published": 2008, "ordered": True, "trust": 1, "rank": 3, "rank_label": None, "size": 1}
     ]
     assert tc.get(f"/api/films/{fid}").get_json()["lists"] == expected
     assert tc.get("/api/films").get_json()[0]["lists"] == expected

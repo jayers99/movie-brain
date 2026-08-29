@@ -171,6 +171,7 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "trust": 1,
                 "rank": 1,
                 "rank_label": None,
+                "size": 1,
             },
             {
                 "slug": "backlog-10",
@@ -181,6 +182,7 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "trust": 1,
                 "rank": 5,
                 "rank_label": None,
+                "size": 1,
             },
         ]
     }
@@ -245,6 +247,7 @@ def test_list_views_populates_lists(repo, today):
             "trust": 1,
             "rank": 1,
             "rank_label": None,
+            "size": 1,
         }
     ]
 
@@ -268,6 +271,7 @@ def test_get_view_populates_lists(repo, today):
             "trust": 1,
             "rank": 1,
             "rank_label": None,
+            "size": 1,
         }
     ]
 
@@ -278,6 +282,34 @@ def test_get_view_film_with_no_lists_is_empty(repo, today):
     view = repo.get_view(fid, today)
     assert view is not None
     assert view.lists == []
+
+
+def test_list_entries_carry_their_list_size(repo, today):
+    fid = repo.create_film(Film("Citizen Kane", 1941, "Orson Welles", ""))
+    other = repo.create_film(Film("The Rules of the Game", 1939, "Jean Renoir", ""))
+    assert fid is not None and other is not None
+    repo.upsert_film_list(CAHIERS, today)
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles"))
+    repo.upsert_list_entry("cahiers-100", ListEntry(2, "The Rules of the Game", "Jean Renoir"))
+    repo.link_list_entry("cahiers-100", 1, fid)
+    repo.link_list_entry("cahiers-100", 2, other)
+
+    entry = next(v for v in repo.list_views("criterion", today) if v.id == fid).lists[0]
+    assert entry["size"] == 2  # the list's length, not our coverage of it
+    assert entry["rank"] == 1
+
+
+def test_list_size_counts_entries_that_are_not_linked_yet(repo, today):
+    fid = repo.create_film(Film("Citizen Kane", 1941, "Orson Welles", ""))
+    assert fid is not None
+    repo.upsert_film_list(CAHIERS, today)
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles"))
+    repo.upsert_list_entry("cahiers-100", ListEntry(2, "Something Unlinked", None))
+    repo.link_list_entry("cahiers-100", 1, fid)
+
+    entry = next(v for v in repo.list_views("criterion", today) if v.id == fid).lists[0]
+    # rank 2 is deliberately never linked to a film — size must still count it.
+    assert entry["size"] == 2
 
 
 def test_merge_film_moves_film_list_entry_to_survivor(repo, today):
