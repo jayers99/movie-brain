@@ -137,7 +137,7 @@ def test_chip_labels_and_order(dash: Page):
         "Needs revisit",
         "Suspect",
         "on 2+ lists",
-        "Worth buying",
+        "Canon, not owned",
         "Clear",
     ]
 
@@ -377,10 +377,8 @@ def empty_dash(page: Page, empty_server: str) -> Page:
     return page
 
 
-# ---- acquire chip: another separate repo/server/page so the shared seed above (none of
-# whose films are eligible: every ratings-only film sits on the current Criterion listing,
-# and the two discovery films (Golf, Hotel) carry no list membership and too-low/no
-# metacritic) stays untouched. ----
+# ---- acquire chip: another separate repo/server/page so the shared seed above (whose acquire
+# results none of the tests below examine) stays untouched. ----
 
 ACQUIRE_TODAY = date(2026, 8, 19)
 
@@ -392,9 +390,9 @@ def seed_acquire(repo: Repository) -> None:
     yankee = repo.create_film(Film("Yankee", 2001, "Yolanda", ""))
     xray = repo.create_film(Film("Xray", 2002, "Xena", ""))
     assert yankee is not None and xray is not None
-    # Whiskey: same list (rank 2, so it would score BETWEEN Yankee and Xray if it counted) but
-    # currently on the Criterion Channel — proves the criterion clause suppresses even a
-    # canon-list film, ahead of the isCanon/metacritic test.
+    # Whiskey: same list (rank 2, so it scores BETWEEN Yankee and Xray) and currently on the
+    # Criterion Channel — proves a current Criterion listing no longer suppresses the chip
+    # (D1, reversed): streaming availability is not a reason to hide a canon film.
     repo.record_catalog("criterion", [Film("Whiskey", 2003, "Walt", "https://c/whiskey")], ACQUIRE_TODAY)
     whiskey = repo.film_id_by_key("whiskey (2003)")
     assert whiskey is not None
@@ -462,18 +460,18 @@ def test_acquire_chip_shows_canon_film_with_no_subscribed_listing(acquire_dash: 
     assert acquire_dash.locator("tr[data-id]", has_text="Yankee").count() == 1
 
 
-def test_acquire_chip_excludes_film_currently_on_criterion(acquire_dash: Page):
+def test_acquire_chip_includes_film_currently_on_criterion(acquire_dash: Page):
     acquire_dash.click('.chip[data-chip="acquire"]')
-    assert count(acquire_dash) == 4  # Yankee, Xray, Victor, Zulu — Whiskey stays off despite its list rank
-    assert acquire_dash.locator("tr[data-id]", has_text="Whiskey").count() == 0
+    assert count(acquire_dash) == 5  # Yankee, Whiskey, Xray, Victor, Zulu — all unowned and canon-adjacent
+    assert acquire_dash.locator("tr[data-id]", has_text="Whiskey").count() == 1
 
 
 def test_acquire_chip_orders_by_canon_score_desc(acquire_dash: Page):
     # Yankee/Xray have no listing anywhere, so `f.url` is None and `.c-title` renders no <a>
     # (first_titles assumes one) — read the plain title text instead.
     acquire_dash.click('.chip[data-chip="acquire"]')
-    titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()[:2]]
-    assert titles == ["Yankee", "Xray"]  # #1/3 (score 10.0) before #3/3 (score 3.33)
+    titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()[:3]]
+    assert titles == ["Yankee", "Whiskey", "Xray"]  # #1/3 (10.0), #2/3 (6.67), #3/3 (3.33)
 
 
 def test_acquire_chip_tier_1_outranks_tier_2_even_with_a_lower_raw_score(acquire_dash: Page):
@@ -486,7 +484,7 @@ def test_acquire_chip_tier_1_outranks_tier_2_even_with_a_lower_raw_score(acquire
     # canon_score comparison would already have produced on its own.
     acquire_dash.click('.chip[data-chip="acquire"]')
     titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()]
-    assert titles == ["Yankee", "Xray", "Victor", "Zulu"]
+    assert titles == ["Yankee", "Whiskey", "Xray", "Victor", "Zulu"]
 
 
 def test_drawer_shows_also_streaming(dash):

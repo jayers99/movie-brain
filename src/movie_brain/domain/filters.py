@@ -67,19 +67,16 @@ def is_canon(view: FilmView) -> bool:
 
 
 def acquisition_candidate(view: FilmView, _today: date) -> bool:
-    """Worth buying: unreachable on anything I pay for, unseen, unowned, and canon-adjacent.
+    """The canon shortlist I do not own yet.
 
-    The Criterion clause is separate from the `services` test on purpose: `criterion` IS a
-    subscribed svod row in `movie_service`, but `_SERVICES_SQL` filters it out of
-    `FilmView.services` (`l.source != 'criterion'`), so testing `services` alone would offer to
-    sell a film that is streaming on the Channel right now. Only `kind == 'svod'` suppresses —
-    a subscribed `store` (e.g. `apple-tv-store`) is a shop, not access, and must never suppress.
+    The working filter is "not yet BOUGHT", not "not yet seen" (C5): the owner has seen many of
+    these once and wants to re-watch them, so a rating is not a reason to hide a film. Streaming
+    availability is likewise not a reason (D1, reversed): a film streaming somewhere is still
+    worth owning at $5 (C4), so it appears and the dashboard badges where to watch it instead of
+    dropping it. `owned` is the only possession test, because possession is the only thing that
+    settles the question.
     """
-    if view.owned or view.my_rating is not None:
-        return False
-    if view.criterion and not view.departed:
-        return False
-    if any(s.get("subscribed") and s.get("kind") == "svod" for s in view.services):
+    if view.owned:
         return False
     return is_canon(view) or (view.metacritic is not None and view.metacritic >= TOP_MC)
 

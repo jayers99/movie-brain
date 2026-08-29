@@ -186,57 +186,32 @@ def test_a_film_on_no_list_scores_zero_and_is_not_canon():
     assert is_canon(v) is False
 
 
-def test_a_film_streaming_on_a_subscribed_svod_is_not_a_candidate(today):
-    v = view(
-        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
-        services=[{"name": "HBO Max", "subscribed": True, "kind": "svod"}],
-        criterion=False,
-    )
-    assert acquisition_candidate(v, today) is False
+def test_acquire_keeps_a_rated_film():
+    """C5: 'a lot of them I already have seen once, I just want to re-watch them.'"""
+    v = view(my_rating=8, metacritic=95, owned=False, criterion=False)
+    assert acquisition_candidate(v, TODAY) is True
 
 
-def test_a_subscribed_STORE_does_not_suppress_a_candidate(today):
-    v = view(
-        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
-        services=[{"name": "Apple TV Store", "subscribed": True, "kind": "store"}],
-        criterion=False,
-    )
-    assert acquisition_candidate(v, today) is True
+def test_acquire_keeps_a_streamable_film():
+    """D1 reversed: a streamable canon film appears, badged, rather than being hidden."""
+    v = view(metacritic=95, owned=False, criterion=False,
+             services=[{"name": "Kanopy", "subscribed": True, "kind": "svod", "quality": 1, "has_apple_app": False}])
+    assert acquisition_candidate(v, TODAY) is True
 
 
-def test_a_film_on_the_criterion_channel_right_now_is_not_a_candidate(today):
-    v = view(
-        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
-        criterion=True,
-        departed=False,
-    )
-    assert acquisition_candidate(v, today) is False
+def test_acquire_keeps_a_film_on_the_criterion_channel():
+    v = view(metacritic=95, owned=False, criterion=True, departed=False)
+    assert acquisition_candidate(v, TODAY) is True
 
 
-def test_a_DEPARTED_criterion_film_is_a_candidate_again(today):
-    v = view(
-        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
-        criterion=True,
-        departed=True,
-    )
-    assert acquisition_candidate(v, today) is True
+def test_acquire_drops_an_owned_film():
+    v = view(metacritic=95, owned=True, criterion=False)
+    assert acquisition_candidate(v, TODAY) is False
 
 
-def test_owned_and_rated_films_are_not_candidates(today):
-    base = {
-        "lists": [{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
-        "criterion": False,
-    }
-    assert acquisition_candidate(view(**base, owned=True), today) is False
-    assert acquisition_candidate(view(**base, my_rating=7), today) is False
-
-
-def test_a_high_metacritic_film_on_no_list_is_a_candidate(today):
-    assert acquisition_candidate(view(lists=[], metacritic=93, criterion=False), today) is True
-
-
-def test_a_mediocre_film_on_no_list_is_not_a_candidate(today):
-    assert acquisition_candidate(view(lists=[], metacritic=72, criterion=False), today) is False
+def test_acquire_drops_a_film_that_is_neither_canon_nor_acclaimed():
+    v = view(metacritic=40, owned=False, criterion=False, lists=[])
+    assert acquisition_candidate(v, TODAY) is False
 
 
 def test_acquire_is_a_registered_chip():
