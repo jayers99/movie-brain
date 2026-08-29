@@ -63,6 +63,13 @@ Feature: Dispositioned films stay out of every collector's way
     Then exactly 1 group is keyed "alpha"
     And the group "alpha" is undecided from source "id-conflict"
 
+  Scenario: An imdb-id conflict between same-titled films is undecided, never a false "distinct"
+    Given "Alpha (1950)" holds tmdb id "5"
+    And "Alpha (1950)" holds imdb id "tt0024216"
+    And "Alpha (1951)" has an open id-conflict review claiming imdb id "tt0024216"
+    When I audit dupes
+    Then the group "alpha" is undecided from source "id-conflict"
+
   Scenario: Distinct TMDB ids are kept both
     Given "Alpha (1950)" holds tmdb id "5"
     And "Alpha (1951)" holds tmdb id "6"
