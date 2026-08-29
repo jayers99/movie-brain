@@ -239,7 +239,7 @@ def test_repair_imdb_help():
     assert "--apply" in r.output and "--limit" in r.output
 
 
-def test_repair_imdb_dry_run_reports_and_writes_nothing(monkeypatch):
+def test_repair_imdb_dry_run_passes_the_flag_through_and_reports(monkeypatch):
     from movie_brain.application.backfill_imdb import BackfillReport
 
     calls = {}

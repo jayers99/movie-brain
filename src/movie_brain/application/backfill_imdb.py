@@ -68,6 +68,11 @@ def backfill_imdb(
             no_imdb += 1
             continue
         if not apply:
+            holder = repo.film_id_for_external("imdb", tt)
+            if holder is not None and holder != target.film_id:
+                log(f"  #{target.film_id} {target.title!r}: {tt} already held by #{holder}")
+                held += 1
+                continue
             log(f"  #{target.film_id} {target.title!r} ({target.year}) → {tt}")
             backfilled += 1
             continue

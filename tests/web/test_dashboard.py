@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Page, expect
 
-from movie_brain.domain.models import Film, ListEntry, ListMeta
+from movie_brain.domain.models import Film, ListEntry, ListMeta, OmdbRating
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
 
@@ -398,6 +398,22 @@ def seed_acquire(repo: Repository) -> None:
     repo.record_catalog("criterion", [Film("Whiskey", 2003, "Walt", "https://c/whiskey")], ACQUIRE_TODAY)
     whiskey = repo.film_id_by_key("whiskey (2003)")
     assert whiskey is not None
+    # Zulu: unowned, unrated, no listing, no list membership at all — qualifies for the chip on
+    # Metacritic alone (91 >= top_mc). Tier 1 (on a list) must still outrank tier 2
+    # (Metacritic-only) even though Zulu's raw Metascore (91) dwarfs Xray's canon_score (3.33) —
+    # this is the ordering check the tier-then-canon_score `compare()` clause promises.
+    zulu = repo.create_film(Film("Zulu", 2004, "Zora", ""))
+    assert zulu is not None
+    repo.upsert_omdb(zulu, OmdbRating(8.0, 90, True, "English", '{"Title":"Zulu"}', metacritic=91), ACQUIRE_TODAY)
+
+    # Victor: unowned, unrated, no listing, no Metacritic — its ONLY qualification for the chip
+    # is membership on a list whose trust the owner has set to 0 ("visible, scores nothing"),
+    # so canon_score(Victor) == 0.0, exactly TIED with canon_score(Zulu) == 0.0 (Zulu carries no
+    # list at all). A score-only comparator would leave this tie to the metacritic/rt/imdb
+    # fallback below, where Zulu's 91 would wrongly sort it ahead of listless Victor — only the
+    # tier check (isCanon) breaks the tie correctly in Victor's favor.
+    victor = repo.create_film(Film("Victor", 2005, "Vera", ""))
+    assert victor is not None
 
     meta = ListMeta("acquire-test", "Acquire Test List", None, None, None, True)
     repo.upsert_film_list(meta, ACQUIRE_TODAY)
@@ -408,6 +424,12 @@ def seed_acquire(repo: Repository) -> None:
     repo.upsert_list_entry("acquire-test", ListEntry(3, "Xray", "Xena"))
     repo.link_list_entry("acquire-test", 3, xray)
     repo.set_list_trust("acquire-test", 10)
+
+    victor_meta = ListMeta("victor-test", "Victor Test List", None, None, None, True)
+    repo.upsert_film_list(victor_meta, ACQUIRE_TODAY)
+    repo.upsert_list_entry("victor-test", ListEntry(1, "Victor", "Vera"))
+    repo.link_list_entry("victor-test", 1, victor)
+    repo.set_list_trust("victor-test", 0)
 
 
 @pytest.fixture
@@ -442,7 +464,7 @@ def test_acquire_chip_shows_canon_film_with_no_subscribed_listing(acquire_dash: 
 
 def test_acquire_chip_excludes_film_currently_on_criterion(acquire_dash: Page):
     acquire_dash.click('.chip[data-chip="acquire"]')
-    assert count(acquire_dash) == 2  # Yankee, Xray — Whiskey stays off despite its list rank
+    assert count(acquire_dash) == 4  # Yankee, Xray, Victor, Zulu — Whiskey stays off despite its list rank
     assert acquire_dash.locator("tr[data-id]", has_text="Whiskey").count() == 0
 
 
@@ -452,6 +474,19 @@ def test_acquire_chip_orders_by_canon_score_desc(acquire_dash: Page):
     acquire_dash.click('.chip[data-chip="acquire"]')
     titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()[:2]]
     assert titles == ["Yankee", "Xray"]  # #1/3 (score 10.0) before #3/3 (score 3.33)
+
+
+def test_acquire_chip_tier_1_outranks_tier_2_even_with_a_lower_raw_score(acquire_dash: Page):
+    # Zulu is Metacritic-only (91, no list membership) — its raw score dwarfs Xray's
+    # canon_score (3.33), but tier 1 (on a curated list) must still sort above tier 2
+    # (Metacritic-only) per the spec: on-a-list beats Metacritic-only, full stop. Victor sits
+    # on a trust-0 list, so canon_score(Victor) == 0.0 exactly TIES canon_score(Zulu) == 0.0 —
+    # only the tier check (not a score-magnitude comparison) can break that tie correctly, so
+    # this also proves the tier check is load-bearing, not merely a shortcut a nonneg
+    # canon_score comparison would already have produced on its own.
+    acquire_dash.click('.chip[data-chip="acquire"]')
+    titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()]
+    assert titles == ["Yankee", "Xray", "Victor", "Zulu"]
 
 
 def test_drawer_shows_also_streaming(dash):

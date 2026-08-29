@@ -33,6 +33,12 @@ Feature: Backfilling IMDb ids from the TMDB ids we already hold
     And an open tmdb review row exists for "Rio Bravo" with reason "id-conflict"
     And the film "Rio Bravo" still holds no imdb id
 
+  Scenario: A dry run reports held, not backfilled, for an id another film already holds
+    Given a film "Rio Bravo (1959)" already holds imdb id "tt0053221"
+    When I back fill imdb ids without applying
+    Then the report counts 1 held
+    And the film "Rio Bravo" still holds no imdb id
+
   Scenario: TMDB publishing no imdb id is counted, not written
     Given TMDB publishes no imdb id for tmdb id 10767
     When I back fill imdb ids with apply
