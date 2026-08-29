@@ -4,6 +4,7 @@ import pytest
 
 from movie_brain.domain.filters import (
     CHIPS,
+    MULTI_LIST,
     NEW_ARRIVAL_DAYS,
     RECENT_DAYS,
     TOP_IMDB,
@@ -52,6 +53,7 @@ def test_chip_names_are_stable():
         "not_owned",
         "needs_revisit",
         "suspect",
+        "multi_list",
     )
 
 
@@ -103,6 +105,7 @@ def test_thresholds_exposes_constants():
         "top_imdb": TOP_IMDB,
         "recent_days": RECENT_DAYS,
         "new_arrival_days": NEW_ARRIVAL_DAYS,
+        "multi_list": MULTI_LIST,
     }
 
 
@@ -132,6 +135,15 @@ def test_owned_chip_matches_owned_views():
 def test_not_owned_chip_excludes_owned_views():
     assert matches(view(owned=False), ["not_owned"], TODAY)
     assert not matches(view(owned=True), ["not_owned"], TODAY)
+
+
+def test_multi_list_chip_matches_two_or_more_lists():
+    two = view(lists=[{"slug": "a"}, {"slug": "b"}])
+    one = view(lists=[{"slug": "a"}])
+    none = view()
+    assert matches(two, ["multi_list"], TODAY)
+    assert not matches(one, ["multi_list"], TODAY)
+    assert not matches(none, ["multi_list"], TODAY)
 
 
 def test_needs_revisit_chip():

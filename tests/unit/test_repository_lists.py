@@ -159,7 +159,8 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
     assert len(seen) == 1, f"expected exactly one query, got {seen}"
     assert "film_list_entry" in seen[0]
     assert result == {
-        # ordered by l.name — "100 Films..." sorts before "Backlog Ten" (ASCII '1' < 'B')
+        # both at default trust 1 — tie-broken by l.name: "100 Films..." sorts before
+        # "Backlog Ten" (ASCII '1' < 'B')
         fid: [
             {
                 "slug": "cahiers-100",
@@ -167,6 +168,7 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "curator": "Cahiers du Cinéma",
                 "published": 2008,
                 "ordered": True,
+                "trust": 1,
                 "rank": 1,
                 "rank_label": None,
             },
@@ -176,11 +178,37 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "curator": None,
                 "published": None,
                 "ordered": False,
+                "trust": 1,
                 "rank": 5,
                 "rank_label": None,
             },
         ]
     }
+
+
+def test_lists_by_film_carries_trust_and_orders_by_trust_desc_then_name(repo, today):
+    """The read model's own ordering — trust descending, then name — is the ONLY place trust
+    is visible in the UI (the drawer renders `d.lists` verbatim, in this order)."""
+    repo.upsert_film_list(CAHIERS, today)  # name "100 Films..." sorts alphabetically first
+    repo.upsert_film_list(BACKLOG, today)  # name "Backlog Ten"
+    repo.set_list_trust("backlog-10", 9)  # lower-trust list nonetheless is named ("100 Films...")
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Vertigo", "Alfred Hitchcock"))
+    repo.upsert_list_entry("backlog-10", ListEntry(1, "Vertigo", "Alfred Hitchcock"))
+    fid = repo.create_film(Film("Vertigo", 1958, "Alfred Hitchcock", ""))
+    assert fid is not None
+    repo.link_list_entry("cahiers-100", 1, fid)
+    repo.link_list_entry("backlog-10", 1, fid)
+
+    conn = sqlite3.connect(repo.db_path)
+    conn.row_factory = sqlite3.Row
+    result = _lists_by_film(conn)
+    conn.close()
+
+    slugs = [entry["slug"] for entry in result[fid]]
+    trusts = [entry["trust"] for entry in result[fid]]
+    # backlog-10 (trust 9) sorts ahead of cahiers-100 (trust 1) despite naming alphabetically last.
+    assert slugs == ["backlog-10", "cahiers-100"]
+    assert trusts == [9, 1]
 
 
 def test_lists_by_film_carries_rank_label(repo, today):
@@ -214,6 +242,7 @@ def test_list_views_populates_lists(repo, today):
             "curator": "Cahiers du Cinéma",
             "published": 2008,
             "ordered": True,
+            "trust": 1,
             "rank": 1,
             "rank_label": None,
         }
@@ -236,6 +265,7 @@ def test_get_view_populates_lists(repo, today):
             "curator": "Cahiers du Cinéma",
             "published": 2008,
             "ordered": True,
+            "trust": 1,
             "rank": 1,
             "rank_label": None,
         }
