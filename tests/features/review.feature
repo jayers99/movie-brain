@@ -211,3 +211,33 @@ Feature: match_review rows are resolved by CLI and never come back
     Given a list "cahiers" with entry 1 "Alpha" by "Ann"
     And an open list "unresolved" review for "cahiers" rank 1
     Then resolving it with pick "A" fails mentioning "apply to tmdb rows"
+
+  # An id-disagreement row (supplied-id spec §5) is a `list` row like any other: no film_id,
+  # so it drains through the SAME --film/--create/--dismiss verbs an `unresolved` or
+  # `corpus-veto` row does — the reason names why the row was queued, not what can close it.
+
+  Scenario: An id-disagreement entry is matched to an existing film
+    Given a list "cahiers" with entry 1 "Alpha" by "Ann"
+    And an open list "id-disagreement" review for "cahiers" rank 1
+    When I resolve it with film "Alpha (1950)"
+    Then list "cahiers" rank 1 is linked to "Alpha (1950)"
+    And "Alpha (1950)" holds a list claim "cahiers#1"
+
+  Scenario: An id-disagreement entry creates a new unkeyed film
+    Given a list "cahiers" with entry 5 "Nashville" by "Robert Altman"
+    And an open list "id-disagreement" review for "cahiers" rank 5
+    When I resolve it with create
+    Then a film "Nashville" exists unkeyed and list "cahiers" rank 5 is linked to it
+    And that film holds a list claim "cahiers#5"
+
+  Scenario: Dismissing an id-disagreement entry leaves it unlinked forever
+    Given a list "cahiers" with entry 9 "Nashville" by "Robert Altman"
+    And an open list "id-disagreement" review for "cahiers" rank 9
+    When I resolve it with dismiss
+    Then the review is resolved
+    And list "cahiers" rank 9 is not linked
+
+  Scenario: --pick/--tt/--none are refused on an id-disagreement row too — it has no film to key
+    Given a list "cahiers" with entry 1 "Alpha" by "Ann"
+    And an open list "id-disagreement" review for "cahiers" rank 1
+    Then resolving it with pick "A" fails mentioning "apply to tmdb rows"

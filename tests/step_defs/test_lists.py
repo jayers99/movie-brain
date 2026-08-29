@@ -174,6 +174,34 @@ def pool_one_named(ctx, form, tt, tid, year, director, name):
     ctx["tmdb"].years[tid] = year
 
 
+@given(
+    parsers.parse(
+        'the candidate pool has "{form}" → {tta}/{ida:d} {ya:d} titled "{na}" '
+        'and {ttb}/{idb:d} {yb:d} titled "{nb}"'
+    )
+)
+def pool_two_named(ctx, form, tta, ida, ya, na, ttb, idb, yb, nb):
+    """Two DIFFERENT works, each also known by the listed title, neither corroborated by a
+    director: the resolver refuses to pick one.
+
+    Both score identically, so `ranked` keeps this insertion order — the FIRST is `ranked[0]`
+    and the second is the one a scenario supplies an id for. That is what makes such a
+    scenario a real test of `_winner`, which selects on tt.
+    """
+    ctx["fetcher"].by_title[form] = [
+        candidate(tta, ida, (na, form), ya, "", votes=50),
+        candidate(ttb, idb, (nb, form), yb, "", votes=60),
+    ]
+    ctx["tmdb"].years.update({ida: ya, idb: yb})
+
+
+@given(parsers.parse('the candidate pool has nothing for "{form}"'))
+def pool_empty(ctx, form):
+    """The resolver answers `review`/`no candidates` — a verdict, not a failure. Stated
+    explicitly because it is the shape a supplied id exists to settle."""
+    ctx["fetcher"].by_title.pop(form, None)
+
+
 @given(parsers.parse('the candidate pool is offline for "{form}"'))
 def pool_offline(ctx, form):
     ctx["fetcher"].offline.add(form)
@@ -204,6 +232,11 @@ def an_entry(ctx, rank, title, director):
     ctx["entries"].append(ListEntry(rank, title, director))
 
 
+@given(parsers.parse('the list entry {rank:d} is "{title}" by "{director}" with id "{tt}"'))
+def an_entry_with_id(ctx, rank, title, director, tt):
+    ctx["entries"].append(ListEntry(rank, title, director, tt))
+
+
 @given("I imported the list with --apply")
 def imported_once(ctx):
     _run(ctx, apply=True)
@@ -212,6 +245,14 @@ def imported_once(ctx):
 @given(parsers.parse('I imported the list with --apply for entry {rank:d} "{title}" by "{director}"'))
 def imported_with_entry(ctx, rank, title, director):
     ctx["entries"].append(ListEntry(rank, title, director))
+    _run(ctx, apply=True)
+
+
+@given(
+    parsers.parse('I imported the list with --apply for entry {rank:d} "{title}" by "{director}" with id "{tt}"')
+)
+def imported_with_entry_and_id(ctx, rank, title, director, tt):
+    ctx["entries"].append(ListEntry(rank, title, director, tt))
     _run(ctx, apply=True)
 
 
@@ -394,6 +435,65 @@ def film_holds_ids(ctx, title, tt, tid):
     film_id = _film_id(ctx, title)
     assert ctx["repo"].film_id_for_external("imdb", tt) == film_id
     assert ctx["repo"].film_id_for_external("tmdb", tid) == film_id
+
+
+@then("gate 2b was never asked")
+def gate_2b_not_asked(ctx):
+    # Gate 2 answered with the WINNING candidate's own tmdb id, so `find_by_imdb` was
+    # unnecessary — which is only true if the winner is the candidate the id names.
+    assert ctx["tmdb"].calls == [], ctx["tmdb"].calls
+
+
+@then(parsers.parse('the film "{title}" holds imdb "{tt}"'))
+def film_holds_imdb(ctx, title, tt):
+    assert ctx["repo"].film_id_for_external("imdb", tt) == _film_id(ctx, title)
+
+
+@then(parsers.parse("the id tally says agree {agree:d}, disagree {disagree:d}, supplied {supplied:d}, of {n:d} compared"))
+def id_tally_says(ctx, agree, disagree, supplied, n):
+    r = ctx["report"]
+    assert (r.agree, r.disagree, r.supplied, r.compared) == (agree, disagree, supplied, n)
+    # The denominator is the sum of the three: an entry the resolver never answered for
+    # (already linked, or every lookup failed) cannot be scored against its id.
+    assert r.compared == r.agree + r.disagree + r.supplied
+
+
+@then(parsers.parse('the scorecard tally line is "{text}"'))
+def scorecard_tally_line(ctx, text):
+    assert ctx["scorecard"].splitlines()[-1] == text
+
+
+@then("the scorecard has no supplied-id tally line")
+def no_scorecard_tally_line(ctx):
+    assert "resolver vs supplied id" not in ctx["scorecard"]
+
+
+@then("the same entries with their ids removed land on the same film")
+def same_film_without_the_id(ctx):
+    """The control run: `agree` must not quietly mean "a different code path".
+
+    The identical entries are imported again as a second list with `tt_listed` stripped, and
+    every rank must land on exactly the film id the id-bearing run reached.
+    """
+    control_meta = ListMeta(
+        ctx["meta"].slug + "-no-id", ctx["meta"].name, ctx["meta"].curator, ctx["meta"].published_year, None, True
+    )
+    control = import_list(
+        ctx["repo"],
+        control_meta,
+        [ListEntry(e.rank, e.title_listed, e.director_listed) for e in ctx["entries"]],
+        TODAY,
+        fetcher=ctx["fetcher"],
+        tmdb=ctx["tmdb"],
+        apply=True,
+        log=ctx["log"].append,
+    )
+    by_rank = {o.rank: o for o in ctx["report"].rows}
+    for row in control.rows:
+        assert (row.kind, row.film_id) == (by_rank[row.rank].kind, by_rank[row.rank].film_id), row
+        assert row.agreement == "", row
+    assert (control.agree, control.disagree, control.supplied, control.compared) == (0, 0, 0, 0)
+    assert "resolver vs supplied id" not in scorecard(control.rows)
 
 
 @then("the eval CSV is byte-identical")
