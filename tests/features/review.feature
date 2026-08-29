@@ -154,3 +154,42 @@ Feature: match_review rows are resolved by CLI and never come back
     When I resolve it with tt "tt0024216"
     Then "King Kong (1933)" holds imdb "tt0024216" and no tmdb id
     And a warning mentions "tmdb lookup failed"
+
+  Scenario: A list entry is matched to an existing film
+    Given a list "cahiers" with entry 1 "Alpha" by "Ann"
+    And an open list "unresolved" review for "cahiers" rank 1
+    When I resolve it with film "Alpha (1950)"
+    Then list "cahiers" rank 1 is linked to "Alpha (1950)"
+    And "Alpha (1950)" holds a list claim "cahiers#1"
+
+  Scenario: A list entry that already sits at another rank refuses --film
+    Given a list "cahiers" with entry 1 "Alpha" by "Ann"
+    And list "cahiers" entry 2 "Alpha Twin" by "Ann" is already linked to "Alpha (1950)"
+    And an open list "unresolved" review for "cahiers" rank 1
+    Then resolving it with film "Alpha (1950)" fails
+
+  Scenario: A list entry creates a new unkeyed film
+    Given a list "cahiers" with entry 5 "Nashville" by "Robert Altman"
+    And an open list "unresolved" review for "cahiers" rank 5
+    When I resolve it with create
+    Then a film "Nashville" exists unkeyed and list "cahiers" rank 5 is linked to it
+    And that film holds a list claim "cahiers#5"
+
+  Scenario: A list --create colliding with an existing film's key links to it instead
+    Given an unkeyed film "Nashville" with no year exists
+    And a list "cahiers" with entry 7 "Nashville" by "Robert Altman"
+    And an open list "unresolved" review for "cahiers" rank 7
+    When I resolve it with create
+    Then list "cahiers" rank 7 is linked to the yearless film "Nashville"
+
+  Scenario: Dismissing a list entry leaves it unlinked forever
+    Given a list "cahiers" with entry 9 "Nashville" by "Robert Altman"
+    And an open list "unresolved" review for "cahiers" rank 9
+    When I resolve it with dismiss
+    Then the review is resolved
+    And list "cahiers" rank 9 is not linked
+
+  Scenario: --pick/--tt/--none are refused on list rows
+    Given a list "cahiers" with entry 1 "Alpha" by "Ann"
+    And an open list "unresolved" review for "cahiers" rank 1
+    Then resolving it with pick "A" fails mentioning "apply to tmdb rows"

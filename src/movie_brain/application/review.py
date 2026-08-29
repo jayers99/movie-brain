@@ -58,8 +58,10 @@ def resolve_review(
     (year adoption included when a client is given) · tmdb id-conflict/year-collision →
     --film merges this film INTO the named twin · metacritic slug rows → --film links the
     slug, --create promotes the staged title · apple-tv rows → --film marks owned, --create
-    creates + marks owned · every row accepts --dismiss. The row is marked resolved, which
-    also suppresses the same anomaly from being re-queued by later runs.
+    creates + marks owned · list rows (no film_id — nothing to key) → --film links the entry,
+    --create mints an unkeyed film for the next sync to key · every row accepts --dismiss. The
+    row is marked resolved, which also suppresses the same anomaly from being re-queued by
+    later runs.
 
     The three thumbprint verdicts on a tmdb row — --pick A/B/C (a candidate off the resolver's
     own review detail), --tt (any IMDb id, whether or not it was ranked), --none (verified
@@ -78,10 +80,22 @@ def resolve_review(
     (tv-only) so a film that legitimately has both a theatrical cut and a TV cut isn't silently
     mis-kinded. --series is refused only when TMDB knows the tt purely as a movie.
 
-    Imports metacritic/owned locally (not at module top) — those two modules import
-    `suppress_resolved` from this one at their own top level, so a module-level import here
-    would be circular depending on which module a caller happens to import first.
+    A `list` row (design §1 A1) carries no `film_id` at all — an entry that matched nothing
+    has no film to key, so the thumbprint verdicts (`--pick`/`--tt`/`--none`) are refused here
+    exactly like every other film-less row. `--film` links the entry (refusing when that film
+    already sits at another rank on the same list); `--create` mints an unkeyed film from the
+    entry's own `title_listed`/`director_listed` — the next sync's keying step keys it, the
+    same deferred-keying precedent as an apple-tv `--create` film — and a `films.key` collision
+    canonicalizes to the existing film and links to it instead, exactly as the apple-tv branch
+    does; `--dismiss` leaves the entry unlinked forever.
+
+    Imports metacritic/owned/lists locally (not at module top) — metacritic.py and owned.py
+    import `suppress_resolved` from this one at their own top level, so a module-level import
+    here would be circular depending on which module a caller happens to import first; lists.py
+    imports nothing from this module today, but the same local convention is followed anyway
+    so a future import there can never introduce that cycle by accident.
     """
+    from movie_brain.application.lists import AUTHORITY as LIST_AUTHORITY
     from movie_brain.application.metacritic import AUTHORITY as MC_AUTHORITY
     from movie_brain.application.metacritic import create_from_staged
     from movie_brain.application.owned import AUTHORITY as APPLE_AUTHORITY
@@ -251,6 +265,35 @@ def resolve_review(
             outcome = f"created film {new_id} from slug {value}"
         else:
             raise ValueError("metacritic slug rows accept --film, --create or --dismiss")
+    elif authority == LIST_AUTHORITY and value is not None:
+        slug, _, rank_s = value.rpartition("#")
+        rank = int(rank_s)
+        # Re-derive the entry's own listed title/director at resolution time (the standing
+        # rule: resolution re-derives, never trusts the row's stored value) rather than the
+        # review row's detail text, which is display-only and may have been hand-edited.
+        entry = next((e for e in repo.list_entries(slug) if e.rank == rank), None)
+        if entry is None:
+            raise ValueError(f"list {slug!r} rank {rank} not found")
+        if film_id is not None:
+            twin_rank = repo.film_rank_on_list(slug, film_id)
+            if twin_rank is not None and twin_rank != rank:
+                raise ValueError(f"film {film_id} is already linked at rank {twin_rank} on list {slug!r}")
+            repo.link_list_entry(slug, rank, film_id)
+            repo.add_claim(film_id, LIST_AUTHORITY, value, entry.title_listed, first_seen=today.isoformat())
+            outcome = f"{value} → film {film_id}"
+        elif create:
+            # Unkeyed on purpose: the next sync's keying step keys it, exactly as an apple-tv
+            # --create film is keyed. A films.key collision means the identity already exists
+            # under some other title — canonicalize and link to it, never mint a twin.
+            film = Film(entry.title_listed, None, entry.director_listed, "")
+            new_id = repo.create_film(film)
+            if new_id is None:
+                new_id = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
+            repo.link_list_entry(slug, rank, new_id)
+            repo.add_claim(new_id, LIST_AUTHORITY, value, entry.title_listed, first_seen=today.isoformat())
+            outcome = f"created film {new_id} from list {value}"
+        else:
+            raise ValueError("list rows accept --film, --create or --dismiss")
     elif authority == APPLE_AUTHORITY and value is not None:
         if film_id is not None:
             repo.mark_owned(film_id, today)
