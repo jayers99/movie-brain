@@ -1621,14 +1621,18 @@ def test_register_provider_refuses_a_name_with_no_usable_slug(repo):
 @pytest.fixture
 def film_with_two_listings(repo, today):
     """A film streaming on max and mubi (the pair `test_view_best_source_prefers_a_subscribed_service`
-    manipulates directly) plus peacock/prime-video/apple-tv-plus, pinned unsubscribed so they never
-    outrank a subscribed max, but shaped to give the lockstep test genuine 4-key discrimination:
-    peacock/prime-video/apple-tv-plus tie on subscribed(False) and quality(3); prime-video's
-    has_apple_app=True splits it from the other two; apple-tv-plus and peacock then tie on all
-    three earlier keys and split only on name ("Apple TV+" < "Peacock").
+    manipulates directly) plus peacock/prime-video/apple-tv-plus/bfi-player-classics, pinned
+    unsubscribed so they never outrank a subscribed max, but shaped to give the lockstep test
+    genuine 4-key discrimination: bfi-player-classics carries quality=10 — higher than EITHER
+    subscribed service ever gets in these tests — so a correct ranking still places it behind
+    both max and mubi, proving `subscribed` (the dominant key) actually outranks `quality` rather
+    than the ordering being an artifact of quality alone; peacock/prime-video/apple-tv-plus tie on
+    subscribed(False) and quality(3); prime-video's has_apple_app=True splits it from the other
+    two; apple-tv-plus and peacock then tie on all three earlier keys and split only on name
+    ("Apple TV+" < "Peacock").
     """
     fid = repo.create_film(Film("Two Listings", 2020, None, ""))
-    for slug in ("max", "mubi", "peacock", "prime-video", "apple-tv-plus"):
+    for slug in ("max", "mubi", "peacock", "prime-video", "apple-tv-plus", "bfi-player-classics"):
         repo.record_listing_with_transition(fid, slug, f"https://tmdb/w/{slug}", today)
     repo.set_service_subscribed("peacock", False)
     repo.set_service_subscribed("prime-video", False)
@@ -1637,6 +1641,7 @@ def film_with_two_listings(repo, today):
     repo.set_service_quality("prime-video", 3)
     repo.set_service_quality("apple-tv-plus", 3)
     repo.set_service_apple_app("prime-video", True)
+    repo.set_service_quality("bfi-player-classics", 10)
     return fid
 
 
