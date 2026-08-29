@@ -48,6 +48,16 @@ class Film:
 
 
 @dataclass(frozen=True)
+class ImdbBackfillTarget:
+    """A film holding a TMDB id and no IMDb id — the whole worklist of `repair imdb`."""
+
+    film_id: int
+    title: str
+    year: int | None
+    tmdb_id: int
+
+
+@dataclass(frozen=True)
 class OmdbRating:
     imdb: float | None
     rt: int | None
@@ -155,9 +165,11 @@ class FilmView:
     metacritic: int | None = None
     metacritic_url: str | None = None
     services: list[dict[str, object]] = field(default_factory=list)
-    # [{slug, name, curator, published, ordered, trust, rank, rank_label}] — rank_label is the
-    # rank AS PRINTED (may be None, may carry a tie marker like "=243"); rank is always the
-    # 1-based line position. The drawer renders rank_label ?? rank. Entries arrive pre-ordered
+    # [{slug, name, curator, published, ordered, trust, rank, rank_label, size}] — rank_label is
+    # the rank AS PRINTED (may be None, may carry a tie marker like "=243"); rank is always the
+    # 1-based line position. The drawer renders rank_label ?? rank. size is the list's full entry
+    # count — every row in film_list_entry for that slug, including ones never linked to a film —
+    # and is the canon_score denominator, never our coverage of the list. Entries arrive pre-ordered
     # by trust descending then name (the query's own ORDER BY) — trust is otherwise invisible
     # in the UI, so this ordering is the only place it shows (design 2026-08-29 §5/§6); the
     # cross-list tally (the "N lists" card badge, the "on 2+ lists" chip) is len(lists), derived

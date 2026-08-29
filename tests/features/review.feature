@@ -45,6 +45,12 @@ Feature: match_review rows are resolved by CLI and never come back
     When I resolve it with film "Alpha (1950)"
     Then "King Kong (1933)" is merged into "Alpha (1950)"
 
+  Scenario: A tmdb id-conflict claiming an imdb id resolved to the holder merges the twins
+    Given "Alpha (1950)" holds imdb id "tt0024216"
+    And an open tmdb "id-conflict" review for "King Kong (1933)" claiming imdb id "tt0024216"
+    When I resolve it with film "Alpha (1950)"
+    Then "King Kong (1933)" is merged into "Alpha (1950)"
+
   Scenario: Invalid combinations are refused
     Given an open tmdb "no-match" review for "King Kong (1933)"
     Then resolving it with create fails

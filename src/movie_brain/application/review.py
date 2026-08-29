@@ -7,7 +7,7 @@ from pathlib import Path
 
 import requests
 
-from movie_brain.application.availability import TMDB_AUTHORITY, record_tmdb_match
+from movie_brain.application.availability import TMDB_AUTHORITY, conflict_authority, record_tmdb_match
 from movie_brain.application.eval_log import EvalEntry, ratify
 from movie_brain.application.keying import key_film
 from movie_brain.application.thumbprint import parse_review_detail
@@ -237,8 +237,10 @@ def resolve_review(
         elif film_id is not None and reason in MERGE_REASONS and rid is not None:
             if reason == "id-conflict":
                 if value is None:
-                    raise ValueError(f"id-conflict review {review_id} has no claimed tmdb id")
-                holder = repo.film_id_for_external(TMDB_AUTHORITY, value)
+                    raise ValueError(f"id-conflict review {review_id} has no claimed id")
+                # The value is whichever id was contested: `key_films` queues a TMDB id,
+                # `repair imdb` an IMDb id. Re-derive the holder under the matching authority.
+                holder = repo.film_id_for_external(conflict_authority(value), value)
             else:
                 holder = int(value) if value else None
             if holder != film_id:

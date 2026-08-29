@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 import sys
 from collections.abc import Callable
@@ -13,12 +14,21 @@ from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository, 
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient, watch_link
 
 TMDB_AUTHORITY = "tmdb"
+IMDB_AUTHORITY = "imdb"
 NO_MATCH_REVIEWED = "no-match-reviewed"
 STORE_PROVIDER_ID = 2  # Apple TV Store (iTunes) — the only rent/buy id we record
 REFRESH_DAYS = 7
 FIRST_CHECK_BATCH = 500  # never-checked films given providers per nightly run
 META_REFRESHED_AT = TMDB_REFRESH_STAMP
 MAX_CONSECUTIVE_FAILURES = 5
+_IMDB_ID = re.compile(r"^tt\d+\Z")
+
+
+def conflict_authority(value: str) -> str:
+    """Which authority an `id-conflict` row's value names: `key_films` queues a TMDB id,
+    `repair imdb` an IMDb id — both write to the same reason, so the holder must be
+    re-derived under whichever authority the value's shape actually names."""
+    return IMDB_AUTHORITY if _IMDB_ID.match(value) else TMDB_AUTHORITY
 
 
 def _stderr(msg: str) -> None:

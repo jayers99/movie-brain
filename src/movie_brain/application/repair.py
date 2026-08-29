@@ -12,8 +12,10 @@ from pathlib import Path
 import requests
 
 from movie_brain.application.availability import (
+    IMDB_AUTHORITY,
     MAX_CONSECUTIVE_FAILURES,
     TMDB_AUTHORITY,
+    conflict_authority,
     queue_review_once,
 )
 from movie_brain.application.keying import key_film
@@ -80,7 +82,8 @@ def _classify(key: str, films: tuple[RepairFilm, ...], source: str) -> DupGroup:
 
 
 def audit_dupes(repo: Repository) -> list[DupGroup]:
-    """Norm-title groups plus id-conflict pairs, classified by TMDB id equality (re-derived now)."""
+    """Norm-title groups plus id-conflict pairs, classified by id equality (re-derived now;
+    the contested id's own authority — tmdb or imdb — decides where its holder is looked up)."""
     films = {f.id: f for f in repo.films_for_repair()}
     # id-conflict rows: the flagged film could not claim the id its twin holds — lend it the
     # claimed id for classification (value re-derived against the current holder).
@@ -89,10 +92,11 @@ def audit_dupes(repo: Repository) -> list[DupGroup]:
     for r in repo.open_reviews(TMDB_AUTHORITY):
         if r["reason"] != "id-conflict" or r["film_id"] not in films or not r["value"]:
             continue
-        holder = repo.film_id_for_external(TMDB_AUTHORITY, str(r["value"]))
+        value = str(r["value"])
+        holder = repo.film_id_for_external(conflict_authority(value), value)
         if holder is None or holder not in films or holder == r["film_id"]:
             continue
-        claimed[int(r["film_id"])] = str(r["value"])
+        claimed[int(r["film_id"])] = value
         pairs.append((int(r["film_id"]), holder))
     by_key: dict[str, list[RepairFilm]] = defaultdict(list)
     for f in films.values():
@@ -100,8 +104,19 @@ def audit_dupes(repo: Repository) -> list[DupGroup]:
     groups: list[DupGroup] = []
     paired: set[int] = set()
     for loser, holder in pairs:
-        lent = films[loser]._replace(tmdb=claimed[loser])
-        groups.append(_classify(_group_key(films[holder].title), (films[holder], lent), "id-conflict"))
+        value = claimed[loser]
+        if conflict_authority(value) == IMDB_AUTHORITY:
+            # An imdb-id conflict has no tmdb id to lend at all — lending the tt string into
+            # the tmdb field would make the pair look like it holds two DIFFERENT tmdb ids
+            # (a positive "distinct" claim) about a pair whose only evidence is that they
+            # SHARE an imdb id. Surface it to a human instead; never auto-merge on it.
+            group = DupGroup(
+                _group_key(films[holder].title), (films[holder], films[loser]), "undecided", None, (), "id-conflict"
+            )
+        else:
+            lent = films[loser]._replace(tmdb=value)
+            group = _classify(_group_key(films[holder].title), (films[holder], lent), "id-conflict")
+        groups.append(group)
         paired.update((loser, holder))
     for key, members in sorted(by_key.items()):
         # Filter out members already covered by an id-conflict pair above, per-member —
