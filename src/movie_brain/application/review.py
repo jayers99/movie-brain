@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import sqlite3
 from collections.abc import Callable
 from datetime import date
@@ -8,7 +7,7 @@ from pathlib import Path
 
 import requests
 
-from movie_brain.application.availability import TMDB_AUTHORITY, record_tmdb_match
+from movie_brain.application.availability import TMDB_AUTHORITY, conflict_authority, record_tmdb_match
 from movie_brain.application.eval_log import EvalEntry, ratify
 from movie_brain.application.keying import key_film
 from movie_brain.application.thumbprint import parse_review_detail
@@ -33,7 +32,6 @@ def suppress_resolved(repo: Repository, authority: str, entries: list[ReviewEntr
 
 SLUG_REASONS = {"year-gap", "ambiguous-title"}  # metacritic rows keyed by slug, no film_id
 MERGE_REASONS = {"id-conflict", "year-collision"}  # tmdb rows whose "match to X" means "X is my twin"
-_IMDB_ID = re.compile(r"^tt\d+$")
 
 
 def resolve_review(
@@ -242,8 +240,7 @@ def resolve_review(
                     raise ValueError(f"id-conflict review {review_id} has no claimed id")
                 # The value is whichever id was contested: `key_films` queues a TMDB id,
                 # `repair imdb` an IMDb id. Re-derive the holder under the matching authority.
-                authority = "imdb" if _IMDB_ID.match(value) else TMDB_AUTHORITY
-                holder = repo.film_id_for_external(authority, value)
+                holder = repo.film_id_for_external(conflict_authority(value), value)
             else:
                 holder = int(value) if value else None
             if holder != film_id:
