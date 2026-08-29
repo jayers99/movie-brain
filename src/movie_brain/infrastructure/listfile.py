@@ -18,6 +18,7 @@ from movie_brain.domain.models import ListEntry, ListMeta
 _TRUE = {"true", "1", "yes"}
 _FALSE = {"false", "0", "no"}
 _TT_RE = re.compile(r"^tt\d+$")
+_RANK_LABEL_RE = re.compile(r"^=?[1-9]\d*$")
 
 
 class ListFileError(Exception):
@@ -72,7 +73,7 @@ def parse_list_file(text: str) -> ParsedList:
     )
 
     entries: list[ListEntry] = []
-    seen_ranks: set[int] = set()
+    last_numeric: int | None = None
     for line in lines[i:]:
         if not line.strip() or line.startswith("#"):
             continue
@@ -92,18 +93,30 @@ def parse_list_file(text: str) -> ParsedList:
         if tt_listed is not None and not _TT_RE.match(tt_listed):
             raise ListFileError(f"malformed tt id: {tt_listed!r}")
 
-        try:
-            rank = int(rank_raw)
-        except ValueError as e:
-            raise ListFileError(f"non-integer rank: {rank_raw!r}") from e
-        if rank in seen_ranks:
-            raise ListFileError(f"duplicate rank: {rank}")
-        seen_ranks.add(rank)
+        # column one is the rank AS PRINTED (design §3): an optional leading `=` tie marker
+        # then a positive integer, nothing else. `entry.rank` is derived below from line
+        # order, not from this cell — ties make the printed value non-unique by design.
+        if not _RANK_LABEL_RE.match(rank_raw):
+            raise ListFileError(f"malformed rank: {rank_raw!r}")
+        numeric = int(rank_raw.removeprefix("="))
+        # Ranks are contiguous 1..N by construction now (position = line order), so the old
+        # duplicate/gap guard has nothing left to protect. What replaces it: the BFI page
+        # defaults to listing 250 -> 1, so an extraction that forgets to reverse comes out
+        # backwards — this catches that instead of importing a poll upside down.
+        if last_numeric is not None and numeric < last_numeric:
+            raise ListFileError(
+                f"rank went backwards at {rank_raw!r} (was {last_numeric}) — "
+                "labels must be non-decreasing down the file; a descending source page "
+                "extraction may not have been reversed"
+            )
+        last_numeric = numeric
 
+        rank = len(entries) + 1
         if not title_listed:
             raise ListFileError(f"empty title at rank {rank}")
+        rank_label = rank_raw if rank_raw != str(rank) else None
 
-        entries.append(ListEntry(rank, title_listed, director_listed, tt_listed))
+        entries.append(ListEntry(rank, title_listed, director_listed, tt_listed, rank_label))
 
     return ParsedList(meta=meta, entries=tuple(entries))
 

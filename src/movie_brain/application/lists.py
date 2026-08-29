@@ -62,6 +62,7 @@ DUPLICATE_ENTRY = "duplicate-entry"
 TOMBSTONED_HOLDER = "tombstoned-holder"
 KEY_COLLISION = "key-collision"
 ID_DISAGREEMENT = "id-disagreement"
+ENTRY_CHANGED = "entry-changed"
 
 # `EntryOutcome.agreement`: how the resolver's verdict stood against the curator's id.
 # "" is "the entry carried no id", not "we did not check".
@@ -317,6 +318,10 @@ class EntryOutcome:
     form_used: str
     detail: str
     agreement: str = ""  # "" | AGREE | DISAGREE | SUPPLIED
+    # The rank AS PRINTED (tied-ranks design §4) — None on every plain (untied) entry, in
+    # which case the scorecard falls back to `rank`. Appended last, defaulted, so every
+    # existing positional construction of this dataclass keeps working.
+    rank_label: str | None = None
 
 
 def _id_tally(rows: Sequence[EntryOutcome]) -> tuple[int, int, int, int]:
@@ -390,7 +395,17 @@ def _outcome(
     agreement: str = "",
 ) -> EntryOutcome:
     return EntryOutcome(
-        entry.rank, entry.title_listed, entry.director_listed, kind, film_id, tt, reason, form, detail, agreement
+        entry.rank,
+        entry.title_listed,
+        entry.director_listed,
+        kind,
+        film_id,
+        tt,
+        reason,
+        form,
+        detail,
+        agreement,
+        rank_label=entry.rank_label,
     )
 
 
@@ -480,18 +495,24 @@ def import_list(
     Dry run by default: with `apply=False` **nothing at all** is written — no registry row, no
     entries, no claims, no review rows — and the report says what would have happened.
 
-    Re-import is idempotent: an entry that already carries a `film_id` is settled and is
+    Re-import is idempotent: an entry that already carries a `film_id` is settled — unless its title
+    changed, or an `entry-changed` row is still open for it — and is
     skipped before the fetcher is touched, so a re-run costs no API calls for the links it
     already made; `upsert_list_entry` refreshes title/director without clearing a link.
 
     `exit_code` is reserved for a whole-run failure. A per-entry exception logs, counts as
     `error`, and never aborts the run.
     """
-    prior = {row.rank: row.film_id for row in repo.list_entries(meta.slug)}
+    # Read BEFORE the upsert below, so `was` is what the PREVIOUS import stored — which is
+    # the only thing that can reveal a renumbered file (see the entry-changed guard).
+    prior = {row.rank: (row.film_id, row.title_listed) for row in repo.list_entries(meta.slug)}
     # film_id -> the rank already holding it. Seeded from the stored links and extended as
     # this run links, so the duplicate-entry guard sees this run's own work too — which the
     # stored-state query `film_rank_on_list` cannot, since a dry run writes nothing.
-    linked_at = {fid: rank for rank, fid in prior.items() if fid is not None}
+    linked_at = {fid: rank for rank, (fid, _t) in prior.items() if fid is not None}
+    # `<slug>#<rank>` values with an OPEN entry-changed row — see the guard in the loop.
+    open_changed = {str(r["value"]) for r in repo.open_reviews(AUTHORITY)
+                    if r["reason"] == ENTRY_CHANGED and r["value"]}
 
     if apply:
         repo.upsert_film_list(meta, today)
@@ -508,7 +529,25 @@ def import_list(
     for entry in entries:
         value = f"{meta.slug}#{entry.rank}"
         try:
-            settled = prior.get(entry.rank)
+            settled, was_titled = prior.get(entry.rank, (None, None))
+            # An open row keeps firing: the upsert above already rewrote `title_listed` on the
+            # run that queued it, so without this a second --apply of the same corrected file
+            # would compare the file against itself, fall through to `already linked`, and go
+            # quiet while the link is still stale. The card is the deliverable; it must not
+            # stop saying so until a human resolves the row.
+            if settled is not None and (was_titled != entry.title_listed or value in open_changed):
+                # Position is line order now, so ONE dropped line renumbers every entry below
+                # it. `upsert_list_entry` never clears `film_id`, so re-importing a corrected
+                # file would keep each stale link while overwriting its title — a silent
+                # mislink reported as "already linked". Refuse: queue, and leave the link
+                # exactly where it is. A list file is append-only once imported.
+                detail = (
+                    f"rank {entry.rank}: stored {was_titled!r}, file {entry.title_listed!r} — "
+                    f"the link to {_film_label(catalog, settled)} is untouched"
+                )
+                reviews.append(ReviewEntry(ENTRY_CHANGED, value=value, detail=detail))
+                rows.append(_outcome(entry, "review", f"{ENTRY_CHANGED}: {detail}"))
+                continue
             if settled is not None:
                 detail = f"{_film_label(catalog, settled)}  already linked"
                 rows.append(_outcome(entry, "linked", detail, film_id=settled))
@@ -752,7 +791,7 @@ def create_films(
     human_owned: set[str] = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
     human_owned |= {str(v) for _reason, _film_id, v in repo.resolved_review_keys(AUTHORITY) if v}
     worklist = [
-        ListEntry(row.rank, row.title_listed, row.director_listed, row.tt_listed)
+        ListEntry(row.rank, row.title_listed, row.director_listed, row.tt_listed, row.rank_label)
         for row in stored
         if row.film_id is None and f"{slug}#{row.rank}" not in human_owned
     ]
@@ -1003,7 +1042,8 @@ def scorecard(rows: Sequence[EntryOutcome]) -> str:
     out: list[str] = []
     for r in rows:
         who = f"{r.title_listed} / {r.director_listed}" if r.director_listed else r.title_listed
-        out.append(f"{f'#{r.rank}'.ljust(6)}{who}")
+        rank_shown = r.rank_label if r.rank_label is not None else r.rank
+        out.append(f"{f'#{rank_shown}'.ljust(6)}{who}")
         line = f"→ {_LABELS.get(r.kind, r.kind.upper())} {r.detail}".rstrip()
         if r.agreement in _ID_SUFFIX:
             line += f"  {_ID_SUFFIX[r.agreement]}"

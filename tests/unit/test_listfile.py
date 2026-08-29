@@ -86,10 +86,13 @@ def test_non_integer_rank_raises():
         parse_list_file(text)
 
 
-def test_duplicate_rank_raises():
-    text = "# slug: s\n# name: n\n1\tA\tB\n1\tC\tD\n"
-    with pytest.raises(ListFileError):
-        parse_list_file(text)
+def test_repeated_printed_rank_is_a_tie_not_an_error():
+    # A duplicate printed rank used to be rejected outright; now position (line order)
+    # makes each entry addressable and a repeated label is exactly what a tie looks like.
+    text = "# slug: s\n# name: n\n=243\tA\tB\n=243\tC\tD\n"
+    parsed = parse_list_file(text)
+    assert [e.rank for e in parsed.entries] == [1, 2]
+    assert [e.rank_label for e in parsed.entries] == ["=243", "=243"]
 
 
 def test_empty_title_raises():
@@ -166,3 +169,96 @@ def test_read_list_file_reads_from_disk(tmp_path: Path):
     assert isinstance(parsed, ParsedList)
     assert parsed.meta.slug == "cahiers-100"
     assert len(parsed.entries) == 2
+
+
+# --- tied ranks (design 2026-08-28-tied-ranks-design.md §3) ---
+
+
+def test_sequential_printed_ranks_yield_no_labels():
+    # The existing-file guarantee: when the printed cell equals the line position, there's
+    # nothing to record beyond `rank` itself.
+    text = "# slug: s\n# name: n\n1\tA\tB\n2\tC\tD\n3\tE\tF\n"
+    parsed = parse_list_file(text)
+    assert [e.rank for e in parsed.entries] == [1, 2, 3]
+    assert [e.rank_label for e in parsed.entries] == [None, None, None]
+
+
+def test_repeated_tie_label_yields_contiguous_ranks_with_shared_label():
+    text = "# slug: s\n# name: n\n=243\tA\tB\n=243\tC\tD\n=243\tE\tF\n"
+    parsed = parse_list_file(text)
+    assert [e.rank for e in parsed.entries] == [1, 2, 3]
+    assert [e.rank_label for e in parsed.entries] == ["=243", "=243", "=243"]
+
+
+def test_mixed_file_labels_only_where_printed_differs_from_position():
+    text = "# slug: s\n# name: n\n1\tA\tB\n2\tC\tD\n=3\tE\tF\n=3\tG\tH\n5\tI\tJ\n"
+    parsed = parse_list_file(text)
+    assert [e.rank for e in parsed.entries] == [1, 2, 3, 4, 5]
+    assert [e.rank_label for e in parsed.entries] == [None, None, "=3", "=3", None]
+
+
+def test_decreasing_tie_labels_raise_the_reversed_bfi_page_case():
+    # The BFI page defaults to listing 250 -> 1; an extraction that forgets to reverse it
+    # comes out backwards. This is exactly that shape and must be rejected, not imported
+    # upside down.
+    text = "# slug: s\n# name: n\n=243\tA\tB\n=225\tC\tD\n"
+    with pytest.raises(ListFileError):
+        parse_list_file(text)
+
+
+def test_decreasing_plain_ranks_raise_the_reversed_bfi_page_case():
+    text = "# slug: s\n# name: n\n250\tA\tB\n249\tC\tD\n248\tE\tF\n"
+    with pytest.raises(ListFileError):
+        parse_list_file(text)
+
+
+@pytest.mark.parametrize(
+    "bad_rank",
+    ["abc", "=", "-1", "3.5", "= 243"],
+    ids=["letters", "bare-equals", "negative", "decimal", "space-after-equals"],
+)
+def test_malformed_rank_raises(bad_rank: str):
+    text = f"# slug: s\n# name: n\n{bad_rank}\tA Title\tA Director\n"
+    with pytest.raises(ListFileError):
+        parse_list_file(text)
+
+
+def test_ranks_are_contiguous_by_construction_so_a_gap_cannot_occur():
+    # There is no longer any way to write a "gap" in the printed column — rank is derived
+    # from line order, not parsed from the file, so three data rows always yield 1, 2, 3
+    # regardless of what's printed (as long as the labels are individually well-formed and
+    # non-decreasing).
+    text = "# slug: s\n# name: n\n=1\tA\tB\n=50\tC\tD\n=50\tE\tF\n"
+    parsed = parse_list_file(text)
+    assert [e.rank for e in parsed.entries] == [1, 2, 3]
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize("slug", ["cahiers-100", "bergan-100"])
+def test_checked_in_real_lists_still_parse_byte_identically(slug: str):
+    # cahiers-100.tsv and bergan-100.tsv are checked in and already imported into the
+    # owner's live database. They print 1..100, which equals their line order, so under
+    # the new label-aware rules they must still parse to 100 rows with rank_label None on
+    # every row — the one thing this task must not break.
+    parsed = read_list_file(REPO_ROOT / "lists" / f"{slug}.tsv")
+    assert len(parsed.entries) == 100
+    assert [e.rank for e in parsed.entries] == list(range(1, 101))
+    assert all(e.rank_label is None for e in parsed.entries)
+
+
+HEADER_ONLY = "# slug: s\n# name: n\n"
+
+
+def test_a_label_that_equals_the_position_but_carries_an_equals_sign_is_still_a_label():
+    """`=3` at position 3 differs from `"3"`, so it is stored — the file said `=3`, not `3`."""
+    parsed = parse_list_file(HEADER_ONLY + "1\tA\tdir\n2\tB\tdir\n=3\tC\tdir\n")
+    assert [e.rank_label for e in parsed.entries] == [None, None, "=3"]
+
+
+def test_a_file_whose_first_label_is_not_one_still_starts_at_position_one():
+    """The other shape a bad extraction takes: a slice starting mid-poll. The non-decreasing
+    check cannot see it, so this pins the behaviour rather than claiming to catch it."""
+    parsed = parse_list_file(HEADER_ONLY + "=5\tA\tdir\n=5\tB\tdir\n=7\tC\tdir\n")
+    assert [(e.rank, e.rank_label) for e in parsed.entries] == [(1, "=5"), (2, "=5"), (3, "=7")]
