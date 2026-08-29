@@ -71,4 +71,4 @@ buster.cheapcharts.de/v1/DetailData.php?store=itunes&country=us&itemType=movies&
 - Three lists live and 100% linked: `cahiers-100` (trust 10), `bergan-100` (9), `sight-and-sound-2022` (8). 23 films on all three, 70 on two.
 - **255–263 On Sale candidates** today (the number moves as films are rated).
 - Two films created but deliberately **unkeyed**, awaiting a sync then `review resolve <row> --tt <id> --series`: `#4763 Histoire(s) du Cinéma` (`tt6677224`) and `#4764 Twin Peaks: The Return` (`tt4093826`). Both appear in candidate lists with no year until keyed.
-- `movie-brain repair links --film ID --tt ttNNN [--apply]` was added this session (merged `07318dc`) for a film keyed confidently to the wrong work — the shape no other repair verb can see.
+- `movie-brain repair links --film ID --tt ttNNN [--apply]` was added this session (merged `07318dc`) for a film keyed confidently to the wrong work — the shape no other repair verb can see./

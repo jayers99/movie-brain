@@ -493,9 +493,24 @@ def test_drawer_shows_also_streaming(dash):
 
 
 def test_drawer_without_services_hides_the_line(dash):
+    # Echo, not Bravo: Bravo now carries five services to exercise the overflow disclosure.
+    dash.locator("tbody tr", has_text="Echo").first.click()
+    expect(dash.locator("#drawer-body")).not_to_contain_text("Also streaming on")
+
+
+def test_drawer_collapses_services_past_the_cap(dash):
+    """Five svod services, ranked: the best three show, the rest hide behind a disclosure."""
     clear_lang(dash)  # Bravo is French; the default English filter hides its row
     dash.locator("tbody tr", has_text="Bravo").first.click()
-    expect(dash.locator("#drawer-body")).not_to_contain_text("Also streaming on")
+    body = dash.locator("#drawer-body")
+    expect(body).to_contain_text("Also streaming on: Apple TV+, HBO Max, Peacock")
+    expect(body.locator(".svc-more summary")).to_have_text("⋯ 2 more")
+    # Collapsed by default. The overflow names are in the DOM either way — a closed <details>
+    # still holds its text — so this asserts VISIBILITY, which is the thing that matters.
+    expect(body.locator(".svc-rest")).not_to_be_visible()
+    body.locator(".svc-more summary").click()
+    expect(body.locator(".svc-rest")).to_be_visible()
+    expect(body.locator(".svc-rest")).to_contain_text("MUBI (not subscribed)")
 
 
 def test_drawer_names_the_best_source(dash: Page):
