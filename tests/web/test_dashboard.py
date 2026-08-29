@@ -134,6 +134,7 @@ def test_chip_labels_and_order(dash: Page):
         "Not owned",
         "Needs revisit",
         "Suspect",
+        "on 2+ lists",
         "Clear",
     ]
 
@@ -427,6 +428,24 @@ def test_drawer_shows_unordered_list_without_rank(dash):
     dash.wait_for_selector("#drawer:not([hidden])")
     expect(dash.locator("#drawer-body")).to_contain_text("On lists: Backlog Ten")
     expect(dash.locator("#drawer-body")).not_to_contain_text("Backlog Ten #5")
+
+
+def test_card_badge_shows_lists_count(dash):
+    # Alpha is on three seeded lists (cahiers-100, backlog-10, sight-sound-2022).
+    row = dash.locator("#films tbody tr[data-id]", has_text="Alpha")
+    expect(row.locator(".badge-lists")).to_have_text("3 lists")
+
+
+def test_card_badge_absent_when_no_lists(dash):
+    clear_lang(dash)  # Bravo is French; the default English filter would hide its row
+    row = dash.locator("#films tbody tr[data-id]", has_text="Bravo")
+    expect(row.locator(".badge-lists")).to_have_count(0)
+
+
+def test_multi_list_chip_narrows_to_films_on_two_or_more_lists(dash):
+    dash.click('button[data-chip="multi_list"]')
+    dash.wait_for_selector('#films tbody[data-count="1"]')
+    assert dash.locator("#films tbody tr").first.inner_text().startswith("Alpha")
 
 
 def test_drawer_shows_tied_rank_label_not_position(dash):

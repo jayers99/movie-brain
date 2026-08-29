@@ -294,10 +294,10 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
 
 
 _LISTS_SQL = """
-SELECT e.film_id, e.list_slug, l.name, l.curator, l.published_year, l.ordered, e.rank, e.rank_label
+SELECT e.film_id, e.list_slug, l.name, l.curator, l.published_year, l.ordered, l.trust, e.rank, e.rank_label
 FROM film_list_entry e JOIN film_list l ON l.slug = e.list_slug
 WHERE e.film_id IS NOT NULL
-ORDER BY e.film_id, l.name, e.rank
+ORDER BY e.film_id, l.trust DESC, l.name, e.rank
 """
 
 _FILM_LIST_SELECT = "SELECT slug, name, curator, published_year, source_url, ordered, trust FROM film_list "
@@ -325,6 +325,7 @@ def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
                 "curator": r["curator"],
                 "published": r["published_year"],
                 "ordered": bool(r["ordered"]),
+                "trust": int(r["trust"]),
                 "rank": int(r["rank"]),
                 "rank_label": r["rank_label"],
             }

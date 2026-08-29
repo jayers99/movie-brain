@@ -530,23 +530,85 @@ def test_lists_trust_unknown_slug_errors_and_names_known_lists(config_dir):
     assert "cahiers-100" in r.output
 
 
-def test_lists_trust_reimport_preserves_trust(config_dir):
-    """Pins the trap this task exists to close: `lists import`'s own registry write
-    (`upsert_film_list`) must never reset a trust the owner set with `lists trust`."""
+def test_lists_trust_unknown_slug_on_empty_registry_says_so(config_dir):
+    r = runner.invoke(app, ["lists", "trust", "no-such-list", "5"])
+    assert r.exit_code == 2
+    assert "no lists registered" in r.output
+
+
+def test_lists_trust_no_n_shows_one_lists_trust(config_dir):
     from datetime import date
 
     from movie_brain.domain.models import ListMeta
     from movie_brain.infrastructure.database import Repository
 
     repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+    repo.set_list_trust("cahiers-100", 7)
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100"])
+    assert r.exit_code == 0
+    assert r.output.strip().startswith("cahiers-100")
+    assert "trust 7" in r.output
+
+
+def test_lists_trust_no_n_on_unknown_slug_errors(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "no-such-list"])
+    assert r.exit_code == 2
+    assert "no-such-list" in r.output
+    assert "cahiers-100" in r.output
+
+
+def test_lists_trust_reimport_preserves_trust(config_dir, tmp_path, monkeypatch):
+    """Pins the trap this task exists to close: `lists import`'s own registry write
+    (`upsert_film_list`) must never reset a trust the owner set with `lists trust`.
+
+    A genuine round trip through the real `lists import` CLI verb — not a direct call to
+    `repo.upsert_film_list` — so a future refactor of `import_list`'s registry write would
+    actually be caught here."""
+    from datetime import date
+
+    from lists_fakes import RecordingFetcher, StubTmdb, candidate
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
     today = date(2026, 8, 29)
-    meta = ListMeta("cahiers-100", "Cahiers", "Cahiers du Cinéma", 2008, None, True)
-    repo.upsert_film_list(meta, today)
+    fid = repo.create_film(Film("Citizen Kane", 1941, "Orson Welles", ""))
+    assert fid is not None
+    repo.set_external_id(fid, "imdb", "tt0033467", today)
+
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    (config_dir / "tmdb-read-token.txt").write_text("t")
+    monkeypatch.setattr("movie_brain.cli.TmdbClient", lambda token: StubTmdb())
+    fetcher = RecordingFetcher(by_title={"Citizen Kane": [candidate("tt0033467", 100, "Citizen Kane", 1941, "Orson Welles")]})
+    monkeypatch.setattr(
+        "movie_brain.infrastructure.thumbprint_fetch.session_fetcher", lambda *a, **kw: (fetcher, None)
+    )
+
+    path = tmp_path / "cahiers-100.tsv"
+    path.write_text("# slug: cahiers-100\n# name: Cahiers\n1\tCitizen Kane\tOrson Welles\n")
+
+    r = runner.invoke(app, ["lists", "import", str(path), "--apply"])
+    assert r.exit_code == 0, r.output
+    assert repo.film_list("cahiers-100").trust == 1  # default, un-set
 
     r = runner.invoke(app, ["lists", "trust", "cahiers-100", "9"])
     assert r.exit_code == 0
+    assert repo.film_list("cahiers-100").trust == 9
 
-    # Simulate a re-import (e.g. to pick up newly created films) — same slug, same header.
-    repo.upsert_film_list(meta, date(2026, 8, 30))
+    # The re-import — same file, same slug — is the trap: `import_list` calls
+    # `upsert_film_list` again on every run, e.g. to pick up newly created films.
+    r = runner.invoke(app, ["lists", "import", str(path), "--apply"])
+    assert r.exit_code == 0, r.output
 
     assert repo.film_list("cahiers-100").trust == 9
