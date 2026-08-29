@@ -488,7 +488,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the list entry 8 is "Vertigo" by "Alfred Hitchcock" with id "tt0052357"
     When I import the list with --apply
     Then the id tally says agree 1, disagree 1, supplied 1, of 3 with ids
-    And the scorecard tally line is "resolver vs supplied id:  agree 1 · disagree 1 · resolver had no verdict 1  (of 3 with ids)"
+    And the scorecard tally line is "resolver vs supplied id:  agree 1 · disagree 1 · resolver had no verdict 1  (of 3 compared)"
 
   Scenario: an entry carrying no id is not counted in the tally of a list that mixes both
     Given the candidate pool has "Greed" → tt0016654/613 1924 by "Erich von Stroheim"
@@ -500,6 +500,18 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the id tally says agree 1, disagree 0, supplied 0, of 1 with ids
     And the scorecard line for entry 69 contains "→ WOULD-CREATE tt0006864"
     And no film was created
+
+  Scenario: an already-linked id-bearing entry never reaches reconcile, so the tally line is absent
+    # Re-import is idempotent: an entry with a stored film_id is skipped BEFORE the fetcher is
+    # touched, so it never reaches `reconcile` and cannot be scored — the tally line answers
+    # only for entries actually compared, never for entries merely carrying an id in the file.
+    Given a film "Intolerance" (1916) directed by "David Wark Griffith" holding imdb "tt0006864"
+    And the candidate pool has "Intolerance" → tt0006864/3059 1916 by "David Wark Griffith"
+    And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith" with id "tt0006864"
+    When I import the list with --apply
+    Then the report says linked 1, would-create 0, review 0, blocked 0, error 0
+    And the id tally says agree 0, disagree 0, supplied 0, of 0 with ids
+    And the scorecard has no supplied-id tally line
 
   Scenario: an id the re-resolved verdict now contradicts blocks the creation
     # Phase 2 re-resolves and re-reconciles every entry: phase 1's agreement is never trusted,
