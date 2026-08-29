@@ -314,9 +314,13 @@ def find_by_imdb_down(ctx, tt):
 
 
 def _rekey(ctx, film_id: int | None, tt: str, *, apply: bool) -> None:
+    # Capture the log rather than discard it: a refusal's REASON is the thing worth pinning —
+    # `held` and `error` are indistinguishable by their side effects, since both leave the
+    # film untouched and exit 1.
+    log: list[str] = ctx.setdefault("log", [])
     try:
         ctx["links"] = repair.repair_links(
-            ctx["repo"], TmdbClient("tok"), TODAY, film_id=film_id, tt=tt, apply=apply, log=lambda _m: None
+            ctx["repo"], TmdbClient("tok"), TODAY, film_id=film_id, tt=tt, apply=apply, log=log.append
         )
     except (LookupError, ValueError) as exc:
         ctx["links_error"] = str(exc)
@@ -352,6 +356,17 @@ def holds_both(ctx, spec, tt, tid):
 def holds_imdb_only(ctx, spec, tt):
     ids = ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))
     assert ids.get("imdb") == tt and "tmdb" not in ids
+
+
+@then(parsers.parse('"{spec}" holds imdb id "{tt}"'))
+def still_holds_imdb(ctx, spec, tt):
+    ids = ctx["repo"].external_ids_for(ctx["repo"].film_id_by_key(_key(spec)))
+    assert ids.get("imdb") == tt
+
+
+@then(parsers.parse('the re-key log says "{text}"'))
+def rekey_log_says(ctx, text):
+    assert any(text in line for line in ctx["log"]), ctx["log"]
 
 
 @then(parsers.parse("the re-key repair re-keyed {n:d} films and exits {code:d}"))

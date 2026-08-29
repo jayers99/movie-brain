@@ -152,6 +152,11 @@ Feature: Dispositioned films stay out of every collector's way
     When I re-key film "Alpha (1950)" to imdb "tt0075915"
     Then "Alpha (1950)" holds imdb id "tt0075335" and no tmdb id
     And the re-key repair re-keyed 0 films and exits 1
+    # Without this the scenario cannot tell `held` from `error`: a regression that made
+    # key_film fetch before its holder check would raise, and every assertion above would
+    # still pass. Pin the REASON, and that the id stayed with its rightful owner.
+    And the re-key log says "already held"
+    And "Alpha (1951)" holds imdb id "tt0075915"
 
   Scenario: A re-key leaves the film untouched when TMDB fails
     Given "Alpha (1950)" holds imdb id "tt0075335"
