@@ -14,7 +14,7 @@ from typing import Any, NamedTuple
 
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
-from movie_brain.domain.models import Film, FilmView, McTitle, OmdbRating, ReviewEntry, film_key
+from movie_brain.domain.models import Film, FilmView, ListEntry, ListMeta, McTitle, OmdbRating, ReviewEntry, film_key
 from movie_brain.domain.thumbprint import edition_label, title_norm
 
 MISS_RETRY_DAYS = 30
@@ -73,6 +73,13 @@ class ClaimRow(NamedTuple):
     edition_year: int | None
     runtime_min: int | None
     first_seen: str
+
+
+class ListEntryRow(NamedTuple):
+    rank: int
+    film_id: int | None
+    title_listed: str
+    director_listed: str | None
 
 
 class EditionFilm(NamedTuple):
@@ -284,6 +291,29 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
     return out
 
 
+_LISTS_SQL = """
+SELECT e.film_id, e.list_slug, l.name, l.curator, l.published_year, e.rank
+FROM film_list_entry e JOIN film_list l ON l.slug = e.list_slug
+WHERE e.film_id IS NOT NULL
+ORDER BY e.film_id, l.name, e.rank
+"""
+
+
+def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
+    out: dict[int, list[dict[str, object]]] = {}
+    for r in c.execute(_LISTS_SQL):
+        out.setdefault(int(r["film_id"]), []).append(
+            {
+                "slug": str(r["list_slug"]),
+                "name": str(r["name"]),
+                "curator": r["curator"],
+                "published": r["published_year"],
+                "rank": int(r["rank"]),
+            }
+        )
+    return out
+
+
 _NEW_ON_SQL = """
 SELECT t.film_id, t.source, s.name, MAX(t.appeared_on) AS appeared_on
 FROM availability_transitions t
@@ -350,6 +380,7 @@ def _row_to_view(
     row: sqlite3.Row,
     services: list[dict[str, object]] | None = None,
     *,
+    lists: list[dict[str, object]] | None = None,
     watchlisted: bool = False,
     new_on: list[dict[str, object]] | None = None,
     owned: bool = False,
@@ -374,6 +405,7 @@ def _row_to_view(
         departed=bool(row["departed"]),
         metacritic_url=f"https://www.metacritic.com/movie/{row['mc_slug']}/" if row["mc_slug"] else None,
         services=services or [],
+        lists=lists or [],
         watchlisted=watchlisted,
         new_on=new_on or [],
         criterion=bool(row["criterion"]),
@@ -1732,6 +1764,11 @@ class Repository:
             n_claims = c.execute("UPDATE claim SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)).rowcount
             if n_claims:
                 moved["claim"] = n_claims
+            n_list_entries = c.execute(
+                "UPDATE film_list_entry SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)
+            ).rowcount
+            if n_list_entries:
+                moved["film_list_entry"] = n_list_entries
             for row in c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (loser_id,)).fetchall():
                 auth, val = str(row["authority"]), str(row["value"])
                 held = (
@@ -1785,6 +1822,79 @@ class Repository:
             )
             return MergeReport(moved, dropped, resolved)
 
+    # curated lists ------------------------------------------------------
+    def upsert_film_list(self, meta: ListMeta, today: date) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO film_list (slug, name, curator, published_year, source_url, ordered, imported_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(slug) DO UPDATE SET name=excluded.name, curator=excluded.curator, "
+                "published_year=excluded.published_year, source_url=excluded.source_url, "
+                "ordered=excluded.ordered, imported_at=excluded.imported_at",
+                (
+                    meta.slug,
+                    meta.name,
+                    meta.curator,
+                    meta.published_year,
+                    meta.source_url,
+                    int(meta.ordered),
+                    today.isoformat(),
+                ),
+            )
+
+    def upsert_list_entry(self, slug: str, entry: ListEntry) -> None:
+        """ON CONFLICT(list_slug, rank) DO UPDATE of title/director only — never clears film_id."""
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO film_list_entry (list_slug, rank, film_id, title_listed, director_listed) "
+                "VALUES (?, ?, NULL, ?, ?) "
+                "ON CONFLICT(list_slug, rank) DO UPDATE SET "
+                "title_listed=excluded.title_listed, director_listed=excluded.director_listed",
+                (slug, entry.rank, entry.title_listed, entry.director_listed),
+            )
+
+    def link_list_entry(self, slug: str, rank: int, film_id: int) -> None:
+        with self._conn() as c:
+            c.execute(
+                "UPDATE film_list_entry SET film_id = ? WHERE list_slug = ? AND rank = ?",
+                (film_id, slug, rank),
+            )
+
+    def list_entries(self, slug: str) -> list[ListEntryRow]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT rank, film_id, title_listed, director_listed FROM film_list_entry "
+                "WHERE list_slug = ? ORDER BY rank",
+                (slug,),
+            ).fetchall()
+            return [ListEntryRow(*r) for r in rows]
+
+    def film_list(self, slug: str) -> ListMeta | None:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT slug, name, curator, published_year, source_url, ordered FROM film_list WHERE slug = ?",
+                (slug,),
+            ).fetchone()
+            if row is None:
+                return None
+            return ListMeta(
+                slug=str(row["slug"]),
+                name=str(row["name"]),
+                curator=row["curator"],
+                published_year=row["published_year"],
+                source_url=row["source_url"],
+                ordered=bool(row["ordered"]),
+            )
+
+    def film_rank_on_list(self, slug: str, film_id: int) -> int | None:
+        """The duplicate-entry guard: is this film already linked at some rank on this list?"""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT rank FROM film_list_entry WHERE list_slug = ? AND film_id = ?",
+                (slug, film_id),
+            ).fetchone()
+            return None if row is None else int(row["rank"])
+
     # views ------------------------------------------------------------
     def list_views(self, source: str, today: date | None = None) -> list[FilmView]:
         cutoff = ((today or date.today()) - timedelta(days=NEW_ARRIVAL_DAYS)).isoformat()
@@ -1799,6 +1909,7 @@ class Repository:
                 (source, source),
             ).fetchall()
             services = _services_by_film(c)
+            lists = _lists_by_film(c)
             new_on = _new_on_by_film(c, cutoff)
             wl = _watchlist_ids(c)
             ow = _owned_ids(c)
@@ -1808,6 +1919,7 @@ class Repository:
                 _row_to_view(
                     r,
                     services.get(r["id"]),
+                    lists=lists.get(r["id"]),
                     watchlisted=r["id"] in wl,
                     new_on=new_on.get(r["id"]),
                     owned=r["id"] in ow,
@@ -1828,6 +1940,7 @@ class Repository:
             return _row_to_view(
                 row,
                 _services_by_film(c).get(row["id"]),
+                lists=_lists_by_film(c).get(row["id"]),
                 watchlisted=row["id"] in _watchlist_ids(c),
                 new_on=_new_on_by_film(c, cutoff).get(row["id"]),
                 owned=row["id"] in _owned_ids(c),
