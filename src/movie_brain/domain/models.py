@@ -150,13 +150,23 @@ class TmdbCandidate:
 
 @dataclass(frozen=True)
 class TmdbProviders:
-    """US watch-provider snapshot for one film; payload is the raw response text."""
+    """US watch-provider snapshot for one film; payload is the raw response text.
+
+    `flatrate`, `free` and `ads` are three separate buckets that all mean "I can watch this"
+    (design C2), and TMDB files the same service inconsistently across them — Kanopy's US
+    catalogue is 16,817 titles under `free` and 9,241 under `flatrate` — so the write path
+    unions them rather than choosing between them. `names` carries every seen provider's name
+    so an unregistered provider can auto-register instead of being discarded.
+    """
 
     flatrate: tuple[int, ...]
     rent: tuple[int, ...]
     buy: tuple[int, ...]
     link: str | None
     payload: str
+    free: tuple[int, ...] = ()
+    ads: tuple[int, ...] = ()
+    names: dict[int, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

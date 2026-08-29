@@ -49,6 +49,35 @@ def test_watch_providers_no_us_region_is_empty(rs):
     assert got.flatrate == () and got.link is None
 
 
+def test_watch_providers_reads_free_and_ads_and_carries_names(rs):
+    body = {
+        "results": {
+            "US": {
+                "link": "https://www.themoviedb.org/movie/1/watch",
+                "flatrate": [{"provider_id": 258, "provider_name": "Criterion Channel"}],
+                "free": [{"provider_id": 191, "provider_name": "Kanopy"}],
+                "ads": [{"provider_id": 73, "provider_name": "Tubi TV"}],
+                "rent": [{"provider_id": 2, "provider_name": "Apple TV"}],
+            }
+        }
+    }
+    rs.get(f"{TMDB_API}/movie/1/watch/providers", json=body)
+    p = TmdbClient("tok").watch_providers(1)
+    assert p.flatrate == (258,)
+    assert p.free == (191,)
+    assert p.ads == (73,)
+    assert p.names[191] == "Kanopy"
+    assert p.names[73] == "Tubi TV"
+    assert p.names[258] == "Criterion Channel"
+
+
+def test_watch_providers_tolerates_missing_buckets(rs):
+    rs.get(f"{TMDB_API}/movie/2/watch/providers", json={"results": {}})
+    p = TmdbClient("tok").watch_providers(2)
+    assert p.flatrate == () and p.free == () and p.ads == ()
+    assert p.names == {}
+
+
 def test_watch_link():
     assert watch_link(11) == "https://www.themoviedb.org/movie/11/watch?locale=US"
 
