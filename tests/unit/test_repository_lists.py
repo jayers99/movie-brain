@@ -55,27 +55,27 @@ def test_upsert_list_entry_is_idempotent_and_never_clears_film_id(repo, today):
     repo.link_list_entry("cahiers-100", 1, fid)
 
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", None)]
+    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", None, None)]
 
     # Re-importing the same file (e.g. a corrected director spelling) must update the
     # verbatim text but must NOT clear the film_id a human already linked.
     repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Wells"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, fid, "Citizen Kane", "Orson Wells", None)]
+    assert entries == [(1, fid, "Citizen Kane", "Orson Wells", None, None)]
 
 
 def test_upsert_list_entry_creates_unlinked_entry(repo, today):
     repo.upsert_film_list(CAHIERS, today)
     repo.upsert_list_entry("cahiers-100", ListEntry(2, "The Night of the Hunter", "Charles Laughton"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(2, None, "The Night of the Hunter", "Charles Laughton", None)]
+    assert entries == [(2, None, "The Night of the Hunter", "Charles Laughton", None, None)]
 
 
 def test_upsert_list_entry_persists_tt_listed(repo, today):
     repo.upsert_film_list(CAHIERS, today)
     repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles", "tt0033467"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, None, "Citizen Kane", "Orson Welles", "tt0033467")]
+    assert entries == [(1, None, "Citizen Kane", "Orson Welles", "tt0033467", None)]
 
 
 def test_upsert_list_entry_updates_tt_listed_without_clearing_film_id(repo, today):
@@ -89,7 +89,28 @@ def test_upsert_list_entry_updates_tt_listed_without_clearing_film_id(repo, toda
     # update tt_listed but still must NOT clear the film_id a human already linked.
     repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles", "tt0033467"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", "tt0033467")]
+    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", "tt0033467", None)]
+
+
+def test_upsert_list_entry_persists_rank_label(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    repo.upsert_list_entry("cahiers-100", ListEntry(3, "Born in Flames", "Lizzie Borden", rank_label="=243"))
+    entries = repo.list_entries("cahiers-100")
+    assert entries == [(3, None, "Born in Flames", "Lizzie Borden", None, "=243")]
+
+
+def test_upsert_list_entry_updates_rank_label_without_clearing_film_id(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles", rank_label="=1"))
+    fid = repo.create_film(Film("Citizen Kane", 1941, "Orson Welles", ""))
+    assert fid is not None
+    repo.link_list_entry("cahiers-100", 1, fid)
+
+    # A re-import that resolves a tie (e.g. a corrected extraction) must update rank_label
+    # but still must NOT clear the film_id a human already linked.
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles"))
+    entries = repo.list_entries("cahiers-100")
+    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", None, None)]
 
 
 def test_list_entries_ordered_by_rank(repo, today):
@@ -147,6 +168,7 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "published": 2008,
                 "ordered": True,
                 "rank": 1,
+                "rank_label": None,
             },
             {
                 "slug": "backlog-10",
@@ -155,9 +177,26 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "published": None,
                 "ordered": False,
                 "rank": 5,
+                "rank_label": None,
             },
         ]
     }
+
+
+def test_lists_by_film_carries_rank_label(repo, today):
+    """A tied rank must reach the read model as the printed label, not just the position."""
+    repo.upsert_film_list(CAHIERS, today)
+    repo.upsert_list_entry("cahiers-100", ListEntry(3, "Born in Flames", "Lizzie Borden", rank_label="=243"))
+    fid = repo.create_film(Film("Born in Flames", 1983, "Lizzie Borden", ""))
+    assert fid is not None
+    repo.link_list_entry("cahiers-100", 3, fid)
+
+    conn = sqlite3.connect(repo.db_path)
+    conn.row_factory = sqlite3.Row
+    result = _lists_by_film(conn)
+    conn.close()
+    assert result[fid][0]["rank"] == 3
+    assert result[fid][0]["rank_label"] == "=243"
 
 
 def test_list_views_populates_lists(repo, today):
@@ -176,6 +215,7 @@ def test_list_views_populates_lists(repo, today):
             "published": 2008,
             "ordered": True,
             "rank": 1,
+            "rank_label": None,
         }
     ]
 
@@ -197,6 +237,7 @@ def test_get_view_populates_lists(repo, today):
             "published": 2008,
             "ordered": True,
             "rank": 1,
+            "rank_label": None,
         }
     ]
 

@@ -159,10 +159,28 @@ def test_lists_in_payloads(repo):
     tc = app.test_client()
     expected = [
         {"slug": "cahiers-100", "name": "100 Films for an Ideal Cinematheque", "curator": "Cahiers du Cinéma",
-         "published": 2008, "ordered": True, "rank": 3}
+         "published": 2008, "ordered": True, "rank": 3, "rank_label": None}
     ]
     assert tc.get(f"/api/films/{fid}").get_json()["lists"] == expected
     assert tc.get("/api/films").get_json()[0]["lists"] == expected
+
+
+def test_lists_in_payloads_carries_rank_label(repo):
+    from movie_brain.domain.models import ListEntry, ListMeta
+
+    films = [Film("Quartet", 1948, None, "https://c/quartet")]
+    repo.record_catalog("criterion", films, D)
+    fid = repo.film_id_by_key("quartet (1948)")
+    meta = ListMeta("sight-sound-2022", "Sight & Sound 2022", "BFI", 2022, None, True)
+    repo.upsert_film_list(meta, D)
+    repo.upsert_list_entry(meta.slug, ListEntry(3, "Quartet", None, rank_label="=243"))
+    repo.link_list_entry(meta.slug, 3, fid)
+    app = create_app(repo, today=lambda: D)
+    app.testing = True
+    tc = app.test_client()
+    lists = tc.get(f"/api/films/{fid}").get_json()["lists"]
+    assert lists[0]["rank"] == 3
+    assert lists[0]["rank_label"] == "=243"
 
 
 def test_stale_service_listing_is_not_current(repo):

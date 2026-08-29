@@ -237,6 +237,13 @@ def an_entry_with_id(ctx, rank, title, director, tt):
     ctx["entries"].append(ListEntry(rank, title, director, tt))
 
 
+@given(parsers.parse('the list entry {rank:d} is now "{title}" by "{director}"'))
+def an_entry_changed(ctx, rank, title, director):
+    """The file changed under an already-imported list — a mid-file correction, or the
+    renumbering one dropped line causes. The rank keeps its POSITION and gains a new title."""
+    ctx["entries"] = [ListEntry(rank, title, director) if e.rank == rank else e for e in ctx["entries"]]
+
+
 @given("I imported the list with --apply")
 def imported_once(ctx):
     _run(ctx, apply=True)
@@ -253,6 +260,16 @@ def imported_with_entry(ctx, rank, title, director):
 )
 def imported_with_entry_and_id(ctx, rank, title, director, tt):
     ctx["entries"].append(ListEntry(rank, title, director, tt))
+    _run(ctx, apply=True)
+
+
+@given(
+    parsers.parse(
+        'I imported the list with --apply for entry {rank:d} "{title}" by "{director}" ranked "{label}"'
+    )
+)
+def imported_with_entry_ranked(ctx, rank, title, director, label):
+    ctx["entries"].append(ListEntry(rank, title, director, rank_label=label))
     _run(ctx, apply=True)
 
 
@@ -316,6 +333,14 @@ def entry_linked(ctx, rank, title):
     assert next(o for o in ctx["report"].rows if o.rank == rank).kind in ("linked", "created")
 
 
+@then(parsers.parse('entry {rank:d} still links to "{title}"'))
+def entry_still_links(ctx, rank, title):
+    """The stored link, read from the database and NOT from the outcome's kind — the whole
+    point of `entry-changed` is that the link stands while the outcome is a review."""
+    row = next(e for e in ctx["repo"].list_entries(ctx["meta"].slug) if e.rank == rank)
+    assert row.film_id == _film_id(ctx, title)
+
+
 @then(parsers.parse("entry {rank:d} is unlinked"))
 def entry_unlinked(ctx, rank):
     rows = [e for e in ctx["repo"].list_entries(ctx["meta"].slug) if e.rank == rank]
@@ -357,6 +382,16 @@ def scorecard_contains(ctx, rank, text):
     lines = ctx["scorecard"].splitlines()
     head = next(i for i, line in enumerate(lines) if line.startswith(f"#{rank} "))
     assert text in lines[head + 1], lines[head + 1]
+
+
+@then(parsers.parse('the scorecard header for entry {rank:d} starts with "{expected}"'))
+def scorecard_header_starts_with(ctx, rank, expected):
+    # Located by the outcome's own `.rank` (the counted position, always stable) rather than
+    # by matching the printed header text — the whole point of this assertion is that the
+    # printed header may NOT be "#<rank>" any more.
+    idx = next(i for i, r in enumerate(ctx["report"].rows) if r.rank == rank)
+    lines = ctx["scorecard"].splitlines()
+    assert lines[idx * 2].startswith(expected), lines[idx * 2]
 
 
 @then("no film was created")

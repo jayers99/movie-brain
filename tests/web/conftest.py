@@ -110,6 +110,12 @@ def seed(repo: Repository) -> None:
     repo.upsert_film_list(backlog_meta, TODAY)
     repo.upsert_list_entry(backlog_meta.slug, ListEntry(5, "Echo", "Ann"))
     repo.link_list_entry(backlog_meta.slug, 5, ids["echo (1990)"])
+    # Charlie is on one tied-rank list — the drawer must render the poll's printed label
+    # (rank_label), not the counted position, proving `rank_label ?? rank`.
+    ss_meta = ListMeta("sight-sound-2022", "Sight & Sound 2022", "Sight & Sound", 2022, None, True)
+    repo.upsert_film_list(ss_meta, TODAY)
+    repo.upsert_list_entry(ss_meta.slug, ListEntry(1, "Charlie", "Cy", rank_label="=243"))
+    repo.link_list_entry(ss_meta.slug, 1, ids["charlie (1970)"])
     # Hotel: a discovery film with no Criterion listing but buyable on the Apple TV store —
     # reachable (default scope) shows it, criterion scope hides it. Hungarian + no scores keep it
     # out of the default-English counts and at the tail of the default sort.

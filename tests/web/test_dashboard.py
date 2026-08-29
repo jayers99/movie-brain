@@ -429,6 +429,14 @@ def test_drawer_shows_unordered_list_without_rank(dash):
     expect(dash.locator("#drawer-body")).not_to_contain_text("Backlog Ten #5")
 
 
+def test_drawer_shows_tied_rank_label_not_position(dash):
+    clear_lang(dash)  # Charlie has no language on file; the default English filter would hide its row
+    dash.locator("#films tbody tr", has_text="Charlie").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    expect(dash.locator("#drawer-body")).to_contain_text("On lists: Sight & Sound 2022 #=243")
+    expect(dash.locator("#drawer-body")).not_to_contain_text("Sight & Sound 2022 #1")
+
+
 def test_default_scope_is_reachable_hides_unreachable_discovery(dash):
     clear_lang(dash)  # Hotel is Hungarian
     assert dash.locator("tr[data-id]", has_text="Golf").count() == 0  # no listing, unowned, unrated
