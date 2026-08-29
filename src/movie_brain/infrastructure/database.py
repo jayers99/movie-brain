@@ -300,6 +300,20 @@ WHERE e.film_id IS NOT NULL
 ORDER BY e.film_id, l.name, e.rank
 """
 
+_FILM_LIST_SELECT = "SELECT slug, name, curator, published_year, source_url, ordered, trust FROM film_list "
+
+
+def _row_to_list_meta(row: sqlite3.Row) -> ListMeta:
+    return ListMeta(
+        slug=str(row["slug"]),
+        name=str(row["name"]),
+        curator=row["curator"],
+        published_year=row["published_year"],
+        source_url=row["source_url"],
+        ordered=bool(row["ordered"]),
+        trust=int(row["trust"]),
+    )
+
 
 def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
     out: dict[int, list[dict[str, object]]] = {}
@@ -1828,6 +1842,10 @@ class Repository:
 
     # curated lists ------------------------------------------------------
     def upsert_film_list(self, meta: ListMeta, today: date) -> None:
+        """Never writes `trust` — that column is set only by `set_list_trust` (`lists trust`),
+        so a re-import of the same list can't reset the owner's judgement of it. On first
+        insert `trust` takes the column's own default (1); on conflict it is simply absent
+        from the UPDATE SET clause, so the stored value survives untouched."""
         with self._conn() as c:
             c.execute(
                 "INSERT INTO film_list (slug, name, curator, published_year, source_url, ordered, imported_at) "
@@ -1886,19 +1904,24 @@ class Repository:
     def film_list(self, slug: str) -> ListMeta | None:
         with self._conn() as c:
             row = c.execute(
-                "SELECT slug, name, curator, published_year, source_url, ordered FROM film_list WHERE slug = ?",
+                _FILM_LIST_SELECT + "WHERE slug = ?",
                 (slug,),
             ).fetchone()
-            if row is None:
-                return None
-            return ListMeta(
-                slug=str(row["slug"]),
-                name=str(row["name"]),
-                curator=row["curator"],
-                published_year=row["published_year"],
-                source_url=row["source_url"],
-                ordered=bool(row["ordered"]),
-            )
+            return None if row is None else _row_to_list_meta(row)
+
+    def film_lists(self) -> list[ListMeta]:
+        """Every registered list, ordered by trust descending then slug — the display order
+        for `lists trust` with no arguments."""
+        with self._conn() as c:
+            rows = c.execute(_FILM_LIST_SELECT + "ORDER BY trust DESC, slug").fetchall()
+            return [_row_to_list_meta(r) for r in rows]
+
+    def set_list_trust(self, slug: str, trust: int) -> bool:
+        """Set one list's trust. False when the slug is unknown; True on success. The only
+        writer of `film_list.trust` — `lists import`/`upsert_film_list` never touch it."""
+        with self._conn() as c:
+            cur = c.execute("UPDATE film_list SET trust = ? WHERE slug = ?", (trust, slug))
+            return cur.rowcount > 0
 
     def film_rank_on_list(self, slug: str, film_id: int) -> int | None:
         """The duplicate-entry guard: is this film already linked at some rank on this list?

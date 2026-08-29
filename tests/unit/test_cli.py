@@ -448,3 +448,105 @@ def test_scorecard_rendering_keeps_the_agreement_tally_line_intact(config_dir, t
     )
     # verbatim, on its own line and unfolded — not split across an 80-column wrap.
     assert expected in r.output.splitlines()
+
+
+def test_lists_trust_shows_every_list_ordered_desc_then_slug(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    today = date(2026, 8, 29)
+    repo.upsert_film_list(
+        ListMeta("cahiers-100", "100 Films for an Ideal Cinematheque", "Cahiers du Cinéma", 2008, None, True), today
+    )
+    repo.upsert_film_list(ListMeta("bergan-100", "Bergan 100", None, None, None, True), today)
+    repo.set_list_trust("bergan-100", 5)
+
+    r = runner.invoke(app, ["lists", "trust"])
+    assert r.exit_code == 0
+    lines = [ln for ln in r.output.splitlines() if ln.strip()]
+    assert lines[0].startswith("bergan-100") and "trust 5" in lines[0]
+    assert lines[1].startswith("cahiers-100") and "trust 1" in lines[1]
+
+
+def test_lists_trust_sets_and_persists(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "9"])
+    assert r.exit_code == 0
+    assert "9" in r.output
+
+    assert repo.film_list("cahiers-100").trust == 9
+
+
+def test_lists_trust_accepts_zero(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "0"])
+    assert r.exit_code == 0
+    assert repo.film_list("cahiers-100").trust == 0
+
+
+def test_lists_trust_rejects_negative_value(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "-1"])
+    assert r.exit_code != 0
+    assert repo.film_list("cahiers-100").trust == 1  # unchanged
+
+
+def test_lists_trust_unknown_slug_errors_and_names_known_lists(config_dir):
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    repo.upsert_film_list(ListMeta("cahiers-100", "Cahiers", None, None, None, True), date(2026, 8, 29))
+
+    r = runner.invoke(app, ["lists", "trust", "no-such-list", "5"])
+    assert r.exit_code == 2
+    assert "no-such-list" in r.output
+    assert "cahiers-100" in r.output
+
+
+def test_lists_trust_reimport_preserves_trust(config_dir):
+    """Pins the trap this task exists to close: `lists import`'s own registry write
+    (`upsert_film_list`) must never reset a trust the owner set with `lists trust`."""
+    from datetime import date
+
+    from movie_brain.domain.models import ListMeta
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    today = date(2026, 8, 29)
+    meta = ListMeta("cahiers-100", "Cahiers", "Cahiers du Cinéma", 2008, None, True)
+    repo.upsert_film_list(meta, today)
+
+    r = runner.invoke(app, ["lists", "trust", "cahiers-100", "9"])
+    assert r.exit_code == 0
+
+    # Simulate a re-import (e.g. to pick up newly created films) — same slug, same header.
+    repo.upsert_film_list(meta, date(2026, 8, 30))
+
+    assert repo.film_list("cahiers-100").trust == 9

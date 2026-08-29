@@ -262,3 +262,69 @@ def test_merge_film_moves_film_list_entry_to_survivor(repo, today):
     assert report.moved.get("film_list_entry") == 1
     assert repo.film_rank_on_list("cahiers-100", survivor) == 7
     assert repo.film_rank_on_list("cahiers-100", loser) is None
+
+
+# trust (design docs/superpowers/specs/2026-08-29-list-trust-and-tally-design.md) -----------
+
+
+def test_new_list_defaults_to_trust_1(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.film_list("cahiers-100").trust == 1
+
+
+def test_set_list_trust_updates_and_returns_true(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.set_list_trust("cahiers-100", 9) is True
+    assert repo.film_list("cahiers-100").trust == 9
+
+
+def test_set_list_trust_accepts_zero(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.set_list_trust("cahiers-100", 0) is True
+    assert repo.film_list("cahiers-100").trust == 0
+
+
+def test_set_list_trust_returns_false_for_unknown_slug(repo):
+    assert repo.set_list_trust("nope", 9) is False
+
+
+def test_film_lists_orders_by_trust_desc_then_slug(repo, today):
+    repo.upsert_film_list(CAHIERS, today)  # slug "cahiers-100"
+    repo.upsert_film_list(BACKLOG, today)  # slug "backlog-10"
+    repo.set_list_trust("cahiers-100", 5)
+    # both still at default trust 1: backlog-10 sorts before cahiers-100 by slug...
+    repo.upsert_film_list(
+        ListMeta(
+            slug="alpha-list",
+            name="Alpha",
+            curator=None,
+            published_year=None,
+            source_url=None,
+            ordered=False,
+        ),
+        today,
+    )
+    slugs = [m.slug for m in repo.film_lists()]
+    # trust 5 first (cahiers-100), then the two trust-1 lists ordered by slug
+    assert slugs == ["cahiers-100", "alpha-list", "backlog-10"]
+
+
+def test_reimporting_a_list_preserves_a_previously_set_trust(repo, today):
+    """The trap this task exists to close: `upsert_film_list` runs on every `lists import`,
+    and a re-import (e.g. to pick up newly created films) must never reset the owner's
+    trust judgement back to the default."""
+    repo.upsert_film_list(CAHIERS, today)
+    assert repo.set_list_trust("cahiers-100", 9) is True
+
+    later = date(2026, 8, 20)
+    refreshed = ListMeta(
+        slug="cahiers-100",
+        name=CAHIERS.name,
+        curator=CAHIERS.curator,
+        published_year=CAHIERS.published_year,
+        source_url=CAHIERS.source_url,
+        ordered=CAHIERS.ordered,
+    )
+    repo.upsert_film_list(refreshed, later)
+
+    assert repo.film_list("cahiers-100").trust == 9
