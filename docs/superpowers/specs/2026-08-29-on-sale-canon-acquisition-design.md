@@ -1,6 +1,6 @@
 # On Sale — working through the canon, with price as the acquisition trigger
 
-**Date:** 2026-08-29 · **Status:** designed with the owner across a long conversation; every decision below is theirs and recorded with its reasoning. **Amended 2026-08-29 (build session)** — the probe evidence in the handoff arrived after this spec was written, and the owner has since chosen a build scope (D9) and a backfill shape (D10). Amendments are §2's Criterion clause, §3's list-size note, §5, §6, §8, and the new §9 and §10. §1's D1–D8 are untouched.
+**Date:** 2026-08-29 · **Status:** designed with the owner across a long conversation; every decision below is theirs and recorded with its reasoning. **Amended 2026-08-29 (build session)** — the probe evidence in the handoff arrived after this spec was written, and the owner has since chosen a build scope (D9) and a backfill shape (D10). Amendments are §2's Criterion clause, §3's floor analysis and list-size note, §5, §6, §8, and the new §9, §10, §11 and §12. §1's D1–D8 are untouched.
 
 ## 0. What this actually is
 
@@ -29,6 +29,9 @@ Two earlier framings were tried and discarded, both by the owner:
 | D8 | **The watchlist itself lives on CheapCharts** | See §0 |
 | D9 | **Build the IMDb backfill and the canon ranking now; defer all price and watchlist work** | The ranking works for 100% of the catalogue; the price half reaches only the 57% Apple actually sells, and the browse view is empty most days (handoff §2c). Deferring the price work also means **no schema change at all** — see §10 |
 | D10 | **The backfill writes the IMDb id alone — a "quiet" backfill, no year canonicalization** | These films already hold their TMDB id, so a full re-key would re-run `record_tmdb_match` and move `films.year` on up to **1,236 commerce-created films** as a side effect of writing a missing id. The quiet form uses the same sanctioned `key_film` path and moves no years — see §9 |
+| D11 | **`sight-and-sound-2022` demoted to trust 7; both 1992 Sight & Sound polls added as separate lists — critics at 8, directors at 6** | The owner trusts Moviewise's judgement that the 1992 poll is the better canon and wants it weighted above the 2022 one. Two polls, not one: the 1992 page publishes a critics' top ten and a **separate** directors' top ten with a different electorate, and merging them would invent a ranking nobody published. The trust demotion is **already applied live** (2026-08-29) — `lists trust` is a one-command, reversible change that needed no code |
+| D12 | **No membership floor in `canon_score` — the formula in §3 stands unchanged** | Delegated to the controller and decided on the data; see §3's "The floor question, settled" |
+| D13 | **BFI Player is shelved, not rejected** | The owner's call after seeing the complication. See §11 |
 
 ## 2. The gate — which films are worth buying
 
@@ -54,6 +57,22 @@ canon_score = Σ over lists ( trust × (1 − (printed_rank − 1) / list_size) 
 ```
 
 so #1 on a list contributes its full trust and the last entry contributes ~0. Position matters, not just membership: Cahiers #12 outweighs Sight & Sound #243. The original curated-lists spec §5.7 warned against summing ranked and unranked membership blindly; this honours it. A tied `rank_label` (`=196`) uses the printed rank, which is the poll's own judgement.
+
+### The floor question, settled (D12)
+
+A ten-entry list decays to near nothing by its last rank — 2001 at #10 of the 1992 critics' ten would contribute `8 × 0.1 = 0.8`, which reads a genuine honour as noise. The proposed fix was a **membership floor**: a list contributes at least 25% of its trust to any film on it, `trust × (0.25 + 0.75 × positional)`.
+
+**Measured on the live catalogue (348 listed films), with both 1992 polls simulated in, the floor changes almost nothing:**
+
+| comparison | overlap |
+|---|---|
+| top 10 with floor vs without | 9 / 10 |
+| top 25 | 23 / 25 |
+| top 50 | 49 / 50 |
+
+The top fifteen are the same films in near-identical order (Vertigo and The Godfather each move up one or two places; nothing enters or leaves). What the floor *does* change is the deep tail: films sitting at **poor** ranks on two lists rise 70–85 places out of 348 — *Star Wars*, *Annie Hall*, *Once Upon a Time in America*, *Letter from an Unknown Woman*. For a canon **study** queue that is the wrong direction: it rewards mediocre placement on two lists over strong placement on one, which is precisely the blind membership-summing the curated-lists spec §5.7 warned against.
+
+**Decision: no floor.** It costs a tunable, changes nothing the owner would act on, and its only measurable effect is one we do not want.
 
 Two mechanics the formula needs and the code does not yet supply (found 2026-08-29):
 
@@ -190,10 +209,36 @@ Alerting from movie-brain (CheapCharts owns that) · buying anything · rental p
 
 | item | this pass | note |
 |---|---|---|
+| 0. Trust demotion + the two 1992 lists | **yes** | D11, §11 — the trust demotion is already applied live |
 | 1. IMDb backfill | **yes** | §9 |
 | 2. Canon ranking + candidate view | **yes** | §2, §3, §5 "ships now" |
 | 3. Price + watchlist automation | **no** | §4, §5 "deferred", §6 |
+| — BFI Player as a suppressing service | **no** | shelved by D13, §11 |
 
-**No migration.** The backfill writes `external_ids` rows; `canon_score` is computed from data already in `film_list` / `film_list_entry` and is never denormalized onto `films` (the curated-lists rule). Nothing in this pass changes the schema — the live DB stays at v16 and **017 remains unwritten**.
+**Order matters within this pass.** The backfill (item 1) runs **before** the 1992 imports. Gate 1 — "a film already keyed to the winning IMDb id" — is the gate that stops a list import mislinking, and today only 850 of 4,735 films hold an IMDb id at all; 8 of the 1992 critics' ten hold none. Backfilling first is what makes item 0 safe.
+
+**No migration.** The backfill writes `external_ids` rows; the 1992 lists write `film_list` / `film_list_entry` rows through the existing two-verb import; `canon_score` is computed and never denormalized onto `films` (the curated-lists rule). Nothing in this pass changes the schema — the live DB stays at v16 and **017 remains unwritten**.
+
+## 11. The 1992 Sight & Sound polls, and the BFI shelf
+
+**The 1992 lists (D11).** Source: `https://www.bfi.org.uk/sight-and-sound/polls/greatest-films-all-time/1992`. The page publishes **two top tens only** — no top 100 existed before 2012 — so these are ten- and twelve-entry lists (after ties), not peers of `cahiers-100`. Nineteen distinct films across both.
+
+- `sight-and-sound-1992-critics`, trust **8**, 10 entries, ties at `=6` (four films) — `rank_label` carries the printed cell exactly as `sight-and-sound-2022` does.
+- `sight-and-sound-1992-directors`, trust **6**, 12 entries, ties at `=2`, `=6`, `=9`.
+
+**All nineteen films are already in the catalogue and already on at least one existing list.** Verified 2026-08-29 — including *The Godfather: Part II*, which a crude title match initially missed. So `lists import --apply` links every entry and **`lists create` has nothing to mint**: this increment adds zero films and cannot produce the duplicate the lists contract exists to prevent. It is the lowest-risk list import the feature has seen.
+
+What it does change is the top of the ranking, more than first estimated: with both polls in, *The Passion of Joan of Arc* moves from 13th to 7th, *Vertigo* from 7th to 4th, *Tokyo Story* from 8th to 5th, and *The Searchers* and *The Godfather* enter the top twelve. The earlier claim that the 1992 poll "sharpens but does not reshape" was measured on the critics' ten alone and on coverage rather than ordering; with both polls weighted at 8 and 6 the top fifteen genuinely moves.
+
+Note `La strada` (film #1812) carries **no year**. The form ladder queries with `year=None` regardless, so this is not a blocker, but it is the entry most likely to need a review row.
+
+**BFI Player — shelved (D13).** The owner subscribed to BFI on Apple TV; adding it as a suppressing service turned out to be more complicated than it is worth today, and they shelved it. Recorded so it is not re-derived:
+
+- `bfi-player-classics` already exists in `movie_service` (svod, region US, `subscribed = 0`) but has **no `service_provider` row**, so TMDB has never written one BFI listing. Flipping `subscribed` alone would suppress nothing.
+- TMDB's **US** region knows BFI only as provider **287, "BFI Player Amazon Channel"** (253 films) — and Amazon-channel ids are the one class this project excludes. "BFI Player" (224) and "BFI Player Apple TV Channel" (2041) exist only under **GB**.
+- Measured benefit if 287 were adopted for US: **5 of the 263 candidates** would be suppressed — *Contempt*, *Distant Voices, Still Lives*, *Passport to Pimlico*, *The Discreet Charm of the Bourgeoisie*, *The Servant*. *Contempt* is notable: the CheapCharts probe could not find it on iTunes at any price, so BFI reaches a film Apple never sells.
+- Doing it would require migration **017** (a `service_provider` row plus the `subscribed` flip — no CLI verb writes either) and a forced providers refresh, plus a deliberate carve-out to the Amazon-channel exclusion.
+
+## 12. Housekeeping
 
 **Known state to clear first.** Films `#4763 Histoire(s) du Cinéma` (`tt6677224`) and `#4764 Twin Peaks: The Return` (`tt4093826`) are deliberately unkeyed pending a sync and `review resolve <row> --tt <id> --series`. Both hold no TMDB id, so the backfill does not touch them; they will appear in the ranked queue with no year until they are keyed.
