@@ -495,7 +495,8 @@ def import_list(
     Dry run by default: with `apply=False` **nothing at all** is written — no registry row, no
     entries, no claims, no review rows — and the report says what would have happened.
 
-    Re-import is idempotent: an entry that already carries a `film_id` is settled and is
+    Re-import is idempotent: an entry that already carries a `film_id` is settled — unless its title
+    changed, or an `entry-changed` row is still open for it — and is
     skipped before the fetcher is touched, so a re-run costs no API calls for the links it
     already made; `upsert_list_entry` refreshes title/director without clearing a link.
 
@@ -509,6 +510,9 @@ def import_list(
     # this run links, so the duplicate-entry guard sees this run's own work too — which the
     # stored-state query `film_rank_on_list` cannot, since a dry run writes nothing.
     linked_at = {fid: rank for rank, (fid, _t) in prior.items() if fid is not None}
+    # `<slug>#<rank>` values with an OPEN entry-changed row — see the guard in the loop.
+    open_changed = {str(r["value"]) for r in repo.open_reviews(AUTHORITY)
+                    if r["reason"] == ENTRY_CHANGED and r["value"]}
 
     if apply:
         repo.upsert_film_list(meta, today)
@@ -526,7 +530,12 @@ def import_list(
         value = f"{meta.slug}#{entry.rank}"
         try:
             settled, was_titled = prior.get(entry.rank, (None, None))
-            if settled is not None and was_titled != entry.title_listed:
+            # An open row keeps firing: the upsert above already rewrote `title_listed` on the
+            # run that queued it, so without this a second --apply of the same corrected file
+            # would compare the file against itself, fall through to `already linked`, and go
+            # quiet while the link is still stale. The card is the deliverable; it must not
+            # stop saying so until a human resolves the row.
+            if settled is not None and (was_titled != entry.title_listed or value in open_changed):
                 # Position is line order now, so ONE dropped line renumbers every entry below
                 # it. `upsert_list_entry` never clears `film_id`, so re-importing a corrected
                 # file would keep each stale link while overwriting its title — a silent

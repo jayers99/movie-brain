@@ -31,8 +31,9 @@ def test_scorecard_prints_the_plain_rank_when_no_label():
     assert card.splitlines()[0].startswith("#3 ")
 
 
-def test_an_empty_label_falls_back_to_the_position_and_pins_is_not_none_over_or():
-    """The parser never emits `""` — `rank_label` is either None or a real label. This case
+def test_an_empty_label_renders_empty_which_is_what_pins_is_not_none_over_or():
+    """An empty label renders as a bare `#`, NOT the position — matching `app.js`'s `??`,
+    which is the point of the alignment. The parser never emits `""` — `rank_label` is either None or a real label. This case
     exists to keep the distinction visible: under a truthiness check (`rank_label or rank`)
     an empty label would silently become the position, and only this test would notice if a
     future producer of `rank_label` were less careful than the parser."""
