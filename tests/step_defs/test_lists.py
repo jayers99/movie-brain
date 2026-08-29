@@ -256,6 +256,16 @@ def imported_with_entry_and_id(ctx, rank, title, director, tt):
     _run(ctx, apply=True)
 
 
+@given(
+    parsers.parse(
+        'I imported the list with --apply for entry {rank:d} "{title}" by "{director}" ranked "{label}"'
+    )
+)
+def imported_with_entry_ranked(ctx, rank, title, director, label):
+    ctx["entries"].append(ListEntry(rank, title, director, rank_label=label))
+    _run(ctx, apply=True)
+
+
 @given(parsers.parse('the "{value}" review row is resolved'))
 def resolve_row(ctx, value):
     row = next(r for r in ctx["repo"].open_reviews(AUTHORITY) if r["value"] == value)
@@ -357,6 +367,16 @@ def scorecard_contains(ctx, rank, text):
     lines = ctx["scorecard"].splitlines()
     head = next(i for i, line in enumerate(lines) if line.startswith(f"#{rank} "))
     assert text in lines[head + 1], lines[head + 1]
+
+
+@then(parsers.parse('the scorecard header for entry {rank:d} starts with "{expected}"'))
+def scorecard_header_starts_with(ctx, rank, expected):
+    # Located by the outcome's own `.rank` (the counted position, always stable) rather than
+    # by matching the printed header text — the whole point of this assertion is that the
+    # printed header may NOT be "#<rank>" any more.
+    idx = next(i for i, r in enumerate(ctx["report"].rows) if r.rank == rank)
+    lines = ctx["scorecard"].splitlines()
+    assert lines[idx * 2].startswith(expected), lines[idx * 2]
 
 
 @then("no film was created")

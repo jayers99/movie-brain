@@ -202,6 +202,12 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And there are no open list review rows
     And the eval CSV is byte-identical
 
+  Scenario: creation's scorecard prints the poll's rank label, not the counted position
+    Given the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir" titled "Grand Illusion"
+    And I imported the list with --apply for entry 68 "La Grande Illusion" by "Jean Renoir" ranked "=68"
+    When I create films with --apply
+    Then the scorecard header for entry 68 starts with "#=68"
+
   Scenario: a holder that appeared since the import is linked, and nothing is created
     Given the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir"
     And I imported the list with --apply for entry 68 "La Grande Illusion" by "Jean Renoir"

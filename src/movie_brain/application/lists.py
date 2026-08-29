@@ -317,6 +317,10 @@ class EntryOutcome:
     form_used: str
     detail: str
     agreement: str = ""  # "" | AGREE | DISAGREE | SUPPLIED
+    # The rank AS PRINTED (tied-ranks design §4) — None on every plain (untied) entry, in
+    # which case the scorecard falls back to `rank`. Appended last, defaulted, so every
+    # existing positional construction of this dataclass keeps working.
+    rank_label: str | None = None
 
 
 def _id_tally(rows: Sequence[EntryOutcome]) -> tuple[int, int, int, int]:
@@ -390,7 +394,17 @@ def _outcome(
     agreement: str = "",
 ) -> EntryOutcome:
     return EntryOutcome(
-        entry.rank, entry.title_listed, entry.director_listed, kind, film_id, tt, reason, form, detail, agreement
+        entry.rank,
+        entry.title_listed,
+        entry.director_listed,
+        kind,
+        film_id,
+        tt,
+        reason,
+        form,
+        detail,
+        agreement,
+        rank_label=entry.rank_label,
     )
 
 
@@ -752,7 +766,7 @@ def create_films(
     human_owned: set[str] = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
     human_owned |= {str(v) for _reason, _film_id, v in repo.resolved_review_keys(AUTHORITY) if v}
     worklist = [
-        ListEntry(row.rank, row.title_listed, row.director_listed, row.tt_listed)
+        ListEntry(row.rank, row.title_listed, row.director_listed, row.tt_listed, row.rank_label)
         for row in stored
         if row.film_id is None and f"{slug}#{row.rank}" not in human_owned
     ]
@@ -1003,7 +1017,7 @@ def scorecard(rows: Sequence[EntryOutcome]) -> str:
     out: list[str] = []
     for r in rows:
         who = f"{r.title_listed} / {r.director_listed}" if r.director_listed else r.title_listed
-        out.append(f"{f'#{r.rank}'.ljust(6)}{who}")
+        out.append(f"{f'#{r.rank_label or r.rank}'.ljust(6)}{who}")
         line = f"→ {_LABELS.get(r.kind, r.kind.upper())} {r.detail}".rstrip()
         if r.agreement in _ID_SUFFIX:
             line += f"  {_ID_SUFFIX[r.agreement]}"
