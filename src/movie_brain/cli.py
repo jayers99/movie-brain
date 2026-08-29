@@ -622,20 +622,40 @@ def repair_links_cmd(
     film: Annotated[
         int | None, typer.Option("--film", help="Audit/clear just this film's link (suspect regardless of title).")
     ] = None,
+    tt: Annotated[
+        str | None,
+        typer.Option("--tt", help="Re-key this film to a known-correct IMDb id instead (requires --film)."),
+    ] = None,
     apply: Annotated[bool, typer.Option("--apply", help="Clear every suspect link (default: dry-run).")] = False,
 ) -> None:
-    """Re-validate TMDB links by title (incl. alternative titles); suspects are listed, --apply clears them."""
+    """Re-validate TMDB links by title (incl. alternative titles); suspects are listed, --apply clears them.
+
+    With `--film ID --tt ttNNN` the verb instead re-keys that one film to an id a human knows
+    is right — the case no audit can see, where the stored imdb and tmdb ids agree with each
+    other but describe the wrong work. Nothing is cleared on that path.
+    """
     cfg = load_config()
     token = load_tmdb_token(cfg)
     if not token:
         err.print(f"no TMDB token: set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}")
         raise typer.Exit(2)
     try:
-        report = repair_links(_repo(), TmdbClient(token), date.today(), film_id=film, apply=apply, log=err.print)
+        report = repair_links(
+            _repo(), TmdbClient(token), date.today(), film_id=film, tt=tt, apply=apply, log=err.print
+        )
+    except ValueError as exc:  # misuse of --tt: no --film, malformed id, unusable film id
+        err.print(str(exc))
+        raise typer.Exit(2) from exc
     except LookupError as exc:
         err.print(str(exc))
         raise typer.Exit(1) from exc
-    console.print(f"checked: {report.checked} · suspects: {report.suspects} · cleared: {report.cleared}")
+    except RuntimeError as exc:  # key_film's [partial] loud stop
+        err.print(str(exc))
+        raise typer.Exit(1) from exc
+    if tt is not None:
+        console.print(f"re-keyed: {report.rekeyed}")
+    else:
+        console.print(f"checked: {report.checked} · suspects: {report.suspects} · cleared: {report.cleared}")
     raise typer.Exit(report.exit_code)
 
 
