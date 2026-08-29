@@ -1017,7 +1017,8 @@ def scorecard(rows: Sequence[EntryOutcome]) -> str:
     out: list[str] = []
     for r in rows:
         who = f"{r.title_listed} / {r.director_listed}" if r.director_listed else r.title_listed
-        out.append(f"{f'#{r.rank_label or r.rank}'.ljust(6)}{who}")
+        rank_shown = r.rank_label if r.rank_label is not None else r.rank
+        out.append(f"{f'#{rank_shown}'.ljust(6)}{who}")
         line = f"→ {_LABELS.get(r.kind, r.kind.upper())} {r.detail}".rstrip()
         if r.agreement in _ID_SUFFIX:
             line += f"  {_ID_SUFFIX[r.agreement]}"
