@@ -111,12 +111,22 @@ class TmdbClient:
     def watch_providers(self, tmdb_id: int) -> TmdbProviders:
         resp = self._get(f"/movie/{tmdb_id}/watch/providers")
         us = resp.json().get("results", {}).get("US", {})
+        names: dict[int, str] = {}
 
         def ids(kind: str) -> tuple[int, ...]:
-            return tuple(int(p["provider_id"]) for p in us.get(kind, []))
+            out = []
+            for p in us.get(kind, []):
+                pid = int(p["provider_id"])
+                out.append(pid)
+                if p.get("provider_name"):
+                    names[pid] = str(p["provider_name"])
+            return tuple(out)
 
-        return TmdbProviders(flatrate=ids("flatrate"), rent=ids("rent"), buy=ids("buy"),
-                             link=us.get("link"), payload=resp.text)
+        return TmdbProviders(
+            flatrate=ids("flatrate"), rent=ids("rent"), buy=ids("buy"),
+            free=ids("free"), ads=ids("ads"),
+            link=us.get("link"), payload=resp.text, names=names,
+        )
 
     def movie_year(self, tmdb_id: int) -> int | None:
         d = self._get(f"/movie/{tmdb_id}").json().get("release_date") or ""
