@@ -809,6 +809,32 @@ def test_services_apple_and_subscribe_round_trip(config_dir):
     assert "subscribed yes" in listed
 
 
+def test_services_apple_and_subscribe_off_round_trip(config_dir):
+    """The false branch of `_service_line`'s rendering, reached via an explicit 0 write —
+    not just the pre-existing default — so both directions of the set path are covered."""
+    assert runner.invoke(app, ["services", "apple", "criterion", "1"]).exit_code == 0
+    assert runner.invoke(app, ["services", "apple", "criterion", "0"]).exit_code == 0
+    assert runner.invoke(app, ["services", "subscribe", "mubi", "1"]).exit_code == 0
+    assert runner.invoke(app, ["services", "subscribe", "mubi", "0"]).exit_code == 0
+    listed = runner.invoke(app, ["services", "list"]).output
+    assert "apple-app no" in listed
+    assert "subscribed no" in listed
+
+
+def test_services_apple_sets_and_shows_one_service(config_dir):
+    assert runner.invoke(app, ["services", "apple", "criterion", "1"]).exit_code == 0
+    shown = runner.invoke(app, ["services", "apple", "criterion"])
+    assert shown.exit_code == 0
+    assert "apple-app yes" in shown.output
+
+
+def test_services_subscribe_sets_and_shows_one_service(config_dir):
+    assert runner.invoke(app, ["services", "subscribe", "mubi", "1"]).exit_code == 0
+    shown = runner.invoke(app, ["services", "subscribe", "mubi"])
+    assert shown.exit_code == 0
+    assert "subscribed yes" in shown.output
+
+
 def test_services_unknown_slug_exits_two(config_dir):
     result = runner.invoke(app, ["services", "quality", "nope", "3"])
     assert result.exit_code == 2
