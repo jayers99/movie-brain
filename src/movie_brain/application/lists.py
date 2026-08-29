@@ -209,7 +209,10 @@ def veto_forms(forms: list[str], winner: WorkCandidate | None) -> list[str]:
     AND year both match — as the sole backstop. Strictly in the refusing direction, the same
     argument design §1 A4 makes for gate 2b.
     """
-    return forms + [t for t in (winner.titles if winner is not None else ()) if t not in forms]
+    # `Candidate.titles` can carry an empty string (TMDB's `title`/`original_title` and each
+    # alternative title are read with `or ""`), and `index.lookup("")` would veto against any
+    # catalog film whose norm_title is empty — a veto on nothing at all.
+    return forms + [t for t in (winner.titles if winner is not None else ()) if t and t not in forms]
 
 
 @dataclass(frozen=True)
