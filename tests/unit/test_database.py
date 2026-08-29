@@ -363,12 +363,12 @@ def test_record_catalog_contains_external_id_uniqueness_conflicts(repo):
 
 
 def test_services_registry_accessor(repo):
-    services = {s["slug"]: s for s in repo.services()}
+    services = {s.slug: s for s in repo.movie_services()}
     assert len(services) == 8
-    assert services["criterion"]["subscribed"] == 1
-    assert services["mubi"]["subscribed"] == 0
-    assert services["apple-tv-store"]["kind"] == "store"
-    assert services["prime-video"]["region"] == "US"
+    assert services["criterion"].subscribed is True
+    assert services["mubi"].subscribed is False
+    assert services["apple-tv-store"].kind == "store"
+    assert services["prime-video"].region == "US"
 
 
 def test_init_db_backs_up_before_applying_pending_migrations(tmp_path):
@@ -610,6 +610,17 @@ def test_watchlist_transitions_on_filters_day_and_membership(repo, today):
     assert repo.watchlist_transitions_on(today) == [("Playtime", "HBO Max")]
 
 
+def test_watchlist_transitions_on_ignores_an_unsubscribed_service(repo, today):
+    """Auto-registration lands every unknown provider at subscribed=0, and its first listing
+    write fires a transition — the owner must not be notified about services they cannot watch."""
+    wanted = repo.upsert_film(Film("Playtime", 1967, "Tati", "https://c/playtime"))
+    repo.toggle_watchlist(wanted, today)
+    repo.record_listing_with_transition(wanted, "mubi", "https://tmdb/w/1", today)  # subscribed = 0
+    assert repo.watchlist_transitions_on(today) == []
+    repo.set_service_subscribed("mubi", True)
+    assert repo.watchlist_transitions_on(today) == [("Playtime", "MUBI")]
+
+
 # ---- Phase 4: services currency with refresh stamp -------------------------
 
 
@@ -653,6 +664,20 @@ def test_views_carry_new_on_and_watchlisted(repo, today):
     ]
     (listed,) = [v for v in repo.list_views("criterion", today) if v.id == fid]
     assert listed.new_on == view.new_on and listed.watchlisted is True
+
+
+def test_new_on_ignores_an_unsubscribed_service(repo, today):
+    """The new-arrival chip reads `new_on`; auto-registered providers arrive at subscribed=0
+    and each one's first listing write fires a transition, which would swamp the chip."""
+    from datetime import timedelta
+
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha")], today - timedelta(days=30))
+    fid = repo.film_id_by_key("alpha (1950)")
+    repo.record_listing_with_transition(fid, "mubi", "https://tmdb/w/1", today - timedelta(days=3))
+    repo.record_listing_with_transition(fid, "max", "https://tmdb/w/2", today - timedelta(days=3))
+    assert [n["source"] for n in repo.get_view(fid, today).new_on] == ["max"]
+    repo.set_service_subscribed("mubi", True)
+    assert [n["source"] for n in repo.get_view(fid, today).new_on] == ["max", "mubi"]
 
 
 # ---- Phase 4: nightly watchlist provider pass -----------------------------

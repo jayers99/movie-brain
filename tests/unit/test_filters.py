@@ -204,6 +204,19 @@ def test_acquire_keeps_a_film_on_the_criterion_channel():
     assert acquisition_candidate(v, TODAY) is True
 
 
+def test_acquire_keeps_a_canon_film_with_no_metascore():
+    """Tier 1 stands on its own: list membership alone qualifies, with no Metacritic score
+    to fall back on. Every other acquire test sets metacritic=95, which the second disjunct
+    satisfies by itself — this one fails if `is_canon(view) or` is ever dropped."""
+    v = view(
+        metacritic=None,
+        owned=False,
+        criterion=False,
+        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
+    )
+    assert acquisition_candidate(v, TODAY) is True
+
+
 def test_acquire_drops_an_owned_film():
     v = view(metacritic=95, owned=True, criterion=False)
     assert acquisition_candidate(v, TODAY) is False
