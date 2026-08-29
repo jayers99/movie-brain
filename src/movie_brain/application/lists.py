@@ -7,10 +7,17 @@ costs a merge. So the five helpers here are deliberately timid.
 
 - `entry_forms` — every title string one entry could be known by, primary first.
 - `resolve_entry` — the fallback-only form ladder over those forms (design §1 A2).
+- `reconcile` — the supplied-id comparison policy: run the resolver anyway, then compare.
 - `find_holder` — gates 1 / 2 / 2b: does a film in the catalog already hold this work's ids?
 - `corpus_veto` — gate 3: does the catalog hold anything *resembling* any of these titles?
 - `veto_forms` — the titles gate 3 asks about: the entry's forms plus the winner's own, shared
   by both verbs so the rehearsal card predicts the confirmed run.
+
+A list may carry an IMDb id per entry (supplied-id spec §3). That id is **external ground
+truth**, so the resolver is run anyway and the two answers are reconciled: the headline of
+such an import is the AGREEMENT RATE, not the link count. An agreement is never ratified into
+`scripts/eval/thumbprint_eval_v1.csv` — `application/eval_log.py::ratify` is the only writer
+and only human verdicts drive it, or the benchmark would be scoring itself.
 
 `import_list` is phase 1 (design §5): it links, it asks, and it **never creates a film**.
 `create_films` is phase 2 (design §6) and is the ONLY path in this feature that creates one.
@@ -31,7 +38,7 @@ from __future__ import annotations
 import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 
 import requests
@@ -54,6 +61,13 @@ CORPUS_VETO = "corpus-veto"
 DUPLICATE_ENTRY = "duplicate-entry"
 TOMBSTONED_HOLDER = "tombstoned-holder"
 KEY_COLLISION = "key-collision"
+ID_DISAGREEMENT = "id-disagreement"
+
+# `EntryOutcome.agreement`: how the resolver's verdict stood against the curator's id.
+# "" is "the entry carried no id", not "we did not check".
+AGREE = "agree"
+DISAGREE = "disagree"
+SUPPLIED = "supplied"  # the resolver reached no match; the id is the evidence it lacked
 
 # key_film results that leave the new film identified; anything else waits for the next sync.
 KEYED_OK = ("keyed", "unlinked")
@@ -118,6 +132,71 @@ def resolve_entry(
         if answered is None:
             answered = (verdict, form)
     return answered if answered is not None else (None, forms[0])
+
+
+# The comparison policy, spec §5, as a table rather than as nested conditionals: it is a
+# short contract and it should read like one — the first five rows ARE the spec's table.
+#   (what the resolver said, what the curator supplied) -> (whose tt to proceed on, agreement)
+# "differs" against a "no match" means "differs from what the resolver produced", and the
+# resolver produced nothing — there is no third id state to invent for that row.
+_POLICY: dict[tuple[str, str], tuple[str, str]] = {
+    ("match", "absent"): ("resolver", ""),  # today's behaviour, untouched
+    ("match", "same"): ("resolver", AGREE),  # the normal linked / would-create path
+    ("match", "differs"): ("neither", DISAGREE),  # never link, never create
+    ("no match", "absent"): ("neither", ""),  # today's behaviour, untouched
+    ("no match", "differs"): ("listed", SUPPLIED),  # the id is evidence the resolver lacked
+    # Unreachable, and listed anyway so the table is total over its own key space rather than
+    # total by argument: with no resolver tt there is nothing a supplied id can be "same" as,
+    # so `reconcile` classifies every id under a non-match as "differs". Same answer as the row
+    # above, because it is the same situation.
+    ("no match", "same"): ("listed", SUPPLIED),
+}
+
+
+def reconcile(verdict: Verdict | None, tt_listed: str | None) -> tuple[str | None, str]:
+    """The supplied-id comparison policy (spec §5): `(tt to proceed on, agreement)`.
+
+    Pure — no repo, no fetcher, no clock — so the policy is testable as a table rather than
+    through a whole import loop. `agreement` is `""` (no id supplied), `AGREE`, `DISAGREE` or
+    `SUPPLIED`.
+
+    A **disagreement returns no tt at all**: two independent sources disagree about identity,
+    which is exactly what a human is for, so neither id may be proceeded on. Callers must
+    therefore branch on `DISAGREE` BEFORE reading a `None` tt as "the resolver found nothing".
+
+    `verdict=None` — every form's lookup failed — reads as "no match" and hands back the
+    supplied id, because "the resolver had no verdict" is precisely what `SUPPLIED` counts.
+    Both verbs stop one step earlier on that shape, since a transient failure is not a verdict
+    and must not become a durable row; the row is here so the policy is total and a later
+    caller finds the answer rather than inventing one.
+
+    What this policy does NOT touch: the gates. A supplied id settles *which work this is*; it
+    says nothing about whether the catalog already holds that work, which is the question
+    gates 1/2/2b/3 answer and the only thing standing between this feature and a duplicate
+    film. Every gate runs unchanged on every row above.
+    """
+    resolver_tt = verdict.tt if verdict is not None and verdict.kind == "match" else None
+    said = "match" if resolver_tt is not None else "no match"
+    supplied = "absent" if tt_listed is None else "same" if tt_listed == resolver_tt else "differs"
+    source, agreement = _POLICY[said, supplied]
+    return {"resolver": resolver_tt, "listed": tt_listed, "neither": None}[source], agreement
+
+
+def _gate_verdict(verdict: Verdict, tt: str) -> Verdict:
+    """The verdict the gates run against: the resolver's own, or the same evidence re-pointed
+    at a supplied id the resolver could not confirm.
+
+    The resolver's `reason` is carried over verbatim — it is contract text, and the scorecard's
+    `[id supplied]` suffix is what says where the tt came from. Re-pointing rather than
+    inventing a verdict also keeps `ranked` intact, so a supplied id that IS among the
+    resolver's candidates still lends the gates its tmdb id and phase 2 its title and year.
+    """
+    return verdict if verdict.kind == "match" and verdict.tt == tt else replace(verdict, kind="match", tt=tt)
+
+
+def _disagreement_detail(entry: ListEntry, verdict: Verdict) -> str:
+    """`id-disagreement: resolver tt… [reason] vs listed tt…` — spec §6, one text for both verbs."""
+    return f"{ID_DISAGREEMENT}: resolver {verdict.tt} [{verdict.reason}] vs listed {entry.tt_listed}"
 
 
 def find_holder(
@@ -222,6 +301,10 @@ class EntryOutcome:
     `reason` is the resolver's own reason string — contract text, carried verbatim and never
     reworded — and `detail` is the rendered tail of the entry's scorecard line, reused as the
     body of its review row so the printed page and the queued row can never disagree.
+
+    `agreement` is `reconcile`'s verdict on the curator's id, and renders as the scorecard's
+    `[id agrees]` / `[id supplied]` suffix. It is a suffix, never a replacement: `reason`
+    stays the resolver's own words on every path.
     """
 
     rank: int
@@ -233,6 +316,27 @@ class EntryOutcome:
     reason: str
     form_used: str
     detail: str
+    agreement: str = ""  # "" | AGREE | DISAGREE | SUPPLIED
+
+
+def _id_tally(rows: Sequence[EntryOutcome]) -> tuple[int, int, int, int]:
+    """`(agree, disagree, supplied, compared)` — the headline of a supplied-id import (spec §2).
+
+    `compared` is the DENOMINATOR of the agreement rate, so it is the number of id-bearing
+    entries the resolver actually answered for — not the number of ids in the file. An entry
+    that was already linked (settled before the fetcher is touched) or whose every lookup
+    failed never reaches `reconcile`, and an entry the resolver never spoke about cannot be
+    scored against its id.
+
+    So the measurement is meaningful on the FIRST import of a list: a re-import skips every
+    entry it already linked before the fetcher is touched, and its tally collapses toward zero.
+    That is the counters working, not a regression.
+
+    Both report dataclasses and the scorecard read this one function, so the printed card and
+    the machine tally can never drift apart.
+    """
+    c = Counter(r.agreement for r in rows)
+    return c[AGREE], c[DISAGREE], c[SUPPLIED], c[AGREE] + c[DISAGREE] + c[SUPPLIED]
 
 
 @dataclass(frozen=True)
@@ -245,6 +349,12 @@ class ListImportReport:
     blocked: int
     errors: int
     rows: list[EntryOutcome]
+    # Defaulted and last so the tally is additive: every existing caller builds this
+    # positionally, and these four are one derived reading of `rows` (see `_id_tally`).
+    agree: int = 0
+    disagree: int = 0
+    supplied: int = 0
+    compared: int = 0
 
 
 def queue_list_review_once(repo: Repository, entry: ReviewEntry, today: date) -> bool:
@@ -277,9 +387,10 @@ def _outcome(
     tt: str | None = None,
     reason: str = "",
     form: str = "",
+    agreement: str = "",
 ) -> EntryOutcome:
     return EntryOutcome(
-        entry.rank, entry.title_listed, entry.director_listed, kind, film_id, tt, reason, form, detail
+        entry.rank, entry.title_listed, entry.director_listed, kind, film_id, tt, reason, form, detail, agreement
     )
 
 
@@ -411,25 +522,45 @@ def import_list(
                 rows.append(_outcome(entry, "error", "resolver lookup failed for every form", form=form))
                 continue
 
-            if verdict.kind != "match" or verdict.tt is None:
+            # `reconcile` also answers for a None verdict; no verb reaches that row — an
+            # every-lookup-failure is the `error` above, not a verdict to proceed from.
+            tt, agreement = reconcile(verdict, entry.tt_listed)
+            if agreement == DISAGREE:
+                # Two independent sources disagree about identity — never link, never create,
+                # even where gate 1 would have linked this entry outright a moment ago.
+                detail = _disagreement_detail(entry, verdict)
+                rows.append(_outcome(entry, "review", detail, reason=verdict.reason, form=form, agreement=agreement))
+                reviews.append(ReviewEntry(ID_DISAGREEMENT, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            if tt is None:
                 detail = f"resolver {verdict.reason!r}  cands: {_candidates(verdict)}"
                 rows.append(_outcome(entry, "review", detail, reason=verdict.reason, form=form))
                 reviews.append(ReviewEntry(UNRESOLVED, value=value, detail=_review_detail(entry, form, detail)))
                 continue
+
+            # From here on `verdict` is the verdict the GATES run against — the resolver's own,
+            # or (SUPPLIED) the same evidence re-pointed at the curator's id. Every gate below
+            # is unchanged: the id settled which work this is, nothing more.
+            verdict = _gate_verdict(verdict, tt)
 
             holder, label = find_holder(repo, tmdb, verdict, log)
             if label == "tmdb lookup failed":
                 # Gate 2b raised: the holder is unknown, NOT disproved. Calling this a
                 # would-create would point phase 2 at a film that may already exist.
                 detail = f"gate 2b: tmdb lookup failed — holder unknown  [{verdict.reason}]"
-                rows.append(_outcome(entry, "error", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "error", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 continue
 
             if holder is None and label.startswith("tombstoned"):
                 # A human hid that film; the list re-surfacing its title is not a
                 # resurrection request, and creating a twin beside it is worse still.
                 detail = f"{TOMBSTONED_HOLDER}  {label}  [{verdict.reason}]"
-                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 reviews.append(ReviewEntry(TOMBSTONED_HOLDER, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
@@ -442,7 +573,9 @@ def import_list(
                         f"{DUPLICATE_ENTRY}  {_film_label(catalog, holder)} is already linked "
                         f"at rank {twin_rank}  [{verdict.reason}]"
                     )
-                    rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                    rows.append(
+                        _outcome(entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                    )
                     reviews.append(
                         ReviewEntry(DUPLICATE_ENTRY, value=value, detail=_review_detail(entry, form, detail))
                     )
@@ -453,7 +586,16 @@ def import_list(
                 linked_at[holder] = entry.rank
                 detail = f"{_film_label(catalog, holder)}  via {label}  [{verdict.reason}]"
                 rows.append(
-                    _outcome(entry, "linked", detail, film_id=holder, tt=verdict.tt, reason=verdict.reason, form=form)
+                    _outcome(
+                        entry,
+                        "linked",
+                        detail,
+                        film_id=holder,
+                        tt=tt,
+                        reason=verdict.reason,
+                        form=form,
+                        agreement=agreement,
+                    )
                 )
                 continue
 
@@ -466,12 +608,24 @@ def import_list(
                 # phase 2 would block is reported blocked on the card the owner authorises
                 # from, instead of being promised as a would-create and refused later.
                 detail = f"{CORPUS_VETO}  {_veto_label(hits)}  [{verdict.reason}]"
-                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 reviews.append(ReviewEntry(CORPUS_VETO, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
             detail = f"{_would_create_label(verdict)}  [{verdict.reason}]"
-            rows.append(_outcome(entry, "would-create", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+            rows.append(
+                _outcome(
+                    entry,
+                    "would-create",
+                    detail,
+                    tt=tt,
+                    reason=verdict.reason,
+                    form=form,
+                    agreement=agreement,
+                )
+            )
         except Exception as exc:  # one bad entry must never abort the run
             log(f"list entry {value} failed: {exc}")
             rows.append(_outcome(entry, "error", f"unexpected failure: {exc}"))
@@ -481,6 +635,7 @@ def import_list(
             queue_list_review_once(repo, review, today)
 
     tally = Counter(r.kind for r in rows)
+    agree, disagree, supplied, compared = _id_tally(rows)
     return ListImportReport(
         exit_code=0,
         total=len(entries),
@@ -490,6 +645,10 @@ def import_list(
         blocked=tally["blocked"],
         errors=tally["error"],
         rows=rows,
+        agree=agree,
+        disagree=disagree,
+        supplied=supplied,
+        compared=compared,
     )
 
 
@@ -503,6 +662,13 @@ class ListCreateReport:
     blocked: int
     errors: int
     rows: list[EntryOutcome]
+    # Defaulted and last, exactly as on ListImportReport, and derived by the same `_id_tally`:
+    # phase 2 re-resolves every entry, so it reconciles against the ids again rather than
+    # trusting phase 1's agreement.
+    agree: int = 0
+    disagree: int = 0
+    supplied: int = 0
+    compared: int = 0
 
 
 def _key_new_film(
@@ -586,7 +752,7 @@ def create_films(
     human_owned: set[str] = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
     human_owned |= {str(v) for _reason, _film_id, v in repo.resolved_review_keys(AUTHORITY) if v}
     worklist = [
-        ListEntry(row.rank, row.title_listed, row.director_listed)
+        ListEntry(row.rank, row.title_listed, row.director_listed, row.tt_listed)
         for row in stored
         if row.film_id is None and f"{slug}#{row.rank}" not in human_owned
     ]
@@ -619,7 +785,19 @@ def create_films(
                 rows.append(_outcome(entry, "error", "resolver lookup failed for every form", form=form))
                 continue
 
-            if verdict.kind != "match" or verdict.tt is None:
+            # `reconcile` also answers for a None verdict; no verb reaches that row — an
+            # every-lookup-failure is the `error` above, not a verdict to proceed from.
+            tt, agreement = reconcile(verdict, entry.tt_listed)
+            if agreement == DISAGREE:
+                # Re-reconciled here, never inherited from phase 1: the resolver may reach a
+                # different work today. Two sources at odds about identity is a human's call,
+                # and creating under either id would be a guess.
+                detail = _disagreement_detail(entry, verdict)
+                rows.append(_outcome(entry, "blocked", detail, reason=verdict.reason, form=form, agreement=agreement))
+                reviews.append(ReviewEntry(ID_DISAGREEMENT, value=value, detail=_review_detail(entry, form, detail)))
+                continue
+
+            if tt is None:
                 # Phase 1 said would-create; today's resolver does not. Creation needs a
                 # standing yes, so the disagreement goes to a human, not to `films`.
                 detail = f"{UNRESOLVED}  resolver {verdict.reason!r}  cands: {_candidates(verdict)}"
@@ -627,19 +805,29 @@ def create_films(
                 reviews.append(ReviewEntry(UNRESOLVED, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
-            holder, label = minted.get(verdict.tt), "minted this run"
+            # From here on `verdict` is the verdict the GATES run against — the resolver's own,
+            # or (SUPPLIED) the same evidence re-pointed at the curator's id. Every gate below
+            # is unchanged, and gate 3 vetoes an id-bearing entry exactly as it does any other:
+            # an id says which work this is, never whether the catalog already holds it.
+            verdict = _gate_verdict(verdict, tt)
+
+            holder, label = minted.get(tt), "minted this run"
             if holder is None:
                 holder, label = find_holder(repo, tmdb, verdict, log)
             if label == "tmdb lookup failed":
                 # Gate 2b raised: the holder is unknown, NOT disproved. Creating now is
                 # exactly the failure this verb exists to avoid; retry when TMDB is back.
                 detail = f"gate 2b: tmdb lookup failed — holder unknown  [{verdict.reason}]"
-                rows.append(_outcome(entry, "error", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "error", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 continue
 
             if holder is None and label.startswith("tombstoned"):
                 detail = f"{TOMBSTONED_HOLDER}  {label}  [{verdict.reason}]"
-                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 reviews.append(ReviewEntry(TOMBSTONED_HOLDER, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
@@ -651,7 +839,11 @@ def create_films(
                         f"{DUPLICATE_ENTRY}  {_film_label(catalog, holder)} is already linked "
                         f"at rank {twin_rank}  [{verdict.reason}]"
                     )
-                    rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                    rows.append(
+                        _outcome(
+                            entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement
+                        )
+                    )
                     reviews.append(
                         ReviewEntry(DUPLICATE_ENTRY, value=value, detail=_review_detail(entry, form, detail))
                     )
@@ -662,7 +854,16 @@ def create_films(
                 linked_at[holder] = entry.rank
                 detail = f"{_film_label(catalog, holder)}  via {label}  [{verdict.reason}]"
                 rows.append(
-                    _outcome(entry, "linked", detail, film_id=holder, tt=verdict.tt, reason=verdict.reason, form=form)
+                    _outcome(
+                        entry,
+                        "linked",
+                        detail,
+                        film_id=holder,
+                        tt=tt,
+                        reason=verdict.reason,
+                        form=form,
+                        agreement=agreement,
+                    )
                 )
                 continue
 
@@ -675,7 +876,9 @@ def create_films(
             hits = corpus_veto(index, veto_forms(forms, winner))
             if hits:
                 detail = f"{CORPUS_VETO}  {_veto_label(hits)}  [{verdict.reason}]"
-                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 reviews.append(ReviewEntry(CORPUS_VETO, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
@@ -686,7 +889,9 @@ def create_films(
                 # A human hid that identity; a curator listing its title is not a
                 # resurrection request, and a twin beside it is worse still.
                 detail = f"{TOMBSTONED_HOLDER}  key {film.key!r} is tombstoned  [{verdict.reason}]"
-                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 reviews.append(ReviewEntry(TOMBSTONED_HOLDER, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
@@ -694,7 +899,11 @@ def create_films(
                 # The owner reads this card before authorising the live run, so it must not
                 # claim a creation that has not happened; `created` still counts the row.
                 detail = f"{_would_create_label(verdict)}  [{verdict.reason}]"
-                rows.append(_outcome(entry, "would-create", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(
+                        entry, "would-create", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement
+                    )
+                )
                 continue
 
             film_id = repo.create_film(film)
@@ -706,17 +915,19 @@ def create_films(
                     f"{KEY_COLLISION}  {film.key!r} is held by {_film_label(catalog, clash)}"
                     f"  [{verdict.reason}]"
                 )
-                rows.append(_outcome(entry, "blocked", detail, tt=verdict.tt, reason=verdict.reason, form=form))
+                rows.append(
+                    _outcome(entry, "blocked", detail, tt=tt, reason=verdict.reason, form=form, agreement=agreement)
+                )
                 reviews.append(ReviewEntry(KEY_COLLISION, value=value, detail=_review_detail(entry, form, detail)))
                 continue
 
             index.add(Candidate(id=film_id, title=title, year=year))
             catalog[film_id] = (title, year, entry.director_listed)
-            minted[verdict.tt] = film_id
+            minted[tt] = film_id
             repo.link_list_entry(slug, entry.rank, film_id)
             repo.add_claim(film_id, AUTHORITY, value, entry.title_listed, first_seen=today.isoformat())
             linked_at[film_id] = entry.rank
-            status = _key_new_film(repo, tmdb, film_id, verdict.tt, winner.tmdb_id if winner else None, today, log)
+            status = _key_new_film(repo, tmdb, film_id, tt, winner.tmdb_id if winner else None, today, log)
             if status in KEYED_OK:
                 keyed += 1
             detail = (
@@ -724,7 +935,16 @@ def create_films(
                 f"  [{verdict.reason}]"
             )
             rows.append(
-                _outcome(entry, "created", detail, film_id=film_id, tt=verdict.tt, reason=verdict.reason, form=form)
+                _outcome(
+                    entry,
+                    "created",
+                    detail,
+                    film_id=film_id,
+                    tt=tt,
+                    reason=verdict.reason,
+                    form=form,
+                    agreement=agreement,
+                )
             )
         except Exception as exc:  # one bad entry must never abort the run
             log(f"list entry {value} failed: {exc}")
@@ -735,6 +955,7 @@ def create_films(
             queue_list_review_once(repo, review, today)
 
     tally = Counter(r.kind for r in rows)
+    agree, disagree, supplied, compared = _id_tally(rows)
     return ListCreateReport(
         exit_code=0,
         total=len(worklist),
@@ -744,6 +965,10 @@ def create_films(
         blocked=tally["blocked"],
         errors=tally["error"],
         rows=rows,
+        agree=agree,
+        disagree=disagree,
+        supplied=supplied,
+        compared=compared,
     )
 
 
@@ -758,6 +983,9 @@ _LABELS = {
 # Both verbs print the same tally, so phase 1's `created 0` is a standing restatement of its
 # one hard promise: the import never mints a film.
 _TALLY_ORDER = ("linked", "created", "would-create", "review", "blocked", "error")
+# The supplied-id state as one SUFFIX on the verdict line (spec §6) — the resolver's own reason
+# is never replaced by it. A disagreement gets none: its detail already names both ids.
+_ID_SUFFIX = {AGREE: "[id agrees]", SUPPLIED: "[id supplied]"}
 
 
 def scorecard(rows: Sequence[EntryOutcome]) -> str:
@@ -767,15 +995,27 @@ def scorecard(rows: Sequence[EntryOutcome]) -> str:
     announces itself, but a list entry attached to the wrong existing film does not, so a
     link is printed as fully as a would-create — the film it landed on, the gate that found
     it, and the resolver's own reason verbatim.
+
+    A list carrying ids gains one trailing line, and it is the deliverable of spec §2: the
+    agreement rate is the headline of such an import, not the link count. A list carrying none
+    is printed exactly as before.
     """
     out: list[str] = []
     for r in rows:
         who = f"{r.title_listed} / {r.director_listed}" if r.director_listed else r.title_listed
         out.append(f"{f'#{r.rank}'.ljust(6)}{who}")
         line = f"→ {_LABELS.get(r.kind, r.kind.upper())} {r.detail}".rstrip()
+        if r.agreement in _ID_SUFFIX:
+            line += f"  {_ID_SUFFIX[r.agreement]}"
         if r.form_used and r.form_used != r.title_listed:
             line += f"  [via form {r.form_used!r}]"
         out.append(f"      {line}")
     tally = Counter(r.kind for r in rows)
     out.append(" · ".join(f"{k} {tally[k]}" for k in _TALLY_ORDER))
+    agree, disagree, supplied, compared = _id_tally(rows)
+    if compared:
+        out.append(
+            f"resolver vs supplied id:  agree {agree} · disagree {disagree} · "
+            f"resolver had no verdict {supplied}  (of {compared} compared)"
+        )
     return "\n".join(out)

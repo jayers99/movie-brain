@@ -98,6 +98,67 @@ def test_empty_title_raises():
         parse_list_file(text)
 
 
+def test_four_column_row_parses_tt_listed():
+    text = "# slug: s\n# name: n\n1\tThe Birth of a Nation\tD.W. Griffith\ttt0004972\n"
+    assert parse_list_file(text).entries[0].tt_listed == "tt0004972"
+
+
+def test_three_column_row_yields_none_tt_listed():
+    text = "# slug: s\n# name: n\n1\tA Title\tA Director\n"
+    assert parse_list_file(text).entries[0].tt_listed is None
+
+
+def test_empty_fourth_column_yields_none_tt_listed():
+    text = "# slug: s\n# name: n\n1\tA Title\tA Director\t\n"
+    assert parse_list_file(text).entries[0].tt_listed is None
+
+
+def test_mixed_arity_within_one_file():
+    text = (
+        "# slug: s\n# name: n\n"
+        "1\tFirst\tDir One\ttt0004972\n"
+        "2\tSecond\tDir Two\n"
+        "3\tThird\tDir Three\t\n"
+    )
+    parsed = parse_list_file(text)
+    assert [e.tt_listed for e in parsed.entries] == ["tt0004972", None, None]
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    ["0004972", "ttabc", "tt0004972 "],
+    ids=["missing-tt-prefix", "non-numeric", "trailing-space"],
+)
+def test_malformed_tt_listed_raises(bad_id: str):
+    text = f"# slug: s\n# name: n\n1\tA Title\tA Director\t{bad_id}\n"
+    with pytest.raises(ListFileError):
+        parse_list_file(text)
+
+
+def test_whitespace_only_fourth_column_reads_as_no_id():
+    # A cell of spaces is an empty cell, exactly as the header values treat one — not a
+    # malformed id. Whitespace AROUND a value stays malformed (see the parametrized case
+    # above): the id is stored verbatim, so a padded one is a typo worth stopping on.
+    text = "# slug: s\n# name: n\n1\tA Title\tA Director\t   \n"
+    assert parse_list_file(text).entries[0].tt_listed is None
+
+
+def test_a_fifth_column_raises_rather_than_being_ignored():
+    # The file is hand-checked-in and this parser's whole rationale is that a typo here is
+    # silent forever. A future fifth column should be a deliberate parser change, not a
+    # stray cell nobody notices.
+    text = "# slug: s\n# name: n\n1\tA Title\tA Director\ttt0004972\t1941\n"
+    with pytest.raises(ListFileError):
+        parse_list_file(text)
+
+
+def test_short_but_well_formed_tt_listed_is_accepted():
+    # The contract regex (`^tt\d+$`, spec §3) has no minimum digit count — a short id
+    # is a task-2 reconciliation concern, not a task-1 format-validity one.
+    text = "# slug: s\n# name: n\n1\tA Title\tA Director\ttt123\n"
+    assert parse_list_file(text).entries[0].tt_listed == "tt123"
+
+
 def test_read_list_file_reads_from_disk(tmp_path: Path):
     p = tmp_path / "cahiers-100.tsv"
     p.write_text(FULL_HEADER)
