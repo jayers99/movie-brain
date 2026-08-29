@@ -124,6 +124,7 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "name": "100 Films for an Ideal Cinematheque",
                 "curator": "Cahiers du Cinéma",
                 "published": 2008,
+                "ordered": True,
                 "rank": 1,
             },
             {
@@ -131,6 +132,7 @@ def test_lists_by_film_issues_exactly_one_query(repo, today):
                 "name": "Backlog Ten",
                 "curator": None,
                 "published": None,
+                "ordered": False,
                 "rank": 5,
             },
         ]
@@ -151,6 +153,7 @@ def test_list_views_populates_lists(repo, today):
             "name": "100 Films for an Ideal Cinematheque",
             "curator": "Cahiers du Cinéma",
             "published": 2008,
+            "ordered": True,
             "rank": 1,
         }
     ]
@@ -171,6 +174,7 @@ def test_get_view_populates_lists(repo, today):
             "name": "100 Films for an Ideal Cinematheque",
             "curator": "Cahiers du Cinéma",
             "published": 2008,
+            "ordered": True,
             "rank": 1,
         }
     ]
