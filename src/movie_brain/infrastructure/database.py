@@ -304,7 +304,9 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
 
 
 _LISTS_SQL = """
-SELECT e.film_id, e.list_slug, l.name, l.curator, l.published_year, l.ordered, l.trust, e.rank, e.rank_label
+SELECT e.film_id, e.list_slug, l.name, l.curator, l.published_year, l.ordered, l.trust,
+       e.rank, e.rank_label,
+       (SELECT COUNT(*) FROM film_list_entry e2 WHERE e2.list_slug = e.list_slug) AS size
 FROM film_list_entry e JOIN film_list l ON l.slug = e.list_slug
 WHERE e.film_id IS NOT NULL
 ORDER BY e.film_id, l.trust DESC, l.name, e.rank
@@ -338,6 +340,7 @@ def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
                 "trust": int(r["trust"]),
                 "rank": int(r["rank"]),
                 "rank_label": r["rank_label"],
+                "size": int(r["size"]),
             }
         )
     return out
