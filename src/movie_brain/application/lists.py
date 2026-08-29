@@ -320,9 +320,9 @@ class EntryOutcome:
 
 
 def _id_tally(rows: Sequence[EntryOutcome]) -> tuple[int, int, int, int]:
-    """`(agree, disagree, supplied, with_ids)` — the headline of a supplied-id import (spec §2).
+    """`(agree, disagree, supplied, compared)` — the headline of a supplied-id import (spec §2).
 
-    `with_ids` is the DENOMINATOR of the agreement rate, so it is the number of id-bearing
+    `compared` is the DENOMINATOR of the agreement rate, so it is the number of id-bearing
     entries the resolver actually answered for — not the number of ids in the file. An entry
     that was already linked (settled before the fetcher is touched) or whose every lookup
     failed never reaches `reconcile`, and an entry the resolver never spoke about cannot be
@@ -354,7 +354,7 @@ class ListImportReport:
     agree: int = 0
     disagree: int = 0
     supplied: int = 0
-    with_ids: int = 0
+    compared: int = 0
 
 
 def queue_list_review_once(repo: Repository, entry: ReviewEntry, today: date) -> bool:
@@ -635,7 +635,7 @@ def import_list(
             queue_list_review_once(repo, review, today)
 
     tally = Counter(r.kind for r in rows)
-    agree, disagree, supplied, with_ids = _id_tally(rows)
+    agree, disagree, supplied, compared = _id_tally(rows)
     return ListImportReport(
         exit_code=0,
         total=len(entries),
@@ -648,7 +648,7 @@ def import_list(
         agree=agree,
         disagree=disagree,
         supplied=supplied,
-        with_ids=with_ids,
+        compared=compared,
     )
 
 
@@ -668,7 +668,7 @@ class ListCreateReport:
     agree: int = 0
     disagree: int = 0
     supplied: int = 0
-    with_ids: int = 0
+    compared: int = 0
 
 
 def _key_new_film(
@@ -955,7 +955,7 @@ def create_films(
             queue_list_review_once(repo, review, today)
 
     tally = Counter(r.kind for r in rows)
-    agree, disagree, supplied, with_ids = _id_tally(rows)
+    agree, disagree, supplied, compared = _id_tally(rows)
     return ListCreateReport(
         exit_code=0,
         total=len(worklist),
@@ -968,7 +968,7 @@ def create_films(
         agree=agree,
         disagree=disagree,
         supplied=supplied,
-        with_ids=with_ids,
+        compared=compared,
     )
 
 
@@ -1012,10 +1012,10 @@ def scorecard(rows: Sequence[EntryOutcome]) -> str:
         out.append(f"      {line}")
     tally = Counter(r.kind for r in rows)
     out.append(" · ".join(f"{k} {tally[k]}" for k in _TALLY_ORDER))
-    agree, disagree, supplied, with_ids = _id_tally(rows)
-    if with_ids:
+    agree, disagree, supplied, compared = _id_tally(rows)
+    if compared:
         out.append(
             f"resolver vs supplied id:  agree {agree} · disagree {disagree} · "
-            f"resolver had no verdict {supplied}  (of {with_ids} compared)"
+            f"resolver had no verdict {supplied}  (of {compared} compared)"
         )
     return "\n".join(out)
