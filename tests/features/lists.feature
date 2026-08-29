@@ -406,7 +406,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And entry 69 is linked to "Intolerance"
     And the scorecard line for entry 69 contains "via imdb tt0006864"
     And the scorecard line for entry 69 contains "[id agrees]"
-    And the id tally says agree 1, disagree 0, supplied 0, of 1 with ids
+    And the id tally says agree 1, disagree 0, supplied 0, of 1 compared
     And the same entries with their ids removed land on the same film
     And the eval CSV is byte-identical
 
@@ -421,7 +421,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And entry 69 is unlinked
     And there is one open list review row for "cahiers-100#69" with reason "id-disagreement"
     And that review detail mentions "resolver tt0006864 [director corroborated] vs listed tt9999999"
-    And the id tally says agree 0, disagree 1, supplied 0, of 1 with ids
+    And the id tally says agree 0, disagree 1, supplied 0, of 1 compared
     And no film was created
     And the eval CSV is byte-identical
 
@@ -435,7 +435,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the scorecard line for entry 8 contains "via imdb tt0052357"
     And the scorecard line for entry 8 contains "[no candidates]"
     And the scorecard line for entry 8 contains "[id supplied]"
-    And the id tally says agree 0, disagree 0, supplied 1, of 1 with ids
+    And the id tally says agree 0, disagree 0, supplied 1, of 1 compared
     And there are no open list review rows
 
   Scenario: a supplied id no gate can place is a would-create, and the import still creates nothing
@@ -487,7 +487,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the list entry 11 is "Greed" by "Erich von Stroheim" with id "tt9999999"
     And the list entry 8 is "Vertigo" by "Alfred Hitchcock" with id "tt0052357"
     When I import the list with --apply
-    Then the id tally says agree 1, disagree 1, supplied 1, of 3 with ids
+    Then the id tally says agree 1, disagree 1, supplied 1, of 3 compared
     And the scorecard tally line is "resolver vs supplied id:  agree 1 · disagree 1 · resolver had no verdict 1  (of 3 compared)"
 
   Scenario: an entry carrying no id is not counted in the tally of a list that mixes both
@@ -497,7 +497,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the list entry 69 is "Intolerance" by "David Wark Griffith"
     When I import the list with --apply
     Then the report says linked 0, would-create 2, review 0, blocked 0, error 0
-    And the id tally says agree 1, disagree 0, supplied 0, of 1 with ids
+    And the id tally says agree 1, disagree 0, supplied 0, of 1 compared
     And the scorecard line for entry 69 contains "→ WOULD-CREATE tt0006864"
     And no film was created
 
@@ -510,7 +510,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And I imported the list with --apply for entry 69 "Intolerance" by "David Wark Griffith" with id "tt0006864"
     When I import the list with --apply
     Then the report says linked 1, would-create 0, review 0, blocked 0, error 0
-    And the id tally says agree 0, disagree 0, supplied 0, of 0 with ids
+    And the id tally says agree 0, disagree 0, supplied 0, of 0 compared
     And the scorecard has no supplied-id tally line
 
   Scenario: an id the re-resolved verdict now contradicts blocks the creation
@@ -535,7 +535,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And exactly 1 film exists
     And entry 8 is linked to "Vertigo"
     And the film "Vertigo" holds imdb "tt0052357"
-    And the id tally says agree 0, disagree 0, supplied 1, of 1 with ids
+    And the id tally says agree 0, disagree 0, supplied 1, of 1 compared
     And the eval CSV is byte-identical
 
   Scenario: gate 3 vetoes the creating verb too when the id was supplied
@@ -563,7 +563,7 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the scorecard line for entry 34 contains "[weak]"
     And the scorecard line for entry 34 contains "[id supplied]"
     And gate 2b was never asked
-    And the id tally says agree 0, disagree 0, supplied 1, of 1 with ids
+    And the id tally says agree 0, disagree 0, supplied 1, of 1 compared
 
   Scenario: phase 2 mints a supplied-id entry under THAT candidate's title and year
     # The creating half of the same branch: title, year and tmdb id all come from the candidate
@@ -578,5 +578,5 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And the film "Le Plaisir" holds imdb "tt2" and tmdb "2"
     And entry 34 is linked to "Le Plaisir"
     And the film "Le Plaisir" carries a list claim "cahiers-100#34" ingested as "Pleasure"
-    And the id tally says agree 0, disagree 0, supplied 1, of 1 with ids
+    And the id tally says agree 0, disagree 0, supplied 1, of 1 compared
     And the eval CSV is byte-identical

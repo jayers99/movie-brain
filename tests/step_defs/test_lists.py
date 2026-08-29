@@ -449,13 +449,13 @@ def film_holds_imdb(ctx, title, tt):
     assert ctx["repo"].film_id_for_external("imdb", tt) == _film_id(ctx, title)
 
 
-@then(parsers.parse("the id tally says agree {agree:d}, disagree {disagree:d}, supplied {supplied:d}, of {n:d} with ids"))
+@then(parsers.parse("the id tally says agree {agree:d}, disagree {disagree:d}, supplied {supplied:d}, of {n:d} compared"))
 def id_tally_says(ctx, agree, disagree, supplied, n):
     r = ctx["report"]
-    assert (r.agree, r.disagree, r.supplied, r.with_ids) == (agree, disagree, supplied, n)
+    assert (r.agree, r.disagree, r.supplied, r.compared) == (agree, disagree, supplied, n)
     # The denominator is the sum of the three: an entry the resolver never answered for
     # (already linked, or every lookup failed) cannot be scored against its id.
-    assert r.with_ids == r.agree + r.disagree + r.supplied
+    assert r.compared == r.agree + r.disagree + r.supplied
 
 
 @then(parsers.parse('the scorecard tally line is "{text}"'))
@@ -492,7 +492,7 @@ def same_film_without_the_id(ctx):
     for row in control.rows:
         assert (row.kind, row.film_id) == (by_rank[row.rank].kind, by_rank[row.rank].film_id), row
         assert row.agreement == "", row
-    assert (control.agree, control.disagree, control.supplied, control.with_ids) == (0, 0, 0, 0)
+    assert (control.agree, control.disagree, control.supplied, control.compared) == (0, 0, 0, 0)
     assert "resolver vs supplied id" not in scorecard(control.rows)
 
 
