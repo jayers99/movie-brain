@@ -1604,3 +1604,12 @@ def test_register_provider_maps_a_second_id_onto_an_existing_service(repo):
 def test_register_provider_slugifies_punctuation(repo):
     assert repo.register_provider(999, "Plex Channel") == "plex-channel"
     assert repo.register_provider(998, "AMC+ / Shudder") == "amc-shudder"
+
+
+def test_register_provider_refuses_a_name_with_no_usable_slug(repo):
+    before = {s.slug for s in repo.movie_services()}
+    with pytest.raises(ValueError):
+        repo.register_provider(997, "+++")
+    after = {s.slug for s in repo.movie_services()}
+    assert after == before
+    assert 997 not in repo.provider_map()

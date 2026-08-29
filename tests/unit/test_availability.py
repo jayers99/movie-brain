@@ -215,3 +215,19 @@ def test_tmdb_step_never_records_criterion_from_tmdb(repo, today):
     )
     tmdb_step(repo, _StubTmdbClient(providers), today, log=lambda _: None)
     assert _listing_sources(repo, fid) == set()
+
+
+def test_tmdb_step_skips_an_unregistrable_provider_and_keeps_the_rest(repo, today):
+    """A provider name that slugifies to "" (all punctuation) must not raise mid-pass and
+    abort a refresh over the whole catalog — it's skipped, logged, and the other providers
+    in the same response still record."""
+    fid = _seed_first_check_film(repo, today)
+    providers = TmdbProviders(
+        flatrate=(1899, 991), rent=(), buy=(), link="https://x", payload="{}",
+        names={1899: "HBO Max", 991: "+++"},
+    )
+    messages: list[str] = []
+    tmdb_step(repo, _StubTmdbClient(providers), today, log=messages.append)
+    assert _listing_sources(repo, fid) == {"max"}
+    assert 991 not in repo.provider_map()
+    assert any("991" in m for m in messages)
