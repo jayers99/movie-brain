@@ -1016,6 +1016,6 @@ def scorecard(rows: Sequence[EntryOutcome]) -> str:
     if with_ids:
         out.append(
             f"resolver vs supplied id:  agree {agree} · disagree {disagree} · "
-            f"resolver had no verdict {supplied}  (of {with_ids} with ids)"
+            f"resolver had no verdict {supplied}  (of {with_ids} compared)"
         )
     return "\n".join(out)

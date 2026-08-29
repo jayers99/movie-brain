@@ -407,3 +407,44 @@ def test_scorecard_rendering_keeps_bracketed_resolver_reasons_intact(config_dir,
     assert r.exit_code == 0
     # verbatim and unfolded: the reason is intact and still on its entry's own line.
     assert any(line.endswith(detail) for line in r.output.splitlines())
+
+
+def test_scorecard_rendering_keeps_the_agreement_tally_line_intact(config_dir, tmp_path, monkeypatch):
+    """The tally line (spec §2/§6) is the headline of a supplied-id import: it carries no
+    brackets, but it is long (well past 80 columns) and full of `·` separators — exactly the
+    shape the CLI's non-terminal 80-column fold already broke once for the two-line entry
+    blocks above. Pin that `soft_wrap=True` keeps this line whole too.
+    """
+    from movie_brain.application.lists import AGREE, DISAGREE, SUPPLIED, EntryOutcome, ListImportReport
+
+    def row(rank: int, agreement: str) -> EntryOutcome:
+        return EntryOutcome(
+            rank=rank,
+            title_listed=f"Film {rank}",
+            director_listed=None,
+            kind="linked",
+            film_id=1,
+            tt="tt0000001",
+            reason="director corroborated",
+            form_used=f"Film {rank}",
+            detail="film 1 'Film' (1950)  via imdb tt0000001",
+            agreement=agreement,
+        )
+
+    rows = [row(1, AGREE), row(2, DISAGREE), row(3, SUPPLIED)]
+    monkeypatch.setattr(
+        "movie_brain.cli.import_list", lambda *a, **kw: ListImportReport(0, 3, 3, 0, 0, 0, 0, rows)
+    )
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    (config_dir / "tmdb-read-token.txt").write_text("t")
+    path = tmp_path / "x.tsv"
+    path.write_text("# slug: x\n# name: X\n1\tFilm 1\t\n2\tFilm 2\t\n3\tFilm 3\t\n")
+
+    r = runner.invoke(app, ["lists", "import", str(path)])
+
+    assert r.exit_code == 0
+    expected = (
+        "resolver vs supplied id:  agree 1 · disagree 1 · resolver had no verdict 1  (of 3 compared)"
+    )
+    # verbatim, on its own line and unfolded — not split across an 80-column wrap.
+    assert expected in r.output.splitlines()
