@@ -51,6 +51,21 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     And that review detail mentions "Greed"
     And no film was created
 
+  Scenario: gate 3 vetoes on a catalog film titled like the WINNER, not like the listed title
+    # The phase-1 half of the same shape. The import creates nothing either way, so widening
+    # its veto only moves this entry from would-create to blocked — but it moves it onto the
+    # rehearsal card the owner authorises FROM, instead of promising a creation that phase 2
+    # would then refuse. `films.key` would not have caught it: 1938 vs the winner's 1937.
+    Given a film "Grand Illusion" (1938)
+    And the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir" titled "Grand Illusion"
+    And the list entry 68 is "La Grande Illusion" by "Jean Renoir"
+    When I import the list with --apply
+    Then the report says linked 0, would-create 0, review 0, blocked 1, error 0
+    And entry 68 is unlinked
+    And there is one open list review row for "cahiers-100#68" with reason "corpus-veto"
+    And that review detail mentions "#1 'Grand Illusion' (1938)"
+    And no film was created
+
   Scenario: a second rank resolving to an already-linked film blocks as a duplicate entry
     Given a film "Greed" (1924) holding imdb "tt0016654"
     And the candidate pool has "Greed" → tt0016654/613 1924 by "Erich von Stroheim"
@@ -201,10 +216,12 @@ Feature: Curated lists — the import links and asks; only the create verb ever 
     # and it is titled nothing like the curator's entry, so a veto asked only about the LISTED
     # forms misses it too. `films.key` is the last backstop and it only refuses when title AND
     # year match — 1938 vs the winner's 1937 slips past. The veto must ask what the catalog
-    # will GAIN, which is the winner's own title. Phase 1 reported this entry would-create.
-    Given a film "Grand Illusion" (1938)
-    And the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir" titled "Grand Illusion"
+    # will GAIN, which is the winner's own title. It appears AFTER the import here: phase 1's
+    # veto asks the same question now, so a look-alike present at import time is queued there
+    # and this entry would never reach the create worklist at all.
+    Given the candidate pool has "La Grande Illusion" → tt0028950/6821 1937 by "Jean Renoir" titled "Grand Illusion"
     And I imported the list with --apply for entry 68 "La Grande Illusion" by "Jean Renoir"
+    And a film "Grand Illusion" (1938)
     When I create films with --apply
     Then the create report says created 0, keyed 0, linked 0, blocked 1, error 0
     And there is one open list review row for "cahiers-100#68" with reason "corpus-veto"
