@@ -55,6 +55,14 @@ Feature: Dispositioned films stay out of every collector's way
     When I apply dupes confirming every group
     Then nothing was merged
 
+  Scenario: An id-conflict row claiming an imdb id is no longer invisible to the audit
+    Given "Alpha (1950)" holds imdb id "tt0024216"
+    And the repository also has film "Factory (1970)"
+    And "Factory (1970)" has an open id-conflict review claiming imdb id "tt0024216"
+    When I audit dupes
+    Then exactly 1 group is keyed "alpha"
+    And the group "alpha" is undecided from source "id-conflict"
+
   Scenario: Distinct TMDB ids are kept both
     Given "Alpha (1950)" holds tmdb id "5"
     And "Alpha (1951)" holds tmdb id "6"

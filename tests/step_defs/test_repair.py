@@ -165,6 +165,13 @@ def conflict(ctx, spec, tid):
     ctx["repo"].append_reviews("tmdb", [ReviewEntry("id-conflict", film_id=fid, value=tid, detail=spec)], TODAY)
 
 
+@given(parsers.parse('"{spec}" has an open id-conflict review claiming imdb id "{tt}"'))
+def conflict_imdb(ctx, spec, tt):
+    fid = ctx["repo"].film_id_by_key(_key(spec))
+    ctx["repo"].upsert_tmdb(fid, found=False, looked_up=TODAY)
+    ctx["repo"].append_reviews("tmdb", [ReviewEntry("id-conflict", film_id=fid, value=tt, detail=spec)], TODAY)
+
+
 @when("I audit dupes")
 def audit(ctx):
     ctx["groups"] = repair.audit_dupes(ctx["repo"])
