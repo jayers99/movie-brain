@@ -1,10 +1,35 @@
 from datetime import date
 
-from movie_brain.application.availability import queue_review_once, record_tmdb_match
-from movie_brain.domain.models import Film, OmdbRating, ReviewEntry
+from movie_brain.application.availability import queue_review_once, record_tmdb_match, tmdb_step
+from movie_brain.domain.models import Film, OmdbRating, ReviewEntry, TmdbProviders
 from movie_brain.infrastructure.database import TmdbMatchTarget
 
 TODAY = date(2026, 8, 19)
+
+
+class _StubTmdbClient:
+    """Duck-types `TmdbClient.watch_providers` — `_refresh_pass` calls nothing else on it."""
+
+    def __init__(self, providers: TmdbProviders) -> None:
+        self.providers = providers
+
+    def watch_providers(self, tmdb_id: int) -> TmdbProviders:
+        return self.providers
+
+
+def _seed_first_check_film(repo, today: date) -> int:
+    """A matched film TMDB has never checked providers for — picked up by tmdb_step's
+    first-check pass unconditionally, so no weekly-stamp gate needs defeating."""
+    fid = repo.upsert_film(Film("Nosferatu", 2024, None, "https://mc/nosferatu"))
+    repo.set_external_id(fid, "tmdb", "603", today)
+    repo.upsert_tmdb(fid, found=True, looked_up=today)
+    return fid
+
+
+def _listing_sources(repo, film_id: int) -> set[str]:
+    with repo._conn() as c:
+        rows = c.execute("SELECT source FROM listings WHERE film_id = ?", (film_id,)).fetchall()
+        return {str(r["source"]) for r in rows}
 
 
 def test_queue_review_once_is_idempotent(repo):
@@ -162,3 +187,31 @@ def test_rebuild_leaves_an_open_reviewed_row_alone_and_does_not_double_queue(rep
     rebuild_no_match_queue(repo, today)
     rows = repo.open_reviews("tmdb")
     assert [r["reason"] for r in rows] == [NO_MATCH_REVIEWED]
+
+
+def test_tmdb_step_records_free_and_ads_alongside_flatrate(repo, today):
+    """C2 + the auto-registration this task adds: flatrate/free/ads are unioned, and an
+    unmapped provider (Kanopy, Tubi TV) registers itself at subscribed=0 rather than
+    being discarded — the 29-of-46-canon-films loss the task brief measures."""
+    fid = _seed_first_check_film(repo, today)
+    providers = TmdbProviders(
+        flatrate=(1899,), rent=(), buy=(), link="https://x", payload="{}",
+        free=(191,), ads=(73,),
+        names={1899: "HBO Max", 191: "Kanopy", 73: "Tubi TV"},
+    )
+    tmdb_step(repo, _StubTmdbClient(providers), today, log=lambda _: None)
+    assert _listing_sources(repo, fid) == {"max", "kanopy", "tubi-tv"}
+    assert repo.movie_service("kanopy").subscribed is False
+    assert repo.movie_service("tubi-tv").subscribed is False
+
+
+def test_tmdb_step_never_records_criterion_from_tmdb(repo, today):
+    """Criterion listings come from record_catalog's own currency frontier — the
+    `criterion` exclusion inside the union must survive Task 4's rewrite."""
+    fid = _seed_first_check_film(repo, today)
+    providers = TmdbProviders(
+        flatrate=(258,), rent=(), buy=(), link="https://x", payload="{}",
+        names={258: "Criterion Channel"},
+    )
+    tmdb_step(repo, _StubTmdbClient(providers), today, log=lambda _: None)
+    assert _listing_sources(repo, fid) == set()

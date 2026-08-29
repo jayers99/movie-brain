@@ -344,6 +344,12 @@ def _row_to_service(row: sqlite3.Row) -> ServiceMeta:
     )
 
 
+def service_slug(name: str) -> str:
+    """A TMDB provider name as a registry slug: lowercase, runs of non-alphanumerics to one
+    hyphen, no leading or trailing hyphen. 'Plex Channel' -> 'plex-channel'."""
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
 def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
     out: dict[int, list[dict[str, object]]] = {}
     for r in c.execute(_LISTS_SQL):
@@ -1342,6 +1348,25 @@ class Repository:
         with self._conn() as c:
             rows = c.execute("SELECT tmdb_provider_id, service_slug FROM service_provider").fetchall()
             return {int(r["tmdb_provider_id"]): str(r["service_slug"]) for r in rows}
+
+    def register_provider(self, provider_id: int, name: str) -> str:
+        """Map a TMDB provider id onto a service, creating both rows when missing.
+
+        Returns the slug. NEVER updates an existing `movie_service` row: the owner's
+        `subscribed`, `quality` and `has_apple_app` are judgements, and this runs on every
+        sync for every provider TMDB reports.
+        """
+        slug = service_slug(name)
+        with self._conn() as c:
+            c.execute(
+                "INSERT OR IGNORE INTO movie_service (slug, name, kind, subscribed) VALUES (?, ?, 'svod', 0)",
+                (slug, name),
+            )
+            c.execute(
+                "INSERT OR IGNORE INTO service_provider (tmdb_provider_id, service_slug, label) VALUES (?, ?, ?)",
+                (provider_id, slug, name),
+            )
+        return slug
 
     # meta -------------------------------------------------------------
     def get_meta(self, key: str) -> str | None:
