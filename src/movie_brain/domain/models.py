@@ -58,6 +58,15 @@ class ImdbBackfillTarget:
 
 
 @dataclass(frozen=True)
+class YearBackfillTarget:
+    """A film with no year at all, holding a TMDB id — the worklist of `repair years --from-tmdb`."""
+
+    film_id: int
+    title: str
+    tmdb_id: int
+
+
+@dataclass(frozen=True)
 class OmdbRating:
     imdb: float | None
     rt: int | None
