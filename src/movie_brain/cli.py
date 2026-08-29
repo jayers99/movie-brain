@@ -40,6 +40,7 @@ from movie_brain.application.repair_keys import (
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
+from movie_brain.domain.models import ServiceMeta
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
@@ -67,6 +68,8 @@ thumbprint_app = typer.Typer(
 app.add_typer(thumbprint_app, name="thumbprint")
 audit_app = typer.Typer(help="Data audit: read-only consistency checks; the human records verdicts in the dashboard.")
 app.add_typer(audit_app, name="audit")
+services_app = typer.Typer(help="The service registry: quality, Apple TV app, subscription.")
+app.add_typer(services_app, name="services")
 console = Console()
 err = Console(stderr=True)
 
@@ -387,6 +390,84 @@ def lists_trust_cmd(
         err.print(f"unknown list {slug!r} — known lists: {known}")
         raise typer.Exit(2)
     console.print(f"{slug}: trust set to {n}")
+
+
+def _service_line(m: ServiceMeta) -> str:
+    return (
+        f"{m.slug:<24} quality {m.quality}   "
+        f"apple-app {'yes' if m.has_apple_app else 'no ':<3}   "
+        f"subscribed {'yes' if m.subscribed else 'no ':<3}   {m.kind:<5} {m.name}"
+    )
+
+
+def _service_or_exit(repo: Repository, slug: str) -> ServiceMeta:
+    meta = repo.movie_service(slug)
+    if meta is None:
+        known = ", ".join(m.slug for m in repo.movie_services()) or "no services registered"
+        err.print(f"unknown service {slug!r} — known services: {known}")
+        raise typer.Exit(2)
+    return meta
+
+
+@services_app.command("list")
+def services_list_cmd() -> None:
+    """Every registered service, best first on the same four keys that rank a film's options."""
+    repo = _repo()
+    services = repo.movie_services()
+    if not services:
+        console.print("no services registered")
+        return
+    for m in services:
+        console.print(_service_line(m))
+
+
+@services_app.command("quality")
+def services_quality_cmd(
+    slug: Annotated[str, typer.Argument(help="Service slug (e.g. criterion).")],
+    n: Annotated[int | None, typer.Argument(min=0, help="New quality; 0 is legal (ranks last).")] = None,
+) -> None:
+    """Show or set one service's quality — the owner's judgement of its transfers.
+
+    Nothing but this verb writes `movie_service.quality`, so provider auto-registration during
+    sync can never reset it."""
+    repo = _repo()
+    meta = _service_or_exit(repo, slug)
+    if n is None:
+        console.print(_service_line(meta))
+        return
+    repo.set_service_quality(slug, n)
+    console.print(f"{slug}: quality set to {n}")
+
+
+@services_app.command("apple")
+def services_apple_cmd(
+    slug: Annotated[str, typer.Argument(help="Service slug (e.g. criterion).")],
+    flag: Annotated[int | None, typer.Argument(min=0, max=1, help="1 = has an Apple TV app.")] = None,
+) -> None:
+    """Show or set whether a service has an Apple TV application (C6 — a tiebreak, never a veto)."""
+    repo = _repo()
+    meta = _service_or_exit(repo, slug)
+    if flag is None:
+        console.print(_service_line(meta))
+        return
+    repo.set_service_apple_app(slug, bool(flag))
+    console.print(f"{slug}: apple-app set to {'yes' if flag else 'no'}")
+
+
+@services_app.command("subscribe")
+def services_subscribe_cmd(
+    slug: Annotated[str, typer.Argument(help="Service slug (e.g. kanopy).")],
+    flag: Annotated[int | None, typer.Argument(min=0, max=1, help="1 = I subscribe to this.")] = None,
+) -> None:
+    """Show or set whether the owner subscribes to a service — the top ranking key, and what
+    decides whether a film counts as reachable."""
+    repo = _repo()
+    meta = _service_or_exit(repo, slug)
+    if flag is None:
+        console.print(_service_line(meta))
+        return
+    repo.set_service_subscribed(slug, bool(flag))
+    console.print(f"{slug}: subscribed set to {'yes' if flag else 'no'}")
 
 
 @app.command("rematch")
