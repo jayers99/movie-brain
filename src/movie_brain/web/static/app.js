@@ -135,8 +135,8 @@
     const watchBadge = best && best.subscribed
       ? ` <span class="badge-watch" title="Best source: ${esc(best.name)}">${esc(best.name)}</span>` : '';
     const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '')
-      + (f.owned ? ' <span class="badge-owned" title="Owned on Apple TV">owned</span>' : '')
       + (listCount > 0 ? ` <span class="badge-lists" title="on ${listCount} curated list${listCount === 1 ? '' : 's'}">${listCount} list${listCount === 1 ? '' : 's'}</span>` : '')
+      + (f.owned ? ' <span class="badge-owned" title="Owned on Apple TV">owned</span>' : '')
       + watchBadge;
     return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>

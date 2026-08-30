@@ -541,6 +541,15 @@ def test_a_reachable_film_carries_a_watch_badge(dash: Page):
     expect(row.locator(".badge-watch")).to_have_text("Apple TV+")
 
 
+def test_row_badges_read_lists_then_owned(dash: Page):
+    """Owner preference (2026-08-29): the list tally comes BEFORE the owned flag. Alpha carries
+    both, so the order is observable — asserted on rendered text, since each badge's own
+    presence is already covered elsewhere and only the SEQUENCE is at stake here."""
+    row = dash.locator('tr[data-id]', has_text="Alpha").locator("td.c-title")
+    text = row.inner_text()
+    assert text.index("3 lists") < text.index("owned"), text
+
+
 def test_an_owned_row_is_not_badged_with_its_source(dash: Page):
     """The row already says "owned"; badging the purchase again states it twice."""
     row = dash.locator('tr[data-id]', has_text="Alpha")
