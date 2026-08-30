@@ -648,7 +648,7 @@ def test_drawer_shows_tied_rank_label_not_position(dash):
     clear_lang(dash)  # Charlie has no language on file; the default English filter would hide its row
     dash.locator("#films tbody tr", has_text="Charlie").first.click()
     dash.wait_for_selector("#drawer:not([hidden])")
-    expect(dash.locator("#drawer-body")).to_contain_text("On lists: Sight & Sound 2022 #=243")
+    expect(dash.locator("#drawer-body")).to_contain_text("On lists: Sight & Sound 2022 #243")
     expect(dash.locator("#drawer-body")).not_to_contain_text("Sight & Sound 2022 #1")
 
 

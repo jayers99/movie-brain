@@ -377,7 +377,10 @@
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     const lists = (d.lists || []).map((l) => {
       const label = l.published ? `${esc(l.curator || l.name)} ${esc(l.published)}` : esc(l.curator || l.name);
-      return l.ordered ? `${label} #${esc(l.rank_label ?? l.rank)}` : label;
+      // rank_label is the cell AS PRINTED, so a tie arrives as "=54"; the drawer shows the
+      // number alone (#54) — whether the placing was tied is not what this line is for.
+      const rank = String(l.rank_label ?? l.rank).replace(/^=/, '');
+      return l.ordered ? `${label} #${esc(rank)}` : label;
     }).join(', ');
     const bestLine = d.best_source
       ? `<p class="meta best-source">Best source: <b>${esc(d.best_source.name)}</b>${d.best_source.subscribed ? '' : ' (not subscribed)'}</p>`

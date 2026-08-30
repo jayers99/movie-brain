@@ -200,7 +200,8 @@ class FilmView:
     services: list[dict[str, object]] = field(default_factory=list)
     # [{slug, name, curator, published, ordered, trust, rank, rank_label, size}] — rank_label is
     # the rank AS PRINTED (may be None, may carry a tie marker like "=243"); rank is always the
-    # 1-based line position. The drawer renders rank_label ?? rank. size is the list's full entry
+    # 1-based line position. The drawer renders rank_label ?? rank with any tie marker stripped
+    # ("=243" prints as #243). size is the list's full entry
     # count — every row in film_list_entry for that slug, including ones never linked to a film —
     # and is the canon_score denominator, never our coverage of the list. Entries arrive pre-ordered
     # by trust descending then name (the query's own ORDER BY) — trust is otherwise invisible
