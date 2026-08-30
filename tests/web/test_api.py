@@ -99,14 +99,14 @@ def test_summary_and_config(client):
         "top_imdb": 7.5,
         "recent_days": 30,
         "new_arrival_days": 14,
-        "multi_list": 2,
+        "multi_list": 1,
     }
     assert cfg["today"] == "2026-08-19" and "leaving" in cfg["chips"]
 
 
 def test_config_exposes_multi_list_threshold_and_chip(client):
     cfg = client.get("/api/config").get_json()
-    assert cfg["canned_thresholds"]["multi_list"] == 2
+    assert cfg["canned_thresholds"]["multi_list"] == 1
     assert "multi_list" in cfg["chips"]
 
 

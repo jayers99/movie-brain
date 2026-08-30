@@ -136,7 +136,7 @@ def test_chip_labels_and_order(dash: Page):
         "Not owned",
         "Needs revisit",
         "Suspect",
-        "on 2+ lists",
+        "On a list",
         "Canon, not owned",
         "Clear",
     ]
@@ -638,10 +638,17 @@ def test_card_badge_shows_singular_for_one_list(dash):
     expect(row.locator(".badge-lists")).to_have_text("1 list")
 
 
-def test_multi_list_chip_narrows_to_films_on_two_or_more_lists(dash):
+def test_on_a_list_chip_keeps_films_on_a_single_list(dash):
+    # Alpha is on three lists, Echo and Charlie on one each. A single-list film must survive the
+    # chip — that is the whole difference from the old "on 2+ lists" behaviour, which kept Alpha
+    # alone. clear_lang because Charlie has no language on file.
+    clear_lang(dash)
     dash.click('button[data-chip="multi_list"]')
-    dash.wait_for_selector('#films tbody[data-count="1"]')
-    assert dash.locator("#films tbody tr").first.inner_text().startswith("Alpha")
+    dash.wait_for_selector('#films tbody[data-count="3"]')
+    # A row's first cell carries badges after the title ("Alpha 3 lists owned"), so compare the
+    # leading word rather than the whole cell.
+    rows = dash.locator("#films tbody tr").all_inner_texts()
+    assert sorted(r.split()[0] for r in rows) == ["Alpha", "Charlie", "Echo"]
 
 
 def test_drawer_shows_tied_rank_label_not_position(dash):
