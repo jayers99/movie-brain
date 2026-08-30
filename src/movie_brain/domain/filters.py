@@ -11,7 +11,9 @@ TOP_RT = 90
 TOP_IMDB = 7.5
 RECENT_DAYS = 30
 NEW_ARRIVAL_DAYS = 14
-MULTI_LIST = 2  # cross-list tally chip: "on 2+ lists" (design 2026-08-29 §7)
+MIN_LISTS = 1  # cross-list tally chip, labelled "On a list" (design 2026-08-29 §7, widened
+# from 2 to 1 on 2026-08-30 at the owner's request). The chip KEY stays `multi_list`: it is
+# encoded in dashboard URL state, so renaming it would drop the chip from saved links.
 
 Predicate = Callable[[FilmView, date], bool]
 
@@ -99,7 +101,7 @@ _PREDICATES: dict[str, Predicate] = {
     "not_owned": lambda v, _: not v.owned,
     "needs_revisit": lambda v, _: v.needs_revisit,
     "suspect": lambda v, _: v.audit is not None,
-    "multi_list": lambda v, _: len(v.lists) >= MULTI_LIST,
+    "multi_list": lambda v, _: len(v.lists) >= MIN_LISTS,
     "acquire": acquisition_candidate,
 }
 
@@ -117,5 +119,5 @@ def thresholds() -> dict[str, object]:
         "top_imdb": TOP_IMDB,
         "recent_days": RECENT_DAYS,
         "new_arrival_days": NEW_ARRIVAL_DAYS,
-        "multi_list": MULTI_LIST,
+        "multi_list": MIN_LISTS,
     }
