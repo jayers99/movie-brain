@@ -639,16 +639,16 @@ def test_card_badge_shows_singular_for_one_list(dash):
 
 
 def test_on_a_list_chip_keeps_films_on_a_single_list(dash):
-    # Alpha is on three lists, Echo and Charlie on one each. A single-list film must survive the
-    # chip — that is the whole difference from the old "on 2+ lists" behaviour, which kept Alpha
-    # alone. clear_lang because Charlie has no language on file.
+    # Alpha is on three lists, Charlie on two, Echo and Delta on one each. The single-list films
+    # must survive the chip — that is the whole difference from the old "on 2+ lists" behaviour,
+    # which kept Alpha alone. clear_lang because Charlie and Delta have no language on file.
     clear_lang(dash)
     dash.click('button[data-chip="multi_list"]')
-    dash.wait_for_selector('#films tbody[data-count="3"]')
+    dash.wait_for_selector('#films tbody[data-count="4"]')
     # A row's first cell carries badges after the title ("Alpha 3 lists owned"), so compare the
     # leading word rather than the whole cell.
     rows = dash.locator("#films tbody tr").all_inner_texts()
-    assert sorted(r.split()[0] for r in rows) == ["Alpha", "Charlie", "Echo"]
+    assert sorted(r.split()[0] for r in rows) == ["Alpha", "Charlie", "Delta", "Echo"]
 
 
 def test_drawer_shows_tied_rank_label_not_position(dash):
@@ -768,3 +768,55 @@ def test_drawer_shows_audit_reasons_and_records_a_verdict(dash: Page):
     assert count(dash) == 2  # a non-fine verdict keeps the film a suspect
     block.locator("button.verdict-btn[data-verdict=fine]").click()
     expect(dash.locator("#films tbody")).to_have_attribute("data-count", "1")  # fine hides Echo; Bravo remains
+
+
+def test_list_picker_offers_every_seeded_list_by_trust(dash):
+    # Trust order (backlog-10 7, sight-sound-2022 5, cahiers-100 1) disagrees with name order,
+    # so this proves the picker sorts by trust rather than falling back to the label.
+    # The two Sight & Sound lists share a curator AND a year, so both fall back to their full
+    # names; the unambiguous two keep the shorter "curator published" form.
+    labels = dash.locator("#list-picker option").all_inner_texts()
+    assert labels == [
+        "— all films —",
+        "Backlog Ten (2)",
+        "Sight & Sound 2022 (2)",             # Charlie and Alpha — full name, not "curator year"
+        "Sight & Sound 2022 Directors (1)",
+        "Cahiers du Cinéma 2008 (2)",
+    ]
+
+
+def test_list_picker_filters_to_the_list_and_orders_by_printed_rank(dash):
+    # cahiers-100 holds Charlie (#1) and Alpha (#3). Rank order is the REVERSE of alphabetical,
+    # so a title fallback would fail this.
+    clear_lang(dash)  # Charlie has no language on file
+    dash.select_option("#list-picker", "cahiers-100")
+    dash.wait_for_selector('#films tbody[data-count="2"]')
+    rows = dash.locator("#films tbody tr").all_inner_texts()
+    assert [r.split()[0] for r in rows] == ["Charlie", "Alpha"]
+
+
+def test_list_picker_switches_scope_to_all(dash):
+    # A list must be reproduced whole, so picking one widens the scope past `reachable`.
+    dash.select_option("#list-picker", "cahiers-100")
+    expect(dash.locator("#scope-toggle")).to_have_text("All films")
+
+
+def test_list_picker_is_encoded_in_the_url(dash):
+    dash.select_option("#list-picker", "cahiers-100")
+    dash.wait_for_function("() => location.search.includes('list=cahiers-100')")
+
+
+def test_clear_chip_clears_the_list_picker(dash):
+    dash.select_option("#list-picker", "cahiers-100")
+    dash.wait_for_selector('#films tbody[data-count="1"]')
+    dash.click("#chips-clear")
+    expect(dash.locator("#list-picker")).to_have_value("")
+
+
+def test_unordered_list_does_not_sort_by_a_meaningless_rank(dash):
+    # backlog-10 is unordered (ordered=False): Alpha #1 and Echo #5 are line positions, not a
+    # ranking, so the default hierarchy decides. Alpha (mc 92) leads Echo (mc 70).
+    dash.select_option("#list-picker", "backlog-10")
+    dash.wait_for_selector('#films tbody[data-count="2"]')
+    rows = dash.locator("#films tbody tr").all_inner_texts()
+    assert [r.split()[0] for r in rows] == ["Alpha", "Echo"]

@@ -6,6 +6,7 @@
   const DEFAULT_LANG = 'English';
   const state = {
     films: [], cfg: null, chips: new Set(), scope: 'reachable',
+    list: null, listCatalog: [],   // list picker: filter to one curated list and order by its rank
     cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null },
     sort: null,            // {col, dir} or null = default
     filtered: [], openFilm: null,
@@ -25,6 +26,13 @@
     return t + e.trust * (1 - (printedRank(e) - 1) / e.size);
   }, 0);
   const isCanon = (f) => (f.lists || []).length > 0;
+  // The selected list's printed rank for one film, or null when the list is UNORDERED — an
+  // unordered list's `rank` is a line position, not a placing, so sorting on it would invent
+  // a ranking the source never made. Null falls through to the default hierarchy.
+  const listRank = (f) => {
+    const e = (f.lists || []).find((l) => l.slug === state.list);
+    return e && e.ordered ? printedRank(e) : null;
+  };
   const CHIP_PREDICATES = {
     leaving: (f) => f.leaving_date != null,
     unrated: (f) => f.my_rating == null,
@@ -60,6 +68,7 @@
   const inRange = (v, lo, hi) => v != null && (lo == null || v >= lo) && (hi == null || v <= hi);
   function rowMatches(f) {
     if (!inScope(f)) return false;
+    if (state.list && !(f.lists || []).some((l) => l.slug === state.list)) return false;
     for (const c of state.chips) if (!CHIP_PREDICATES[c](f)) return false;
     const k = state.cols;
     if (k.title && !f.title.toLowerCase().includes(k.title)) return false;
@@ -77,6 +86,10 @@
   const byTitle = (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
   function compare(a, b) {
     if (!state.sort) {  // default hierarchy: metacritic, ties → rt, ties → imdb (each desc, missing after present), then title
+      if (state.list) {  // a picked list is reproduced in ITS order, ahead of every other rule
+        const ra = listRank(a), rb = listRank(b);
+        if (ra != null && rb != null && ra !== rb) return ra - rb;
+      }
       if (state.chips.has('acquire')) {  // tier 1 (on a list) above tier 2 (metacritic only), then canon score desc
         const ta = isCanon(a) ? 1 : 0, tb = isCanon(b) ? 1 : 0;
         if (ta !== tb) return tb - ta;
@@ -174,6 +187,7 @@
     for (const [name, lo, hi] of [['year', k.yearMin, k.yearMax], ['mc', k.mcMin, k.mcMax], ['rt', k.rtMin, k.rtMax], ['imdb', k.imdbMin, k.imdbMax]]) {
       if (lo != null || hi != null) p.set(name, `${lo ?? ''}-${hi ?? ''}`);
     }
+    if (state.list) p.set('list', state.list);
     if (state.sort) p.set('sort', `${state.sort.col}:${state.sort.dir}`);
     if (state.openFilm != null) p.set('film', state.openFilm);
     const qs = p.toString();
@@ -183,6 +197,8 @@
     const p = new URLSearchParams(location.search);
     state.chips = new Set((p.get('chips') || '').split(',').filter((c) => c in CHIP_PREDICATES));
     state.scope = SCOPES.includes(p.get('scope')) ? p.get('scope') : 'reachable';
+    const slug = p.get('list');
+    state.list = state.listCatalog.some((l) => l.slug === slug) ? slug : null;
     const k = state.cols;
     k.title = (p.get('title') || '').toLowerCase();
     k.director = (p.get('director') || '').toLowerCase();
@@ -196,6 +212,7 @@
     state.openFilm = film ? +film : null;
   }
   function writeControlsFromState() {
+    $('#list-picker').value = state.list || '';
     $('#scope-toggle').textContent = SCOPE_LABELS[state.scope];
     $('#scope-toggle').classList.toggle('active', state.scope !== 'reachable');
     document.querySelectorAll('.chip[data-chip]').forEach((b) => b.classList.toggle('active', state.chips.has(b.dataset.chip)));
@@ -216,7 +233,8 @@
   $('#chips').addEventListener('click', (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
     if (b.id === 'scope-toggle') state.scope = SCOPES[(SCOPES.indexOf(state.scope) + 1) % SCOPES.length];
-    else if (b.id === 'chips-clear') state.chips.clear();
+    else if (b.id === 'chips-clear') { state.chips.clear(); state.list = null; }
+    else if (!b.dataset.chip) return;  // a .chip with no data-chip would add `undefined` to the set
     else if (state.chips.has(b.dataset.chip)) state.chips.delete(b.dataset.chip); else state.chips.add(b.dataset.chip);
     writeControlsFromState(); applyFilters();
   });
@@ -256,6 +274,32 @@
       + '<label><input type="checkbox" id="f-lang-any"> Any language</label>'
       + [...langs].sort().map((l) => `<label><input type="checkbox" value="${esc(l)}"> ${esc(l)}</label>`).join('');
   }
+  // The picker's options come from the films payload — every film carries its list entries with
+  // slug/name/curator/published/ordered/trust/size — so no endpoint is needed. A list with no
+  // linked film is absent, which is right: there would be nothing to filter to.
+  function populateLists() {
+    const by = new Map();
+    state.films.forEach((f) => (f.lists || []).forEach((l) => { if (!by.has(l.slug)) by.set(l.slug, l); }));
+    // trust desc then name — the order `movie-brain lists trust` prints and the drawer uses.
+    state.listCatalog = [...by.values()].sort((a, b) => b.trust - a.trust || a.name.localeCompare(b.name));
+    // "curator published" reads best ("Cahiers du Cinéma 2008"), but it is not unique: the two
+    // 1992 Sight & Sound polls (critics' and directors') share a curator AND a year, so that form
+    // would print the same label twice. Any label that collides falls back to the list's own name.
+    const short = (l) => `${l.curator || l.name}${l.published ? ' ' + l.published : ''}`;
+    const seen = new Map();
+    state.listCatalog.forEach((l) => seen.set(short(l), (seen.get(short(l)) || 0) + 1));
+    const label = (l) => `${seen.get(short(l)) > 1 ? l.name : short(l)} (${l.size})`;
+    $('#list-picker').innerHTML = '<option value="">— all films —</option>'
+      + state.listCatalog.map((l) => `<option value="${esc(l.slug)}">${esc(label(l))}</option>`).join('');
+  }
+  $('#list-picker').addEventListener('change', (e) => {
+    state.list = e.target.value || null;
+    // A list is reproduced WHOLE: 9 of the Cahiers 100 are unreachable, and a picker that
+    // silently dropped them would answer a different question than the one it was asked.
+    if (state.list) state.scope = 'all';
+    writeControlsFromState(); applyFilters();
+  });
+
   const langPanel = $('#f-lang-panel'), langInput = $('#f-lang-input');
   // The language cell is a combobox: the input shows the selection while closed, and turns
   // into a typeahead search over the options while the panel is open.
@@ -532,6 +576,7 @@
     const [cfg, films] = await Promise.all([fetch('/api/config').then((r) => r.json()), fetch('/api/films').then((r) => r.json())]);
     state.cfg = cfg; state.films = films;
     populateLanguages();
+    populateLists();
     readUrl();
     writeControlsFromState();
     renderCounts();
