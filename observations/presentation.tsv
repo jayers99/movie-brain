@@ -1,0 +1,13 @@
+# name: presentation-quality observations
+# grain: one row per (film x service) VIEWING — the unit the per-service `movie_service.quality`
+#   dial cannot express. Intolerance is the proof: good on justwatch-tv, awful on mgm-plus, the
+#   same night. See CLAUDE.md's watch contract and the 2026-08-30 discussion.
+# status: hand-kept precursor. No code reads this file yet. It exists so that the schema, when it
+#   is designed, is designed against real rows instead of guesses.
+# verdicts: good | poor  (free-text detail belongs in `note`)
+# unknown: `?` — never guess a field. A blank service or date is a real gap, not a placeholder.
+# columns: watched_on	film_id	title	year	service	verdict	note
+?	3089	Notorious	1946	?	poor	stretched, soft transfer; measurably distorted my judgment of the film and of Ingrid Bergman's performance. Service and viewing date not recorded at the time.
+2026-08-30	3084	The Conformist	1971	kino-film-collection	good	4K restoration by Kino Lorber; visibly beat the Kanopy copy on my own screen. Prompted setting kino-film-collection to quality 9.
+2026-08-30	3096	Intolerance	1916	justwatch-tv	good	Cohen Media restored version. Free, ad-supported, watched through the JustWatch Apple TV app without subscribing.
+2026-08-30	3096	Intolerance	1916	mgm-plus	poor	awful quality, surprisingly — MGM+ sits at quality 5, well above the free tier. Deliberately did NOT move the per-service dial for one title.
