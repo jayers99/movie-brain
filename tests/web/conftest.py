@@ -110,6 +110,12 @@ def seed(repo: Repository) -> None:
     repo.upsert_film_list(list_meta, TODAY)
     repo.upsert_list_entry(list_meta.slug, ListEntry(3, "Alpha", "Ann"))
     repo.link_list_entry(list_meta.slug, 3, ids["alpha (1950)"])
+    # Charlie sits ABOVE Alpha on cahiers-100 (#1 vs #3) while sorting BELOW it alphabetically —
+    # the only seeded arrangement that lets the list picker's rank ordering be proved rather than
+    # mistaken for the title fallback. cahiers-100 is left at the default trust 1 (see below), so
+    # this does not disturb Charlie's drawer line, which Sight & Sound still leads.
+    repo.upsert_list_entry(list_meta.slug, ListEntry(1, "Charlie", "Cy"))
+    repo.link_list_entry(list_meta.slug, 1, ids["charlie (1970)"])
     # Echo is on one unordered list (no curator either) — the drawer must render its name alone,
     # with no #rank, proving the ordered/unordered branch rather than assuming it.
     backlog_meta = ListMeta("backlog-10", "Backlog Ten", None, None, None, False)
@@ -129,6 +135,17 @@ def seed(repo: Repository) -> None:
     # lowest of the three) — proving the drawer's "On lists:" line orders by trust descending
     # rather than merely falling back to name. This is why test_drawer_shows_on_lists_line was
     # updated to expect Backlog Ten first instead of Cahiers (see that test's comment).
+    # A SECOND Sight & Sound 2022 list: same curator, same year, different poll — the live
+    # catalogue has exactly this collision (the 1992 critics' and directors' polls), and it is the
+    # only seed that proves the picker falls back to the full name instead of printing a duplicate.
+    ss_dir_meta = ListMeta("sight-sound-2022-directors", "Sight & Sound 2022 Directors", "Sight & Sound", 2022, None, True)
+    repo.upsert_film_list(ss_dir_meta, TODAY)
+    # Linked to DELTA, not Charlie: the drawer labels a list "curator published" too, so hanging a
+    # second "Sight & Sound 2022" off Charlie would make its "On lists:" line print that name twice
+    # and blunt test_drawer_shows_tied_rank_label_not_position's guard against the line position.
+    repo.upsert_list_entry(ss_dir_meta.slug, ListEntry(1, "Delta", "Dee"))
+    repo.link_list_entry(ss_dir_meta.slug, 1, ids["delta (1980)"])
+    repo.set_list_trust(ss_dir_meta.slug, 4)
     repo.set_list_trust(backlog_meta.slug, 7)
     repo.set_list_trust(ss_meta.slug, 5)
     repo.upsert_list_entry(backlog_meta.slug, ListEntry(1, "Alpha", "Ann"))
