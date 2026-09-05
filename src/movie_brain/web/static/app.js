@@ -439,7 +439,9 @@
       <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
         ${d.metacritic_url ? ` <a class="criterion" href="${esc(d.metacritic_url)}" target="_blank" rel="noopener">Open on Metacritic ↗</a>` : ''}
         ${d.owned ? ` <a class="criterion owned-link" href="https://tv.apple.com/search?term=${encodeURIComponent(d.title)}" target="_blank" rel="noopener">Owned on Apple TV ↗</a>` : ''}
-        ${buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}
+        ${d.cheapcharts_url
+          ? ` <a class="criterion cheapcharts-link" href="${esc(d.cheapcharts_url)}" target="_blank" rel="noopener">CheapCharts ↗</a>`
+          : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}
         &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
       ${bestLine}

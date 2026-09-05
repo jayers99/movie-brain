@@ -18,6 +18,7 @@ from movie_brain.domain.models import (
     Film,
     FilmView,
     ImdbBackfillTarget,
+    ItunesTarget,
     ListEntry,
     ListMeta,
     McTitle,
@@ -29,6 +30,7 @@ from movie_brain.domain.models import (
 )
 from movie_brain.domain.thumbprint import edition_label, title_norm
 from movie_brain.domain.watch import best_source
+from movie_brain.infrastructure.cheapcharts import product_url
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -274,6 +276,7 @@ SELECT f.id, f.title, f.year,
        COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director,
        l.url, o.language, o.imdb, o.rt,
        COALESCE(mc.score, o.metacritic) AS metacritic, x.value AS mc_slug, o.found,
+       (SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'itunes') AS itunes_id,
        (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
        COALESCE(l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source), 0) AS departed,
        (l.film_id IS NOT NULL) AS criterion
@@ -491,6 +494,7 @@ def _row_to_view(
         my_rating=row["score"],
         departed=bool(row["departed"]),
         metacritic_url=f"https://www.metacritic.com/movie/{row['mc_slug']}/" if row["mc_slug"] else None,
+        cheapcharts_url=product_url(str(row["itunes_id"])) if row["itunes_id"] else None,
         services=services or [],
         lists=lists or [],
         watchlisted=watchlisted,
@@ -1132,6 +1136,26 @@ class Repository:
             rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
         return [
             ImdbBackfillTarget(int(r["id"]), str(r["title"]), r["year"], int(r["tmdb_id"]))
+            for r in rows
+        ]
+
+    def films_needing_itunes_id(self, limit: int | None = None) -> list[ItunesTarget]:
+        """Films holding an IMDb id and no iTunes one — the CheapCharts resolver's worklist.
+        A stored id is never re-fetched, which is what makes the backfill self-checkpointing:
+        interrupt it at any point and the next run resumes where it stopped."""
+        sql = (
+            "SELECT f.id, f.title, f.year, f.director, x.value AS imdb_id FROM films f "
+            "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'imdb' "
+            "WHERE " + _NOT_DISPOSED + _IS_MOVIE +
+            " AND NOT EXISTS (SELECT 1 FROM external_ids i WHERE i.film_id = f.id AND i.authority = 'itunes')"
+            " ORDER BY f.id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+        with self._conn() as c:
+            rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
+        return [
+            ItunesTarget(int(r["id"]), str(r["title"]), r["year"], r["director"], str(r["imdb_id"]))
             for r in rows
         ]
 

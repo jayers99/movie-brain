@@ -444,6 +444,7 @@ def match_owned(
     embedded_year: bool = False,
     runtime_min: int | None = None,
     rerelease_hint: bool = False,
+    director: str | None = None,
 ) -> MatchResult:
     """Pick the film an owned Apple title refers to — a policy shell over match_candidates.
 
@@ -452,6 +453,11 @@ def match_owned(
     (looser ``COMMERCE`` band, same trailing-drift-is-neutral treatment as Metacritic).
     ``candidates`` accepts the old 3-tuple rows, a plain Candidate list, or a prebuilt
     CandidateIndex.
+
+    ``director`` is the store listing's own credit where the source publishes one (Apple's
+    own export does not; CheapCharts' `artist` field does). The core already scores a
+    director agreement — passing it here is what lets an agreeing credit corroborate a
+    trailing store year that would otherwise earn only a year-gap review.
 
     ``title`` is stripped of any edition annotations it still carries (matching
     match_film's own-title-stripping policy), OR'd with the caller-supplied
@@ -465,6 +471,7 @@ def match_owned(
         title=cleaned,
         year=year,
         year_kind=YearKind.DATABASE if embedded_year else YearKind.COMMERCE,
+        director=director,
         runtime_min=runtime_min,
     )
     verdict = match_candidates(query, _coerce_index(candidates), rerelease_hint=rerelease_hint or bool(hint))

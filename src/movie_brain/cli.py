@@ -11,6 +11,7 @@ from rich.table import Table
 
 from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
+from movie_brain.application.cheapcharts import resolve_itunes_ids
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.lists import create_films, import_list, scorecard
@@ -41,6 +42,7 @@ from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
 from movie_brain.domain.models import ServiceMeta
+from movie_brain.infrastructure.cheapcharts import CheapChartsClient
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
@@ -60,6 +62,8 @@ lists_app = typer.Typer(help="Curated top-N lists: import a checked-in list file
 app.add_typer(lists_app, name="lists")
 repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong TMDB links, fix years.")
 app.add_typer(repair_app, name="repair")
+cheapcharts_app = typer.Typer(help="CheapCharts: resolve each film's direct product page.")
+app.add_typer(cheapcharts_app, name="cheapcharts")
 review_app = typer.Typer(help="Resolve match_review anomalies: match to a film, create, or dismiss.")
 app.add_typer(review_app, name="review")
 thumbprint_app = typer.Typer(
@@ -946,3 +950,27 @@ def audit_verdicts(
     for fid, title, year, v, reasons, note, marked in rows:
         table.add_row(f"#{fid}", title, str(year or ""), v, reasons, note or "", marked)
     console.print(table)
+
+
+@cheapcharts_app.command("resolve")
+def cheapcharts_resolve_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Store the itunes ids (default: dry-run).")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the worklist.")] = None,
+) -> None:
+    """Resolve each film's CheapCharts product page and store the iTunes id its link needs.
+
+    Asks CheapCharts by IMDb id, five films per call, and falls back to a title search only
+    where their IMDb index has a hole — a search answer is believed only when the shared
+    matcher confirms it. A stored id is never re-fetched, so the pass is self-checkpointing:
+    interrupt it and the next run resumes. Dry-run by default.
+    """
+    report = resolve_itunes_ids(
+        _repo(), CheapChartsClient(), date.today(), apply=apply, limit=limit, log=_plain
+    )
+    console.print(
+        f"scanned: {report.scanned} · resolved: {report.resolved} "
+        f"(by imdb id: {report.by_imdb} · by search: {report.by_search}) · "
+        f"unmatched: {report.unmatched} · ambiguous: {report.ambiguous} · "
+        f"held: {report.held} · failed: {report.failed}"
+        + (" · RATE-LIMITED, stopped early" if report.rate_limited else "")
+    )

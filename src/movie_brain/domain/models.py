@@ -58,6 +58,19 @@ class ImdbBackfillTarget:
 
 
 @dataclass(frozen=True)
+class ItunesTarget:
+    """A film holding an IMDb id and no iTunes one — the worklist of `cheapcharts resolve`.
+    `director` is carried because the search fallback confirms through the shared matcher,
+    which scores a director agreement when both sides have one."""
+
+    film_id: int
+    title: str
+    year: int | None
+    director: str | None
+    imdb_id: str
+
+
+@dataclass(frozen=True)
 class YearBackfillTarget:
     """A film with no year at all, holding a TMDB id — the worklist of `repair years --from-tmdb`."""
 
@@ -197,6 +210,10 @@ class FilmView:
     departed: bool = False  # no longer in the source's current catalog
     metacritic: int | None = None
     metacritic_url: str | None = None
+    # The direct CheapCharts product page, derived on read from the film's stored `itunes`
+    # external id (infrastructure/cheapcharts.py::product_url). None = the id was never
+    # resolved, and the drawer falls back to a title search.
+    cheapcharts_url: str | None = None
     services: list[dict[str, object]] = field(default_factory=list)
     # [{slug, name, curator, published, ordered, trust, rank, rank_label, size}] — rank_label is
     # the rank AS PRINTED (may be None, may carry a tie marker like "=243"); rank is always the

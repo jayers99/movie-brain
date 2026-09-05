@@ -820,3 +820,14 @@ def test_unordered_list_does_not_sort_by_a_meaningless_rank(dash):
     dash.wait_for_selector('#films tbody[data-count="2"]')
     rows = dash.locator("#films tbody tr").all_inner_texts()
     assert [r.split()[0] for r in rows] == ["Alpha", "Echo"]
+
+
+def test_drawer_links_straight_to_the_resolved_cheapcharts_page(dash):
+    """Alpha's iTunes id is resolved, so the drawer skips the search list entirely — and it
+    does so without a store listing, since the resolved id is itself proof Apple sells it."""
+    clear_lang(dash)
+    dash.locator("#films tbody tr", has_text="Alpha").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    link = dash.locator("#drawer-body a.cheapcharts-link")
+    expect(link).to_have_attribute("href", "https://www.cheapcharts.com/us/itunes/movies/284815525")
+    expect(link).to_have_text("CheapCharts ↗")

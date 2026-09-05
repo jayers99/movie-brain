@@ -2,6 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
+from movie_brain.application.cheapcharts import ResolveReport
 from movie_brain.application.repair import DupesReport, LinksReport, YearsFromTmdbReport, YearsReport
 from movie_brain.application.sync import SyncResult
 from movie_brain.cli import app
@@ -838,3 +839,17 @@ def test_services_subscribe_sets_and_shows_one_service(config_dir):
 def test_services_unknown_slug_exits_two(config_dir):
     result = runner.invoke(app, ["services", "quality", "nope", "3"])
     assert result.exit_code == 2
+
+
+def test_cheapcharts_resolve_is_dry_run_by_default_and_reports_both_paths(config_dir, monkeypatch):
+    calls = {}
+
+    def fake_resolve(repo, client, today, **kw):
+        calls.update(kw)
+        return ResolveReport(scanned=7, resolved=5, by_imdb=4, by_search=1, unmatched=1, ambiguous=1)
+
+    monkeypatch.setattr("movie_brain.cli.resolve_itunes_ids", fake_resolve)
+    r = runner.invoke(app, ["cheapcharts", "resolve"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is False
+    assert "by imdb id: 4" in r.output and "by search: 1" in r.output

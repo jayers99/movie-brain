@@ -152,6 +152,9 @@ def seed(repo: Repository) -> None:
     repo.link_list_entry(backlog_meta.slug, 1, ids["alpha (1950)"])
     repo.upsert_list_entry(ss_meta.slug, ListEntry(2, "Alpha", "Ann"))
     repo.link_list_entry(ss_meta.slug, 2, ids["alpha (1950)"])
+    # Alpha's CheapCharts product page is resolved (external id `itunes`), so its drawer links
+    # straight to the page; Hotel's is not, so Hotel keeps the title-search fallback.
+    repo.set_external_id(ids["alpha (1950)"], "itunes", "284815525", TODAY)
     # Hotel: a discovery film with no Criterion listing but buyable on the Apple TV store —
     # reachable (default scope) shows it, criterion scope hides it. Hungarian + no scores keep it
     # out of the default-English counts and at the tail of the default sort.

@@ -448,3 +448,11 @@ def test_pick_tmdb_dateless_shorts_do_not_win_when_the_feature_is_unindexable():
         _tc(3059, "Intolerance: Love's Struggle Throughout the Ages", 1916, 3.5),
     ]
     assert pick_tmdb_match("Intolerance", 1916, cands) is None
+
+
+def test_match_owned_lets_an_agreeing_director_corroborate_a_store_year_gap():
+    """A store listing whose year trails the original by decades earns only a year-gap
+    review on its own; an agreeing director is the corroboration that settles it."""
+    index = CandidateIndex([Candidate(id=7, title="Vertigo", year=1958, director="Alfred Hitchcock")])
+    assert match_owned("Vertigo", 2013, index).winner is None
+    assert match_owned("Vertigo", 2013, index, director="Alfred Hitchcock").winner == 7

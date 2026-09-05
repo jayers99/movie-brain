@@ -1715,3 +1715,17 @@ def test_services_sql_order_matches_the_domain_ranking(repo, film_with_two_listi
     repo.set_service_subscribed("mubi", True)
     services = repo.get_view(film_with_two_listings).services
     assert [s["name"] for s in services] == [s["name"] for s in sorted(services, key=rank_key)]
+
+
+def test_view_builds_the_direct_cheapcharts_link_from_the_stored_itunes_id(repo):
+    """The drawer link is derived on read from the resolved id — never a stored URL, and
+    never a call out to CheapCharts at render time. No id means no direct link."""
+    day = date(2026, 1, 1)
+    repo.record_catalog("criterion", [Film("Vertigo", 1958, "Alfred Hitchcock", "https://c/vertigo"),
+                                      Film("Unresolved", 1960, None, "https://c/unresolved")], day)
+    linked = repo.film_id_by_key("vertigo (1958)")
+    repo.set_external_id(linked, "itunes", "284815525", day)
+
+    views = {v.title: v for v in repo.list_views("criterion", day)}
+    assert views["Vertigo"].cheapcharts_url == "https://www.cheapcharts.com/us/itunes/movies/284815525"
+    assert views["Unresolved"].cheapcharts_url is None
