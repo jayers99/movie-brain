@@ -292,3 +292,38 @@ def test_suspect_chip_and_verdict_endpoint(client, repo):
     assert client.post(f"/api/films/{fid}/verdict", json={}).status_code == 400
     assert client.post("/api/films/999/verdict", json={"verdict": "fine"}).status_code == 404
     assert len(repo.verdict_history()) == 2  # append-only: nothing overwritten
+
+
+def _enrich_trio(repo):
+    from movie_brain.domain.models import CastRow, CrewRow, TmdbCredits
+
+    trio = repo.film_id_by_key("trio (1950)")
+    repo.set_external_id(trio, "tmdb", "3", D)
+    repo.write_credits(trio, TmdbCredits(
+        tmdb_id=3, imdb_id=None, title="Trio", original_title="Trio", year=1950, runtime_min=None, alt_titles=(),
+        overview="Three tales of a private eye.", tagline=None, genres=("Drama",), keywords=("anthology",),
+        cast=(CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),), crew=(CrewRow(1, "Ken", "Director", "Directing"),),
+    ), D)
+    return trio
+
+
+def test_search_requires_q(client):
+    assert client.get("/api/search").status_code == 400
+    assert client.get("/api/search?q=%20").status_code == 400
+
+
+def test_search_field_query_returns_ids_and_correction(client, repo):
+    trio = _enrich_trio(repo)
+    r = client.get("/api/search?q=actor:%20bogrt")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["ids"] == [trio] and body["ranked"] is False and body["total"] == 1
+    assert body["corrections"] == [{"field": "actor", "typed": "bogrt", "used": "Humphrey Bogart"}]
+    assert body["q"] == "actor: bogrt"
+
+
+def test_search_freeform_is_ranked_and_reaches_titles_without_credits(client, repo):
+    _enrich_trio(repo)
+    body = client.get("/api/search?q=quartet").get_json()
+    quartet = repo.film_id_by_key("quartet (1948)")
+    assert body["ids"] == [quartet] and body["ranked"] is True

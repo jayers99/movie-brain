@@ -7,6 +7,7 @@ from datetime import date
 from flask import Flask, Response, jsonify, render_template, request
 
 from movie_brain.application.ratings import rate_film
+from movie_brain.application.search import run_search
 from movie_brain.application.sync import SOURCE
 from movie_brain.domain.audit import VERDICTS
 from movie_brain.domain.filters import CHIPS, thresholds
@@ -104,5 +105,13 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
     @app.get("/api/config")
     def config() -> Response:
         return jsonify({"canned_thresholds": thresholds(), "chips": list(CHIPS), "today": today().isoformat()})
+
+    @app.get("/api/search")
+    def search() -> tuple[Response, int]:
+        q = (request.args.get("q") or "").strip()
+        if not q:
+            return jsonify({"error": "q is required"}), 400
+        result = run_search(repo, q)
+        return jsonify({"q": q, **result.to_dict()}), 200
 
     return app
