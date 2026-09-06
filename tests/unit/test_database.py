@@ -1822,3 +1822,32 @@ def test_films_needing_credits_lists_live_movies_with_a_tmdb_id_and_no_stamp(rep
     assert repo.films_needing_credits(limit=0) == []
     assert repo.credits_summary() == {"films_with_credits": 1, "films_with_tmdb": 2, "persons": 3}
     assert c_ not in {t.film_id for t in targets}  # no tmdb id → not on the worklist
+
+
+def test_merge_moves_credits_keywords_and_text_to_the_survivor(repo):
+    a, b = _two_films(repo)
+    repo.set_external_id(b, "tmdb", "910", D)
+    repo.write_credits(b, _credits(), D)
+
+    report = repo.merge_film(b, a, D, note="twin")
+
+    assert [r[1] for r in repo.credits_for(a)] == ["Humphrey Bogart", "Lauren Bacall", "Howard Hawks", "Humphrey Bogart"]
+    assert repo.credits_for(b) == [] and repo.keywords_for(b) == []
+    assert repo.keywords_for(a) == ["film noir", "private investigator"]
+    assert report.moved["film_credit"] == 4 and report.moved["film_keyword"] == 2 and report.moved["film_text"] == 1
+    with sqlite3.connect(repo.db_path) as c:
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'sternwood'").fetchall() == [(a,)]
+
+
+def test_merge_keeps_the_survivors_credits_when_both_films_have_them(repo):
+    a, b = _two_films(repo)
+    repo.set_external_id(a, "tmdb", "1", D)
+    repo.set_external_id(b, "tmdb", "910", D)
+    repo.write_credits(a, _credits(tmdb_id=1, cast=(CastRow(1, "Alpha Actor", "Lead", 0),), crew=(), keywords=("kept",)), D)
+    repo.write_credits(b, _credits(), D)
+
+    report = repo.merge_film(b, a, D, note="twin")
+
+    assert [r[1] for r in repo.credits_for(a)] == ["Alpha Actor"]  # survivor wins; loser's rows dropped
+    assert repo.keywords_for(a) == ["kept"]
+    assert report.dropped["film_credit"] == 4 and report.dropped["film_keyword"] == 2 and report.dropped["film_text"] == 1

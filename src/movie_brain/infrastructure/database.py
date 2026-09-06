@@ -2081,6 +2081,44 @@ class Repository:
             ).rowcount
             if n_list_entries:
                 moved["film_list_entry"] = n_list_entries
+            # Credits follow the survivor-wins rule the one-row tables use: a survivor that
+            # already carries credits keeps them and the loser's are dropped; otherwise the
+            # loser's rows move. `film_text` moves through DELETE+INSERT rather than UPDATE
+            # so migration 018's triggers re-key the FTS row (an UPDATE of the rowid alone
+            # would leave the index pointing at the loser).
+            survivor_has_credits = (
+                c.execute("SELECT 1 FROM film_credit WHERE film_id = ? LIMIT 1", (survivor_id,)).fetchone() is not None
+            )
+            for table in ("film_credit", "film_keyword"):
+                n_loser = c.execute(f"SELECT COUNT(*) FROM {table} WHERE film_id = ?", (loser_id,)).fetchone()[0]
+                if not n_loser:
+                    continue
+                if survivor_has_credits:
+                    c.execute(f"DELETE FROM {table} WHERE film_id = ?", (loser_id,))
+                    dropped[table] = int(n_loser)
+                else:
+                    c.execute(f"UPDATE {table} SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id))
+                    moved[table] = int(n_loser)
+            loser_text = c.execute(
+                "SELECT title, overview, plot FROM film_text WHERE film_id = ?", (loser_id,)
+            ).fetchone()
+            if loser_text is not None:
+                c.execute("DELETE FROM film_text WHERE film_id = ?", (loser_id,))
+                if survivor_has_credits:
+                    dropped["film_text"] = 1
+                else:
+                    c.execute(
+                        "INSERT INTO film_text (film_id, title, overview, plot) VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(film_id) DO UPDATE SET overview = excluded.overview, plot = excluded.plot",
+                        (survivor_id, loser_text["title"], loser_text["overview"], loser_text["plot"]),
+                    )
+                    moved["film_text"] = 1
+            if survivor_has_credits:
+                c.execute(
+                    "UPDATE tmdb_facts SET credits_fetched_on = NULL "
+                    "WHERE film_id = ? AND credits_fetched_on IS NOT NULL",
+                    (loser_id,),
+                )
             for row in c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (loser_id,)).fetchall():
                 auth, val = str(row["authority"]), str(row["value"])
                 held = (
