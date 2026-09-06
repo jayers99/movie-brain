@@ -190,13 +190,15 @@ Multiple fields are ANDed. The same field twice is ORed (`actor: bogart actor: b
 | `year` | | exact / range | `films.year`; `1946`, `1940-1949`, `1940-`, `-1949` |
 | `plot` | `overview` | freeform-in-field | FTS5 over overview + plot only |
 
-The job sets above are the plan's to verify against the live crew-job vocabulary after enrichment; they are the current best reading of TMDB's job names on *The Big Sleep*.
+Job sets verified against the live vocabulary 2026-09-06 (286,429 credit rows): `writer` = Screenplay, Writer, Story, Novel, Original Story, Dialogue, Adaptation, Author, Book, Short Story, Theatre Play, Scenario Writer, Co-Writer, Screenstory, Original Film Writer; `cinematographer` = Director of Photography, Cinematography; `composer` = Original Music Composer, Music; `producer` = Producer, Executive Producer, Co-Producer, Associate Producer; `director` = Director; `editor` = Editor. The registry is `domain/search.py::FIELDS`.
 
 An unknown field name is not an error: `foo: bar` is treated as the freeform text `foo: bar` and the response carries `hint: "unknown field 'foo'"`.
 
 ### 7.3 Spelling (D7, D8)
 
 For a fuzzy field: try an exact (case-insensitive) match first. If none, query the field's trigram FTS index and take the top candidate above a fixed similarity floor (the plan sets it and pins it with a test on a deliberate misspelling). The response records `{field, typed, used}` in `corrections`; the bar renders "Showing results for **Humphrey Bogart**" with an undo that re-runs the query with the typed text quoted, which forces exact. If no candidate clears the floor, the result is empty and the response carries the nearest three as `suggestions`, which the bar offers as clickable chips. Freeform text is never corrected.
+
+Ranking is the resolver's, never FTS's: the trigram index proposes candidates (an OR of the query's windows) and `rank_candidates` orders them by token-aware similarity, then credit count, then name — verified necessary on the live index, where FTS's own rank put 'Ogranya' above every Bogart for `bogrt`.
 
 ## 8. Execution and ranking
 
@@ -206,7 +208,7 @@ Three stages, always in this order:
 
 1. **Parse** — `domain/search.py`, pure: query string → `ParsedQuery(fields=[(name, value)…], free=str)`. No SQL, no I/O; fully unit-testable.
 2. **Resolve** — `application/search.py`: each fuzzy field value → an exact id or value via the repository (`resolve_person(name, job_filter)`, `resolve_character(text)`, `resolve_title(text)`), producing corrections and suggestions.
-3. **Filter and rank** — one repository call builds one SQL statement: exact and resolved fields become an `AND` of `EXISTS` subqueries against `film_credit` / `film_keyword` / genre / year; freeform text becomes an FTS5 `MATCH` over `film_text_fts` plus the person and character indexes, unioned and weighted.
+3. **Filter and rank** — the field filters are one statement; freeform scores are a handful of small statements merged in Python inside the same connection (three FTS tables with different tokenisers plus a `films.title` scan do not fit one readable statement). One repository call either way: exact and resolved fields become an `AND` of `EXISTS` subqueries against `film_credit` / `film_keyword` / genre / year; freeform text becomes an FTS5 `MATCH` over `film_text_fts` plus the person and character indexes, unioned and weighted.
 
 **Ranking.** A query with no freeform text returns its set unranked; the dashboard's current sort applies. A query with freeform text ranks by where the text hit, using FTS5's built-in `bm25()` with per-column weights — title highest, then person name, character, genre/keyword, plot lowest — and the client sorts by that rank while the search is active. No scoring code of our own.
 
