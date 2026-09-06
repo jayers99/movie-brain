@@ -71,6 +71,53 @@ class ItunesTarget:
 
 
 @dataclass(frozen=True)
+class CastRow:
+    """One TMDB cast credit. `person_id` is TMDB's person id — the join to `person.tmdb_person_id`."""
+
+    person_id: int
+    name: str
+    character: str
+    order: int
+
+
+@dataclass(frozen=True)
+class CrewRow:
+    person_id: int
+    name: str
+    job: str
+    department: str
+
+
+@dataclass(frozen=True)
+class TmdbCredits:
+    """Everything `TmdbClient.movie_credits` brings back in ONE call (spec D11): the movie
+    body's title/year/runtime (so `tmdb_facts` can be upserted for a film that has no row
+    yet), plus credits and keywords."""
+
+    tmdb_id: int
+    imdb_id: str | None
+    title: str
+    original_title: str
+    year: int | None
+    runtime_min: int | None
+    overview: str | None
+    tagline: str | None
+    genres: tuple[str, ...]
+    keywords: tuple[str, ...]
+    cast: tuple[CastRow, ...]
+    crew: tuple[CrewRow, ...]
+
+
+@dataclass(frozen=True)
+class CreditsTarget:
+    """A live movie holding a TMDB id and no `credits_fetched_on` — the enrichment worklist."""
+
+    film_id: int
+    title: str
+    tmdb_id: int
+
+
+@dataclass(frozen=True)
 class YearBackfillTarget:
     """A film with no year at all, holding a TMDB id — the worklist of `repair years --from-tmdb`."""
 

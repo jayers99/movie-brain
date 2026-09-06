@@ -1,4 +1,13 @@
-from movie_brain.domain.models import Film, FilmView, film_key, merge_yearless
+from movie_brain.domain.models import (
+    CastRow,
+    CreditsTarget,
+    CrewRow,
+    Film,
+    FilmView,
+    TmdbCredits,
+    film_key,
+    merge_yearless,
+)
 
 
 def test_film_key_matches_legacy_scheme():
@@ -74,3 +83,22 @@ def test_owned_title_holds_title_and_optional_year():
     t = OwnedTitle("Step Brothers", 2008)
     assert (t.title, t.year) == ("Step Brothers", 2008)
     assert OwnedTitle("Unknown", None).year is None
+
+
+def test_tmdb_credits_is_frozen_and_carries_rows_as_tuples():
+    credits = TmdbCredits(
+        tmdb_id=910,
+        imdb_id="tt0038355",
+        title="The Big Sleep",
+        original_title="The Big Sleep",
+        year=1946,
+        runtime_min=114,
+        overview="Private Investigator Philip Marlowe…",
+        tagline="The picture they were born for!",
+        genres=("Mystery", "Crime"),
+        keywords=("film noir", "private investigator"),
+        cast=(CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),),
+        crew=(CrewRow(2636, "Howard Hawks", "Director", "Directing"),),
+    )
+    assert credits.cast[0].character == "Philip Marlowe"
+    assert CreditsTarget(1, "The Big Sleep", 910).tmdb_id == 910
