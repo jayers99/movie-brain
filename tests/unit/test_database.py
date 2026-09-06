@@ -2054,3 +2054,33 @@ def test_search_films_ors_a_repeated_field_for_every_kind(repo):
     assert [i for i, _ in repo.search_films(chars, "")] == [a, b]
     # AND across different fields still holds
     assert [i for i, _ in repo.search_films([years[1], chars[0]], "")] == []
+
+
+def test_plot_filter_never_reads_the_title_column_even_for_later_words(repo):
+    """FTS5 binds a column filter to ONE phrase; without parentheses every word after the
+    first is matched anywhere, title included — verified live: 110 vs 107 films."""
+    a, b, g = _seed_search(repo)
+    # 'alpha' appears in Beta's overview and in Alpha's TITLE only; 'ward' only in Beta's overview.
+    assert [i for i, _ in repo.search_films([Filter("text", values=("ward alpha",))], "")] == [b]
+    assert repo.search_films([Filter("text", values=("sternwood alpha",))], "") == []  # Alpha's plot has sternwood; 'alpha' is only its title
+
+
+def test_year_with_no_bounds_and_keyword_with_no_values_yield_nothing(repo):
+    """An unresolvable value inside a repeated field is `0 = 1` in ITS OR group, never
+    a SQL error and never a stand-in for 'no constraint' (I2)."""
+    a, b, g = _seed_search(repo)
+    assert repo.search_films([Filter("year")], "") == []
+    assert repo.search_films([Filter("keyword", values=())], "") == []
+
+
+def test_search_films_freeform_person_hit_never_surfaces_a_disposed_film(repo):
+    a, b, g = _seed_search(repo)
+    day = date(2026, 9, 6)
+    zeta = repo.create_film(Film("Zeta", 1990, None, ""))
+    repo.write_credits(zeta, _credits(
+        tmdb_id=999, imdb_id="tt9999999", title="Zeta", original_title="Zeta",
+        cast=(CastRow(9999, "Zed Zeta", "Lead", 0),), crew=(),
+    ), day)
+    repo.merge_film(zeta, a, day, note="twin")
+    ids = [i for i, _ in repo.search_films([], "zeta")]
+    assert zeta not in ids

@@ -327,3 +327,8 @@ def test_search_freeform_is_ranked_and_reaches_titles_without_credits(client, re
     body = client.get("/api/search?q=quartet").get_json()
     quartet = repo.film_id_by_key("quartet (1948)")
     assert body["ids"] == [quartet] and body["ranked"] is True
+
+
+@pytest.mark.parametrize("q", ["***", "NOT AND OR", "{}", "^", "%", '""', "plot: (", 'actor: "'])
+def test_search_survives_hostile_fts_syntax(client, q):
+    assert client.get("/api/search", query_string={"q": q}).status_code == 200

@@ -1402,12 +1402,17 @@ class Repository:
                 genre_params += [f"%,{g},%", g]
             return "(" + " OR ".join(genre_parts) + ")", genre_params
         if flt.kind == "keyword":
+            if not flt.values:
+                return "0 = 1", []
             marks = ",".join("?" * len(flt.values))
             return (
                 f"EXISTS (SELECT 1 FROM film_keyword k WHERE k.film_id = f.id AND lower(k.keyword) IN ({marks}))",
                 [v.lower() for v in flt.values],
             )
         if flt.kind == "year":
+            # A valid range always sets at least one bound; both None means the resolver
+            # never parsed one (I2) — treat it exactly like an unresolvable value in ANY
+            # other kind: `0 = 1` inside its OR group, not a stand-in for "no constraint".
             year_parts: list[str] = []
             year_params: list[object] = []
             if flt.lo is not None:
@@ -1416,21 +1421,29 @@ class Repository:
             if flt.hi is not None:
                 year_parts.append("f.year <= ?")
                 year_params.append(flt.hi)
-            return "(" + " AND ".join(year_parts) + ")" if year_parts else "1 = 1", year_params
+            if not year_parts:
+                return "0 = 1", []
+            return "(" + " AND ".join(year_parts) + ")", year_params
         if flt.kind == "text":
             match = fts_words(" ".join(flt.values))
             if not match:
                 return "0 = 1", []
+            # The column filter binds to ONE phrase: `{overview plot}: a b` means "a in
+            # overview/plot AND b anywhere, title included" — parenthesizing the match binds
+            # every word to the same column filter (C1; verified live: 110 vs 107 films).
             return (
                 "f.id IN (SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH ?)",
-                [f"{{overview plot}}: {match}"],
+                [f"{{overview plot}}: ({match})"],
             )
         raise ValueError(f"unknown filter kind {flt.kind!r}")
 
     def _freeform_scores(self, c: sqlite3.Connection, free: str) -> dict[int, float]:
-        """Where the text hit decides the rank (spec §8): title, then person, character,
-        genre/keyword, then plot — summed per film. Several small statements merged here rather
-        than one CTE across three differently-tokenised FTS tables (plan §"deviation")."""
+        """Every matching signal — bm25 over film_text_fts (title/overview/plot), person,
+        character, genre/keyword, and a direct title substring — contributes its own weight,
+        and the weights are SUMMED per film (spec §8): title just carries the heaviest one, this
+        is not a precedence where an earlier signal shadows a later one. Several small statements
+        merged here rather than one CTE across three differently-tokenised FTS tables (plan
+        §"deviation")."""
         scores: dict[int, float] = {}
 
         def add(rows: list[sqlite3.Row], weight: float | None = None) -> None:
@@ -1509,6 +1522,9 @@ class Repository:
                 if not scores:
                     return []
                 if len(scores) > 30000:
+                    # Defensive, not a real limit: scores are keyed by film id and bounded by
+                    # the catalogue's own size, so this only trims a pathological freeform match
+                    # BEFORE `_NOT_DISPOSED` and the rest of the WHERE clause apply below.
                     top = sorted(scores.items(), key=lambda kv: -kv[1])[:30000]
                     scores = dict(top)
                 marks = ",".join("?" * len(scores))

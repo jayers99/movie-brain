@@ -179,11 +179,11 @@ Multiple fields are ANDed. The same field twice is ORed (`actor: bogart actor: b
 | `actor` | `cast` | fuzzy → exact | `person.name` where `kind='cast'` |
 | `character` | `role` | fuzzy | `film_credit.character` |
 | `director` | | fuzzy → exact | `person.name` where `job='Director'` |
-| `writer` | | fuzzy → exact | `job IN ('Screenplay','Writer','Novel','Story','Author')` |
-| `cinematographer` | `dp` | fuzzy → exact | `job='Director of Photography'` |
+| `writer` | | fuzzy → exact | `job IN ('Screenplay','Writer','Story','Novel','Original Story','Dialogue','Adaptation','Author','Book','Short Story','Theatre Play','Scenario Writer','Co-Writer','Screenstory','Original Film Writer')` |
+| `cinematographer` | `dp` | fuzzy → exact | `job IN ('Director of Photography','Cinematography')` |
 | `editor` | | fuzzy → exact | `job='Editor'` |
-| `composer` | `music` | fuzzy → exact | `job='Original Music Composer'` |
-| `producer` | | fuzzy → exact | `job IN ('Producer','Executive Producer')` |
+| `composer` | `music` | fuzzy → exact | `job IN ('Original Music Composer','Music')` |
+| `producer` | | fuzzy → exact | `job IN ('Producer','Executive Producer','Co-Producer','Associate Producer')` |
 | `crew` | | fuzzy → exact | any crew row, all ~40 jobs (D9) |
 | `genre` | | exact | OMDb `Genre` ∪ TMDB `genres`, case-insensitive, hyphen/space-insensitive (`film noir` = `Film-Noir`) |
 | `keyword` | `kw` | exact, corrected | `film_keyword.keyword` |
@@ -202,7 +202,7 @@ Ranking is the resolver's, never FTS's: the trigram index proposes candidates (a
 
 ## 8. Execution and ranking
 
-`GET /api/search?q=…` → `{ ids: [film_id, …], corrections: [...], suggestions: [...], hint: str|null, total: int }`
+`GET /api/search?q=…` → `{ q, ids, ranked, corrections, suggestions, hints: [str…], total }`
 
 Three stages, always in this order:
 
@@ -210,7 +210,7 @@ Three stages, always in this order:
 2. **Resolve** — `application/search.py`: each fuzzy field value → an exact id or value via the repository (`resolve_person(name, job_filter)`, `resolve_character(text)`, `resolve_title(text)`), producing corrections and suggestions.
 3. **Filter and rank** — the field filters are one statement; freeform scores are a handful of small statements merged in Python inside the same connection (three FTS tables with different tokenisers plus a `films.title` scan do not fit one readable statement). One repository call either way: exact and resolved fields become an `AND` of `EXISTS` subqueries against `film_credit` / `film_keyword` / genre / year; freeform text becomes an FTS5 `MATCH` over `film_text_fts` plus the person and character indexes, unioned and weighted.
 
-**Ranking.** A query with no freeform text returns its set unranked; the dashboard's current sort applies. A query with freeform text ranks by where the text hit, using FTS5's built-in `bm25()` with per-column weights — title highest, then person name, character, genre/keyword, plot lowest — and the client sorts by that rank while the search is active. No scoring code of our own.
+**Ranking.** A query with no freeform text returns its set unranked; the dashboard's current sort applies. A query with freeform text ranks by where the text hit: `bm25()` over `film_text_fts` (title 10 / overview 2 / plot 1) contributes its score, and person (5), character (4), genre/keyword (3) and a direct title substring (10) hits each contribute their own fixed weight — every matching signal is SUMMED per film in Python (title just carries the heaviest weight, this is not a precedence where an earlier signal shadows a later one), and the client sorts by that combined rank while the search is active.
 
 **Limits.** The endpoint returns every matching id (the dashboard is a client-side table over the whole catalogue; an id list of a few thousand integers is small). No `limit` parameter in Phase 1.
 

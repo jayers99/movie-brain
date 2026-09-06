@@ -357,15 +357,19 @@
   // Quoting a value makes it exact (spec §7.3): undo re-runs with the typed text quoted, and a
   // suggestion replaces the typed text with the chosen name, quoted.
   noteEl.addEventListener('click', (e) => {
+    if (searchTimer) clearTimeout(searchTimer);   // a click within 300ms of typing must not also fire the debounced fetch
     const b = e.target.closest('button'); if (!b) return;
     const typed = b.dataset.typed, use = b.classList.contains('undo') ? typed : b.dataset.use, field = b.dataset.field;
     // Anchor on the field the server reported: a bare `.replace(typed, …)` would quote the
     // FIRST textual occurrence of `typed` in the query, which is wrong when the same text
     // appears earlier under a different field (e.g. `title: bogrt actor: bogrt`).
     const anchored = new RegExp(`(${field}\\s*:\\s*)${escapeRegExp(typed)}`, 'i');
+    // A replacer FUNCTION, not a template string: a string replacement treats `$1`, `$&`, etc.
+    // inside it as backreferences, so a corrected name containing e.g. "$1" would corrupt itself
+    // (I3) — a function's return value is inserted verbatim, no re-interpretation.
     state.q = anchored.test(state.q)
-      ? state.q.replace(anchored, `$1"${use}"`)
-      : state.q.replace(typed, `"${use}"`);   // the user typed an alias (cast:, role:, dp:…); fall back to the first occurrence
+      ? state.q.replace(anchored, (_m, p1) => `${p1}"${use}"`)
+      : state.q.replace(typed, () => `"${use}"`);   // the user typed an alias (cast:, role:, dp:…); fall back to the first occurrence
     searchEl.value = state.q;
     delete searchEl.dataset.settled;
     runSearch();

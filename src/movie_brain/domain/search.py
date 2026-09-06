@@ -242,9 +242,9 @@ def similarity(query: str, name: str) -> float:
     q = query.lower().strip()
     n = name.lower()
     best = SequenceMatcher(None, q, n).ratio()
-    for token in n.split():
+    for token in n.split():  # str.split() with no args never yields an empty token
         ratio = SequenceMatcher(None, q, token).ratio()
-        len_factor = min(len(q), len(token)) / max(len(q), len(token)) if token else 0.0
+        len_factor = min(len(q), len(token)) / max(len(q), len(token))
         length_penalty = len_factor ** LENGTH_PENALTY_EXPONENT
         best = max(best, ratio * length_penalty)
     return best

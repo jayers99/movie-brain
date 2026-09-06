@@ -912,3 +912,14 @@ def test_search_correction_undo_targets_the_right_field(dash: Page):
     expect(note).to_contain_text("Showing results for Humphrey Bogart")
     note.locator("button.undo").click()
     expect(dash.locator("#search")).to_have_value('title: bogrt actor: "bogrt"')
+
+
+def test_search_note_click_replace_survives_a_dollar_sign_in_the_value(dash: Page):
+    # "Ke$1ha" carries a literal "$1": a `.replace(regex, "$1\"...\"")` template-string
+    # replacement re-interprets that embedded "$1" as a second backreference and corrupts
+    # the rewritten query (I3) — the fix is a replacer FUNCTION, whose return value is never
+    # re-scanned for "$" patterns.
+    clear_lang(dash)
+    _search(dash, "actor: e$1z")   # shares the 'e$1' trigram window with Ke$1ha; similarity 0.6 — a suggestion, not a correction
+    dash.locator("#search-note button.suggest", has_text="Ke$1ha").click()
+    expect(dash.locator("#search")).to_have_value('actor: "Ke$1ha"')

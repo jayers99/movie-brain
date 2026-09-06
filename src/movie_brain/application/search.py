@@ -27,6 +27,7 @@ from movie_brain.domain.search import (
     parse_query,
     parse_year_range,
     rank_candidates,
+    trigram_query,
 )
 from movie_brain.infrastructure.database import Repository
 
@@ -55,7 +56,7 @@ class _Resolver:
         self.filters: list[Filter] = []
         self.corrections: list[dict[str, str]] = []
         self.suggestions: list[dict[str, object]] = []
-        self.unresolved = False  # a fuzzy field found nothing usable → the whole result is empty (AND)
+        self.hints: list[str] = []  # too-short-to-correct notices from person()/character() (I5)
 
     def _pick(self, term: Term, candidates: list[Candidate]) -> Candidate | None:
         """Exact-first has already failed. Rank, then use / suggest / refuse (spec §7.3)."""
@@ -67,7 +68,6 @@ class _Resolver:
         options = [r.name for r in ranked if r.score >= SUGGESTION_FLOOR][:MAX_SUGGESTIONS]
         if options:
             self.suggestions.append({"field": term.field, "typed": term.value, "options": options})
-        self.unresolved = True
         return None
 
     def person(self, term: Term) -> None:
@@ -76,8 +76,8 @@ class _Resolver:
         if not ids and not term.exact:
             chosen = self._pick(term, self.repo.person_candidates(term.value, spec.credit_kind, spec.jobs))
             ids = [int(chosen.key)] if chosen else []
-        if not ids:
-            self.unresolved = True
+            if not ids and trigram_query(term.value) == "":
+                self.hints.append(f"'{term.value}' is too short to correct — try three characters or more")
         self.filters.append(Filter("person", ids=tuple(ids), credit_kind=spec.credit_kind, jobs=spec.jobs))
 
     def character(self, term: Term) -> None:
@@ -85,8 +85,8 @@ class _Resolver:
         if not names and not term.exact:
             chosen = self._pick(term, self.repo.character_candidates(term.value))
             names = [str(chosen.key)] if chosen else []
-        if not names:
-            self.unresolved = True
+            if not names and trigram_query(term.value) == "":
+                self.hints.append(f"'{term.value}' is too short to correct — try three characters or more")
         self.filters.append(Filter("character", values=tuple(names)))
 
     def keyword(self, term: Term) -> None:
@@ -95,8 +95,6 @@ class _Resolver:
         if not exact and not term.exact:
             chosen = self._pick(term, all_kw)
             exact = [str(chosen.key)] if chosen else []
-        if not exact:
-            self.unresolved = True
         self.filters.append(Filter("keyword", values=tuple(exact)))
 
     def title(self, term: Term) -> None:
@@ -117,7 +115,9 @@ class _Resolver:
     def year(self, term: Term) -> None:
         rng = parse_year_range(term.value)
         if rng is None:
-            self.unresolved = True
+            # Unparseable, not "no constraint": `_filter_sql` turns a bare Filter("year") into
+            # `0 = 1` inside its OR group (I2), same as any other unresolvable value.
+            self.filters.append(Filter("year"))
             return
         self.filters.append(Filter("year", lo=rng[0], hi=rng[1]))
 
@@ -150,10 +150,11 @@ def run_search(repo: Repository, text: str) -> SearchResult:
             dispatch[kind](term)
     if people_asked and repo.credits_summary()["films_with_credits"] == 0:
         hints.append(NO_CREDITS_HINT)
-    if resolver.unresolved:
-        ids: list[tuple[int, float]] = []
-    else:
-        ids = repo.search_films(resolver.filters, parsed.free)
+    hints.extend(resolver.hints)
+    ids = repo.search_films(resolver.filters, parsed.free)
+    if not ids and len(parsed.free.split()) >= 2:
+        n = len(parsed.free.split())
+        hints.append(f"no film matches all {n} words — try fewer, or quote a phrase")
     return SearchResult(
         ids=tuple(i for i, _ in ids),
         ranked=bool(parsed.free.strip()) and bool(ids),

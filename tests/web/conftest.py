@@ -170,8 +170,12 @@ def seed(repo: Repository) -> None:
     repo.set_external_id(ids["bravo (1960)"], "tmdb", "911", TODAY)
     repo.write_credits(ids["alpha (1950)"], _credits(910, "Alpha", "A private eye in the Sternwood house.",
                                                      (CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),)), TODAY)
+    # Ke$1ha (I3): a cast name carrying a literal "$1" — the one thing that can turn the note-click
+    # handler's suggestion/correction replace into a String.replace backreference if it ever
+    # regresses to a template-string replacement instead of a replacer function.
     repo.write_credits(ids["bravo (1960)"], _credits(911, "Bravo", "A holiday in the alpha quadrant.",
-                                                     (CastRow(77, "Jane Bogart", "Nurse", 0),)), TODAY)
+                                                     (CastRow(77, "Jane Bogart", "Nurse", 0),
+                                                      CastRow(78, "Ke$1ha", "Singer", 1))), TODAY)
     # Hotel: a discovery film with no Criterion listing but buyable on the Apple TV store —
     # reachable (default scope) shows it, criterion scope hides it. Hungarian + no scores keep it
     # out of the default-English counts and at the tail of the default sort.

@@ -67,3 +67,18 @@ Feature: Resolving a search into an exact film-id set
   Scenario: The same field twice is ORed, even for a year range
     When I search for "year: 1946 year: 1950"
     Then the result ids are Alpha then Beta
+
+  Scenario: One unresolvable value does not empty an OR group
+    When I search for "actor: humphrey bogart actor: bacalllzz"
+    Then the result ids are Alpha
+    And there are no corrections
+
+  Scenario: A too-short fuzzy value explains itself instead of failing silently
+    When I search for "character: xy"
+    Then the result is empty
+    And the hints include "'xy' is too short to correct — try three characters or more"
+
+  Scenario: An unmatched multi-word freeform query explains itself instead of failing silently
+    When I search for "purple elephant parade"
+    Then the result is empty
+    And the hints include "no film matches all 3 words — try fewer, or quote a phrase"
