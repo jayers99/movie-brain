@@ -180,13 +180,18 @@ class TmdbClient:
         )
 
     def movie_credits(self, tmdb_id: int) -> TmdbCredits:
-        """Cast, crew, keywords and the movie body in ONE call (spec D11). Nulls from TMDB
-        become '' for the three credit text columns, which are NOT NULL DEFAULT '' so the
-        UNIQUE constraint on `film_credit` actually dedups."""
-        d = self._get(f"/movie/{tmdb_id}", append_to_response="credits,keywords").json()
+        """Cast, crew, keywords, alternative titles and the movie body in ONE call (spec D11).
+        Alternative titles are parsed exactly as `movie_facts` does, so `write_credits` can
+        stamp a fresh `tmdb_facts` row with TMDB's real value instead of a fabricated `[]`.
+        Nulls from TMDB become '' for the three credit text columns, which are NOT NULL
+        DEFAULT '' so the UNIQUE constraint on `film_credit` actually dedups."""
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="credits,keywords,alternative_titles").json()
         rd = d.get("release_date") or ""
         year = int(rd[:4]) if len(rd) >= 4 and rd[:4].isdigit() else None
         runtime = d.get("runtime")
+        alts = tuple(
+            str(t["title"]) for t in (d.get("alternative_titles") or {}).get("titles") or [] if t.get("title")
+        )
         credits = d.get("credits") or {}
         cast = tuple(
             CastRow(int(r["id"]), str(r.get("name") or ""), str(r.get("character") or ""), int(r.get("order") or 0))
@@ -205,6 +210,7 @@ class TmdbClient:
             original_title=d.get("original_title") or "",
             year=year,
             runtime_min=int(runtime) if isinstance(runtime, int) and runtime > 0 else None,
+            alt_titles=alts,
             overview=(d.get("overview") or "").strip() or None,
             tagline=(d.get("tagline") or "").strip() or None,
             genres=tuple(str(g["name"]) for g in d.get("genres") or [] if g.get("name")),

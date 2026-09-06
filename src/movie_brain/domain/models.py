@@ -100,6 +100,7 @@ class TmdbCredits:
     original_title: str
     year: int | None
     runtime_min: int | None
+    alt_titles: tuple[str, ...]
     overview: str | None
     tagline: str | None
     genres: tuple[str, ...]

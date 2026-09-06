@@ -288,6 +288,7 @@ BIG_SLEEP_CREDITS = {
         ],
     },
     "keywords": {"keywords": [{"id": 1, "name": "film noir"}, {"id": 2, "name": "private investigator"}]},
+    "alternative_titles": {"titles": [{"iso_3166_1": "BR", "title": "À Beira do Abismo"}]},
 }
 
 
@@ -295,13 +296,14 @@ BIG_SLEEP_CREDITS = {
 def test_movie_credits_reads_cast_crew_keywords_and_body_in_one_call():
     responses.get(f"{TMDB_API}/movie/910", json=BIG_SLEEP_CREDITS)
     c = TmdbClient("tok").movie_credits(910)
-    assert responses.calls[0].request.params["append_to_response"] == "credits,keywords"
+    assert responses.calls[0].request.params["append_to_response"] == "credits,keywords,alternative_titles"
     assert (c.tmdb_id, c.imdb_id, c.title, c.year, c.runtime_min) == (910, "tt0038355", "The Big Sleep", 1946, 114)
     assert c.genres == ("Mystery", "Crime") and c.keywords == ("film noir", "private investigator")
     assert c.cast[0] == CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0)
     assert c.cast[2].character == ""  # a null character becomes '' — the column is NOT NULL DEFAULT ''
     assert c.crew[1] == CrewRow(2637, "William Faulkner", "Screenplay", "Writing")
     assert c.overview.startswith("Private Investigator") and c.tagline.startswith("The picture")
+    assert c.alt_titles == ("À Beira do Abismo",)
 
 
 @responses.activate

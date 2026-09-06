@@ -43,3 +43,4 @@ Feature: Enriching films with TMDB credits
     Given 2 more films holding tmdb ids with empty credits
     When I enrich credits with apply
     Then TMDB was paced with 2 pauses
+    And the film "Empty 0" is stamped as enriched

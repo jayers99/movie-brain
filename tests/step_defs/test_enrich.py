@@ -16,7 +16,7 @@ scenarios("../features/enrich.feature")
 def _credits(tmdb_id: int, title: str, cast: tuple[CastRow, ...]) -> TmdbCredits:
     return TmdbCredits(
         tmdb_id=tmdb_id, imdb_id=None, title=title, original_title=title, year=None, runtime_min=None,
-        overview=None, tagline=None, genres=(), keywords=(), cast=cast, crew=(),
+        alt_titles=(), overview=None, tagline=None, genres=(), keywords=(), cast=cast, crew=(),
     )
 
 

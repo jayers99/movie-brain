@@ -1163,13 +1163,17 @@ class Repository:
 
     # credits (power search, Plan A) -----------------------------------------
     def films_needing_credits(self, limit: int | None = None) -> list[CreditsTarget]:
-        """Live movies holding a TMDB id and no `credits_fetched_on`. The stamp is what makes
-        the enrichment resumable — a stamped film is never re-fetched by this worklist."""
+        """Live movies holding a TMDB id whose `tmdb_facts` row is missing, unstamped, or
+        stamped under a DIFFERENT tmdb_id than the film now holds. That last clause is what
+        makes a re-key (`repair links --tt`, `review resolve --tmdb-id`, `repair nomatch`)
+        re-enrich on the next run instead of leaving the film stamped for the work it no
+        longer holds — copy `tmdb_facts_needed`'s idiom exactly."""
         sql = (
             "SELECT f.id, f.title, x.value AS tmdb_id FROM films f "
             "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
             "LEFT JOIN tmdb_facts t ON t.film_id = f.id "
-            "WHERE t.credits_fetched_on IS NULL AND " + _NOT_DISPOSED + _IS_MOVIE + " ORDER BY f.id"
+            "WHERE (t.credits_fetched_on IS NULL OR t.tmdb_id != CAST(x.value AS INTEGER)) AND "
+            + _NOT_DISPOSED + _IS_MOVIE + " ORDER BY f.id"
         )
         if limit is not None:
             sql += " LIMIT ?"
@@ -1184,10 +1188,10 @@ class Repository:
         with self._conn() as c:
             c.execute(
                 "INSERT INTO tmdb_facts (film_id, tmdb_id, imdb_id, title, original_title, alt_titles, "
-                "release_year, runtime_min, fetched_on) VALUES (?, ?, ?, ?, ?, '[]', ?, ?, ?) "
+                "release_year, runtime_min, fetched_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(film_id) DO NOTHING",
                 (film_id, credits.tmdb_id, credits.imdb_id, credits.title, credits.original_title,
-                 credits.year, credits.runtime_min, today.isoformat()),
+                 json.dumps(list(credits.alt_titles)), credits.year, credits.runtime_min, today.isoformat()),
             )
             c.execute(
                 "UPDATE tmdb_facts SET overview = ?, tagline = ?, genres = ?, credits_fetched_on = ? WHERE film_id = ?",
@@ -2086,7 +2090,11 @@ class Repository:
             # loser's rows move. `film_text` moves through DELETE+INSERT rather than UPDATE
             # because the survivor may already hold its own `film_text` row (PRIMARY KEY on
             # film_id), which a plain `UPDATE ... SET film_id` would violate; the subsequent
-            # `ON CONFLICT` then applies survivor-wins per column.
+            # `ON CONFLICT` then applies survivor-wins per column. `merge_film` does not move
+            # `tmdb_facts`, so a survivor that received moved rows this way has no stamp of
+            # its own and returns to the worklist, where the next `enrich credits --apply`
+            # replaces the moved rows with its own fetch — the move is a stopgap, not the
+            # final state.
             survivor_has_credits = (
                 c.execute("SELECT 1 FROM film_credit WHERE film_id = ? LIMIT 1", (survivor_id,)).fetchone() is not None
             )
@@ -2124,20 +2132,25 @@ class Repository:
                 if survivor_has_credits:
                     dropped["film_text"] = 1
                 else:
+                    survivor_title = c.execute(
+                        "SELECT title FROM films WHERE id = ?", (survivor_id,)
+                    ).fetchone()["title"]
                     c.execute(
                         "INSERT INTO film_text (film_id, title, overview, plot) VALUES (?, ?, ?, ?) "
                         "ON CONFLICT(film_id) DO UPDATE SET "
                         "overview = COALESCE(film_text.overview, excluded.overview), "
                         "plot = COALESCE(film_text.plot, excluded.plot)",
-                        (survivor_id, loser_text["title"], loser_text["overview"], loser_text["plot"]),
+                        (survivor_id, survivor_title, loser_text["overview"], loser_text["plot"]),
                     )
                     moved["film_text"] = 1
-            if survivor_has_credits:
-                c.execute(
-                    "UPDATE tmdb_facts SET credits_fetched_on = NULL "
-                    "WHERE film_id = ? AND credits_fetched_on IS NOT NULL",
-                    (loser_id,),
-                )
+            # The loser's stamp is cleared unconditionally, on BOTH paths: dropped or moved,
+            # its film_credit/film_keyword rows are gone from film_id=loser_id either way, and
+            # a stamp naming credits it no longer holds must not survive.
+            c.execute(
+                "UPDATE tmdb_facts SET credits_fetched_on = NULL "
+                "WHERE film_id = ? AND credits_fetched_on IS NOT NULL",
+                (loser_id,),
+            )
             for row in c.execute("SELECT authority, value FROM external_ids WHERE film_id = ?", (loser_id,)).fetchall():
                 auth, val = str(row["authority"]), str(row["value"])
                 held = (

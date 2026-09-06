@@ -144,7 +144,7 @@ Volume: ~4,645 films × 24 cast ≈ 111k credit rows, ~60k persons. Trivial for 
 
 `movie-brain enrich credits [--apply] [--limit N]`
 
-Worklist: live, non-disposed films holding a `tmdb` external id and no `credits_fetched_on` (or one older than a `--refresh-days` the plan may add later; not in scope now). One call per film (D11). For each: upsert `person` rows by `tmdb_person_id`, replace the film's `film_credit` and `film_keyword` rows, write `overview`, `tagline`, `genres` and the stamp on `tmdb_facts`, and delete-and-reinsert the film's `film_text_fts` row — all inside one transaction per film. Dry-run by default; `--limit` batches; the same consecutive-failure abort and resume-by-stamp pattern as `cheapcharts resolve` and `repair imdb`. Pacing: TMDB advertises no limit; keep the existing `TmdbClient` session and a modest delay.
+Worklist: every live, non-disposed movie holding a `tmdb` external id whose `tmdb_facts` row is missing, unstamped, or stamped under a different `tmdb_id` than the film now holds — a re-keyed film is re-enriched on the next run (or one older than a `--refresh-days` the plan may add later; not in scope now). One call per film (D11). For each: upsert `person` rows by `tmdb_person_id`, replace the film's `film_credit` and `film_keyword` rows, write `overview`, `tagline`, `genres` and the stamp on `tmdb_facts`, and delete-and-reinsert the film's `film_text_fts` row — all inside one transaction per film. Dry-run by default; `--limit` batches; the same consecutive-failure abort and resume-by-stamp pattern as `cheapcharts resolve` and `repair imdb`. Pacing: TMDB advertises no limit; keep the existing `TmdbClient` session and a modest delay.
 
 `movie-brain status` gains a line: films enriched / with a tmdb id.
 
@@ -223,7 +223,7 @@ The bar's `<input>` carries a class of its own, NOT `chip` — the `#chips` clic
 - **Enrichment not run yet.** Search works on what is stored — title, `films.director`, OMDb genre and plot. `actor:` and `character:` match nothing and the response `hint` says "no credits loaded — run `movie-brain enrich credits --apply`". `status` shows the count.
 - **TMDB unreachable during enrichment.** Consecutive-failure abort, stamp-based resume. Nothing partial is left: a film's credit rows are replaced inside one transaction.
 - **A film with no tmdb id** (63 today). Not on the worklist; searchable on its held fields only.
-- **FTS5 trigram unavailable** (a Python built against an old SQLite). Migration 018 fails loudly at `migrate --apply` rather than creating a table that cannot be queried; the message names the required SQLite version.
+- **FTS5 trigram unavailable** (a Python built against an old SQLite). On a Python whose SQLite lacks the `trigram` tokenizer, migration 018 fails at its `CREATE VIRTUAL TABLE` inside the `BEGIN/COMMIT` script, `init_db` never commits and the connection's close rolls the transaction back, so the DB is untouched and no `schema_version` 18 row lands; the error surfaces as SQLite's own `OperationalError` naming the tokenizer (not a version message) — verified by reading `init_db`, not by executing it.
 
 ## 11. Testing
 

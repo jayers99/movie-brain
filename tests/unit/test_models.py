@@ -93,6 +93,7 @@ def test_tmdb_credits_is_frozen_and_carries_rows_as_tuples():
         original_title="The Big Sleep",
         year=1946,
         runtime_min=114,
+        alt_titles=("À Beira do Abismo",),
         overview="Private Investigator Philip Marlowe…",
         tagline="The picture they were born for!",
         genres=("Mystery", "Crime"),

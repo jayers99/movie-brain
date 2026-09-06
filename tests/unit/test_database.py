@@ -1754,6 +1754,7 @@ def test_migration_018_creates_credit_tables_and_trigram_indexes(repo):
 def _credits(**over):
     base = dict(
         tmdb_id=910, imdb_id="tt0038355", title="The Big Sleep", original_title="The Big Sleep", year=1946, runtime_min=114,
+        alt_titles=(),
         overview="Private Investigator Philip Marlowe is hired by General Sternwood.", tagline="The picture they were born for!",
         genres=("Mystery", "Crime"), keywords=("film noir", "private investigator"),
         cast=(CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0), CastRow(3092, "Lauren Bacall", "Vivian Sternwood Rutledge", 1)),
@@ -1769,7 +1770,7 @@ def test_write_credits_stores_persons_once_and_rows_per_credit(repo):
     repo.set_external_id(fid, "tmdb", "910", day)
     repo.upsert_omdb(fid, OmdbRating(8.0, 97, True, "English", '{"Plot": "A private eye takes a case."}'), day)
 
-    repo.write_credits(fid, _credits(), day)
+    repo.write_credits(fid, _credits(alt_titles=("À Beira do Abismo",)), day)
 
     assert repo.credits_for(fid) == [
         ("cast", "Humphrey Bogart", "Philip Marlowe", ""),
@@ -1784,6 +1785,10 @@ def test_write_credits_stores_persons_once_and_rows_per_credit(repo):
         row = c.execute("SELECT overview, tagline, genres, credits_fetched_on, title FROM tmdb_facts WHERE film_id = ?", (fid,)).fetchone()
         assert row == (_credits().overview, _credits().tagline, '["Mystery", "Crime"]', "2026-09-06", "The Big Sleep")
         assert c.execute("SELECT plot FROM film_text WHERE film_id = ?", (fid,)).fetchone() == ("A private eye takes a case.",)
+        # I2: a fresh tmdb_facts row carries TMDB's real alt_titles, never the '[]' placeholder
+        assert c.execute("SELECT alt_titles FROM tmdb_facts WHERE film_id = ?", (fid,)).fetchone() == (
+            json.dumps(["À Beira do Abismo"]),
+        )
 
 
 def test_write_credits_replaces_a_films_rows_and_never_duplicates(repo):
@@ -1794,6 +1799,15 @@ def test_write_credits_replaces_a_films_rows_and_never_duplicates(repo):
     repo.write_credits(fid, _credits(cast=(CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),), keywords=("film noir",)), day)
     assert [r[1] for r in repo.credits_for(fid) if r[0] == "cast"] == ["Humphrey Bogart"]
     assert repo.keywords_for(fid) == ["film noir"]
+    with sqlite3.connect(repo.db_path) as c:
+        # M6: Bacall's character is gone from the index, Marlowe's survives — the FTS
+        # trigger contract on a replace, not just on the base film_credit table.
+        assert c.execute(
+            "SELECT character FROM character_fts WHERE character_fts MATCH ?", (trigram_query("sternwood"),)
+        ).fetchall() == []
+        assert c.execute(
+            "SELECT character FROM character_fts WHERE character_fts MATCH ?", (trigram_query("marlowe"),)
+        ).fetchall() == [("Philip Marlowe",)]
 
 
 def test_write_credits_indexes_names_and_characters_for_misspellings(repo):
@@ -1826,8 +1840,26 @@ def test_films_needing_credits_lists_live_movies_with_a_tmdb_id_and_no_stamp(rep
     assert c_ not in {t.film_id for t in targets}  # no tmdb id → not on the worklist
 
 
+def test_films_needing_credits_includes_a_rekeyed_film(repo):
+    """A film's TMDB link can change after it was stamped (`repair links --tt`, `review
+    resolve --tmdb-id`, `repair nomatch`) — the film must return to the worklist under its
+    NEW tmdb id rather than staying stamped for the work it no longer holds."""
+    day = date(2026, 9, 6)
+    fid = repo.create_film(Film("A", 1950, None, ""))
+    repo.set_external_id(fid, "tmdb", "910", day)
+    repo.write_credits(fid, _credits(tmdb_id=910, title="A", original_title="A"), day)
+    assert repo.films_needing_credits() == []
+
+    repo.set_external_id(fid, "tmdb", "911", day)  # re-keyed to a different work
+
+    targets = repo.films_needing_credits()
+    assert [(t.film_id, t.tmdb_id) for t in targets] == [(fid, 911)]
+
+
 def test_merge_moves_credits_keywords_and_text_to_the_survivor(repo):
     a, b = _two_films(repo)
+    with sqlite3.connect(repo.db_path) as c:
+        c.execute("UPDATE films SET title = 'Bravo' WHERE id = ?", (b,))  # distinct from a's "Alpha"
     repo.set_external_id(b, "tmdb", "910", D)
     repo.write_credits(b, _credits(), D)
 
@@ -1839,6 +1871,10 @@ def test_merge_moves_credits_keywords_and_text_to_the_survivor(repo):
     assert report.moved["film_credit"] == 4 and report.moved["film_keyword"] == 2 and report.moved["film_text"] == 1
     with sqlite3.connect(repo.db_path) as c:
         assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'sternwood'").fetchall() == [(a,)]
+        a_title = c.execute("SELECT title FROM films WHERE id = ?", (a,)).fetchone()[0]
+        text_title = c.execute("SELECT title FROM film_text WHERE film_id = ?", (a,)).fetchone()[0]
+        assert text_title == a_title  # M3: the survivor's OWN title, never the loser's
+        assert c.execute("SELECT credits_fetched_on FROM tmdb_facts WHERE film_id = ?", (b,)).fetchone() == (None,)  # M4
 
 
 def test_merge_keeps_the_survivors_credits_when_both_films_have_them(repo):
