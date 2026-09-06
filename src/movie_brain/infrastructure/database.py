@@ -2365,4 +2365,5 @@ class Repository:
             "departed": sum(1 for v in crit if v.departed),
             "discovery": sum(1 for v in views if not v.criterion),
             "owned": sum(1 for v in views if v.owned),
+            "credits": self.credits_summary()["films_with_credits"],
         }

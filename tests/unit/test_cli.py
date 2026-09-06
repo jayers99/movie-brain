@@ -3,6 +3,7 @@ import json
 from typer.testing import CliRunner
 
 from movie_brain.application.cheapcharts import ResolveReport
+from movie_brain.application.enrich import EnrichReport
 from movie_brain.application.repair import DupesReport, LinksReport, YearsFromTmdbReport, YearsReport
 from movie_brain.application.sync import SyncResult
 from movie_brain.cli import app
@@ -853,3 +854,29 @@ def test_cheapcharts_resolve_is_dry_run_by_default_and_reports_both_paths(config
     assert r.exit_code == 0, r.output
     assert calls["apply"] is False
     assert "by imdb id: 4" in r.output and "by search: 1" in r.output
+
+
+def test_enrich_credits_needs_a_tmdb_token(config_dir):
+    r = runner.invoke(app, ["enrich", "credits"])
+    assert r.exit_code == 2 and "TMDB" in r.output
+
+
+def test_enrich_credits_is_dry_run_by_default_and_prints_the_report(config_dir, monkeypatch):
+    (config_dir / "tmdb-read-token.txt").write_text("t")
+    calls = {}
+
+    def fake(repo, tmdb, today, **kw):
+        calls.update(kw)
+        return EnrichReport(scanned=5, enriched=4, failed=1)
+
+    monkeypatch.setattr("movie_brain.cli.enrich_credits", fake)
+    r = runner.invoke(app, ["enrich", "credits"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is False and calls["limit"] is None
+    assert "enriched: 4" in r.output and "failed: 1" in r.output
+
+
+def test_status_reports_credit_coverage(config_dir):
+    r = runner.invoke(app, ["status"])
+    assert r.exit_code == 0
+    assert "credits" in r.output

@@ -12,6 +12,7 @@ from rich.table import Table
 from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.application.cheapcharts import resolve_itunes_ids
+from movie_brain.application.enrich import enrich_credits
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
 from movie_brain.application.lists import create_films, import_list, scorecard
@@ -64,6 +65,8 @@ repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong
 app.add_typer(repair_app, name="repair")
 cheapcharts_app = typer.Typer(help="CheapCharts: resolve each film's direct product page.")
 app.add_typer(cheapcharts_app, name="cheapcharts")
+enrich_app = typer.Typer(help="Enrich films with metadata the search bar runs on.")
+app.add_typer(enrich_app, name="enrich")
 review_app = typer.Typer(help="Resolve match_review anomalies: match to a film, create, or dismiss.")
 app.add_typer(review_app, name="review")
 thumbprint_app = typer.Typer(
@@ -973,4 +976,28 @@ def cheapcharts_resolve_cmd(
         f"unmatched: {report.unmatched} · ambiguous: {report.ambiguous} · "
         f"held: {report.held} · failed: {report.failed}"
         + (" · RATE-LIMITED, stopped early" if report.rate_limited else "")
+    )
+
+
+@enrich_app.command("credits")
+def enrich_credits_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Write the credits (default: dry-run).")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the worklist.")] = None,
+) -> None:
+    """Fetch TMDB cast, crew, characters, keywords, overview and tagline for every film that
+    holds a TMDB id and has not been enriched yet.
+
+    One call per film. A stamped film is never re-fetched, so the run can be interrupted and
+    resumed. Never part of sync. Dry-run by default.
+    """
+    cfg = load_config()
+    token = load_tmdb_token(cfg)
+    if not token:
+        err.print(f"no TMDB token: set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}")
+        raise typer.Exit(2)
+    report = enrich_credits(_repo(), TmdbClient(token), date.today(), apply=apply, limit=limit, log=_plain)
+    console.print(
+        f"scanned: {report.scanned} · enriched: {report.enriched} · failed: {report.failed}"
+        + (" · ABORTED" if report.aborted else "")
+        + ("" if apply else "   (dry run — nothing written)")
     )

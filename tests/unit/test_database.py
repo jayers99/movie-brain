@@ -134,6 +134,7 @@ def test_init_db_is_idempotent(tmp_path):
         "departed": 0,
         "discovery": 0,
         "owned": 0,
+        "credits": 0,
     }
 
 
@@ -262,6 +263,7 @@ def test_views_and_summary(repo):
         "departed": 0,
         "discovery": 0,
         "owned": 0,
+        "credits": 0,
     }
 
 
