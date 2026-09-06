@@ -2084,8 +2084,9 @@ class Repository:
             # Credits follow the survivor-wins rule the one-row tables use: a survivor that
             # already carries credits keeps them and the loser's are dropped; otherwise the
             # loser's rows move. `film_text` moves through DELETE+INSERT rather than UPDATE
-            # so migration 018's triggers re-key the FTS row (an UPDATE of the rowid alone
-            # would leave the index pointing at the loser).
+            # because the survivor may already hold its own `film_text` row (PRIMARY KEY on
+            # film_id), which a plain `UPDATE ... SET film_id` would violate; the subsequent
+            # `ON CONFLICT` then applies survivor-wins per column.
             survivor_has_credits = (
                 c.execute("SELECT 1 FROM film_credit WHERE film_id = ? LIMIT 1", (survivor_id,)).fetchone() is not None
             )
@@ -2109,7 +2110,9 @@ class Repository:
                 else:
                     c.execute(
                         "INSERT INTO film_text (film_id, title, overview, plot) VALUES (?, ?, ?, ?) "
-                        "ON CONFLICT(film_id) DO UPDATE SET overview = excluded.overview, plot = excluded.plot",
+                        "ON CONFLICT(film_id) DO UPDATE SET "
+                        "overview = COALESCE(film_text.overview, excluded.overview), "
+                        "plot = COALESCE(film_text.plot, excluded.plot)",
                         (survivor_id, loser_text["title"], loser_text["overview"], loser_text["plot"]),
                     )
                     moved["film_text"] = 1

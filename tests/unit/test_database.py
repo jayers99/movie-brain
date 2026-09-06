@@ -1843,7 +1843,17 @@ def test_merge_keeps_the_survivors_credits_when_both_films_have_them(repo):
     a, b = _two_films(repo)
     repo.set_external_id(a, "tmdb", "1", D)
     repo.set_external_id(b, "tmdb", "910", D)
-    repo.write_credits(a, _credits(tmdb_id=1, cast=(CastRow(1, "Alpha Actor", "Lead", 0),), crew=(), keywords=("kept",)), D)
+    repo.write_credits(
+        a,
+        _credits(
+            tmdb_id=1,
+            cast=(CastRow(1, "Alpha Actor", "Lead", 0),),
+            crew=(),
+            keywords=("kept",),
+            overview="Survivor overview mentioning a quokka.",
+        ),
+        D,
+    )
     repo.write_credits(b, _credits(), D)
 
     report = repo.merge_film(b, a, D, note="twin")
@@ -1851,3 +1861,30 @@ def test_merge_keeps_the_survivors_credits_when_both_films_have_them(repo):
     assert [r[1] for r in repo.credits_for(a)] == ["Alpha Actor"]  # survivor wins; loser's rows dropped
     assert repo.keywords_for(a) == ["kept"]
     assert report.dropped["film_credit"] == 4 and report.dropped["film_keyword"] == 2 and report.dropped["film_text"] == 1
+    with sqlite3.connect(repo.db_path) as c:
+        assert c.execute("SELECT credits_fetched_on FROM tmdb_facts WHERE film_id = ?", (b,)).fetchone() == (None,)
+        # the survivor's own film_text/FTS row is untouched: its overview wins, the loser's is gone
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'quokka'").fetchall() == [(a,)]
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'sternwood'").fetchall() == []
+
+
+def test_merge_keeps_the_survivors_own_text_when_it_holds_text_but_no_credits(repo):
+    a, b = _two_films(repo)
+    # keywords=() too: a's own default keywords would otherwise collide with the loser's
+    # identical default set when film_keyword rows move (film_keyword's PK is (film_id, keyword)).
+    repo.write_credits(a, _credits(tmdb_id=1, cast=(), crew=(), keywords=(), overview="SURVIVOR TEXT ALPHA"), D)
+    repo.write_credits(b, _credits(), D)
+
+    report = repo.merge_film(b, a, D, note="twin")
+
+    # no film_credit rows existed on the survivor, so the loser's credits/keywords MOVE
+    assert [r[1] for r in repo.credits_for(a)] == ["Humphrey Bogart", "Lauren Bacall", "Howard Hawks", "Humphrey Bogart"]
+    assert repo.keywords_for(a) == ["film noir", "private investigator"]
+    assert report.moved["film_credit"] == 4 and report.moved["film_keyword"] == 2
+    with sqlite3.connect(repo.db_path) as c:
+        row = c.execute("SELECT title, overview FROM film_text WHERE film_id = ?", (a,)).fetchone()
+        assert row[0] == c.execute("SELECT title FROM films WHERE id = ?", (a,)).fetchone()[0]
+        assert row[1] == "SURVIVOR TEXT ALPHA"
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'alpha'").fetchall() == [(a,)]
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'sternwood'").fetchall() == []
+        assert c.execute("SELECT 1 FROM film_text WHERE film_id = ?", (b,)).fetchone() is None
