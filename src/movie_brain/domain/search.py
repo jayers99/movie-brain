@@ -28,6 +28,12 @@ MAX_SUGGESTIONS = 3
 CANDIDATE_LIMIT = 2000  # trigram candidates fetched per lookup before Python ranks them
 # freeform weights — where the text hit decides the rank (spec §8): title > person > character > genre/keyword > plot
 W_TITLE, W_OVERVIEW, W_PLOT, W_PERSON, W_CHARACTER, W_TAG = 10.0, 2.0, 1.0, 5.0, 4.0, 3.0
+# A freeform NAME hit counts cast only, and only the billing line the owner would recognise: `ord`
+# below LEAD earns W_PERSON, below MAX earns half, deeper earns nothing. Measured on the live
+# catalogue for 'marlowe': 16 of 19 name hits were bit parts (40th of 63 on Being John Malkovich)
+# or crew (a camera loader, a location scout). A FIELD (`actor:`) is exact and complete regardless.
+FREEFORM_LEAD_BILLING = 5
+FREEFORM_MAX_BILLING = 10
 LENGTH_PENALTY_EXPONENT = 0.35  # in similarity(): plain difflib ratio over-rewards a short query in a long
 # token ('bogrt' inside 'Lena Brogren' scored 0.667 unpenalised); token scores are scaled by
 # (min_len / max_len) ** LENGTH_PENALTY_EXPONENT; equal lengths unpenalised

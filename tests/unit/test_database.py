@@ -2084,3 +2084,33 @@ def test_search_films_freeform_person_hit_never_surfaces_a_disposed_film(repo):
     repo.merge_film(zeta, a, day, note="twin")
     ids = [i for i, _ in repo.search_films([], "zeta")]
     assert zeta not in ids
+
+
+def test_freeform_name_hits_are_cast_only_and_billing_weighted(repo):
+    """'marlowe' on the live catalogue hit a 40th-billed bit part (Being John Malkovich) and three
+    crew members (a camera loader, a location scout). A freeform NAME hit now counts cast only:
+    full weight for the top five billed, half for six to ten, nothing below. `actor:` is a field
+    and stays complete — it still finds every one of them."""
+    day = date(2026, 9, 6)
+    films = {t: repo.create_film(Film(t, 1950 + i, None, "")) for i, t in enumerate(["Lead", "Mid", "Deep", "Crew"])}
+    for i, fid in enumerate(films.values()):
+        repo.set_external_id(fid, "tmdb", str(901 + i), day)
+    filler = tuple(CastRow(1000 + i, f"Extra {i}", f"Role {i}", i) for i in range(45))
+    zed = 7
+
+    def credits(tid, title, cast, crew=()):
+        return _credits(tmdb_id=tid, title=title, original_title=title, overview=None, keywords=(), cast=cast, crew=crew)
+
+    repo.write_credits(films["Lead"], credits(901, "Lead", (CastRow(zed, "Zed Marlowe", "Hero", 1),) + filler[2:]), day)
+    repo.write_credits(films["Mid"], credits(902, "Mid", filler[:6] + (CastRow(zed, "Zed Marlowe", "Cameo", 6),)), day)
+    repo.write_credits(films["Deep"], credits(903, "Deep", filler[:40] + (CastRow(zed, "Zed Marlowe", "Bit", 40),)), day)
+    repo.write_credits(films["Crew"], credits(904, "Crew", (), (CrewRow(zed, "Zed Marlowe", "Camera Loader", "Camera"),)), day)
+
+    ranked = repo.search_films([], "marlowe")
+    assert [i for i, _ in ranked] == [films["Lead"], films["Mid"]]  # the bit part and the crew credit are gone
+    scores = dict(ranked)
+    assert scores[films["Lead"]] > scores[films["Mid"]] > 0  # a lead outranks a 7th-billed cameo
+    everyone = repo.search_films(
+        [Filter("person", ids=tuple(repo.persons_named("Zed Marlowe", "cast", ())), credit_kind="cast")], ""
+    )
+    assert {i for i, _ in everyone} == {films["Lead"], films["Mid"], films["Deep"]}  # the field is still complete

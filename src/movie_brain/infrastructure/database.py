@@ -32,6 +32,8 @@ from movie_brain.domain.models import (
 )
 from movie_brain.domain.search import (
     CANDIDATE_LIMIT,
+    FREEFORM_LEAD_BILLING,
+    FREEFORM_MAX_BILLING,
     W_CHARACTER,
     W_OVERVIEW,
     W_PERSON,
@@ -1463,13 +1465,15 @@ class Repository:
         add(c.execute("SELECT id FROM films WHERE lower(title) LIKE ?", (f"%{free.lower()}%",)).fetchall(), W_TITLE)
         tri = fts_words(free, min_len=3)
         if tri:
+            # cast only, billing-weighted (domain/search.py::FREEFORM_*_BILLING): the weight comes back
+            # from SQL so `add` sums it like a bm25 score; crew and deep cast never enter freeform.
             add(
                 c.execute(
-                    "SELECT DISTINCT fc.film_id FROM person_fts pf "
-                    "JOIN film_credit fc ON fc.person_id = pf.rowid WHERE person_fts MATCH ?",
-                    (tri,),
-                ).fetchall(),
-                W_PERSON,
+                    "SELECT fc.film_id, MAX(CASE WHEN fc.ord < ? THEN ? ELSE ? END) FROM person_fts pf "
+                    "JOIN film_credit fc ON fc.person_id = pf.rowid "
+                    "WHERE person_fts MATCH ? AND fc.kind = 'cast' AND fc.ord < ? GROUP BY fc.film_id",
+                    (FREEFORM_LEAD_BILLING, W_PERSON, W_PERSON / 2, tri, FREEFORM_MAX_BILLING),
+                ).fetchall()
             )
             add(
                 c.execute(
