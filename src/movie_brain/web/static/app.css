@@ -76,3 +76,12 @@ tbody tr.departed td { color:var(--muted); }
 input.revisit-note { display:block; width:100%; max-width:320px; font:inherit; padding:2px 6px; margin:0 0 8px; border:1px solid var(--line); border-radius:4px; }
 .audit-block { margin-top:1rem; border-top:1px solid var(--line, #ccc); padding-top:.5rem; }
 .verdict-buttons button { margin-right:.25rem; }
+
+/* Power search bar. It lives OUTSIDE #chips and never carries .chip: the #chips click handler
+   matches .chip and would add `undefined` to the chip set (the list-picker precedent). */
+#search-row { margin-top:8px; }
+.search { width:100%; box-sizing:border-box; border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:6px 14px; font:inherit; }
+.search:focus { outline:2px solid var(--chip-on); outline-offset:1px; }
+.search-note { margin-top:4px; font-size:13px; color:var(--muted, #666); }
+.search-note b { font-weight:600; }
+.search-note button { border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:1px 8px; margin-left:4px; cursor:pointer; font:inherit; font-size:12px; }

@@ -9,7 +9,7 @@ from datetime import date
 import pytest
 from playwright.sync_api import Page
 
-from movie_brain.domain.models import Film, ListEntry, ListMeta, McTitle, OmdbRating
+from movie_brain.domain.models import CastRow, CrewRow, Film, ListEntry, ListMeta, McTitle, OmdbRating, TmdbCredits
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
 
@@ -155,6 +155,23 @@ def seed(repo: Repository) -> None:
     # Alpha's CheapCharts product page is resolved (external id `itunes`), so its drawer links
     # straight to the page; Hotel's is not, so Hotel keeps the title-search fallback.
     repo.set_external_id(ids["alpha (1950)"], "itunes", "284815525", TODAY)
+    # Power search (Plan B): Alpha and Bravo carry credits. Bogart plays Marlowe on Alpha (the
+    # spec's own example query); Jane Bogart on Bravo is the near-name that makes the
+    # correction's tiebreak real; Bravo's overview says "alpha" so a freeform 'alpha' search
+    # ranks Alpha (title) above Bravo (overview). Hawks directs both.
+    def _credits(tmdb_id: int, title: str, overview: str, cast: tuple[CastRow, ...]) -> TmdbCredits:
+        return TmdbCredits(
+            tmdb_id=tmdb_id, imdb_id=None, title=title, original_title=title, year=None, runtime_min=None,
+            alt_titles=(), overview=overview, tagline=None, genres=("Mystery",), keywords=("film noir",),
+            cast=cast, crew=(CrewRow(2636, "Howard Hawks", "Director", "Directing"),),
+        )
+
+    repo.set_external_id(ids["alpha (1950)"], "tmdb", "910", TODAY)
+    repo.set_external_id(ids["bravo (1960)"], "tmdb", "911", TODAY)
+    repo.write_credits(ids["alpha (1950)"], _credits(910, "Alpha", "A private eye in the Sternwood house.",
+                                                     (CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),)), TODAY)
+    repo.write_credits(ids["bravo (1960)"], _credits(911, "Bravo", "A holiday in the alpha quadrant.",
+                                                     (CastRow(77, "Jane Bogart", "Nurse", 0),)), TODAY)
     # Hotel: a discovery film with no Criterion listing but buyable on the Apple TV store —
     # reachable (default scope) shows it, criterion scope hides it. Hungarian + no scores keep it
     # out of the default-English counts and at the tail of the default sort.

@@ -6,6 +6,7 @@
   const DEFAULT_LANG = 'English';
   const state = {
     films: [], cfg: null, chips: new Set(), scope: 'reachable',
+    q: '', search: null,   // power search: state.search is null or {ids: Set, rank: Map|null}
     list: null, listCatalog: [],   // list picker: filter to one curated list and order by its rank
     cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null },
     sort: null,            // {col, dir} or null = default
@@ -68,6 +69,7 @@
   const inRange = (v, lo, hi) => v != null && (lo == null || v >= lo) && (hi == null || v <= hi);
   function rowMatches(f) {
     if (!inScope(f)) return false;
+    if (state.search && !state.search.ids.has(f.id)) return false;
     if (state.list && !(f.lists || []).some((l) => l.slug === state.list)) return false;
     for (const c of state.chips) if (!CHIP_PREDICATES[c](f)) return false;
     const k = state.cols;
@@ -86,6 +88,10 @@
   const byTitle = (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
   function compare(a, b) {
     if (!state.sort) {  // default hierarchy: metacritic, ties → rt, ties → imdb (each desc, missing after present), then title
+      if (state.search && state.search.rank) {  // freeform text ranks; a column sort still overrides
+        const ra = state.search.rank.get(a.id), rb = state.search.rank.get(b.id);
+        if (ra !== rb) return ra - rb;
+      }
       if (state.list) {  // a picked list is reproduced in ITS order, ahead of every other rule
         const ra = listRank(a), rb = listRank(b);
         if (ra != null && rb != null && ra !== rb) return ra - rb;
@@ -188,6 +194,7 @@
       if (lo != null || hi != null) p.set(name, `${lo ?? ''}-${hi ?? ''}`);
     }
     if (state.list) p.set('list', state.list);
+    if (state.q) p.set('q', state.q);
     if (state.sort) p.set('sort', `${state.sort.col}:${state.sort.dir}`);
     if (state.openFilm != null) p.set('film', state.openFilm);
     const qs = p.toString();
@@ -210,8 +217,10 @@
     state.sort = s && COLS.includes(s.split(':')[0]) && ['asc', 'desc'].includes(s.split(':')[1]) ? { col: s.split(':')[0], dir: s.split(':')[1] } : null;
     const film = p.get('film');
     state.openFilm = film ? +film : null;
+    state.q = p.get('q') || '';
   }
   function writeControlsFromState() {
+    $('#search').value = state.q;
     $('#list-picker').value = state.list || '';
     $('#scope-toggle').textContent = SCOPE_LABELS[state.scope];
     $('#scope-toggle').classList.toggle('active', state.scope !== 'reachable');
@@ -298,6 +307,59 @@
     // silently dropped them would answer a different question than the one it was asked.
     if (state.list) state.scope = 'all';
     writeControlsFromState(); applyFilters();
+  });
+
+  // ---- power search (spec §9) ----
+  // The server resolves the query to an id set; this pipeline only intersects with it, so chips,
+  // scope, list picker and column filters all keep working mid-search. `dataset.settled` on the
+  // input records the last query whose response has been applied — tests wait on it.
+  const searchEl = $('#search'), noteEl = $('#search-note');
+  let searchTimer = null, searchSeq = 0;
+  function applySearchResponse(body) {
+    state.search = { ids: new Set(body.ids), rank: body.ranked ? new Map(body.ids.map((id, i) => [id, i])) : null };
+    const parts = [];
+    for (const c of body.corrections) parts.push(`Showing results for <b>${esc(c.used)}</b> (you typed “${esc(c.typed)}”) <button class="undo" data-typed="${esc(c.typed)}">undo</button>`);
+    for (const s of body.suggestions) parts.push(`No ${esc(s.field)} “${esc(s.typed)}” — did you mean ${s.options.map((o) => `<button class="suggest" data-typed="${esc(s.typed)}" data-use="${esc(o)}">${esc(o)}</button>`).join('')}?`);
+    for (const h of body.hints) parts.push(esc(h));
+    noteEl.innerHTML = parts.join('<br>');
+    noteEl.hidden = parts.length === 0;
+  }
+  async function runSearch() {
+    const q = state.q.trim();
+    const seq = ++searchSeq;
+    if (!q) {
+      state.search = null; noteEl.hidden = true; noteEl.innerHTML = '';
+      searchEl.dataset.settled = searchEl.value;
+      applyFilters();
+      return;
+    }
+    try {
+      const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const body = await r.json();
+      if (seq !== searchSeq) return;  // a newer query is in flight
+      applySearchResponse(body);
+    } catch (e) {
+      if (seq !== searchSeq) return;
+      state.search = null; noteEl.hidden = false; noteEl.textContent = `Search failed: ${e.message}`;
+    }
+    searchEl.dataset.settled = searchEl.value;
+    applyFilters();
+  }
+  searchEl.addEventListener('input', () => {
+    state.q = searchEl.value;
+    delete searchEl.dataset.settled;
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(runSearch, 300);
+  });
+  // Quoting a value makes it exact (spec §7.3): undo re-runs with the typed text quoted, and a
+  // suggestion replaces the typed text with the chosen name, quoted.
+  noteEl.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const typed = b.dataset.typed, use = b.classList.contains('undo') ? typed : b.dataset.use;
+    state.q = state.q.replace(typed, `"${use}"`);
+    searchEl.value = state.q;
+    delete searchEl.dataset.settled;
+    runSearch();
   });
 
   const langPanel = $('#f-lang-panel'), langInput = $('#f-lang-input');
@@ -583,6 +645,7 @@
     writeControlsFromState();
     renderCounts();
     applyFilters();
+    if (state.q) runSearch(); else searchEl.dataset.settled = '';
     if (window.MB.onBoot) window.MB.onBoot();
   }
   boot().catch((e) => toast(`Failed to load: ${e.message}`));

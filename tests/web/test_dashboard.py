@@ -831,3 +831,71 @@ def test_drawer_links_straight_to_the_resolved_cheapcharts_page(dash):
     link = dash.locator("#drawer-body a.cheapcharts-link")
     expect(link).to_have_attribute("href", "https://www.cheapcharts.com/us/itunes/movies/284815525")
     expect(link).to_have_text("CheapCharts ↗")
+
+
+def _search(dash: Page, text: str) -> None:
+    dash.fill("#search", text)
+    dash.wait_for_function("document.querySelector('#search').dataset.settled === document.querySelector('#search').value")
+
+
+def test_search_field_query_narrows_to_the_exact_set(dash: Page):
+    clear_lang(dash)
+    _search(dash, "character: philip marlowe")
+    assert count(dash) == 1
+    expect(dash.locator("#films tbody tr[data-id]").first).to_contain_text("Alpha")
+    assert "q=character" in dash.url
+
+
+def test_search_freeform_ranks_a_title_hit_first_and_sort_restores_on_clear(dash: Page):
+    clear_lang(dash)
+    _search(dash, "alpha")
+    rows = dash.locator("#films tbody tr[data-id]")
+    assert count(dash) == 2
+    expect(rows.nth(0)).to_contain_text("Alpha")   # title hit (10) above Bravo's overview hit (2)
+    expect(rows.nth(1)).to_contain_text("Bravo")
+    _search(dash, "")
+    assert count(dash) > 2 and "q=" not in dash.url
+
+
+def test_search_correction_is_shown_and_undo_forces_exact(dash: Page):
+    clear_lang(dash)
+    _search(dash, "actor: bogrt")
+    note = dash.locator("#search-note")
+    expect(note).to_contain_text("Showing results for Humphrey Bogart")
+    assert count(dash) == 1
+    note.locator("button.undo").click()
+    expect(dash.locator("#search")).to_have_value('actor: "bogrt"')
+    dash.wait_for_function("document.querySelector('#search').dataset.settled === document.querySelector('#search').value")
+    assert count(dash) == 0
+
+
+def test_search_suggestion_chip_replaces_the_value(dash: Page):
+    clear_lang(dash)
+    _search(dash, "actor: bogxrtq")   # shares 'bog' with Bogart; similarity 0.77 — suggestion band, not correction
+    assert count(dash) == 0
+    dash.locator("#search-note button.suggest", has_text="Humphrey Bogart").click()
+    expect(dash.locator("#search")).to_have_value('actor: "Humphrey Bogart"')
+    dash.wait_for_function("document.querySelector('#search').dataset.settled === document.querySelector('#search').value")
+    assert count(dash) == 1
+
+
+def test_chips_keep_working_mid_search(dash: Page):
+    clear_lang(dash)
+    _search(dash, "director: hawks")
+    assert count(dash) == 2   # Alpha and Bravo
+    dash.click(".chip[data-chip=owned]")
+    assert count(dash) == 1   # only Alpha is owned
+    dash.click(".chip[data-chip=owned]")
+    assert count(dash) == 2
+
+
+def test_search_round_trips_through_the_url(dash: Page, server: str):
+    dash.goto(f"{server}/?q=character%3A+philip+marlowe&lang=any")
+    dash.wait_for_function("document.querySelector('#search').dataset.settled === document.querySelector('#search').value")
+    expect(dash.locator("#search")).to_have_value("character: philip marlowe")
+    assert count(dash) == 1
+
+
+def test_search_input_is_not_a_chip(dash: Page):
+    assert dash.locator("#search.chip").count() == 0
+    assert dash.locator("#chips #search").count() == 0
