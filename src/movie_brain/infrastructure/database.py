@@ -30,6 +30,7 @@ from movie_brain.domain.models import (
     YearBackfillTarget,
     film_key,
 )
+from movie_brain.domain.search import CANDIDATE_LIMIT, Candidate, trigram_query
 from movie_brain.domain.thumbprint import edition_label, title_norm
 from movie_brain.domain.watch import best_source
 from movie_brain.infrastructure.cheapcharts import product_url
@@ -1269,6 +1270,79 @@ class Repository:
                 "films_with_tmdb": int(with_tmdb),
                 "persons": int(persons),
             }
+
+    # search (power search, Plan B) ------------------------------------------
+    @staticmethod
+    def _credit_clause(credit_kind: str | None, jobs: tuple[str, ...]) -> tuple[str, list[str]]:
+        """SQL fragment (no leading AND) restricting film_credit rows to a field's kind/job set."""
+        if credit_kind is None:
+            return "1 = 1", []
+        if credit_kind == "cast" or not jobs:
+            return "fc.kind = ?", [credit_kind]
+        return f"fc.kind = 'crew' AND fc.job IN ({','.join('?' * len(jobs))})", list(jobs)
+
+    def persons_named(self, name: str, credit_kind: str | None, jobs: tuple[str, ...]) -> list[int]:
+        clause, params = self._credit_clause(credit_kind, jobs)
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT p.id FROM person p JOIN film_credit fc ON fc.person_id = p.id "
+                f"WHERE lower(p.name) = ? AND {clause} ORDER BY p.id",
+                [name.lower().strip(), *params],
+            ).fetchall()
+            return [int(r["id"]) for r in rows]
+
+    def person_candidates(self, text: str, credit_kind: str | None, jobs: tuple[str, ...]) -> list[Candidate]:
+        """Every person sharing at least one trigram with `text`, restricted to the field's
+        kind/job set, with their credit count in that set. Ranking is the caller's job."""
+        match = trigram_query(text)
+        if not match:
+            return []
+        clause, params = self._credit_clause(credit_kind, jobs)
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT p.id, p.name, COUNT(*) AS n FROM person_fts pf "
+                "JOIN person p ON p.id = pf.rowid JOIN film_credit fc ON fc.person_id = p.id "
+                f"WHERE person_fts MATCH ? AND {clause} GROUP BY p.id ORDER BY n DESC, p.name LIMIT ?",
+                [match, *params, CANDIDATE_LIMIT],
+            ).fetchall()
+            return [Candidate(int(r["id"]), str(r["name"]), int(r["n"])) for r in rows]
+
+    def characters_named(self, text: str) -> list[str]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT character FROM film_credit "
+                "WHERE kind = 'cast' AND lower(character) = ? ORDER BY character",
+                (text.lower().strip(),),
+            ).fetchall()
+            return [str(r["character"]) for r in rows]
+
+    def character_candidates(self, text: str) -> list[Candidate]:
+        match = trigram_query(text)
+        if not match:
+            return []
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT fc.character AS name, COUNT(*) AS n FROM character_fts cf "
+                "JOIN film_credit fc ON fc.rowid = cf.rowid "
+                "WHERE character_fts MATCH ? AND fc.character != '' "
+                "GROUP BY fc.character ORDER BY n DESC, name LIMIT ?",
+                (match, CANDIDATE_LIMIT),
+            ).fetchall()
+            return [Candidate(str(r["name"]), str(r["name"]), int(r["n"])) for r in rows]
+
+    def keyword_candidates(self) -> list[Candidate]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT keyword, COUNT(*) AS n FROM film_keyword GROUP BY keyword ORDER BY keyword"
+            ).fetchall()
+            return [Candidate(str(r["keyword"]), str(r["keyword"]), int(r["n"])) for r in rows]
+
+    def title_candidates(self) -> list[Candidate]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title FROM films f WHERE " + _NOT_DISPOSED + " ORDER BY f.id"
+            ).fetchall()
+            return [Candidate(int(r["id"]), str(r["title"]), 0) for r in rows]
 
     def films_needing_year_backfill(self, limit: int | None = None) -> list[YearBackfillTarget]:
         """Films with no year at all, holding a TMDB id — the worklist of `repair years

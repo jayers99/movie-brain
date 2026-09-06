@@ -1928,3 +1928,56 @@ def test_merge_keeps_the_survivors_own_text_when_it_holds_text_but_no_credits(re
         assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'alpha'").fetchall() == [(a,)]
         assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'sternwood'").fetchall() == []
         assert c.execute("SELECT 1 FROM film_text WHERE film_id = ?", (b,)).fetchone() is None
+
+
+def _seed_people(repo):
+    """Two films: Alpha (Bogart as Marlowe, Hawks directing, Bogart also producing) and
+    Beta (Jane Bogart as Nurse, Hawks directing). Bogart carries 2 credits, Jane 1."""
+    day = date(2026, 9, 6)
+    a = repo.create_film(Film("Alpha", 1946, None, ""))
+    b = repo.create_film(Film("Beta", 1950, None, ""))
+    repo.set_external_id(a, "tmdb", "910", day)
+    repo.set_external_id(b, "tmdb", "911", day)
+    repo.write_credits(a, _credits(), day)
+    repo.write_credits(b, _credits(
+        tmdb_id=911, title="Beta", original_title="Beta", overview="A nurse in the alpha ward.",
+        keywords=("hospital",),
+        cast=(CastRow(77, "Jane Bogart", "Nurse", 0),),
+        crew=(CrewRow(2636, "Howard Hawks", "Director", "Directing"),),
+    ), day)
+    return a, b
+
+
+def test_persons_named_is_exact_case_insensitive_and_job_aware(repo):
+    a, b = _seed_people(repo)
+    bogart = repo.persons_named("humphrey BOGART", "cast", ())
+    assert len(bogart) == 1
+    assert repo.persons_named("Humphrey Bogart", "crew", ("Director",)) == []      # he produces, never directs
+    assert repo.persons_named("Humphrey Bogart", "crew", ("Producer",)) == bogart
+    assert repo.persons_named("Howard Hawks", "crew", ()) != [] and repo.persons_named("Howard Hawks", "cast", ()) == []
+    assert repo.persons_named("Nobody", None, ()) == []
+
+
+def test_person_candidates_come_from_the_trigram_index_with_credit_counts(repo):
+    _seed_people(repo)
+    cands = {c.name: c for c in repo.person_candidates("bogrt", "cast", ())}
+    assert {"Humphrey Bogart", "Jane Bogart"} <= set(cands)
+    assert cands["Humphrey Bogart"].weight == 1 and cands["Jane Bogart"].weight == 1   # cast credits only
+    assert "Howard Hawks" not in cands
+    assert repo.person_candidates("bogrt", "crew", ("Producer",))[0].name == "Humphrey Bogart"
+    assert repo.person_candidates("xx", "cast", ()) == []   # shorter than a trigram → nothing asked
+
+
+def test_character_lookups(repo):
+    _seed_people(repo)
+    assert repo.characters_named("philip marlowe") == ["Philip Marlowe"]
+    cands = repo.character_candidates("marlow")
+    assert [c.name for c in cands] == ["Philip Marlowe"] and cands[0].weight == 1 and cands[0].key == "Philip Marlowe"
+
+
+def test_keyword_and_title_candidates(repo):
+    a, b = _seed_people(repo)
+    kws = {c.name: c.weight for c in repo.keyword_candidates()}
+    assert kws == {"film noir": 1, "private investigator": 1, "hospital": 1}
+    titles = {c.name: c.key for c in repo.title_candidates()}
+    assert titles == {"Alpha": a, "Beta": b}
