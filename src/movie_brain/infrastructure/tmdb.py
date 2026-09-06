@@ -5,7 +5,7 @@ from typing import Any, NamedTuple
 import requests
 
 from movie_brain.domain.matching import norm_title, split_annotations
-from movie_brain.domain.models import TmdbCandidate, TmdbProviders
+from movie_brain.domain.models import CastRow, CrewRow, TmdbCandidate, TmdbCredits, TmdbProviders
 
 TMDB_API = "https://api.themoviedb.org/3"
 
@@ -177,6 +177,40 @@ class TmdbClient:
             alternatives=alts,
             year=year,
             runtime_min=int(runtime) if isinstance(runtime, int) and runtime > 0 else None,
+        )
+
+    def movie_credits(self, tmdb_id: int) -> TmdbCredits:
+        """Cast, crew, keywords and the movie body in ONE call (spec D11). Nulls from TMDB
+        become '' for the three credit text columns, which are NOT NULL DEFAULT '' so the
+        UNIQUE constraint on `film_credit` actually dedups."""
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="credits,keywords").json()
+        rd = d.get("release_date") or ""
+        year = int(rd[:4]) if len(rd) >= 4 and rd[:4].isdigit() else None
+        runtime = d.get("runtime")
+        credits = d.get("credits") or {}
+        cast = tuple(
+            CastRow(int(r["id"]), str(r.get("name") or ""), str(r.get("character") or ""), int(r.get("order") or 0))
+            for r in credits.get("cast") or []
+            if r.get("id") is not None
+        )
+        crew = tuple(
+            CrewRow(int(r["id"]), str(r.get("name") or ""), str(r.get("job") or ""), str(r.get("department") or ""))
+            for r in credits.get("crew") or []
+            if r.get("id") is not None
+        )
+        return TmdbCredits(
+            tmdb_id=int(d.get("id") or tmdb_id),
+            imdb_id=str(d["imdb_id"]) if d.get("imdb_id") else None,
+            title=d.get("title") or "",
+            original_title=d.get("original_title") or "",
+            year=year,
+            runtime_min=int(runtime) if isinstance(runtime, int) and runtime > 0 else None,
+            overview=(d.get("overview") or "").strip() or None,
+            tagline=(d.get("tagline") or "").strip() or None,
+            genres=tuple(str(g["name"]) for g in d.get("genres") or [] if g.get("name")),
+            keywords=tuple(str(k["name"]) for k in (d.get("keywords") or {}).get("keywords") or [] if k.get("name")),
+            cast=cast,
+            crew=crew,
         )
 
 

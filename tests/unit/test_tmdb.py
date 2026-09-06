@@ -6,7 +6,7 @@ import pytest
 import requests
 import responses
 
-from movie_brain.domain.models import TmdbCandidate
+from movie_brain.domain.models import CastRow, CrewRow, TmdbCandidate
 from movie_brain.infrastructure.tmdb import TMDB_API, AuthError, FindResult, TmdbClient, watch_link
 
 
@@ -269,3 +269,44 @@ def test_thumbprint_raw_methods_hit_the_right_endpoints(rs):
     assert c.person_movie_credits(7)[0]["job"] == "Director"
     assert c.movie_detail(1)["external_ids"]["imdb_id"] == "tt1"
     assert "append_to_response" in rs.calls[-1].request.url
+
+
+BIG_SLEEP_CREDITS = {
+    "id": 910, "imdb_id": "tt0038355", "title": "The Big Sleep", "original_title": "The Big Sleep",
+    "release_date": "1946-08-22", "runtime": 114,
+    "overview": "Private Investigator Philip Marlowe is hired…", "tagline": "The picture they were born for!",
+    "genres": [{"id": 9648, "name": "Mystery"}, {"id": 80, "name": "Crime"}],
+    "credits": {
+        "cast": [
+            {"id": 4110, "name": "Humphrey Bogart", "character": "Philip Marlowe", "order": 0},
+            {"id": 3092, "name": "Lauren Bacall", "character": "Vivian Sternwood Rutledge", "order": 1},
+            {"id": 9999, "name": "Uncredited Extra", "character": None, "order": 40},
+        ],
+        "crew": [
+            {"id": 2636, "name": "Howard Hawks", "job": "Director", "department": "Directing"},
+            {"id": 2637, "name": "William Faulkner", "job": "Screenplay", "department": "Writing"},
+        ],
+    },
+    "keywords": {"keywords": [{"id": 1, "name": "film noir"}, {"id": 2, "name": "private investigator"}]},
+}
+
+
+@responses.activate
+def test_movie_credits_reads_cast_crew_keywords_and_body_in_one_call():
+    responses.get(f"{TMDB_API}/movie/910", json=BIG_SLEEP_CREDITS)
+    c = TmdbClient("tok").movie_credits(910)
+    assert responses.calls[0].request.params["append_to_response"] == "credits,keywords"
+    assert (c.tmdb_id, c.imdb_id, c.title, c.year, c.runtime_min) == (910, "tt0038355", "The Big Sleep", 1946, 114)
+    assert c.genres == ("Mystery", "Crime") and c.keywords == ("film noir", "private investigator")
+    assert c.cast[0] == CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0)
+    assert c.cast[2].character == ""  # a null character becomes '' — the column is NOT NULL DEFAULT ''
+    assert c.crew[1] == CrewRow(2637, "William Faulkner", "Screenplay", "Writing")
+    assert c.overview.startswith("Private Investigator") and c.tagline.startswith("The picture")
+
+
+@responses.activate
+def test_movie_credits_tolerates_a_film_with_no_credits_or_keywords_blocks():
+    responses.get(f"{TMDB_API}/movie/1", json={"id": 1, "title": "Bare", "original_title": "Bare", "release_date": "", "genres": []})
+    c = TmdbClient("tok").movie_credits(1)
+    assert (c.year, c.runtime_min, c.overview, c.tagline) == (None, None, None, None)
+    assert c.cast == () and c.crew == () and c.keywords == () and c.genres == ()
