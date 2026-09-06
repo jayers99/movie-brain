@@ -1870,16 +1870,18 @@ def test_merge_keeps_the_survivors_credits_when_both_films_have_them(repo):
 
 def test_merge_keeps_the_survivors_own_text_when_it_holds_text_but_no_credits(repo):
     a, b = _two_films(repo)
-    # keywords=() too: a's own default keywords would otherwise collide with the loser's
-    # identical default set when film_keyword rows move (film_keyword's PK is (film_id, keyword)).
-    repo.write_credits(a, _credits(tmdb_id=1, cast=(), crew=(), keywords=(), overview="SURVIVOR TEXT ALPHA"), D)
+    # The survivor already holds a "film noir" keyword row, textually identical to one of the
+    # loser's — the keyword move must tolerate that collision (film_keyword's PK is (film_id, keyword)),
+    # never raise, and keep the survivor's non-overlapping "kept" keyword alongside the loser's.
+    repo.write_credits(a, _credits(tmdb_id=1, cast=(), crew=(), keywords=("kept", "film noir"), overview="SURVIVOR TEXT ALPHA"), D)
     repo.write_credits(b, _credits(), D)
 
     report = repo.merge_film(b, a, D, note="twin")
 
     # no film_credit rows existed on the survivor, so the loser's credits/keywords MOVE
     assert [r[1] for r in repo.credits_for(a)] == ["Humphrey Bogart", "Lauren Bacall", "Howard Hawks", "Humphrey Bogart"]
-    assert repo.keywords_for(a) == ["film noir", "private investigator"]
+    assert repo.keywords_for(a) == ["film noir", "kept", "private investigator"]
+    assert repo.keywords_for(b) == []
     assert report.moved["film_credit"] == 4 and report.moved["film_keyword"] == 2
     with sqlite3.connect(repo.db_path) as c:
         row = c.execute("SELECT title, overview FROM film_text WHERE film_id = ?", (a,)).fetchone()

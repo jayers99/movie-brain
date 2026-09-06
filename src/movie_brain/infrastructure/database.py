@@ -2090,16 +2090,32 @@ class Repository:
             survivor_has_credits = (
                 c.execute("SELECT 1 FROM film_credit WHERE film_id = ? LIMIT 1", (survivor_id,)).fetchone() is not None
             )
-            for table in ("film_credit", "film_keyword"):
-                n_loser = c.execute(f"SELECT COUNT(*) FROM {table} WHERE film_id = ?", (loser_id,)).fetchone()[0]
-                if not n_loser:
-                    continue
+            n_credit = c.execute("SELECT COUNT(*) FROM film_credit WHERE film_id = ?", (loser_id,)).fetchone()[0]
+            if n_credit:
                 if survivor_has_credits:
-                    c.execute(f"DELETE FROM {table} WHERE film_id = ?", (loser_id,))
-                    dropped[table] = int(n_loser)
+                    c.execute("DELETE FROM film_credit WHERE film_id = ?", (loser_id,))
+                    dropped["film_credit"] = int(n_credit)
                 else:
-                    c.execute(f"UPDATE {table} SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id))
-                    moved[table] = int(n_loser)
+                    # The survivor has no film_credit rows by definition here, so its UNIQUE
+                    # (film_id, person_id, kind, job, character) cannot collide with the move.
+                    c.execute("UPDATE film_credit SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id))
+                    moved["film_credit"] = int(n_credit)
+            n_kw = c.execute("SELECT COUNT(*) FROM film_keyword WHERE film_id = ?", (loser_id,)).fetchone()[0]
+            if n_kw:
+                if survivor_has_credits:
+                    c.execute("DELETE FROM film_keyword WHERE film_id = ?", (loser_id,))
+                    dropped["film_keyword"] = int(n_kw)
+                else:
+                    # Unlike film_credit, the survivor CAN already hold a film_keyword row here
+                    # (an enriched-but-credit-free survivor) — INSERT OR IGNORE tolerates a
+                    # keyword textually identical to one of the loser's, dropping the duplicate.
+                    c.execute(
+                        "INSERT OR IGNORE INTO film_keyword (film_id, keyword) "
+                        "SELECT ?, keyword FROM film_keyword WHERE film_id = ?",
+                        (survivor_id, loser_id),
+                    )
+                    c.execute("DELETE FROM film_keyword WHERE film_id = ?", (loser_id,))
+                    moved["film_keyword"] = int(n_kw)
             loser_text = c.execute(
                 "SELECT title, overview, plot FROM film_text WHERE film_id = ?", (loser_id,)
             ).fetchone()
