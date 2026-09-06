@@ -2042,3 +2042,15 @@ def test_search_films_freeform_and_field_combine_and_disposed_films_never_appear
     assert [i for i, _ in repo.search_films([Filter("year", lo=1950, hi=1950)], "alpha")] == [b]
     assert all(i != a + 3 for i, _ in repo.search_films([], "alpha delta"))  # the merged-away 'Alpha Delta'
     assert repo.search_films([], "zzzz") == []
+
+
+def test_search_films_ors_a_repeated_field_for_every_kind(repo):
+    a, b, g = _seed_search(repo)
+    years = [Filter("year", lo=1946, hi=1946), Filter("year", lo=1950, hi=1950)]
+    assert [i for i, _ in repo.search_films(years, "")] == [a, b]
+    plots = [Filter("text", values=("sternwood",)), Filter("text", values=("alpha ward",))]
+    assert [i for i, _ in repo.search_films(plots, "")] == [a, b]
+    chars = [Filter("character", values=("Philip Marlowe",)), Filter("character", values=("Nurse",))]
+    assert [i for i, _ in repo.search_films(chars, "")] == [a, b]
+    # AND across different fields still holds
+    assert [i for i, _ in repo.search_films([years[1], chars[0]], "")] == []

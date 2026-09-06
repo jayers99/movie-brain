@@ -1482,13 +1482,27 @@ class Repository:
         return scores
 
     def search_films(self, filters: Sequence[Filter], free: str) -> list[tuple[int, float]]:
-        """Every filter ANDed, freeform scored (spec §8). Disposed films never appear."""
+        """The same field repeated ORs; different fields AND (spec §7.1); freeform scored
+        (spec §8). Disposed films never appear. Grouping happens here, not in the resolver,
+        so every filter kind — including `year` and `plot` — gets the same OR-within-AND-across
+        treatment by construction, rather than each kind needing its own opt-in."""
+        groups: dict[tuple[str, str | None, tuple[str, ...]], list[Filter]] = {}
+        order: list[tuple[str, str | None, tuple[str, ...]]] = []
+        for flt in filters:
+            key = (flt.kind, flt.credit_kind, flt.jobs)
+            if key not in groups:
+                groups[key] = []
+                order.append(key)
+            groups[key].append(flt)
         clauses = [_NOT_DISPOSED]
         params: list[object] = []
-        for flt in filters:
-            sql, p = self._filter_sql(flt)
-            clauses.append(sql)
-            params += p
+        for key in order:
+            sub_clauses: list[str] = []
+            for flt in groups[key]:
+                sql, p = self._filter_sql(flt)
+                sub_clauses.append(sql)
+                params += p
+            clauses.append(sub_clauses[0] if len(sub_clauses) == 1 else "(" + " OR ".join(sub_clauses) + ")")
         with self._conn() as c:
             scores = self._freeform_scores(c, free.strip()) if free.strip() else None
             if scores is not None:

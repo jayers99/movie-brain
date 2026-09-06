@@ -63,3 +63,7 @@ Feature: Resolving a search into an exact film-id set
     When I search for "actor: anyone"
     Then the result is empty
     And the hints include "no credits loaded — run `movie-brain enrich credits --apply`"
+
+  Scenario: The same field twice is ORed, even for a year range
+    When I search for "year: 1946 year: 1950"
+    Then the result ids are Alpha then Beta

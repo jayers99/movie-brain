@@ -102,9 +102,10 @@ class _Resolver:
     def title(self, term: Term) -> None:
         # A title term is a substring filter, like the column filter it sits beside; when it
         # matches nothing, the nearest titles are offered but never substituted.
-        hits = [c for c in self.repo.title_candidates() if term.value.lower() in c.name.lower()]
+        candidates = self.repo.title_candidates()
+        hits = [c for c in candidates if term.value.lower() in c.name.lower()]
         if not hits and not term.exact:
-            ranked = rank_candidates(term.value, self.repo.title_candidates())
+            ranked = rank_candidates(term.value, candidates)
             options = [r.name for r in ranked if r.score >= SUGGESTION_FLOOR][:MAX_SUGGESTIONS]
             if options:
                 self.suggestions.append({"field": "title", "typed": term.value, "options": options})
@@ -149,11 +150,10 @@ def run_search(repo: Repository, text: str) -> SearchResult:
             dispatch[kind](term)
     if people_asked and repo.credits_summary()["films_with_credits"] == 0:
         hints.append(NO_CREDITS_HINT)
-    filters = _merge_same_field(resolver.filters)
     if resolver.unresolved:
         ids: list[tuple[int, float]] = []
     else:
-        ids = repo.search_films(filters, parsed.free)
+        ids = repo.search_films(resolver.filters, parsed.free)
     return SearchResult(
         ids=tuple(i for i, _ in ids),
         ranked=bool(parsed.free.strip()) and bool(ids),
@@ -161,26 +161,3 @@ def run_search(repo: Repository, text: str) -> SearchResult:
         suggestions=tuple(resolver.suggestions),
         hints=tuple(hints),
     )
-
-
-def _merge_same_field(filters: list[Filter]) -> list[Filter]:
-    """The same field repeated ORs (spec §7.1): fold its filters' ids/values into one."""
-    merged: dict[tuple[str, str | None, tuple[str, ...]], Filter] = {}
-    out: list[Filter] = []
-    for flt in filters:
-        if flt.kind == "year":
-            out.append(flt)
-            continue
-        key = (flt.kind, flt.credit_kind, flt.jobs)
-        if key in merged:
-            prev = merged[key]
-            merged[key] = Filter(
-                flt.kind,
-                ids=prev.ids + flt.ids,
-                values=prev.values + flt.values,
-                credit_kind=flt.credit_kind,
-                jobs=flt.jobs,
-            )
-        else:
-            merged[key] = flt
-    return out + list(merged.values())
