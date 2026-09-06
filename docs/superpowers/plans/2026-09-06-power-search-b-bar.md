@@ -927,7 +927,7 @@ Feature: Resolving a search into an exact film-id set
     And there are no suggestions
 
   Scenario: A name too far from any person is refused with suggestions
-    When I search for "actor: bgt"
+    When I search for "actor: bogxrtq"
     Then the result is empty
     And the suggestions for "actor" include Humphrey Bogart
 
@@ -940,10 +940,11 @@ Feature: Resolving a search into an exact film-id set
     Then the result ids are Alpha then Beta
     And the result is ranked
 
-  Scenario: An unknown field is freeform with a hint
+  Scenario: An unknown field is searched as text, with a hint saying so
     When I search for "foo: gamma"
-    Then the result ids are Gamma
+    Then the result is empty
     And the hints include "unknown field 'foo'"
+    And the result is not ranked
 
   Scenario: Genre matches the OMDb spelling however it is typed
     When I search for "genre: film noir"
@@ -1438,7 +1439,7 @@ def test_search_correction_is_shown_and_undo_forces_exact(dash: Page):
 
 def test_search_suggestion_chip_replaces_the_value(dash: Page):
     clear_lang(dash)
-    _search(dash, "actor: bgt")
+    _search(dash, "actor: bogxrtq")   # shares 'bog' with Bogart; similarity 0.77 — suggestion band, not correction
     assert count(dash) == 0
     dash.locator("#search-note button.suggest", has_text="Humphrey Bogart").click()
     expect(dash.locator("#search")).to_have_value('actor: "Humphrey Bogart"')
