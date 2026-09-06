@@ -144,6 +144,7 @@
 
   // ---- virtual-scrolled rows ----
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const fmt = (v, suffix = '') => (v == null ? '—' : `${v}${suffix}`);
   function rowHtml(f) {
     const link = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
@@ -318,23 +319,25 @@
   function applySearchResponse(body) {
     state.search = { ids: new Set(body.ids), rank: body.ranked ? new Map(body.ids.map((id, i) => [id, i])) : null };
     const parts = [];
-    for (const c of body.corrections) parts.push(`Showing results for <b>${esc(c.used)}</b> (you typed “${esc(c.typed)}”) <button class="undo" data-typed="${esc(c.typed)}">undo</button>`);
-    for (const s of body.suggestions) parts.push(`No ${esc(s.field)} “${esc(s.typed)}” — did you mean ${s.options.map((o) => `<button class="suggest" data-typed="${esc(s.typed)}" data-use="${esc(o)}">${esc(o)}</button>`).join('')}?`);
+    for (const c of body.corrections) parts.push(`Showing results for <b>${esc(c.used)}</b> (you typed “${esc(c.typed)}”) <button class="undo" data-typed="${esc(c.typed)}" data-field="${esc(c.field)}">undo</button>`);
+    for (const s of body.suggestions) parts.push(`No ${esc(s.field)} “${esc(s.typed)}” — did you mean ${s.options.map((o) => `<button class="suggest" data-typed="${esc(s.typed)}" data-use="${esc(o)}" data-field="${esc(s.field)}">${esc(o)}</button>`).join('')}?`);
     for (const h of body.hints) parts.push(esc(h));
     noteEl.innerHTML = parts.join('<br>');
     noteEl.hidden = parts.length === 0;
   }
   async function runSearch() {
+    const value = searchEl.value;
     const q = state.q.trim();
     const seq = ++searchSeq;
     if (!q) {
       state.search = null; noteEl.hidden = true; noteEl.innerHTML = '';
-      searchEl.dataset.settled = searchEl.value;
+      searchEl.dataset.settled = value;
       applyFilters();
       return;
     }
     try {
       const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const body = await r.json();
       if (seq !== searchSeq) return;  // a newer query is in flight
       applySearchResponse(body);
@@ -342,7 +345,7 @@
       if (seq !== searchSeq) return;
       state.search = null; noteEl.hidden = false; noteEl.textContent = `Search failed: ${e.message}`;
     }
-    searchEl.dataset.settled = searchEl.value;
+    searchEl.dataset.settled = value;
     applyFilters();
   }
   searchEl.addEventListener('input', () => {
@@ -355,8 +358,14 @@
   // suggestion replaces the typed text with the chosen name, quoted.
   noteEl.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
-    const typed = b.dataset.typed, use = b.classList.contains('undo') ? typed : b.dataset.use;
-    state.q = state.q.replace(typed, `"${use}"`);
+    const typed = b.dataset.typed, use = b.classList.contains('undo') ? typed : b.dataset.use, field = b.dataset.field;
+    // Anchor on the field the server reported: a bare `.replace(typed, …)` would quote the
+    // FIRST textual occurrence of `typed` in the query, which is wrong when the same text
+    // appears earlier under a different field (e.g. `title: bogrt actor: bogrt`).
+    const anchored = new RegExp(`(${field}\\s*:\\s*)${escapeRegExp(typed)}`, 'i');
+    state.q = anchored.test(state.q)
+      ? state.q.replace(anchored, `$1"${use}"`)
+      : state.q.replace(typed, `"${use}"`);   // the user typed an alias (cast:, role:, dp:…); fall back to the first occurrence
     searchEl.value = state.q;
     delete searchEl.dataset.settled;
     runSearch();

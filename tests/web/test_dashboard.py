@@ -899,3 +899,16 @@ def test_search_round_trips_through_the_url(dash: Page, server: str):
 def test_search_input_is_not_a_chip(dash: Page):
     assert dash.locator("#search.chip").count() == 0
     assert dash.locator("#chips #search").count() == 0
+
+
+def test_search_correction_undo_targets_the_right_field(dash: Page):
+    # "bogrt" appears twice, under two different fields: a bare `.replace` would quote the
+    # FIRST textual occurrence (the title term) instead of the one the correction is actually
+    # about (the actor term). Row count is 0 either way (`title: bogrt` matches nothing), so
+    # this pins the input value, not the result set.
+    clear_lang(dash)
+    _search(dash, "title: bogrt actor: bogrt")
+    note = dash.locator("#search-note")
+    expect(note).to_contain_text("Showing results for Humphrey Bogart")
+    note.locator("button.undo").click()
+    expect(dash.locator("#search")).to_have_value('title: bogrt actor: "bogrt"')
