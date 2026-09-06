@@ -418,7 +418,7 @@ def test_migration_004_creates_metacritic_tables(repo):
     try:
         tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         assert {"metacritic", "match_review"} <= tables
-        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 17
+        assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 18
     finally:
         conn.close()
 
@@ -1175,7 +1175,7 @@ def test_migration_011_claims_and_film_columns(tmp_path):
     repo.set_title_norm(fid, "bladerunner")
     assert repo.films_missing_title_norm() == []
     with sqlite3.connect(tmp_path / "t.db") as c:
-        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 17
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 18
         assert c.execute("SELECT kind FROM films WHERE id = ?", (fid,)).fetchone()[0] == "movie"
 
 
@@ -1729,3 +1729,20 @@ def test_view_builds_the_direct_cheapcharts_link_from_the_stored_itunes_id(repo)
     views = {v.title: v for v in repo.list_views("criterion", day)}
     assert views["Vertigo"].cheapcharts_url == "https://www.cheapcharts.com/us/itunes/movies/284815525"
     assert views["Unresolved"].cheapcharts_url is None
+
+
+def test_migration_018_creates_credit_tables_and_trigram_indexes(repo):
+    """A fresh repo bootstraps 018. The FTS indexes are external-content tables kept in step
+    by triggers, so a plain INSERT into the base table must be enough to make a row findable;
+    and the trigram tokenizer must be present, or Plan B's misspelling correction is dead."""
+    with sqlite3.connect(repo.db_path) as c:
+        names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type IN ('table','trigger')")}
+        assert {"person", "film_credit", "film_keyword", "film_text", "person_fts", "character_fts", "film_text_fts"} <= names
+        assert {"person_ai", "film_credit_ai", "film_credit_ad", "film_text_ai", "film_text_ad", "film_text_au"} <= names
+        cols = {r[1] for r in c.execute("PRAGMA table_info(tmdb_facts)")}
+        assert {"overview", "tagline", "genres", "credits_fetched_on"} <= cols
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 18
+
+        c.execute("INSERT INTO person (tmdb_person_id, name, first_seen) VALUES (4110, 'Humphrey Bogart', '2026-09-06')")
+        # trigram phrase MATCH is a substring test — 'Bogart' is found by its middle
+        assert c.execute("SELECT rowid FROM person_fts WHERE person_fts MATCH '\"ogar\"'").fetchall() == [(1,)]
