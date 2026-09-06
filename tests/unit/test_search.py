@@ -117,3 +117,23 @@ def test_every_field_has_a_kind_and_every_alias_points_at_a_field():
         "Short Story", "Theatre Play", "Scenario Writer", "Co-Writer", "Screenstory", "Original Film Writer",
     )
     assert FIELDS["actor"].credit_kind == "cast" and FIELDS["crew"].credit_kind == "crew" and FIELDS["crew"].jobs == ()
+
+
+def test_abutting_tokens_are_kept_verbatim_in_freeform():
+    for s in ("a:b:c", "foo:bar", "mailto:x@y.z", "see https://example.com"):
+        q = parse_query(s)
+        assert q.free == s and q.terms == (), s
+
+
+def test_abutting_tokens_are_kept_verbatim_inside_a_field_value():
+    q = parse_query("title: 2001:a space odyssey")
+    assert q.terms == (Term("title", "2001:a space odyssey", False),)
+
+
+def test_unknown_field_inside_a_value_is_absorbed_and_hinted():
+    q = parse_query("actor: bogart foo: bar")
+    assert q.terms == (Term("actor", "bogart foo: bar", False),) and q.hints == ("unknown field 'foo'",)
+
+
+def test_internal_whitespace_of_a_value_is_preserved_as_typed():
+    assert parse_query("title:  the   big sleep ").terms == (Term("title", "the   big sleep", False),)

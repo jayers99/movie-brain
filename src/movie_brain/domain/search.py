@@ -87,76 +87,103 @@ class ParsedQuery:
 
 
 # A token is: a double-quoted string (quotes may be doubled inside), OR a field token `name:` at a
-# word start, OR a run of non-space. `(?<!\S)` keeps `https://…` from reading as field `https` —
-# it does read as one, and then falls to "unknown field", which is the right outcome for a URL.
+# word start, OR a run of non-space. The regex recognizes `https:` as a field token, which becomes an
+# unknown-field hint. Offsets — not joins — keep surrounding text verbatim: adjacent bare spans merge
+# to preserve "https://example.com" and "a:b:c" as-is.
 _TOKEN = re.compile(r'"((?:[^"]|"")*)"|(?<!\S)([A-Za-z_]+):|(\S+)')
+
+
+def _merge_bare_pieces(
+    pieces: list[tuple[str, tuple[int, int] | str]],
+) -> list[tuple[str, tuple[int, int] | str]]:
+    """Merge adjacent bare-token spans (non-quoted pieces)."""
+    if not pieces:
+        return pieces
+    merged: list[tuple[str, tuple[int, int] | str]] = []
+    for piece_type, piece_data in pieces:
+        if piece_type == "bare" and merged and merged[-1][0] == "bare":
+            # Merge with last bare piece
+            _, last_data = merged.pop()
+            assert isinstance(last_data, tuple) and isinstance(piece_data, tuple)
+            merged.append(("bare", (last_data[0], piece_data[1])))
+        else:
+            merged.append((piece_type, piece_data))
+    return merged
+
+
+def _render_pieces(pieces: list[tuple[str, tuple[int, int] | str]], text: str) -> str:
+    """Render pieces as a string: quoted → content, spans → text[start:end], joined by space."""
+    if not pieces:
+        return ""
+    result = []
+    for piece_type, piece_data in pieces:
+        if piece_type == "quoted":
+            assert isinstance(piece_data, str)
+            result.append(piece_data)
+        else:  # bare or field (both are spans)
+            assert isinstance(piece_data, tuple)
+            result.append(text[piece_data[0] : piece_data[1]])
+    return " ".join(result).strip()
 
 
 def parse_query(text: str) -> ParsedQuery:
     """Bare, run-to-next-field grammar (spec §7.1, D5). Pure; never raises."""
     terms: list[Term] = []
-    free: list[str] = []
+    free_pieces: list[tuple[str, tuple[int, int] | str]] = []
     hints: list[str] = []
     current: str | None = None  # canonical field collecting a value
-    buf: list[str] = []
+    buf_pieces: list[tuple[str, tuple[int, int] | str]] = []
+    current_field_span: tuple[int, int] | None = None
     exact = False
 
     def flush() -> None:
-        nonlocal current, buf, exact
+        nonlocal current, buf_pieces, exact, current_field_span
         if current is not None:
-            value = " ".join(buf).strip()
+            merged = _merge_bare_pieces(buf_pieces)
+            value = _render_pieces(merged, text)
             if value:
                 terms.append(Term(current, value, exact))
             else:
-                free.append(current + ":")
+                if current_field_span:
+                    free_pieces.append(("bare", current_field_span))
                 hints.append(f"field '{current}' has no value")
-        current, buf, exact = None, [], False
+            current, buf_pieces, exact, current_field_span = None, [], False, None
 
-    matches = list(_TOKEN.finditer(text))
-    i = 0
-    while i < len(matches):
-        m = matches[i]
-        quoted, field, word = m.group(1), m.group(2), m.group(3)
+    for m in _TOKEN.finditer(text):
+        quoted, field, _ = m.group(1), m.group(2), m.group(3)
         if field is not None:
             name = field.lower()
             if name in ALIASES:
                 flush()
                 current = ALIASES[name]
-                i += 1
+                current_field_span = (m.start(), m.end())
                 continue
             hints.append(f"unknown field '{name}'")
-            word = field + ":"  # falls through as ordinary text
-            # Check if the next token is a URL continuation (starts with "//")
-            if i + 1 < len(matches):
-                next_m = matches[i + 1]
-                next_quoted, next_field, next_word = next_m.group(1), next_m.group(2), next_m.group(3)
-                if next_field is None and next_quoted is None and next_word and next_word.startswith("//"):
-                    # Reconstruct the URL: "https:" + "//example.com" = "https://example.com"
-                    word = field + ":" + next_word
-                    i += 2
-                    if current is not None:
-                        buf.append(word)
-                    else:
-                        free.append(word)
-                    continue
+            # Unknown field token: treated as bare span (not a field blocker);
+            # add span to current stream and let it merge with adjacent bare spans
+            if current is not None:
+                buf_pieces.append(("bare", (m.start(), m.end())))
+            else:
+                free_pieces.append(("bare", (m.start(), m.end())))
+            continue
         if quoted is not None:
             piece = quoted.replace('""', '"')
-            if current is not None and not buf:
+            if current is not None and not buf_pieces:
                 exact = True
-                buf.append(piece)
+                buf_pieces.append(("quoted", piece))
             elif current is not None:
-                buf.append(piece)
+                buf_pieces.append(("quoted", piece))
             else:
-                free.append(piece)
-            i += 1
+                free_pieces.append(("quoted", piece))
             continue
         if current is not None:
-            buf.append(word)
+            buf_pieces.append(("bare", (m.start(3), m.end(3))))
         else:
-            free.append(word)
-        i += 1
+            free_pieces.append(("bare", (m.start(3), m.end(3))))
     flush()
-    return ParsedQuery(tuple(terms), " ".join(free).strip(), tuple(hints))
+    merged_free = _merge_bare_pieces(free_pieces)
+    free = _render_pieces(merged_free, text)
+    return ParsedQuery(tuple(terms), free, tuple(hints))
 
 
 _YEAR = re.compile(r"^(\d{4})?-(\d{4})?$")
