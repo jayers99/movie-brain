@@ -28,6 +28,9 @@ MAX_SUGGESTIONS = 3
 CANDIDATE_LIMIT = 2000  # trigram candidates fetched per lookup before Python ranks them
 # freeform weights — where the text hit decides the rank (spec §8): title > person > character > genre/keyword > plot
 W_TITLE, W_OVERVIEW, W_PLOT, W_PERSON, W_CHARACTER, W_TAG = 10.0, 2.0, 1.0, 5.0, 4.0, 3.0
+LENGTH_PENALTY_EXPONENT = 0.35  # in similarity(): plain difflib ratio over-rewards a short query in a long
+# token ('bogrt' inside 'Lena Brogren' scored 0.667 unpenalised); token scores are scaled by
+# (min_len / max_len) ** LENGTH_PENALTY_EXPONENT; equal lengths unpenalised
 
 
 @dataclass(frozen=True)
@@ -232,17 +235,17 @@ class Ranked:
 
 
 def similarity(query: str, name: str) -> float:
-    """Best of: the whole name, or any one token of it. 'bogrt' against 'Humphrey Bogart' is
-    judged on 'bogart' (0.91), not on the full name (0.5). Verified on the live index: this is
-    what lifts the Bogarts above 'Ogranya', which FTS's own rank preferred."""
+    """Best of the whole name's SequenceMatcher ratio, or any single token's (each length-penalised).
+    The penalty scales short-query-in-long-token mismatches down to prevent false positives.
+    Verified on the live index: 'bogrt' → 'Humphrey Bogart' (best token 'bogart') scores 0.853,
+    lifting it above 'Ogranya' (0.472) and rejecting 'Lena Brogren' (best token 'brogren', 0.593 < 0.6)."""
     q = query.lower().strip()
     n = name.lower()
     best = SequenceMatcher(None, q, n).ratio()
     for token in n.split():
         ratio = SequenceMatcher(None, q, token).ratio()
-        # Penalize length mismatches moderately: same length gets 1x, 1-char diff ~0.98x, 2-char diff ~0.96x
         len_factor = min(len(q), len(token)) / max(len(q), len(token)) if token else 0.0
-        length_penalty = len_factor ** 0.35
+        length_penalty = len_factor ** LENGTH_PENALTY_EXPONENT
         best = max(best, ratio * length_penalty)
     return best
 

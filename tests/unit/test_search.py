@@ -153,7 +153,7 @@ def test_similarity_is_case_insensitive_and_exact_is_one():
 
 
 def test_rank_candidates_breaks_a_similarity_tie_on_weight_then_name():
-    """On the live index 'bogrt' ties four Bogarts at 0.91 — the one with the most credits wins,
+    """On the live index 'bogrt' ties four Bogarts at 0.853 — the one with the most credits wins,
     and equal credits fall back to name order so the result is deterministic."""
     cands = [Candidate(1, "Jane Bogart", 1), Candidate(2, "Humphrey Bogart", 11), Candidate(3, "Lena Brogren", 40),
              Candidate(4, "Bogart Edwards", 11)]
@@ -164,3 +164,11 @@ def test_rank_candidates_breaks_a_similarity_tie_on_weight_then_name():
 
 def test_rank_candidates_on_nothing_is_empty():
     assert rank_candidates("x", []) == []
+
+
+def test_length_penalty_only_bites_when_the_query_is_much_shorter_than_the_token():
+    """Equal lengths are unpenalised; a short query inside a long token is scaled down. The
+    Brogren assertion above passes ONLY because of this — 0.667 unpenalised, 0.593 with it."""
+    assert similarity("bogart", "Bogart") == 1.0
+    assert similarity("bogrt", "Lena Brogren") < 0.6 < 0.67  # the plain ratio would be 0.667
+    assert similarity("bog", "Bog") == 1.0 and similarity("bog", "Bogartsson") < similarity("bog", "Bogar")
