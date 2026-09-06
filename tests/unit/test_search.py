@@ -2,6 +2,7 @@ from movie_brain.domain.search import (
     ALIASES,
     FIELDS,
     Candidate,
+    Filter,
     ParsedQuery,
     Term,
     fts_words,
@@ -172,3 +173,8 @@ def test_length_penalty_only_bites_when_the_query_is_much_shorter_than_the_token
     assert similarity("bogart", "Bogart") == 1.0
     assert similarity("bogrt", "Lena Brogren") < 0.6 < 0.67  # the plain ratio would be 0.667
     assert similarity("bog", "Bog") == 1.0 and similarity("bog", "Bogartsson") < similarity("bog", "Bogar")
+
+
+def test_filter_is_a_frozen_value_with_defaults():
+    f = Filter("year", lo=1940, hi=1949)
+    assert (f.ids, f.values, f.credit_kind, f.jobs) == ((), (), None, ())

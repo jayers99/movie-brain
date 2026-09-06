@@ -5,7 +5,7 @@ import re
 import sqlite3
 import sys
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -30,7 +30,20 @@ from movie_brain.domain.models import (
     YearBackfillTarget,
     film_key,
 )
-from movie_brain.domain.search import CANDIDATE_LIMIT, Candidate, trigram_query
+from movie_brain.domain.search import (
+    CANDIDATE_LIMIT,
+    W_CHARACTER,
+    W_OVERVIEW,
+    W_PERSON,
+    W_PLOT,
+    W_TAG,
+    W_TITLE,
+    Candidate,
+    Filter,
+    fts_words,
+    norm_genre,
+    trigram_query,
+)
 from movie_brain.domain.thumbprint import edition_label, title_norm
 from movie_brain.domain.watch import best_source
 from movie_brain.infrastructure.cheapcharts import product_url
@@ -1343,6 +1356,159 @@ class Repository:
                 "SELECT f.id, f.title FROM films f WHERE " + _NOT_DISPOSED + " ORDER BY f.id"
             ).fetchall()
             return [Candidate(int(r["id"]), str(r["title"]), 0) for r in rows]
+
+    _GENRE_NORM = "replace(replace(replace(lower({col}), ' ', ''), '-', ''), '.', '')"
+
+    def _filter_sql(self, flt: Filter) -> tuple[str, list[object]]:
+        """One ANDed clause against alias `f` (films). Every fuzzy kind arrives already resolved."""
+        if flt.kind == "person":
+            if not flt.ids:
+                return "0 = 1", []
+            clause, credit_params = self._credit_clause(flt.credit_kind, flt.jobs)
+            marks = ",".join("?" * len(flt.ids))
+            return (
+                f"EXISTS (SELECT 1 FROM film_credit fc WHERE fc.film_id = f.id "
+                f"AND fc.person_id IN ({marks}) AND {clause})",
+                [*flt.ids, *credit_params],
+            )
+        if flt.kind == "character":
+            if not flt.values:
+                return "0 = 1", []
+            marks = ",".join("?" * len(flt.values))
+            return (
+                f"EXISTS (SELECT 1 FROM film_credit fc WHERE fc.film_id = f.id "
+                f"AND fc.kind = 'cast' AND fc.character IN ({marks}))",
+                list(flt.values),
+            )
+        if flt.kind == "title":
+            parts = [
+                "(lower(f.title) LIKE ? OR EXISTS (SELECT 1 FROM tmdb_facts t "
+                "WHERE t.film_id = f.id AND lower(t.original_title) LIKE ?))"
+            ] * len(flt.values)
+            title_params: list[object] = []
+            for v in flt.values:
+                title_params += [f"%{v.lower()}%", f"%{v.lower()}%"]
+            return "(" + " OR ".join(parts) + ")", title_params
+        if flt.kind == "genre":
+            omdb = self._GENRE_NORM.format(col="json_extract(o.payload, '$.Genre')")
+            tmdb = self._GENRE_NORM.format(col="value")
+            genre_parts: list[str] = []
+            genre_params: list[object] = []
+            for g in flt.values:
+                genre_parts.append(
+                    f"EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = f.id AND ',' || {omdb} || ',' LIKE ?) "
+                    f"OR EXISTS (SELECT 1 FROM tmdb_facts t, json_each(t.genres) WHERE t.film_id = f.id AND {tmdb} = ?)"
+                )
+                genre_params += [f"%,{g},%", g]
+            return "(" + " OR ".join(genre_parts) + ")", genre_params
+        if flt.kind == "keyword":
+            marks = ",".join("?" * len(flt.values))
+            return (
+                f"EXISTS (SELECT 1 FROM film_keyword k WHERE k.film_id = f.id AND lower(k.keyword) IN ({marks}))",
+                [v.lower() for v in flt.values],
+            )
+        if flt.kind == "year":
+            year_parts: list[str] = []
+            year_params: list[object] = []
+            if flt.lo is not None:
+                year_parts.append("f.year >= ?")
+                year_params.append(flt.lo)
+            if flt.hi is not None:
+                year_parts.append("f.year <= ?")
+                year_params.append(flt.hi)
+            return "(" + " AND ".join(year_parts) + ")" if year_parts else "1 = 1", year_params
+        if flt.kind == "text":
+            match = fts_words(" ".join(flt.values))
+            if not match:
+                return "0 = 1", []
+            return (
+                "f.id IN (SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH ?)",
+                [f"{{overview plot}}: {match}"],
+            )
+        raise ValueError(f"unknown filter kind {flt.kind!r}")
+
+    def _freeform_scores(self, c: sqlite3.Connection, free: str) -> dict[int, float]:
+        """Where the text hit decides the rank (spec §8): title, then person, character,
+        genre/keyword, then plot — summed per film. Several small statements merged here rather
+        than one CTE across three differently-tokenised FTS tables (plan §"deviation")."""
+        scores: dict[int, float] = {}
+
+        def add(rows: list[sqlite3.Row], weight: float | None = None) -> None:
+            for r in rows:
+                scores[int(r[0])] = scores.get(int(r[0]), 0.0) + (float(r[1]) if weight is None else weight)
+
+        words = fts_words(free)
+        if words:
+            add(
+                c.execute(
+                    f"SELECT rowid, -bm25(film_text_fts, {W_TITLE}, {W_OVERVIEW}, {W_PLOT}) "
+                    "FROM film_text_fts WHERE film_text_fts MATCH ?",
+                    (words,),
+                ).fetchall()
+            )
+        # unenriched films have no film_text row: reach their title directly
+        add(c.execute("SELECT id FROM films WHERE lower(title) LIKE ?", (f"%{free.lower()}%",)).fetchall(), W_TITLE)
+        tri = fts_words(free, min_len=3)
+        if tri:
+            add(
+                c.execute(
+                    "SELECT DISTINCT fc.film_id FROM person_fts pf "
+                    "JOIN film_credit fc ON fc.person_id = pf.rowid WHERE person_fts MATCH ?",
+                    (tri,),
+                ).fetchall(),
+                W_PERSON,
+            )
+            add(
+                c.execute(
+                    "SELECT DISTINCT fc.film_id FROM character_fts cf "
+                    "JOIN film_credit fc ON fc.rowid = cf.rowid WHERE character_fts MATCH ?",
+                    (tri,),
+                ).fetchall(),
+                W_CHARACTER,
+            )
+        g = norm_genre(free)
+        if g:
+            omdb = self._GENRE_NORM.format(col="json_extract(o.payload, '$.Genre')")
+            add(
+                c.execute(f"SELECT film_id FROM omdb o WHERE ',' || {omdb} || ',' LIKE ?", (f"%,{g},%",)).fetchall(),
+                W_TAG,
+            )
+            add(
+                c.execute(
+                    "SELECT film_id FROM film_keyword WHERE lower(keyword) = ?", (free.lower().strip(),)
+                ).fetchall(),
+                W_TAG,
+            )
+        return scores
+
+    def search_films(self, filters: Sequence[Filter], free: str) -> list[tuple[int, float]]:
+        """Every filter ANDed, freeform scored (spec §8). Disposed films never appear."""
+        clauses = [_NOT_DISPOSED]
+        params: list[object] = []
+        for flt in filters:
+            sql, p = self._filter_sql(flt)
+            clauses.append(sql)
+            params += p
+        with self._conn() as c:
+            scores = self._freeform_scores(c, free.strip()) if free.strip() else None
+            if scores is not None:
+                if not scores:
+                    return []
+                if len(scores) > 30000:
+                    top = sorted(scores.items(), key=lambda kv: -kv[1])[:30000]
+                    scores = dict(top)
+                marks = ",".join("?" * len(scores))
+                clauses.append(f"f.id IN ({marks})")
+                params += list(scores)
+            rows = c.execute(
+                "SELECT f.id, f.title FROM films f WHERE " + " AND ".join(clauses) + " ORDER BY f.title, f.id",
+                params,
+            ).fetchall()
+        if scores is None:
+            return [(int(r["id"]), 0.0) for r in rows]
+        ranked = [(int(r["id"]), scores[int(r["id"])], str(r["title"])) for r in rows]
+        ranked.sort(key=lambda t: (-t[1], t[2].lower(), t[0]))
+        return [(i, s) for i, s, _ in ranked]
 
     def films_needing_year_backfill(self, limit: int | None = None) -> list[YearBackfillTarget]:
         """Films with no year at all, holding a TMDB id — the worklist of `repair years

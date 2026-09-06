@@ -257,3 +257,17 @@ def rank_candidates(query: str, candidates: Iterable[Candidate]) -> list[Ranked]
     weights = {c.key: c.weight for c in cands}
     scored = [Ranked(c.key, c.name, similarity(query, c.name)) for c in cands]
     return sorted(scored, key=lambda r: (-r.score, -weights[r.key], r.name))
+
+
+@dataclass(frozen=True)
+class Filter:
+    """One resolved, exact constraint. The resolver turns fuzzy text into these; the repository
+    only ever sees exact values (spec D6)."""
+
+    kind: str
+    ids: tuple[int, ...] = ()
+    values: tuple[str, ...] = ()
+    credit_kind: str | None = None
+    jobs: tuple[str, ...] = ()
+    lo: int | None = None
+    hi: int | None = None

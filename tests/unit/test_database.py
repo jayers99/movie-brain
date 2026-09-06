@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import CastRow, CrewRow, Film, McTitle, OmdbRating, ReviewEntry, TmdbCredits
-from movie_brain.domain.search import trigram_query
+from movie_brain.domain.search import Filter, trigram_query
 from movie_brain.infrastructure.database import (
     KEY_AUTHORITIES,
     MIGRATIONS_DIR,
@@ -1941,7 +1941,7 @@ def _seed_people(repo):
     repo.write_credits(a, _credits(), day)
     repo.write_credits(b, _credits(
         tmdb_id=911, title="Beta", original_title="Beta", overview="A nurse in the alpha ward.",
-        keywords=("hospital",),
+        genres=("Drama",), keywords=("hospital",),
         cast=(CastRow(77, "Jane Bogart", "Nurse", 0),),
         crew=(CrewRow(2636, "Howard Hawks", "Director", "Directing"),),
     ), day)
@@ -1981,3 +1981,64 @@ def test_keyword_and_title_candidates(repo):
     assert kws == {"film noir": 1, "private investigator": 1, "hospital": 1}
     titles = {c.name: c.key for c in repo.title_candidates()}
     assert titles == {"Alpha": a, "Beta": b}
+
+
+def _seed_search(repo):
+    """Alpha (1946): Bogart as Marlowe, Hawks directs, OMDb genre Film-Noir, plot mentions Sternwood.
+    Beta (1950): Jane Bogart as Nurse, Hawks directs, overview mentions 'alpha ward'.
+    Gamma (1960): no credits, no tmdb id — reachable by title only. Delta: merged away, invisible."""
+    day = date(2026, 9, 6)
+    a, b = _seed_people(repo)
+    repo.upsert_omdb(a, OmdbRating(8.0, 97, True, "English", '{"Genre": "Crime, Drama, Film-Noir", "Plot": "A private eye visits the Sternwood mansion."}'), day)
+    repo.write_credits(a, _credits(), day)  # re-write so film_text picks up the plot
+    g = repo.create_film(Film("Gamma", 1960, None, ""))
+    d = repo.create_film(Film("Alpha Delta", 1970, None, ""))
+    repo.merge_film(d, a, day, note="twin")
+    return a, b, g
+
+
+def test_search_films_person_filter_respects_kind_and_jobs(repo):
+    a, b, g = _seed_search(repo)
+    bogart = repo.persons_named("Humphrey Bogart", "cast", ())
+    hawks = repo.persons_named("Howard Hawks", "crew", ("Director",))
+    assert [i for i, _ in repo.search_films([Filter("person", ids=tuple(bogart), credit_kind="cast")], "")] == [a]
+    assert [i for i, _ in repo.search_films([Filter("person", ids=tuple(hawks), credit_kind="crew", jobs=("Director",))], "")] == [a, b]
+    assert repo.search_films([Filter("person", ids=tuple(bogart), credit_kind="crew", jobs=("Director",))], "") == []
+
+
+def test_search_films_ands_fields_and_ors_values(repo):
+    a, b, g = _seed_search(repo)
+    both = Filter("character", values=("Philip Marlowe", "Nurse"))
+    assert [i for i, _ in repo.search_films([both], "")] == [a, b]
+    assert [i for i, _ in repo.search_films([both, Filter("year", lo=1950, hi=None)], "")] == [b]
+
+
+def test_search_films_genre_matches_omdb_and_tmdb_forms(repo):
+    a, b, g = _seed_search(repo)
+    assert [i for i, _ in repo.search_films([Filter("genre", values=("filmnoir",))], "")] == [a]
+    assert [i for i, _ in repo.search_films([Filter("genre", values=("mystery",))], "")] == [a]  # TMDB genre on Alpha's tmdb_facts
+    assert repo.search_films([Filter("genre", values=("western",))], "") == []
+
+
+def test_search_films_title_keyword_and_plot_filters(repo):
+    a, b, g = _seed_search(repo)
+    assert [i for i, _ in repo.search_films([Filter("title", values=("gamm",))], "")] == [g]   # substring, no credits needed
+    assert [i for i, _ in repo.search_films([Filter("keyword", values=("hospital",))], "")] == [b]
+    assert [i for i, _ in repo.search_films([Filter("text", values=("sternwood",))], "")] == [a]   # plot column, not title
+
+
+def test_search_films_freeform_ranks_a_title_hit_above_a_plot_hit_and_reaches_unenriched_titles(repo):
+    a, b, g = _seed_search(repo)
+    ranked = repo.search_films([], "alpha")
+    assert [i for i, _ in ranked][:2] == [a, b]        # Alpha by title (10) above Beta by overview (2)
+    assert ranked[0][1] > ranked[1][1] > 0
+    assert [i for i, _ in repo.search_films([], "gamma")] == [g]   # never enriched, found through films.title
+    assert [i for i, _ in repo.search_films([], "bogart")] == [a, b]  # person-name hit reaches both films
+    assert [i for i, _ in repo.search_films([], "marlowe")][0] == a  # character hit
+
+
+def test_search_films_freeform_and_field_combine_and_disposed_films_never_appear(repo):
+    a, b, g = _seed_search(repo)
+    assert [i for i, _ in repo.search_films([Filter("year", lo=1950, hi=1950)], "alpha")] == [b]
+    assert all(i != a + 3 for i, _ in repo.search_films([], "alpha delta"))  # the merged-away 'Alpha Delta'
+    assert repo.search_films([], "zzzz") == []
