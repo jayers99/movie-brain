@@ -15,6 +15,7 @@ from typing import Any, NamedTuple
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import (
+    CreditsTarget,
     Film,
     FilmView,
     ImdbBackfillTarget,
@@ -25,6 +26,7 @@ from movie_brain.domain.models import (
     OmdbRating,
     ReviewEntry,
     ServiceMeta,
+    TmdbCredits,
     YearBackfillTarget,
     film_key,
 )
@@ -1158,6 +1160,111 @@ class Repository:
             ItunesTarget(int(r["id"]), str(r["title"]), r["year"], r["director"], str(r["imdb_id"]))
             for r in rows
         ]
+
+    # credits (power search, Plan A) -----------------------------------------
+    def films_needing_credits(self, limit: int | None = None) -> list[CreditsTarget]:
+        """Live movies holding a TMDB id and no `credits_fetched_on`. The stamp is what makes
+        the enrichment resumable — a stamped film is never re-fetched by this worklist."""
+        sql = (
+            "SELECT f.id, f.title, x.value AS tmdb_id FROM films f "
+            "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'tmdb' "
+            "LEFT JOIN tmdb_facts t ON t.film_id = f.id "
+            "WHERE t.credits_fetched_on IS NULL AND " + _NOT_DISPOSED + _IS_MOVIE + " ORDER BY f.id"
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+        with self._conn() as c:
+            rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
+        return [CreditsTarget(int(r["id"]), str(r["title"]), int(r["tmdb_id"])) for r in rows]
+
+    def write_credits(self, film_id: int, credits: TmdbCredits, today: date) -> None:
+        """Replace ONE film's credit, keyword and text rows and stamp `tmdb_facts`, in one
+        transaction. Persons are inserted once by `tmdb_person_id` and never updated. The
+        FTS indexes follow through migration 018's triggers — nothing here touches them."""
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO tmdb_facts (film_id, tmdb_id, imdb_id, title, original_title, alt_titles, "
+                "release_year, runtime_min, fetched_on) VALUES (?, ?, ?, ?, ?, '[]', ?, ?, ?) "
+                "ON CONFLICT(film_id) DO NOTHING",
+                (film_id, credits.tmdb_id, credits.imdb_id, credits.title, credits.original_title,
+                 credits.year, credits.runtime_min, today.isoformat()),
+            )
+            c.execute(
+                "UPDATE tmdb_facts SET overview = ?, tagline = ?, genres = ?, credits_fetched_on = ? WHERE film_id = ?",
+                (credits.overview, credits.tagline, json.dumps(list(credits.genres)), today.isoformat(), film_id),
+            )
+            people = {r.person_id: r.name for r in credits.cast} | {r.person_id: r.name for r in credits.crew}
+            c.executemany(
+                "INSERT INTO person (tmdb_person_id, name, first_seen) VALUES (?, ?, ?) "
+                "ON CONFLICT(tmdb_person_id) DO NOTHING",
+                [(pid, name, today.isoformat()) for pid, name in people.items()],
+            )
+            ids: dict[int, int] = {}
+            if people:
+                placeholders = ",".join("?" * len(people))
+                ids = {
+                    int(r["tmdb_person_id"]): int(r["id"])
+                    for r in c.execute(
+                        f"SELECT id, tmdb_person_id FROM person WHERE tmdb_person_id IN ({placeholders})",
+                        list(people),
+                    ).fetchall()
+                }
+            c.execute("DELETE FROM film_credit WHERE film_id = ?", (film_id,))
+            c.execute("DELETE FROM film_keyword WHERE film_id = ?", (film_id,))
+            c.executemany(
+                "INSERT OR IGNORE INTO film_credit (film_id, person_id, kind, job, department, character, ord) "
+                "VALUES (?, ?, 'cast', '', '', ?, ?)",
+                [(film_id, ids[r.person_id], r.character, r.order) for r in credits.cast],
+            )
+            c.executemany(
+                "INSERT OR IGNORE INTO film_credit (film_id, person_id, kind, job, department, character, ord) "
+                "VALUES (?, ?, 'crew', ?, ?, '', ?)",
+                [(film_id, ids[r.person_id], r.job, r.department, i) for i, r in enumerate(credits.crew)],
+            )
+            c.executemany(
+                "INSERT OR IGNORE INTO film_keyword (film_id, keyword) VALUES (?, ?)",
+                [(film_id, k) for k in credits.keywords],
+            )
+            plot_row = c.execute(
+                "SELECT NULLIF(json_extract(payload, '$.Plot'), 'N/A') FROM omdb WHERE film_id = ?", (film_id,)
+            ).fetchone()
+            title_row = c.execute("SELECT title FROM films WHERE id = ?", (film_id,)).fetchone()
+            c.execute(
+                "INSERT INTO film_text (film_id, title, overview, plot) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET "
+                "title = excluded.title, overview = excluded.overview, plot = excluded.plot",
+                (film_id, str(title_row["title"]), credits.overview, plot_row[0] if plot_row else None),
+            )
+
+    def credits_for(self, film_id: int) -> list[tuple[str, str, str, str]]:
+        """(kind, name, character, job) — cast first by billing order, then crew in TMDB's order."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT fc.kind, p.name, fc.character, fc.job FROM film_credit fc JOIN person p ON p.id = fc.person_id "
+                "WHERE fc.film_id = ? ORDER BY fc.kind, fc.ord, p.name",
+                (film_id,),
+            ).fetchall()
+            return [(str(r["kind"]), str(r["name"]), str(r["character"]), str(r["job"])) for r in rows]
+
+    def keywords_for(self, film_id: int) -> list[str]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT keyword FROM film_keyword WHERE film_id = ? ORDER BY keyword", (film_id,)
+            ).fetchall()
+            return [str(r["keyword"]) for r in rows]
+
+    def credits_summary(self) -> dict[str, int]:
+        with self._conn() as c:
+            with_credits = c.execute(
+                "SELECT COUNT(*) FROM tmdb_facts WHERE credits_fetched_on IS NOT NULL"
+            ).fetchone()[0]
+            with_tmdb = c.execute("SELECT COUNT(*) FROM external_ids WHERE authority = 'tmdb'").fetchone()[0]
+            persons = c.execute("SELECT COUNT(*) FROM person").fetchone()[0]
+            return {
+                "films_with_credits": int(with_credits),
+                "films_with_tmdb": int(with_tmdb),
+                "persons": int(persons),
+            }
 
     def films_needing_year_backfill(self, limit: int | None = None) -> list[YearBackfillTarget]:
         """Films with no year at all, holding a TMDB id — the worklist of `repair years

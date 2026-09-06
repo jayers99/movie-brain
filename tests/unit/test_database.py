@@ -5,7 +5,8 @@ from datetime import date
 
 import pytest
 
-from movie_brain.domain.models import Film, McTitle, OmdbRating, ReviewEntry
+from movie_brain.domain.models import CastRow, CrewRow, Film, McTitle, OmdbRating, ReviewEntry, TmdbCredits
+from movie_brain.domain.search import trigram_query
 from movie_brain.infrastructure.database import (
     KEY_AUTHORITIES,
     MIGRATIONS_DIR,
@@ -1746,3 +1747,78 @@ def test_migration_018_creates_credit_tables_and_trigram_indexes(repo):
         c.execute("INSERT INTO person (tmdb_person_id, name, first_seen) VALUES (4110, 'Humphrey Bogart', '2026-09-06')")
         # trigram phrase MATCH is a substring test — 'Bogart' is found by its middle
         assert c.execute("SELECT rowid FROM person_fts WHERE person_fts MATCH '\"ogar\"'").fetchall() == [(1,)]
+
+
+def _credits(**over):
+    base = dict(
+        tmdb_id=910, imdb_id="tt0038355", title="The Big Sleep", original_title="The Big Sleep", year=1946, runtime_min=114,
+        overview="Private Investigator Philip Marlowe is hired by General Sternwood.", tagline="The picture they were born for!",
+        genres=("Mystery", "Crime"), keywords=("film noir", "private investigator"),
+        cast=(CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0), CastRow(3092, "Lauren Bacall", "Vivian Sternwood Rutledge", 1)),
+        crew=(CrewRow(2636, "Howard Hawks", "Director", "Directing"), CrewRow(4110, "Humphrey Bogart", "Producer", "Production")),
+    )
+    base.update(over)
+    return TmdbCredits(**base)
+
+
+def test_write_credits_stores_persons_once_and_rows_per_credit(repo):
+    day = date(2026, 9, 6)
+    fid = repo.create_film(Film("The Big Sleep", 1946, "Howard Hawks", ""))
+    repo.set_external_id(fid, "tmdb", "910", day)
+    repo.upsert_omdb(fid, OmdbRating(8.0, 97, True, "English", '{"Plot": "A private eye takes a case."}'), day)
+
+    repo.write_credits(fid, _credits(), day)
+
+    assert repo.credits_for(fid) == [
+        ("cast", "Humphrey Bogart", "Philip Marlowe", ""),
+        ("cast", "Lauren Bacall", "Vivian Sternwood Rutledge", ""),
+        ("crew", "Howard Hawks", "", "Director"),
+        ("crew", "Humphrey Bogart", "", "Producer"),
+    ]
+    assert repo.keywords_for(fid) == ["film noir", "private investigator"]
+    with sqlite3.connect(repo.db_path) as c:
+        # Bogart acts AND produces: one person row, two credit rows
+        assert c.execute("SELECT COUNT(*) FROM person WHERE tmdb_person_id = 4110").fetchone()[0] == 1
+        row = c.execute("SELECT overview, tagline, genres, credits_fetched_on, title FROM tmdb_facts WHERE film_id = ?", (fid,)).fetchone()
+        assert row == (_credits().overview, _credits().tagline, '["Mystery", "Crime"]', "2026-09-06", "The Big Sleep")
+        assert c.execute("SELECT plot FROM film_text WHERE film_id = ?", (fid,)).fetchone() == ("A private eye takes a case.",)
+
+
+def test_write_credits_replaces_a_films_rows_and_never_duplicates(repo):
+    day = date(2026, 9, 6)
+    fid = repo.create_film(Film("The Big Sleep", 1946, None, ""))
+    repo.set_external_id(fid, "tmdb", "910", day)
+    repo.write_credits(fid, _credits(), day)
+    repo.write_credits(fid, _credits(cast=(CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),), keywords=("film noir",)), day)
+    assert [r[1] for r in repo.credits_for(fid) if r[0] == "cast"] == ["Humphrey Bogart"]
+    assert repo.keywords_for(fid) == ["film noir"]
+
+
+def test_write_credits_indexes_names_and_characters_for_misspellings(repo):
+    """The trigram indexes are what Plan B corrects against. A bare MATCH is a substring
+    test, so the misspelling is asked as an OR of its trigrams (domain/search.py)."""
+    day = date(2026, 9, 6)
+    fid = repo.create_film(Film("The Big Sleep", 1946, None, ""))
+    repo.set_external_id(fid, "tmdb", "910", day)
+    repo.write_credits(fid, _credits(), day)
+    with sqlite3.connect(repo.db_path) as c:
+        people = {r[0] for r in c.execute("SELECT name FROM person_fts WHERE person_fts MATCH ?", (trigram_query("bogrt"),))}
+        assert "Humphrey Bogart" in people
+        chars = {r[0] for r in c.execute("SELECT character FROM character_fts WHERE character_fts MATCH ?", (trigram_query("marlow"),))}
+        assert chars == {"Philip Marlowe"}
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH 'sternwood'").fetchall() == [(fid,)]
+
+
+def test_films_needing_credits_lists_live_movies_with_a_tmdb_id_and_no_stamp(repo):
+    day = date(2026, 9, 6)
+    a = repo.create_film(Film("A", 1950, None, ""))
+    b = repo.create_film(Film("B", 1951, None, ""))
+    c_ = repo.create_film(Film("C", 1952, None, ""))
+    repo.set_external_id(a, "tmdb", "1", day)
+    repo.set_external_id(b, "tmdb", "2", day)
+    repo.write_credits(b, _credits(tmdb_id=2, title="B", original_title="B"), day)  # stamped
+    targets = repo.films_needing_credits()
+    assert [(t.film_id, t.title, t.tmdb_id) for t in targets] == [(a, "A", 1)]
+    assert repo.films_needing_credits(limit=0) == []
+    assert repo.credits_summary() == {"films_with_credits": 1, "films_with_tmdb": 2, "persons": 3}
+    assert c_ not in {t.film_id for t in targets}  # no tmdb id → not on the worklist
