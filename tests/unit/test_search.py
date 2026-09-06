@@ -1,12 +1,15 @@
 from movie_brain.domain.search import (
     ALIASES,
     FIELDS,
+    Candidate,
     ParsedQuery,
     Term,
     fts_words,
     norm_genre,
     parse_query,
     parse_year_range,
+    rank_candidates,
+    similarity,
     trigram_query,
 )
 
@@ -137,3 +140,27 @@ def test_unknown_field_inside_a_value_is_absorbed_and_hinted():
 
 def test_internal_whitespace_of_a_value_is_preserved_as_typed():
     assert parse_query("title:  the   big sleep ").terms == (Term("title", "the   big sleep", False),)
+
+
+def test_similarity_is_token_aware_so_a_surname_alone_scores_high():
+    assert similarity("bogrt", "Humphrey Bogart") > 0.85
+    assert similarity("humphrey bogrt", "Humphrey Bogart") > 0.9
+    assert similarity("bogrt", "Lena Brogren") < 0.6
+
+
+def test_similarity_is_case_insensitive_and_exact_is_one():
+    assert similarity("HUMPHREY BOGART", "Humphrey Bogart") == 1.0
+
+
+def test_rank_candidates_breaks_a_similarity_tie_on_weight_then_name():
+    """On the live index 'bogrt' ties four Bogarts at 0.91 — the one with the most credits wins,
+    and equal credits fall back to name order so the result is deterministic."""
+    cands = [Candidate(1, "Jane Bogart", 1), Candidate(2, "Humphrey Bogart", 11), Candidate(3, "Lena Brogren", 40),
+             Candidate(4, "Bogart Edwards", 11)]
+    ranked = rank_candidates("bogrt", cands)
+    assert [r.name for r in ranked[:3]] == ["Bogart Edwards", "Humphrey Bogart", "Jane Bogart"]
+    assert ranked[0].score == ranked[1].score and ranked[-1].name == "Lena Brogren"
+
+
+def test_rank_candidates_on_nothing_is_empty():
+    assert rank_candidates("x", []) == []

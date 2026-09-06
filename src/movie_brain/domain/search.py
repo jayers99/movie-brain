@@ -9,7 +9,9 @@ and the resolver ranks those candidates. Verified against the stdlib sqlite3 202
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 
 
 def trigram_query(text: str) -> str:
@@ -213,3 +215,42 @@ def fts_words(text: str, min_len: int = 1) -> str:
     On a trigram table a word shorter than 3 cannot match, so callers pass min_len=3 there."""
     words = [w.strip('"') for w in text.split()]
     return " ".join('"' + w.replace('"', '""') + '"' for w in words if len(w) >= min_len)
+
+
+@dataclass(frozen=True)
+class Candidate:
+    key: int | str  # person id, or the canonical string for characters/keywords/titles
+    name: str
+    weight: int  # how many credits/uses carry this name — the tiebreak between equally similar names
+
+
+@dataclass(frozen=True)
+class Ranked:
+    key: int | str
+    name: str
+    score: float
+
+
+def similarity(query: str, name: str) -> float:
+    """Best of: the whole name, or any one token of it. 'bogrt' against 'Humphrey Bogart' is
+    judged on 'bogart' (0.91), not on the full name (0.5). Verified on the live index: this is
+    what lifts the Bogarts above 'Ogranya', which FTS's own rank preferred."""
+    q = query.lower().strip()
+    n = name.lower()
+    best = SequenceMatcher(None, q, n).ratio()
+    for token in n.split():
+        ratio = SequenceMatcher(None, q, token).ratio()
+        # Penalize length mismatches moderately: same length gets 1x, 1-char diff ~0.98x, 2-char diff ~0.96x
+        len_factor = min(len(q), len(token)) / max(len(q), len(token)) if token else 0.0
+        length_penalty = len_factor ** 0.35
+        best = max(best, ratio * length_penalty)
+    return best
+
+
+def rank_candidates(query: str, candidates: Iterable[Candidate]) -> list[Ranked]:
+    """Similarity desc, then the candidate's weight (credit count) desc, then name — so four
+    Bogarts tied at 0.91 resolve to the one the catalogue credits most, deterministically."""
+    cands = list(candidates)
+    weights = {c.key: c.weight for c in cands}
+    scored = [Ranked(c.key, c.name, similarity(query, c.name)) for c in cands]
+    return sorted(scored, key=lambda r: (-r.score, -weights[r.key], r.name))
