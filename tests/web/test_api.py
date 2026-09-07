@@ -92,6 +92,8 @@ def test_summary_and_config(client):
         "discovery": 0,
         "owned": 0,
         "credits": 0,
+        "embeddings": 0,
+        "prose": 0,
     }
     cfg = client.get("/api/config").get_json()
     assert cfg["canned_thresholds"] == {

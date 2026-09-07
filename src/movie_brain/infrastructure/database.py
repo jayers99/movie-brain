@@ -16,6 +16,7 @@ from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import (
     CreditsTarget,
+    EmbedTarget,
     Film,
     FilmView,
     ImdbBackfillTarget,
@@ -32,6 +33,7 @@ from movie_brain.domain.models import (
 )
 from movie_brain.domain.search import (
     CANDIDATE_LIMIT,
+    EMBED_MODEL,
     FREEFORM_LEAD_BILLING,
     FREEFORM_MAX_BILLING,
     W_CHARACTER,
@@ -176,7 +178,7 @@ class RepairFilm(NamedTuple):
     omdb_found: bool
 
 
-_ONE_ROW_TABLES = ("omdb", "tmdb", "my_ratings", "watchlist", "owned")  # film_id PRIMARY KEY tables
+_ONE_ROW_TABLES = ("omdb", "tmdb", "my_ratings", "watchlist", "owned", "film_embedding")  # film_id PRIMARY KEY tables
 
 
 def _tmdb_target(r: sqlite3.Row) -> TmdbMatchTarget:
@@ -1286,6 +1288,60 @@ class Repository:
                 "persons": int(persons),
             }
 
+    # embeddings (power search, Plan C) --------------------------------------
+    def films_needing_embedding(self, model: str, limit: int | None = None) -> list[EmbedTarget]:
+        """Live films holding a `film_text` row whose embedding is missing, made by a different
+        model, or older than the film's last enrichment (the prose may have changed). Whether the
+        prose is actually non-empty is `embedding_text`'s call, not SQL's."""
+        sql = (
+            "SELECT f.id, f.title, t.overview, t.plot, x.tagline FROM films f "
+            "JOIN film_text t ON t.film_id = f.id "
+            "LEFT JOIN tmdb_facts x ON x.film_id = f.id "
+            "LEFT JOIN film_embedding e ON e.film_id = f.id "
+            "WHERE (e.film_id IS NULL OR e.model != ? "
+            "       OR (x.credits_fetched_on IS NOT NULL AND x.credits_fetched_on > e.embedded_on)) AND "
+            + _NOT_DISPOSED + " ORDER BY f.id"
+        )
+        params: list[object] = [model]
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        with self._conn() as c:
+            rows = c.execute(sql, params).fetchall()
+        return [EmbedTarget(int(r["id"]), str(r["title"]), r["overview"], r["plot"], r["tagline"]) for r in rows]
+
+    def write_embeddings(self, rows: Sequence[tuple[int, bytes]], today: date, *, model: str, dim: int) -> None:
+        """One batch, one transaction; a film's row is replaced whole (PRIMARY KEY on film_id)."""
+        with self._conn() as c:
+            c.executemany(
+                "INSERT INTO film_embedding (film_id, model, dim, vector, embedded_on) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET model = excluded.model, dim = excluded.dim, "
+                "vector = excluded.vector, embedded_on = excluded.embedded_on",
+                [(film_id, model, dim, vector, today.isoformat()) for film_id, vector in rows],
+            )
+
+    def all_embeddings(self, model: str) -> list[tuple[int, bytes]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT e.film_id, e.vector FROM film_embedding e JOIN films f ON f.id = e.film_id "
+                "WHERE e.model = ? AND " + _NOT_DISPOSED + " ORDER BY e.film_id",
+                (model,),
+            ).fetchall()
+            return [(int(r["film_id"]), bytes(r["vector"])) for r in rows]
+
+    def embedding_summary(self, model: str) -> tuple[int, str]:
+        """(count, latest embedded_on or '') — the cheap stamp `VectorIndex` compares to know when to rebuild."""
+        with self._conn() as c:
+            r = c.execute(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(embedded_on), '') AS latest FROM film_embedding WHERE model = ?",
+                (model,),
+            ).fetchone()
+            return int(r["n"]), str(r["latest"])
+
+    def prose_count(self) -> int:
+        with self._conn() as c:
+            return int(c.execute("SELECT COUNT(*) FROM film_text").fetchone()[0])
+
     # search (power search, Plan B) ------------------------------------------
     @staticmethod
     def _credit_clause(credit_kind: str | None, jobs: tuple[str, ...]) -> tuple[str, list[str]]:
@@ -2332,6 +2388,8 @@ class Repository:
                         kept[table] = {"added_on": loser_row["added_on"]}
                     elif table == "owned":
                         kept[table] = {"first_imported": loser_row["first_imported"]}
+                    elif table == "film_embedding":
+                        kept[table] = {"film_id": loser_id}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -2653,4 +2711,6 @@ class Repository:
             "discovery": sum(1 for v in views if not v.criterion),
             "owned": sum(1 for v in views if v.owned),
             "credits": self.credits_summary()["films_with_credits"],
+            "embeddings": self.embedding_summary(EMBED_MODEL)[0],
+            "prose": self.prose_count(),
         }

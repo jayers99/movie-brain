@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import CastRow, CrewRow, Film, McTitle, OmdbRating, ReviewEntry, TmdbCredits
-from movie_brain.domain.search import Filter, trigram_query
+from movie_brain.domain.search import EMBED_MODEL, Filter, trigram_query
 from movie_brain.infrastructure.database import (
     KEY_AUTHORITIES,
     MIGRATIONS_DIR,
@@ -135,6 +135,8 @@ def test_init_db_is_idempotent(tmp_path):
         "discovery": 0,
         "owned": 0,
         "credits": 0,
+        "embeddings": 0,
+        "prose": 0,
     }
 
 
@@ -264,6 +266,8 @@ def test_views_and_summary(repo):
         "discovery": 0,
         "owned": 0,
         "credits": 0,
+        "embeddings": 0,
+        "prose": 0,
     }
 
 
@@ -2114,3 +2118,82 @@ def test_freeform_name_hits_are_cast_only_and_billing_weighted(repo):
         [Filter("person", ids=tuple(repo.persons_named("Zed Marlowe", "cast", ())), credit_kind="cast")], ""
     )
     assert {i for i, _ in everyone} == {films["Lead"], films["Mid"], films["Deep"]}  # the field is still complete
+
+
+def _prose_film(repo, title, year, tmdb_id, overview, plot=None, tagline=None, day=D):
+    fid = repo.create_film(Film(title, year, None, ""))
+    repo.set_external_id(fid, "tmdb", str(tmdb_id), day)
+    if plot is not None:
+        repo.upsert_omdb(fid, OmdbRating(7.0, 80, True, "English", f'{{"Plot": "{plot}"}}'), day)
+    repo.write_credits(
+        fid,
+        TmdbCredits(
+            tmdb_id=tmdb_id, imdb_id=None, title=title, original_title=title, year=None, runtime_min=None,
+            alt_titles=(), overview=overview, tagline=tagline, genres=(), keywords=(), cast=(), crew=(),
+        ),
+        day,
+    )
+    return fid
+
+
+def test_embedding_worklist_is_prose_films_without_a_row_for_this_model(repo):
+    a = _prose_film(repo, "Alpha", 1946, 910, "A private eye.", plot="Sternwood.", tagline=None)
+    b = _prose_film(repo, "Beta", 1950, 911, None)  # a film_text row exists (title only), prose is all None
+    repo.create_film(Film("Gamma", 1960, None, ""))  # no film_text row at all
+    targets = repo.films_needing_embedding("m1")
+    assert [(t.film_id, t.title, t.overview, t.plot, t.tagline) for t in targets] == [
+        (a, "Alpha", "A private eye.", "Sternwood.", None),
+        (b, "Beta", None, None, None),
+    ]
+    assert repo.films_needing_embedding("m1", limit=1)[0].film_id == a
+
+
+def test_write_embeddings_stamps_and_removes_from_the_worklist_until_the_prose_changes(repo):
+    a = _prose_film(repo, "Alpha", 1946, 910, "A private eye.")
+    repo.write_embeddings([(a, b"\x00" * 8)], D, model="m1", dim=2)
+    assert repo.films_needing_embedding("m1") == []
+    assert repo.films_needing_embedding("m2")[0].film_id == a  # another model: everything is due
+    assert repo.all_embeddings("m1") == [(a, b"\x00" * 8)]
+    assert repo.embedding_summary("m1") == (1, D.isoformat())
+    # Re-enriched later than embedded → the prose may have changed → back on the worklist.
+    later = date(2026, 8, 20)
+    repo.write_credits(
+        a,
+        TmdbCredits(
+            tmdb_id=910, imdb_id=None, title="Alpha", original_title="Alpha", year=None, runtime_min=None,
+            alt_titles=(), overview="A new overview.", tagline=None, genres=(), keywords=(), cast=(), crew=(),
+        ),
+        later,
+    )
+    assert [t.overview for t in repo.films_needing_embedding("m1")] == ["A new overview."]
+    repo.write_embeddings([(a, b"\x01" * 8)], later, model="m1", dim=2)  # overwrite, PRIMARY KEY
+    assert repo.all_embeddings("m1") == [(a, b"\x01" * 8)]
+    assert repo.embedding_summary("m1") == (1, later.isoformat())
+    assert repo.embedding_summary("m9") == (0, "")
+
+
+def test_summary_counts_embeddings_and_prose(repo):
+    # summary() has no model parameter — it always reads EMBED_MODEL, the production model,
+    # so (unlike the model-scoping tests above) this one must write under that same model.
+    a = _prose_film(repo, "Alpha", 1946, 910, "A private eye.")
+    repo.write_embeddings([(a, b"\x00" * 8)], D, model=EMBED_MODEL, dim=2)
+    s = repo.summary("criterion")
+    assert s["embeddings"] == 1 and s["prose"] == 1
+
+
+def test_merge_moves_the_embedding_survivor_wins(repo):
+    a = _prose_film(repo, "Alpha", 1946, 910, "A private eye.")
+    b = _prose_film(repo, "Alpha", 1947, 911, "A private eye again.")
+    repo.write_embeddings([(b, b"\x02" * 8)], D, model="m1", dim=2)
+    report = repo.merge_film(b, a, D)
+    assert report.moved["film_embedding"] == 1
+    assert repo.all_embeddings("m1") == [(a, b"\x02" * 8)]
+    # And when both hold one, the survivor's stays and the loser's film_id is noted.
+    c = _prose_film(repo, "Alpha", 1948, 912, "Third.")
+    repo.write_embeddings([(a, b"\x0a" * 8), (c, b"\x0c" * 8)], D, model="m1", dim=2)
+    report = repo.merge_film(c, a, D)
+    assert report.dropped["film_embedding"] == 1
+    assert repo.all_embeddings("m1") == [(a, b"\x0a" * 8)]
+    with sqlite3.connect(repo.db_path) as conn:
+        note = conn.execute("SELECT note FROM film_disposition WHERE film_id = ?", (c,)).fetchone()[0]
+    assert "film_embedding" in note

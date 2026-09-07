@@ -119,6 +119,17 @@ class CreditsTarget:
 
 
 @dataclass(frozen=True)
+class EmbedTarget:
+    """One worklist row for `movie-brain embed`: the film and the three prose fields it is embedded from."""
+
+    film_id: int
+    title: str
+    overview: str | None
+    plot: str | None
+    tagline: str | None
+
+
+@dataclass(frozen=True)
 class YearBackfillTarget:
     """A film with no year at all, holding a TMDB id — the worklist of `repair years --from-tmdb`."""
 
