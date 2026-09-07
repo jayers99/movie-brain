@@ -60,8 +60,13 @@ def seed(repo: Repository) -> None:
         ids["bravo (1960)"], OmdbRating(6.0, 50, True, "French", '{"Title":"Bravo"}', metacritic=70), TODAY
     )
     repo.upsert_omdb(ids["charlie (1970)"], OmdbRating(None, None, False), TODAY)
+    # Echo is never enriched: the drawer's OMDb fallbacks (plot, bare-query cast and writer links) are proved on it.
     repo.upsert_omdb(
-        ids["echo (1990)"], OmdbRating(7.0, 60, True, "English, Spanish", '{"Title":"Echo"}', metacritic=70), TODAY
+        ids["echo (1990)"],
+        OmdbRating(7.0, 60, True, "English, Spanish",
+                   '{"Title":"Echo","Plot":"An echo.","Actors":"Ed Actor, Flo Actor","Writer":"Gus Writer (screenplay)"}',
+                   metacritic=70),
+        TODAY,
     )
     repo.set_leaving("criterion", {"alpha (1950)": "August 31"})
     repo.set_rating(ids["alpha (1950)"], 9, TODAY)
@@ -80,6 +85,9 @@ def seed(repo: Repository) -> None:
     # they would change what the new-arrivals chip counts.
     for slug in ("max", "mubi", "peacock", "prime-video", "apple-tv-plus"):
         repo.record_listing(ids["bravo (1960)"], slug, "https://tmdb/w/2", TODAY)
+    # Bravo's best source is Apple TV+ (name tiebreak); its template makes the drawer's watch link
+    # a real title search. `criterion` deliberately gets none, so Charlie proves the listing-URL fallback.
+    repo.set_service_search_url("apple-tv-plus", "https://tv.apple.com/search?term={title}")
     # Bravo is the one seeded watchlist film (Charlie stays free for the toggle test).
     repo.toggle_watchlist(ids["bravo (1960)"], TODAY)
     # Two seeded audit suspects for the Suspect chip + drawer verdict + score-sort tests. Bravo
@@ -159,17 +167,33 @@ def seed(repo: Repository) -> None:
     # spec's own example query); Jane Bogart on Bravo is the near-name that makes the
     # correction's tiebreak real; Bravo's overview says "alpha" so a freeform 'alpha' search
     # ranks Alpha (title) above Bravo (overview). Hawks directs both.
-    def _credits(tmdb_id: int, title: str, overview: str, cast: tuple[CastRow, ...]) -> TmdbCredits:
+    def _credits(tmdb_id: int, title: str, overview: str, cast: tuple[CastRow, ...],
+                 crew: tuple[CrewRow, ...] = (CrewRow(2636, "Howard Hawks", "Director", "Directing"),)) -> TmdbCredits:
         return TmdbCredits(
             tmdb_id=tmdb_id, imdb_id=None, title=title, original_title=title, year=None, runtime_min=None,
             alt_titles=(), overview=overview, tagline=None, genres=("Mystery",), keywords=("film noir",),
-            cast=cast, crew=(CrewRow(2636, "Howard Hawks", "Director", "Directing"),),
+            cast=cast, crew=crew,
         )
 
     repo.set_external_id(ids["alpha (1950)"], "tmdb", "910", TODAY)
     repo.set_external_id(ids["bravo (1960)"], "tmdb", "911", TODAY)
-    repo.write_credits(ids["alpha (1950)"], _credits(910, "Alpha", "A private eye in the Sternwood house.",
-                                                     (CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),)), TODAY)
+    # Alpha carries eight billed actors (the drawer shows six, then "⋯ 2 more" with roles) and a
+    # screenwriter plus a novelist (the writer label branch). No new name shares a trigram with
+    # `bogrt`/`bogxrtq` or contains alpha/hawks/marlowe, so every search count above stays put.
+    repo.write_credits(ids["alpha (1950)"], _credits(910, "Alpha", "A private eye in the Sternwood house.", (
+        CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),
+        CastRow(4201, "Lauren Bacall", "Vivian Rutledge", 1),
+        CastRow(4202, "John Ridgely", "Eddie Mars", 2),
+        CastRow(4203, "Martha Vickers", "Carmen", 3),
+        CastRow(4204, "Louis Jean Heydt", "Joe Brody", 4),
+        CastRow(4205, "Charles Waldron", "The General", 5),
+        CastRow(4206, "Regis Toomey", "Bernie Ohls", 6),
+        CastRow(4207, "Sonia Darrin", "Agnes (uncredited)", 7),
+    ), crew=(
+        CrewRow(2636, "Howard Hawks", "Director", "Directing"),
+        CrewRow(4301, "Leigh Brackett", "Screenplay", "Writing"),
+        CrewRow(4302, "Raymond Chandler", "Novel", "Writing"),
+    )), TODAY)
     # Ke$1ha (I3): a cast name carrying a literal "$1" — the one thing that can turn the note-click
     # handler's suggestion/correction replace into a String.replace backreference if it ever
     # regresses to a template-string replacement instead of a replacer function.

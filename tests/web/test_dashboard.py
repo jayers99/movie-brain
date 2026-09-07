@@ -287,7 +287,7 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     expect(drawer).to_be_visible()
     expect(drawer.locator("h2")).to_have_text("Alpha ☆⚐")  # star + flag buttons: Alpha isn't watchlisted/flagged
     expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
-    expect(drawer.locator("a.criterion:not(.owned-link):not(.cheapcharts-link)")).to_have_attribute(
+    expect(drawer.locator("a.criterion-link")).to_have_attribute(
         "href", "https://c/alpha"
     )
     expect(drawer.locator("div.meta")).not_to_contain_text("Leaving")  # moved to the bottom
@@ -557,14 +557,14 @@ def test_drawer_names_the_best_source(dash: Page):
     # serve this test: it is the seed's owned film, and possession short-circuits the ranking.
     clear_lang(dash)  # Bravo is French; the default English filter hides its row
     dash.locator("tbody tr", has_text="Bravo").first.click()
-    expect(dash.locator("#drawer .best-source")).to_contain_text("Best source: Apple TV+")
+    expect(dash.locator("#drawer .best-source")).to_contain_text("Watch on Apple TV+")
 
 
 def test_an_owned_film_answers_with_the_store_it_was_bought_from(dash: Page):
     """Possession short-circuits the ranking: Alpha streams on Criterion and HBO Max, and
-    still answers iTunes, because the owner already has it."""
+    still answers with the Apple TV library link, because the owner already has it."""
     dash.locator("tbody tr", has_text="Alpha").first.click()
-    expect(dash.locator("#drawer .best-source")).to_contain_text("Best source: Apple TV Store (iTunes)")
+    expect(dash.locator("#drawer .best-source")).to_contain_text("Owned on Apple TV")
 
 
 def test_a_reachable_film_carries_a_watch_badge(dash: Page):
@@ -950,3 +950,89 @@ def test_search_note_click_replace_survives_a_dollar_sign_in_the_value(dash: Pag
     _search(dash, "actor: e$1z")   # shares the 'e$1' trigram window with Ke$1ha; similarity 0.6 — a suggestion, not a correction
     dash.locator("#search-note button.suggest", has_text="Ke$1ha").click()
     expect(dash.locator("#search")).to_have_value('actor: "Ke$1ha"')
+
+
+# ---- drawer redesign (spec docs/superpowers/specs/2026-09-07-drawer-redesign-design.md) ----
+
+
+def _open(dash: Page, title: str):
+    dash.locator("tbody tr", has_text=title).first.click()
+    body = dash.locator("#drawer-body")
+    expect(body).to_contain_text(title)  # populated — a negative assertion on an empty drawer passes vacuously
+    return body
+
+
+def test_drawer_is_760_wide(dash: Page):
+    _open(dash, "Alpha")
+    assert dash.locator("#drawer").bounding_box()["width"] == 760
+
+
+def test_drawer_summary_prefers_the_tmdb_overview(dash: Page):
+    body = _open(dash, "Alpha")
+    expect(body.locator("p").first).to_have_text("A private eye in the Sternwood house.")  # TMDB, not OMDb's "A plot."
+    expect(body.locator("pre.raw")).to_contain_text('"Plot": "A plot."')  # OMDb still in the raw payload
+
+
+def test_drawer_summary_falls_back_to_the_omdb_plot(dash: Page):
+    body = _open(dash, "Echo")  # never enriched
+    expect(body.locator("p").first).to_have_text("An echo.")
+
+
+def test_drawer_sections_run_facts_cast_writer_ratings_then_watch(dash: Page):
+    body = _open(dash, "Alpha")
+    expect(body).to_contain_text("Owned on Apple TV")
+    text = body.inner_text()
+    marks = ["Language", "Cast", "Writer", "My rating", "IMDb 8.5 · Metacritic 92 · Rotten Tomatoes 95%",
+             "On lists: Backlog Ten", "Owned on Apple TV", "Also streaming on", "Open on Criterion", "Raw OMDb payload"]
+    positions = [text.index(m) for m in marks]
+    assert positions == sorted(positions), list(zip(marks, positions, strict=True))
+
+
+def test_drawer_on_lists_line_ends_with_the_canon_score(dash: Page):
+    body = _open(dash, "Alpha")
+    # Backlog Ten unordered, trust 7 → 7. Sight & Sound 2022: 2 entries, Alpha #2, trust 5 → 5 × (1 − 1/2) = 2.5.
+    # cahiers-100: 2 entries, Alpha #3, trust 1 → 1 × (1 − 2/2) = 0. Total 9.5.
+    expect(body.locator(".canon-score")).to_have_text("· canon score 9.5")
+
+
+def test_drawer_ratings_block_notes_a_pending_lookup(dash: Page):
+    body = _open(dash, "Delta")  # no OMDb row
+    expect(body.locator(".ratings")).to_contain_text("OMDb lookup pending.")
+    assert body.locator(".ratings .critics").count() == 0
+
+
+def test_watch_link_fills_the_services_template(dash: Page):
+    clear_lang(dash)
+    body = _open(dash, "Bravo")
+    link = body.locator(".best-source a.watch-link")
+    expect(link).to_have_text("Watch on Apple TV+ ↗")
+    expect(link).to_have_attribute("href", "https://tv.apple.com/search?term=Bravo")
+
+
+def test_watch_link_falls_back_to_the_criterion_page(dash: Page):
+    body = _open(dash, "Charlie")
+    link = body.locator(".best-source a.watch-link")
+    expect(link).to_have_text("Watch on Criterion Channel ↗")
+    expect(link).to_have_attribute("href", "https://c/charlie")
+
+
+def test_owned_film_links_to_the_apple_tv_library_search(dash: Page):
+    body = _open(dash, "Alpha")
+    link = body.locator(".best-source a.owned-link")
+    expect(link).to_have_text("Owned on Apple TV ↗")
+    expect(link).to_have_attribute("href", "https://tv.apple.com/search?term=Alpha")
+
+
+def test_discovery_film_without_listings_has_no_watch_line(dash: Page):
+    body = _open(dash, "Golf")
+    assert body.locator(".best-source").count() == 0
+
+
+def test_drawer_links_row_has_tmdb_and_no_metacritic(dash: Page):
+    body = _open(dash, "Alpha")
+    expect(body.locator("a.tmdb-link")).to_have_text("TMDB ↗")
+    expect(body.locator("a.tmdb-link")).to_have_attribute("href", "https://www.themoviedb.org/movie/910")
+    dash.keyboard.press("Escape")
+    body = _open(dash, "Golf")  # holds a metacritic slug and no tmdb id
+    expect(body).not_to_contain_text("Metacritic ↗")
+    assert body.locator("a.tmdb-link").count() == 0

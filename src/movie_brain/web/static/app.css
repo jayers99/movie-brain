@@ -52,7 +52,7 @@ input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1
 input.rating.invalid { border-color:var(--accent); background:#fdecea; }
 button.info { border:0; background:none; cursor:pointer; font-size:16px; }
 #drawer-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:3; }
-#drawer { position:fixed; top:0; right:0; height:100vh; width:min(560px, 100vw); overflow:auto; background:var(--bg); z-index:4; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
+#drawer { position:fixed; top:0; right:0; height:100vh; width:min(760px, 100vw); overflow:auto; background:var(--bg); z-index:4; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
 #drawer-close { position:absolute; top:10px; right:12px; border:0; background:none; font-size:18px; cursor:pointer; }
 #drawer img.poster { max-width:200px; float:right; margin:0 0 12px 12px; }
 #drawer h2 { margin:0 0 4px; }
@@ -85,3 +85,20 @@ input.revisit-note { display:block; width:100%; max-width:320px; font:inherit; p
 .search-note { margin-top:4px; font-size:13px; color:var(--muted, #666); }
 .search-note b { font-weight:600; }
 .search-note button { border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:1px 8px; margin-left:4px; cursor:pointer; font:inherit; font-size:12px; }
+
+/* Drawer redesign (2026-09-07): person links, the ratings block, the cast disclosure. */
+#drawer a.person { color:#1a56db; text-decoration:none; border-bottom:1px dotted #1a56db; }
+#drawer a.person:hover { border-bottom-style:solid; }
+#drawer .ratings { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:12px 0; }
+#drawer .ratings .row { margin:3px 0; }
+#drawer .ratings .note, #drawer .canon-score { color:var(--muted); }
+#drawer .best-source a { color:inherit; }
+#drawer p.links a { margin-right:6px; }
+/* Open = the whole cast, one per line, roles throughout; the inline six hide while it is open. */
+#drawer .cast:has(.cast-more[open]) .cast-inline { display:none; }
+.cast-more[open] { display:block; }
+.cast-more > summary .when-open { display:none; }
+.cast-more[open] > summary .when-closed { display:none; }
+.cast-more[open] > summary .when-open { display:inline; }
+#drawer ul.cast-full { margin:4px 0 0; padding:0; list-style:none; columns:2; column-gap:24px; }
+#drawer ul.cast-full li { break-inside:avoid; margin:1px 0; }

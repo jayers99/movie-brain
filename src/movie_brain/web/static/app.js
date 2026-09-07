@@ -2,6 +2,7 @@
   'use strict';
   const ROW_H = 36, OVERSCAN = 10;
   const TOP_SERVICES = 3;  // drawer: services shown before the ⋯ more disclosure
+  const TOP_CAST = 6;      // drawer: cast names shown inline before the ⋯ more disclosure (drawer spec D2)
   const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
   const DEFAULT_LANG = 'English';
   const state = {
@@ -475,12 +476,49 @@
       <div class="verdict-buttons">${buttons}</div>
     </div>`;
   }
+  // A person link (drawer spec D4): the click handler below reads data-query and searches it,
+  // closing the drawer. `exact` names come from TMDB credits and are quoted — exact, never
+  // corrected — because they come from the same person table the search resolves against;
+  // OMDb-fallback names are bare so the fuzzy stage can bridge a spelling drift. `shown` is the
+  // link text, `queried` the name in the query (they differ for the director: the table's
+  // Criterion string is shown, the TMDB Director credit is searched).
+  const personLink = (field, shown, exact, queried = shown) => {
+    const query = exact ? `${field}: "${queried.replace(/"/g, '')}"` : `${field}: ${queried}`;
+    return `<a class="person" href="#" data-query="${esc(query)}">${esc(shown)}</a>`;
+  };
+  function castHtml(d, p) {
+    const cast = (d.credits && d.credits.cast) || [];
+    if (cast.length) {
+      const inline = cast.slice(0, TOP_CAST).map((c) => personLink('actor', c.name, true)).join(', ');
+      if (cast.length <= TOP_CAST) return inline;
+      // Six bare names inline; the disclosure lists EVERYONE with their role, one per line, and
+      // CSS hides the inline six while it is open (spec §3 "Cast row").
+      const full = cast.map((c) => `<li>${personLink('actor', c.name, true)}${c.character ? ` as ${esc(c.character)}` : ''}</li>`).join('');
+      return `<div class="cast"><span class="cast-inline">${inline}</span> <details class="svc-more cast-more"><summary><span class="when-closed">⋯ ${cast.length - TOP_CAST} more</span><span class="when-open">⋯ fewer</span></summary><ul class="cast-full">${full}</ul></details></div>`;
+    }
+    if (p.Actors && p.Actors !== 'N/A') return p.Actors.split(', ').map((n) => personLink('actor', n, false)).join(', ');
+    return '';
+  }
+  function writerHtml(d, p) {
+    const writers = (d.credits && d.credits.writers) || [];
+    // label is "Name" or "Name (novel)" (domain/credits.py::writer_label): link the name, keep the tag as text.
+    if (writers.length) return writers.map((w) => personLink('writer', w.name, true) + esc(w.label.slice(w.name.length))).join(', ');
+    if (p.Writer && p.Writer !== 'N/A') {
+      return p.Writer.split(', ').map((part) => {
+        const name = part.replace(/\s*\(.*\)\s*$/, '');   // OMDb's "(screenplay)" / "(novel)" suffixes stay as text
+        return personLink('writer', name, false) + esc(part.slice(name.length));
+      }).join(', ');
+    }
+    return '';
+  }
   function detailHtml(d) {
     const p = d.payload || {};
     const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '';
-    const fields = [['Genre', p.Genre], ['Runtime', p.Runtime], ['Rated', p.Rated], ['Country', p.Country], ['Language', d.language], ['Awards', p.Awards], ['Cast', p.Actors], ['Writer', p.Writer]]
-      .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('');
-    const sources = (p.Ratings || []).map((r) => `<li>${esc(r.Source)}: ${esc(r.Value)}</li>`).join('');
+    // Summary: TMDB's overview first, OMDb's short plot only when there is none (spec D1).
+    const summary = d.overview || (p.Plot && p.Plot !== 'N/A' ? p.Plot : '');
+    const fields = [['Genre', esc(p.Genre)], ['Runtime', esc(p.Runtime)], ['Rated', esc(p.Rated)], ['Country', esc(p.Country)],
+      ['Language', esc(d.language)], ['Awards', esc(p.Awards)], ['Cast', castHtml(d, p)], ['Writer', writerHtml(d, p)]]
+      .filter(([, v]) => v && v !== 'N/A').map(([k, v]) => `<dt>${k}</dt><dd class="dd-${k.toLowerCase()}">${v}</dd>`).join('');
     const svc = d.services || [];
     // Services arrive already ranked (subscribed, quality, Apple TV app, name — see
     // domain/watch.py). A film can carry dozens of them, so show the best few and put the
@@ -499,28 +537,50 @@
       const rank = String(l.rank_label ?? l.rank).replace(/^=/, '');
       return l.ordered ? `${label} #${esc(rank)}` : label;
     }).join(', ');
-    const bestLine = d.best_source
-      ? `<p class="meta best-source">Best source: <b>${esc(d.best_source.name)}</b>${d.best_source.subscribed ? '' : ' (not subscribed)'}</p>`
-      : '';
+    // Ratings block (spec D5): the same three numbers the table columns show, never OMDb's
+    // Ratings array; then the lists line with the canon score the On-a-list sort uses.
+    const critics = [
+      d.imdb != null ? `IMDb <b>${d.imdb.toFixed(1)}</b>` : '',
+      d.metacritic != null ? `Metacritic <b>${esc(d.metacritic)}</b>` : '',
+      d.rt != null ? `Rotten Tomatoes <b>${esc(d.rt)}%</b>` : '',
+    ].filter(Boolean).join(' · ');
+    const criticsLine = critics ? `<div class="row critics">${critics}</div>`
+      : d.pending ? '<div class="row note">OMDb lookup pending.</div>'
+      : d.found === false ? '<div class="row note">No OMDb match.</div>' : '';
+    const listsLine = lists ? `<div class="row on-lists">On lists: ${lists} <span class="canon-score">· canon score ${canonScore(d).toFixed(1)}</span></div>` : '';
+    // The one watch link (spec D6/D7). Possession short-circuits the ranking in domain/watch.py,
+    // so an owned film's best_source is the store row and its url the store's template when set;
+    // the Apple TV library search is the fallback that predates the template.
+    const bs = d.best_source;
+    let watchLine = '';
+    if (d.owned) {
+      const href = (bs && bs.url) || `https://tv.apple.com/search?term=${encodeURIComponent(d.title)}`;
+      watchLine = `<p class="meta best-source"><a class="owned-link" href="${esc(href)}" target="_blank" rel="noopener">Owned on Apple TV ↗</a></p>`;
+    } else if (bs) {
+      const label = `Watch on <b>${esc(bs.name)}</b>${bs.subscribed ? '' : ' (not subscribed)'} ↗`;
+      watchLine = `<p class="meta best-source">${bs.url ? `<a class="watch-link" href="${esc(bs.url)}" target="_blank" rel="noopener">${label}</a>` : label}</p>`;
+    }
+    const credited = d.credits && d.credits.director;
+    const director = d.director ? personLink('director', d.director, !!credited, credited || d.director) : '—';
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       ${renderAudit(d)}
-      <div class="meta">${fmt(d.year)} · ${esc(d.director) || '—'}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
-      ${p.Plot && p.Plot !== 'N/A' ? `<p>${poster}${esc(p.Plot)}</p>` : poster}
+      <div class="meta">${fmt(d.year)} · ${director}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
+      ${summary ? `<p>${poster}${esc(summary)}</p>` : poster}
       <dl>${fields}</dl>
-      ${sources ? `<ul class="sources">${sources}</ul>` : d.pending ? '<p class="meta">OMDb lookup pending.</p>' : d.found === false ? '<p class="meta">No OMDb match.</p>' : ''}
-      <p>${d.url ? `<a class="criterion" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
-        ${d.metacritic_url ? ` <a class="criterion" href="${esc(d.metacritic_url)}" target="_blank" rel="noopener">Open on Metacritic ↗</a>` : ''}
-        ${d.owned ? ` <a class="criterion owned-link" href="https://tv.apple.com/search?term=${encodeURIComponent(d.title)}" target="_blank" rel="noopener">Owned on Apple TV ↗</a>` : ''}
-        ${d.cheapcharts_url
-          ? ` <a class="criterion cheapcharts-link" href="${esc(d.cheapcharts_url)}" target="_blank" rel="noopener">CheapCharts ↗</a>`
-          : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}
-        &nbsp; My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></p>
+      <div class="ratings">
+        <div class="row">My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></div>
+        ${criticsLine}${listsLine}
+      </div>
+      ${watchLine}
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
-      ${bestLine}
       ${streaming ? `<p class="meta">Also streaming on: ${streaming}</p>` : ''}
       ${buyable ? `<p class="meta">Buy on: ${buyable}</p>` : ''}
-      ${lists ? `<p class="meta">On lists: ${lists}</p>` : ''}
+      <p class="links">${d.url ? `<a class="criterion criterion-link" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
+        ${d.tmdb_url ? ` <a class="criterion tmdb-link" href="${esc(d.tmdb_url)}" target="_blank" rel="noopener">TMDB ↗</a>` : ''}
+        ${d.cheapcharts_url
+          ? ` <a class="criterion cheapcharts-link" href="${esc(d.cheapcharts_url)}" target="_blank" rel="noopener">CheapCharts ↗</a>`
+          : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}</p>
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
   }
