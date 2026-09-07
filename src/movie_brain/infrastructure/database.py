@@ -1204,10 +1204,19 @@ class Repository:
         transaction. Persons are inserted once by `tmdb_person_id` and never updated. The
         FTS indexes follow through migration 018's triggers — nothing here touches them."""
         with self._conn() as c:
+            # A facts row stamped under a DIFFERENT tmdb_id belongs to the work this film was
+            # re-keyed away from: replace its facts wholesale, or `films_needing_credits`'s re-key
+            # clause re-selects the film on every run forever (the stamp is set each time, the id
+            # never moves — One Way or Another #493 and Last Round #1136, 2026-09-07) and the
+            # audit keeps checking the film against the wrong work's titles. Same id → untouched.
             c.execute(
                 "INSERT INTO tmdb_facts (film_id, tmdb_id, imdb_id, title, original_title, alt_titles, "
                 "release_year, runtime_min, fetched_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
-                "ON CONFLICT(film_id) DO NOTHING",
+                "ON CONFLICT(film_id) DO UPDATE SET tmdb_id = excluded.tmdb_id, imdb_id = excluded.imdb_id, "
+                "title = excluded.title, original_title = excluded.original_title, alt_titles = excluded.alt_titles, "
+                "release_year = excluded.release_year, runtime_min = excluded.runtime_min, "
+                "fetched_on = excluded.fetched_on "
+                "WHERE tmdb_facts.tmdb_id != excluded.tmdb_id",
                 (film_id, credits.tmdb_id, credits.imdb_id, credits.title, credits.original_title,
                  json.dumps(list(credits.alt_titles)), credits.year, credits.runtime_min, today.isoformat()),
             )

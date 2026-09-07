@@ -1860,6 +1860,27 @@ def test_films_needing_credits_includes_a_rekeyed_film(repo):
     assert [(t.film_id, t.tmdb_id) for t in targets] == [(fid, 911)]
 
 
+def test_rekeyed_film_leaves_the_worklist_once_re_enriched(repo):
+    """The counterpart of the test above: once the re-keyed film's credits ARE fetched under
+    its new id, the facts row must follow to that id — otherwise the worklist's re-key clause
+    re-selects the film on every run forever (One Way or Another #493 and Last Round #1136,
+    re-enriched three times on 2026-09-07 with the stamp set each time)."""
+    day = date(2026, 9, 6)
+    fid = repo.create_film(Film("A", 1950, None, ""))
+    repo.set_external_id(fid, "tmdb", "910", day)
+    repo.write_credits(fid, _credits(tmdb_id=910, title="A", original_title="A"), day)
+    repo.set_external_id(fid, "tmdb", "911", day)  # re-keyed to a different work
+
+    repo.write_credits(fid, _credits(tmdb_id=911, title="A2", original_title="A2", imdb_id="tt0000911"), date(2026, 9, 7))
+
+    assert repo.films_needing_credits() == []
+    with sqlite3.connect(repo.db_path) as c:
+        c.row_factory = sqlite3.Row
+        row = c.execute("SELECT tmdb_id, imdb_id, title, credits_fetched_on FROM tmdb_facts WHERE film_id = ?", (fid,)).fetchone()
+    # the audit's facts cache describes the work the film holds NOW, not the one it was re-keyed away from
+    assert (row["tmdb_id"], row["imdb_id"], row["title"], row["credits_fetched_on"]) == (911, "tt0000911", "A2", "2026-09-07")
+
+
 def test_merge_moves_credits_keywords_and_text_to_the_survivor(repo):
     a, b = _two_films(repo)
     with sqlite3.connect(repo.db_path) as c:
