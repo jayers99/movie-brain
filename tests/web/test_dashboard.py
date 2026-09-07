@@ -167,7 +167,7 @@ def test_chip_labels_and_order(dash: Page):
 def test_cycle_chip_walks_off_a_b_off_and_encodes_one_key(dash: Page):
     owned = dash.locator('.chip[data-group="owned"]')
     cycle(dash, "owned")
-    expect(owned).to_have_text("Owned ✓")
+    expect(owned).to_have_text("Owned")  # the yes-state keeps the plain word; the fill says it is on
     expect(owned).to_have_class(re.compile("active"))
     assert "chips=owned" in dash.url and "not_owned" not in dash.url
     cycle(dash, "owned")
@@ -181,7 +181,7 @@ def test_cycle_chip_walks_off_a_b_off_and_encodes_one_key(dash: Page):
 
 def test_criterion_chip_has_three_on_states(dash: Page):
     crit = dash.locator('.chip[data-group="criterion"]')
-    for label, key in [("Criterion ✓", "criterion"), ("Criterion leaving", "leaving"), ("Criterion new", "criterion_new")]:
+    for label, key in [("Criterion", "criterion"), ("Criterion leaving", "leaving"), ("Criterion new", "criterion_new")]:
         cycle(dash, "criterion")
         expect(crit).to_have_text(label)
         assert f"chips={key}" in dash.url
@@ -193,7 +193,7 @@ def test_chips_stack_with_and(dash: Page):
     clear_lang(dash)
     cycle(dash, "rated")  # Unrated by me
     assert count(dash) == 5  # Bravo, Charlie, Delta, Golf, Hotel
-    cycle(dash, "criterion")  # Criterion ✓
+    cycle(dash, "criterion")  # Criterion (on)
     assert count(dash) == 3  # Bravo, Charlie, Delta — Golf and Hotel have no Criterion listing
     expect(dash.locator('.chip[data-group="rated"]')).to_have_class(re.compile("active"))
     dash.click("#chips-clear")
@@ -702,7 +702,7 @@ def test_everything_is_off_by_default_so_discovery_shows(dash):
 
 def test_reachable_chip_is_the_market_test(dash):
     clear_lang(dash)  # Hotel is Hungarian
-    cycle(dash, "reach")  # Reachable ✓
+    cycle(dash, "reach")  # Reachable (on)
     assert dash.locator("tr[data-id]", has_text="Hotel").count() == 1  # buyable on the Apple TV store
     assert dash.locator("tr[data-id]", has_text="Golf").count() == 0  # nothing to stream, nothing to buy
     assert dash.locator("tr[data-id]", has_text="Foxtrot").count() == 0  # departed, rated — a rating is not a listing
@@ -716,7 +716,8 @@ def test_legacy_scope_criterion_url_maps_onto_the_criterion_chip(page, server):
     page.goto(f"{server}/?scope=criterion&lang=any")
     page.wait_for_selector("#films tbody[data-count]")
     assert page.locator("tr[data-id]", has_text="Hotel").count() == 0
-    expect(page.locator('.chip[data-group="criterion"]')).to_have_text("Criterion ✓")
+    expect(page.locator('.chip[data-group="criterion"]')).to_have_text("Criterion")
+    expect(page.locator('.chip[data-group="criterion"]')).to_have_class(re.compile("active"))
     assert "chips=criterion" in page.url and "scope=" not in page.url
 
 
@@ -760,7 +761,7 @@ def test_drawer_star_toggles_watchlist(dash):
 def test_owned_badge_and_chip(dash):
     row = dash.locator("tr[data-id]", has_text="Alpha")
     assert row.locator(".badge-owned").count() == 1
-    cycle(dash, "owned")  # Owned ✓
+    cycle(dash, "owned")  # Owned (on)
     dash.wait_for_selector("#films tbody[data-count='1']")
     assert dash.locator("tr[data-id]").count() == 1
 
@@ -820,9 +821,9 @@ def test_list_picker_filters_to_the_list_and_orders_by_printed_rank(dash):
 def test_list_picker_leaves_the_reachable_chip_alone(dash):
     # A chip the owner set stays set: picking a list narrows within it rather than resetting it.
     cycle(dash, "reach")
-    expect(dash.locator('.chip[data-group="reach"]')).to_have_text("Reachable ✓")
+    expect(dash.locator('.chip[data-group="reach"]')).to_have_class(re.compile("active"))
     dash.select_option("#list-picker", "cahiers-100")
-    expect(dash.locator('.chip[data-group="reach"]')).to_have_text("Reachable ✓")
+    expect(dash.locator('.chip[data-group="reach"]')).to_have_class(re.compile("active"))
     assert "chips=reachable" in dash.url and "list=cahiers-100" in dash.url
 
 
@@ -908,7 +909,7 @@ def test_chips_keep_working_mid_search(dash: Page):
     clear_lang(dash)
     _search(dash, "director: hawks")
     assert count(dash) == 2   # Alpha and Bravo
-    cycle(dash, "owned")  # Owned ✓
+    cycle(dash, "owned")  # Owned (on)
     assert count(dash) == 1   # only Alpha is owned
     cycle(dash, "owned", 2)  # Not owned, then off
     assert count(dash) == 2

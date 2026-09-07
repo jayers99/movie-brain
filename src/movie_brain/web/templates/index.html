@@ -22,13 +22,14 @@
     </div>
     <div id="chips">
       <!-- Four three-way chips (off → A → B → off) and two plain ones, everything off by default.
-           A cycle chip carries its keys in data-cycle and its labels (off first) in data-labels; the
+           A cycle chip carries its keys in data-cycle and its labels (off first) in data-labels — the yes-state keeps the plain
+           word, the filled background alone says it is on; the
            keys are ordinary CHIP_PREDICATES entries, so URL state is still just `chips=`. -->
-      <button class="chip" data-cycle="reachable,unreachable" data-labels="Reachable|Reachable ✓|Not reachable" data-group="reach">Reachable</button>
+      <button class="chip" data-cycle="reachable,unreachable" data-labels="Reachable|Reachable|Not reachable" data-group="reach">Reachable</button>
       <button class="chip" data-cycle="unrated,mine" data-labels="Rated|Unrated by me|Rated by me" data-group="rated">Rated</button>
-      <button class="chip" data-cycle="criterion,leaving,criterion_new" data-labels="Criterion|Criterion ✓|Criterion leaving|Criterion new" data-group="criterion">Criterion</button>
+      <button class="chip" data-cycle="criterion,leaving,criterion_new" data-labels="Criterion|Criterion|Criterion leaving|Criterion new" data-group="criterion">Criterion</button>
       <button class="chip" data-chip="watchlist">Watchlist</button>
-      <button class="chip" data-cycle="owned,not_owned" data-labels="Owned|Owned ✓|Not owned" data-group="owned">Owned</button>
+      <button class="chip" data-cycle="owned,not_owned" data-labels="Owned|Owned|Not owned" data-group="owned">Owned</button>
       <button class="chip" data-chip="multi_list">On a list</button>
       <select id="list-picker" class="picker" title="Filter to one curated list and order by its rank"></select>
       <button id="chips-clear" class="chip clear">Clear</button>
