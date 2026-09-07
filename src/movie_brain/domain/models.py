@@ -308,6 +308,10 @@ class FilmView:
     # external id (infrastructure/cheapcharts.py::product_url). None = the id was never
     # resolved, and the drawer falls back to a title search.
     cheapcharts_url: str | None = None
+    # The Apple TV desktop app's own deep link, derived on read from the same stored `itunes`
+    # external id as `cheapcharts_url` (domain/watch.py::apple_tv_url). None = no id, and the
+    # drawer falls back to the store template or a tv.apple.com search.
+    apple_tv_url: str | None = None
     services: list[dict[str, object]] = field(default_factory=list)
     # [{slug, name, curator, published, ordered, trust, rank, rank_label, size}] — rank_label is
     # the rank AS PRINTED (may be None, may carry a tie marker like "=243"); rank is always the

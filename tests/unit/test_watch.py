@@ -1,5 +1,5 @@
 from movie_brain.domain.models import FilmView
-from movie_brain.domain.watch import best_source, rank_key, watch_options, watch_url
+from movie_brain.domain.watch import apple_tv_url, best_source, rank_key, watch_options, watch_url
 
 CRITERION = {"name": "Criterion Channel", "subscribed": True, "kind": "svod", "quality": 5, "has_apple_app": True}
 
@@ -142,3 +142,7 @@ def test_watch_url_falls_back_to_the_listing_url():
 
 def test_watch_url_is_none_when_nothing_is_known():
     assert watch_url({"name": "Kanopy"}, "Alpha") is None
+
+
+def test_apple_tv_url_builds_the_apps_own_scheme_from_the_itunes_id():
+    assert apple_tv_url("1722399326") == "com.apple.tv://itunes.apple.com/us/movie/id1722399326"

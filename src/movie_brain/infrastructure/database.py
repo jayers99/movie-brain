@@ -51,7 +51,7 @@ from movie_brain.domain.search import (
     trigram_query,
 )
 from movie_brain.domain.thumbprint import edition_label, title_norm
-from movie_brain.domain.watch import best_source, watch_url
+from movie_brain.domain.watch import apple_tv_url, best_source, watch_url
 from movie_brain.infrastructure.cheapcharts import product_url
 
 MISS_RETRY_DAYS = 30
@@ -534,6 +534,7 @@ def _row_to_view(
         departed=bool(row["departed"]),
         metacritic_url=f"https://www.metacritic.com/movie/{row['mc_slug']}/" if row["mc_slug"] else None,
         cheapcharts_url=product_url(str(row["itunes_id"])) if row["itunes_id"] else None,
+        apple_tv_url=apple_tv_url(str(row["itunes_id"])) if row["itunes_id"] else None,
         services=services or [],
         lists=lists or [],
         watchlisted=watchlisted,

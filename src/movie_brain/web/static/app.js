@@ -528,7 +528,10 @@
       : `${names.slice(0, TOP_SERVICES).join(', ')} <details class="svc-more"><summary>⋯ ${names.length - TOP_SERVICES} more</summary><span class="svc-rest">, ${names.slice(TOP_SERVICES).join(', ')}</span></details>`;
     const streaming = collapse(svc.filter((s) => s.kind !== 'store')
       .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`));
-    const buyable = collapse(svc.filter((s) => s.kind === 'store').map((s) => esc(s.name)));
+    // Every store entry links to the Apple TV app when the film holds an itunes id (the
+    // registry has exactly one store, apple-tv-store) — plain text otherwise.
+    const buyable = collapse(svc.filter((s) => s.kind === 'store')
+      .map((s) => d.apple_tv_url ? `<a class="store-link" href="${esc(d.apple_tv_url)}">${esc(s.name)}</a>` : esc(s.name)));
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     const lists = (d.lists || []).map((l) => {
       const label = esc(l.name);  // the same name the picker shows, so the two agree
@@ -548,14 +551,18 @@
       : d.pending ? '<div class="row note">OMDb lookup pending.</div>'
       : d.found === false ? '<div class="row note">No OMDb match.</div>' : '';
     const listsLine = lists ? `<div class="row on-lists">On lists: ${lists} <span class="canon-score">· canon score ${canonScore(d).toFixed(1)}</span></div>` : '';
-    // The one watch link (spec D6/D7). Possession short-circuits the ranking in domain/watch.py,
-    // so an owned film's best_source is the store row and its url the store's template when set;
-    // the Apple TV library search is the fallback that predates the template.
+    // The one watch link (spec D6/D7). Possession short-circuits the ranking in domain/watch.py.
+    // An owned film opens straight in the Apple TV desktop app via d.apple_tv_url (the app's own
+    // com.apple.tv:// scheme on the film's itunes id — domain/watch.py::apple_tv_url); without an
+    // id it falls back to the store's own url (best_source's template) and then a tv.apple.com
+    // search. A custom scheme gets no target/rel — a new tab for it would just sit there blank.
     const bs = d.best_source;
     let watchLine = '';
     if (d.owned) {
-      const href = (bs && bs.url) || `https://tv.apple.com/search?term=${encodeURIComponent(d.title)}`;
-      watchLine = `<p class="meta best-source"><a class="owned-link" href="${esc(href)}" target="_blank" rel="noopener">Owned on Apple TV ↗</a></p>`;
+      const appLink = !!d.apple_tv_url;
+      const href = d.apple_tv_url || (bs && bs.url) || `https://tv.apple.com/search?term=${encodeURIComponent(d.title)}`;
+      const attrs = appLink ? '' : ' target="_blank" rel="noopener"';
+      watchLine = `<p class="meta best-source"><a class="owned-link" data-opens="${appLink ? 'app' : 'web'}" href="${esc(href)}"${attrs}>Owned on Apple TV ↗</a></p>`;
     } else if (bs) {
       const label = `Watch on <b>${esc(bs.name)}</b>${bs.subscribed ? '' : ' (not subscribed)'} ↗`;
       watchLine = `<p class="meta best-source">${bs.url ? `<a class="watch-link" href="${esc(bs.url)}" target="_blank" rel="noopener">${label}</a>` : label}</p>`;

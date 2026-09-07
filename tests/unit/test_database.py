@@ -1758,6 +1758,19 @@ def test_view_builds_the_direct_cheapcharts_link_from_the_stored_itunes_id(repo)
     assert views["Unresolved"].cheapcharts_url is None
 
 
+def test_view_builds_the_apple_tv_app_link_from_the_stored_itunes_id(repo):
+    """Same id as `cheapcharts_url`, a different destination — the Apple TV desktop app."""
+    day = date(2026, 1, 1)
+    repo.record_catalog("criterion", [Film("Vertigo", 1958, "Alfred Hitchcock", "https://c/vertigo"),
+                                      Film("Unresolved", 1960, None, "https://c/unresolved")], day)
+    linked = repo.film_id_by_key("vertigo (1958)")
+    repo.set_external_id(linked, "itunes", "284815525", day)
+
+    views = {v.title: v for v in repo.list_views("criterion", day)}
+    assert views["Vertigo"].apple_tv_url == "com.apple.tv://itunes.apple.com/us/movie/id284815525"
+    assert views["Unresolved"].apple_tv_url is None
+
+
 def test_films_holding_itunes_id_returns_only_films_with_both_ids(repo, today):
     """The `--recheck` audit worklist — films_needing_itunes_id's mirror image."""
     both = _film(repo, "Vertigo", 1958)

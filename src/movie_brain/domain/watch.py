@@ -22,6 +22,8 @@ from movie_brain.domain.models import FilmView
 
 WatchOption = dict[str, object]
 
+APPLE_TV_APP_URL = "com.apple.tv://itunes.apple.com/us/movie/id{itunes_id}"
+
 
 def rank_key(option: WatchOption) -> tuple[int, int, int, str]:
     """Ascending sort key — the smallest tuple is the BEST option, so `sorted` needs no reverse."""
@@ -81,3 +83,14 @@ def watch_url(option: WatchOption, title: str) -> str | None:
         return str(template).replace("{title}", quote(title, safe=""))
     listing = option.get("listing_url")
     return str(listing) if listing else None
+
+
+def apple_tv_url(itunes_id: str) -> str:
+    """The Apple TV desktop app's own URL scheme, opening this film IN the app.
+
+    `com.apple.tv://` is TV.app's own scheme (from its Info.plist `CFBundleURLSchemes`) — `itms`
+    belongs to Music, which is where it opens a film instead. Verified by the owner 2026-09-07 on
+    Oklahoma! (itunes id 1722399326, "that worked"). `itunes_id` is the iTunes store track id,
+    the same one CheapCharts keys its product page by (`infrastructure/cheapcharts.py`).
+    """
+    return APPLE_TV_APP_URL.format(itunes_id=itunes_id)

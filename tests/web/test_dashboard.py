@@ -740,6 +740,19 @@ def test_drawer_shows_buy_on_and_cheapcharts_link(dash):
     )
 
 
+def test_buy_on_line_links_the_store_to_the_app_when_the_id_is_known(dash):
+    body = _open(dash, "Alpha")  # holds itunes id 284815525
+    link = body.locator("p.meta a.store-link")
+    expect(link).to_have_text("Apple TV Store (iTunes)")
+    expect(link).to_have_attribute("href", "com.apple.tv://itunes.apple.com/us/movie/id284815525")
+
+    dash.keyboard.press("Escape")  # close Alpha's drawer before touching the language control
+    clear_lang(dash)  # Hotel is Hungarian; a store listing but no itunes id
+    body = _open(dash, "Hotel")
+    expect(body).to_contain_text("Buy on: Apple TV Store (iTunes)")
+    assert body.locator("a.store-link").count() == 0
+
+
 def test_drawer_without_store_listing_has_no_cheapcharts_link(dash):
     clear_lang(dash)
     dash.locator("tbody tr", has_text="Bravo").first.click()
@@ -771,7 +784,7 @@ def test_drawer_shows_owned_link(dash):
     dash.locator("tr[data-id]", has_text="Alpha").click()
     link = dash.locator("#drawer-body a.owned-link")
     link.wait_for()
-    assert "tv.apple.com/search" in link.get_attribute("href")
+    assert link.get_attribute("href").startswith("com.apple.tv://")
 
 
 def test_not_owned_chip_hides_owned_films(dash: Page):
@@ -1016,11 +1029,13 @@ def test_watch_link_falls_back_to_the_criterion_page(dash: Page):
     expect(link).to_have_attribute("href", "https://c/charlie")
 
 
-def test_owned_film_links_to_the_apple_tv_library_search(dash: Page):
+def test_owned_film_opens_in_the_apple_tv_app(dash: Page):
     body = _open(dash, "Alpha")
     link = body.locator(".best-source a.owned-link")
     expect(link).to_have_text("Owned on Apple TV ↗")
-    expect(link).to_have_attribute("href", "https://tv.apple.com/search?term=Alpha")
+    expect(link).to_have_attribute("href", "com.apple.tv://itunes.apple.com/us/movie/id284815525")
+    expect(link).to_have_attribute("data-opens", "app")
+    assert link.get_attribute("target") is None
 
 
 def test_discovery_film_without_listings_has_no_watch_line(dash: Page):

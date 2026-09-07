@@ -45,6 +45,15 @@ def test_list_payload_carries_the_watch_url_only_on_best_source(client, repo):
     assert all("listing_url" not in s and "search_url" not in s for s in films["Trio"]["services"])
 
 
+def test_film_json_carries_the_apple_tv_app_link_derived_from_the_itunes_id(client, repo):
+    trio = repo.film_id_by_key("trio (1950)")
+    repo.set_external_id(trio, "itunes", "284815525", D)
+    films = {x["title"]: x for x in client.get("/api/films").get_json()}
+    assert films["Trio"]["apple_tv_url"] == "com.apple.tv://itunes.apple.com/us/movie/id284815525"
+    # Quartet holds no itunes id — the JS falls back to best_source's url or the tv.apple.com search.
+    assert films["Quartet"]["apple_tv_url"] is None
+
+
 def test_list_films(client):
     r = client.get("/api/films")
     assert r.status_code == 200
