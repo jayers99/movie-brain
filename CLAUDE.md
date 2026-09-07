@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Personal film brain: Criterion Channel listings + OMDb ratings + my 0–10 ratings in SQLite, served by a local Flask dashboard. Successor to criterion-ratings; more `listings.source` values (Apple Movies, …) may be added later.
 
-**Roadmap:** a phased multi-service expansion is planned — before feature work, read `docs/multiple-movie-services.md` (Implementation phases + Data model decisions: GUID identity, immutable films/no purge, Metacritic top-N dial) and `docs/vision.md`. Discovery spike scripts live in `scripts/discovery/`. Sibling project to converge with: yt-brain (see `docs/cinema-companion.md`).
+**Status 2026-09-07:** power search (spec `docs/superpowers/specs/2026-09-06-power-search-design.md`, exact + fuzzy + semantic) is COMPLETE and applied live; follow-up candidates live in `docs/backlog.md`. **Roadmap:** a phased multi-service expansion is planned — before feature work, read `docs/multiple-movie-services.md` (Implementation phases + Data model decisions: GUID identity, immutable films/no purge, Metacritic top-N dial) and `docs/vision.md`. Discovery spike scripts live in `scripts/discovery/`. Sibling project to converge with: yt-brain (see `docs/cinema-companion.md`).
 
 ## Commands
 
@@ -47,7 +47,8 @@ uv run movie-brain thumbprint backfill [--apply]      # copy owned/criterion/met
 uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
 uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)
 
-uv run pytest                                        # whole suite (~5s)
+uv run pytest                                        # whole suite (~40s, Playwright dominates; the real-model test runs only when the semantic extra is installed, else skips)
+uv run pytest -q -m semantic                         # the ONE test that loads the real sentence-transformers model (needs `uv sync --extra semantic`)
 uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by keyword
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py
 uv run ruff check . && uv run mypy                   # lint + types (mypy also runs as a pre-commit hook)
