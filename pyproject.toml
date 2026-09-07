@@ -15,6 +15,12 @@ dependencies = [
 [project.scripts]
 movie-brain = "movie_brain.cli:app"
 
+[project.optional-dependencies]
+semantic = [
+    "numpy>=1.26",
+    "sentence-transformers>=3.4",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.3.4",
@@ -25,6 +31,7 @@ dev = [
     "mypy>=1.14.1",
     "types-requests>=2.32",
     "pre-commit>=4.5.1",
+    "numpy>=1.26",
 ]
 
 [tool.ruff]
@@ -47,8 +54,13 @@ files = ["src"]
 module = ["responses", "responses.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["sentence_transformers", "sentence_transformers.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["semantic: exercises the real sentence-transformers model; skipped when the optional extra is not installed"]
 
 [build-system]
 requires = ["hatchling"]
