@@ -463,6 +463,8 @@
   // ---- drawer ----
   const drawer = $('#drawer'), backdrop = $('#drawer-backdrop'), body = $('#drawer-body');
   const VERDICTS = ['fine', 'omdb-wrong', 'tmdb-wrong', 'film-wrong', 'twin'];
+  // Maintenance detail: rendered at the bottom of the drawer, directly above the raw payload
+  // (owner ruling 2026-09-07) — never above the summary the drawer exists to show.
   function renderAudit(d) {
     if (!d.audit && !d.verdict) return '';
     const reasons = d.audit ? d.audit.reasons.map((r) => `<li data-code="${esc(r.code)}"><b>${esc(r.code)}</b> — ${esc(r.detail)}</li>`).join('') : '';
@@ -571,7 +573,6 @@
     const director = d.director ? personLink('director', d.director, !!credited, credited || d.director) : '—';
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
-      ${renderAudit(d)}
       <div class="meta">${fmt(d.year)} · ${director}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${summary ? `<p>${poster}${esc(summary)}</p>` : poster}
       <dl>${fields}</dl>
@@ -588,6 +589,7 @@
         ${d.cheapcharts_url
           ? ` <a class="criterion cheapcharts-link" href="${esc(d.cheapcharts_url)}" target="_blank" rel="noopener">CheapCharts ↗</a>`
           : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}</p>
+      ${renderAudit(d)}
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
   }

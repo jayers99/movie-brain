@@ -1129,3 +1129,14 @@ def test_writer_link_searches_the_writer_field(dash: Page):
     expect(dash.locator("#search")).to_have_value('writer: "Raymond Chandler"')
     _settled(dash)
     assert count(dash) == 1
+
+
+def test_audit_block_sits_just_above_the_raw_payload(dash: Page):
+    # Echo is a seeded audit suspect. The audit is maintenance detail (owner, 2026-09-07): it
+    # lives at the bottom, directly above the raw OMDb payload, never above the summary.
+    body = _open(dash, "Echo")
+    text = body.inner_text()
+    assert text.index("Audit") > text.index("Also streaming on") if "Also streaming on" in text else True
+    assert text.index("Audit") > text.index("My rating")
+    assert text.index("Audit") < text.index("Raw OMDb payload")
+    expect(body.locator(".audit-block + details summary")).to_have_text("Raw OMDb payload")
