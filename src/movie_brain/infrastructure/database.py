@@ -1292,7 +1292,9 @@ class Repository:
     def films_needing_embedding(self, model: str, limit: int | None = None) -> list[EmbedTarget]:
         """Live films holding a `film_text` row whose embedding is missing, made by a different
         model, or older than the film's last enrichment (the prose may have changed). Whether the
-        prose is actually non-empty is `embedding_text`'s call, not SQL's."""
+        prose is actually non-empty is `embedding_text`'s call, not SQL's. A same-day
+        re-enrichment (equal ISO dates) does not re-enter; change `EMBED_MODEL` or delete the row
+        to force one."""
         sql = (
             "SELECT f.id, f.title, t.overview, t.plot, x.tagline FROM films f "
             "JOIN film_text t ON t.film_id = f.id "
@@ -1330,13 +1332,31 @@ class Repository:
             return [(int(r["film_id"]), bytes(r["vector"])) for r in rows]
 
     def embedding_summary(self, model: str) -> tuple[int, str]:
-        """(count, latest embedded_on or '') — the cheap stamp `VectorIndex` compares to know when to rebuild."""
+        """(count, latest embedded_on or '') — feeds `status`; NOT what `VectorIndex` rebuilds on
+        (see `embedding_stamp`), because a merge or tombstone can change the underlying rows
+        without moving either of these two numbers."""
         with self._conn() as c:
             r = c.execute(
                 "SELECT COUNT(*) AS n, COALESCE(MAX(embedded_on), '') AS latest FROM film_embedding WHERE model = ?",
                 (model,),
             ).fetchone()
             return int(r["n"]), str(r["latest"])
+
+    def embedding_stamp(self, model: str) -> tuple[int, str, int]:
+        """(count, latest embedded_on, Σ film_id) over the SAME non-disposed row set
+        `all_embeddings` returns — the stamp `VectorIndex._ensure` compares to decide whether to
+        rebuild. The film_id sum is what makes a merge or a tombstone visible: a merge that moves
+        a row's film_id onto its survivor, or a tombstone that hides a row via `_NOT_DISPOSED`
+        without touching `film_embedding` at all, both leave (count, max embedded_on) unchanged,
+        but change which film_ids are summed."""
+        with self._conn() as c:
+            r = c.execute(
+                "SELECT COUNT(*) AS n, COALESCE(MAX(e.embedded_on), '') AS latest, "
+                "COALESCE(SUM(e.film_id), 0) AS total FROM film_embedding e JOIN films f ON f.id = e.film_id "
+                "WHERE e.model = ? AND " + _NOT_DISPOSED,
+                (model,),
+            ).fetchone()
+            return int(r["n"]), str(r["latest"]), int(r["total"])
 
     def prose_count(self) -> int:
         with self._conn() as c:

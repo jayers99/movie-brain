@@ -50,7 +50,7 @@ def bare_film(repo, today, films, title, year):
 
 @given("the corpus is already embedded")
 def already(repo, today, fake_embedder):
-    embed_films(repo, fake_embedder, today, apply=True)
+    embed_films(repo, fake_embedder, today, apply=True, log=lambda _m: None)
     fake_embedder.asked.clear()
 
 

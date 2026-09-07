@@ -99,6 +99,7 @@ Feature: Resolving a search into an exact film-id set
     Given the corpus is embedded by meaning
     When I search by meaning for "gumshoe caregiver"
     Then the result ids are Alpha then Beta
+    And the result is ranked
     And the hints include "no exact match — showing the 2 closest by meaning"
 
   Scenario: A field still filters a meaning-supplied result over the whole catalogue
@@ -127,12 +128,26 @@ Feature: Resolving a search into an exact film-id set
     And the result is not ranked
     And the model was asked nothing
 
+  Scenario: An index with nothing embedded yet never asks the model
+    When I search by meaning for "gumshoe sleuth"
+    Then the result is empty
+    And the hints include "no film matches all 2 words — try fewer, or quote a phrase"
+    And the hints do not include "semantic search is not installed — uv sync --extra semantic"
+    And the model was asked nothing
+
+  Scenario: A model that cannot load leaves the lexical result untouched, without a hint
+    Given the corpus is embedded by meaning
+    When I search by meaning with a model that cannot load for "alpha"
+    Then the result ids are Alpha then Beta
+    And the hints do not include "no exact match — showing the 2 closest by meaning"
+    And the hints do not include "semantic search is not installed — uv sync --extra semantic"
+
   Scenario: Without the extra, an empty freeform result says what the bar could have done
     When I search for "gumshoe sleuth"
     Then the result is empty
     And the hints include "semantic search is not installed — uv sync --extra semantic"
 
   Scenario: The install hint is not shown when a field emptied the result
-    When I search for "actor: bacalllzz"
+    When I search for "private eye actor: bacalllzz"
     Then the result is empty
     And the hints do not include "semantic search is not installed — uv sync --extra semantic"

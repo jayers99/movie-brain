@@ -75,19 +75,26 @@ class SentenceTransformerEmbedder:
 
 class VectorIndex:
     """Brute-force cosine over every stored vector for one model. Vectors are stored normalised,
-    so distance = 1 − dot. Rebuilt lazily whenever `embedding_summary` changes."""
+    so distance = 1 − dot. Rebuilt lazily whenever `Repository.embedding_stamp` changes —
+    `(count, max embedded_on, Σ film_id)` over the same non-disposed rows `all_embeddings` reads,
+    so the sum catches a merge moving a film_id onto its survivor and a tombstone dropping a row
+    out of the non-disposed set, neither of which moves `embedding_summary`'s bare (count, max)
+    alone. A failed model load latches: once `embed_query` has raised `SemanticUnavailable` once,
+    every later call on this instance raises immediately without asking the embedder again, for
+    the life of this `VectorIndex`."""
 
     def __init__(self, repo: Repository, embedder: Embedder, model: str = EMBED_MODEL) -> None:
         self.repo = repo
         self.embedder = embedder
         self.model = model
-        self._stamp: tuple[int, str] | None = None
+        self._stamp: tuple[int, str, int] | None = None
         self._ids: list[int] = []
         self._matrix: Any = None
         self._warned = False
+        self._unavailable = False
 
     def _ensure(self) -> None:
-        stamp = self.repo.embedding_summary(self.model)
+        stamp = self.repo.embedding_stamp(self.model)
         if stamp == self._stamp:
             return
         import numpy as np
@@ -103,33 +110,37 @@ class VectorIndex:
         return len(self._ids)
 
     def embed_query(self, text: str) -> list[float]:
+        if self._unavailable:
+            raise SemanticUnavailable("semantic search is off for this process")
         try:
             return self.embedder.encode([text])[0]
         except SemanticUnavailable as exc:
             if not self._warned:
                 log.warning("semantic search off: %s", exc)
                 self._warned = True
+            self._unavailable = True
             raise
 
-    def _scores(self, vector: Sequence[float]) -> Any:
+    def _scores(self, vector: Sequence[float]) -> tuple[list[int], Any]:
         self._ensure()
-        if self._matrix is None:
-            return None
+        ids, matrix = self._ids, self._matrix  # snapshot together: _ensure may replace both
+        if matrix is None:
+            return ids, None
         import numpy as np
 
-        return self._matrix @ np.asarray(vector, dtype="<f4")
+        return ids, matrix @ np.asarray(vector, dtype="<f4")
 
     def nearest(self, vector: Sequence[float], floor: float) -> list[tuple[int, float]]:
-        scores = self._scores(vector)
+        ids, scores = self._scores(vector)
         if scores is None:
             return []
-        hits = [(self._ids[i], float(1.0 - s)) for i, s in enumerate(scores) if 1.0 - s <= floor]
+        hits = [(ids[i], float(1.0 - s)) for i, s in enumerate(scores) if 1.0 - s <= floor]
         hits.sort(key=lambda t: (t[1], t[0]))
         return hits
 
     def distances(self, vector: Sequence[float], ids: Iterable[int]) -> dict[int, float]:
-        scores = self._scores(vector)
+        row_ids, scores = self._scores(vector)
         if scores is None:
             return {}
-        pos = {film_id: i for i, film_id in enumerate(self._ids)}
+        pos = {film_id: i for i, film_id in enumerate(row_ids)}
         return {film_id: float(1.0 - scores[pos[film_id]]) for film_id in ids if film_id in pos}

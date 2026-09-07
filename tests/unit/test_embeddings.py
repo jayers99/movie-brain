@@ -16,7 +16,7 @@ def test_pack_is_yt_brain_bytes_and_unpack_inverts_it():
     v = [0.0] * EMBED_DIM
     v[0], v[5] = 0.6, 0.8
     blob = pack(v)
-    assert blob == struct.pack(f"{EMBED_DIM}f", *v) and len(blob) == EMBED_DIM * 4
+    assert blob == struct.pack(f"<{EMBED_DIM}f", *v) and len(blob) == EMBED_DIM * 4
     assert unpack(blob) == pytest.approx(v)
 
 
@@ -82,3 +82,42 @@ def test_sentence_transformer_adapter_reports_availability_and_raises_when_absen
     assert embeddings.SentenceTransformerEmbedder.available() is False
     with pytest.raises(SemanticUnavailable):
         embeddings.SentenceTransformerEmbedder().encode(["x"])
+
+
+class _AlwaysUnavailable:
+    """An embedder that always fails to load — stands in for a model not cached, offline."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def encode(self, texts):
+        self.calls += 1
+        raise SemanticUnavailable("could not load: offline")
+
+
+def test_embed_query_latches_semantic_unavailable_after_the_first_failure(repo):
+    embedder = _AlwaysUnavailable()
+    idx = VectorIndex(repo, embedder, model="m")
+    with pytest.raises(SemanticUnavailable):
+        idx.embed_query("gumshoe")
+    with pytest.raises(SemanticUnavailable):
+        idx.embed_query("gumshoe")
+    assert embedder.calls == 1  # the second call never reaches the embedder
+
+
+def test_index_notices_a_merge_that_moves_the_loser_vector_onto_the_survivor(repo, fake_embedder):
+    a, b = _films(repo, 2)
+    repo.write_embeddings([(b, pack(_unit(0)))], D, model="m", dim=EMBED_DIM)
+    idx = VectorIndex(repo, fake_embedder, model="m")
+    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [b]
+    repo.merge_film(b, a, D)  # survivor a holds no vector, so the loser's row MOVES to a
+    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [a]
+
+
+def test_index_notices_a_tombstoned_film_dropping_out(repo, fake_embedder):
+    (a,) = _films(repo, 1)
+    repo.write_embeddings([(a, pack(_unit(0)))], D, model="m", dim=EMBED_DIM)
+    idx = VectorIndex(repo, fake_embedder, model="m")
+    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [a]
+    repo.tombstone_film(a, D)  # film_embedding is untouched; only _NOT_DISPOSED hides the row
+    assert idx.nearest(_unit(0), 2.0) == []

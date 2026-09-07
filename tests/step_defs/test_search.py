@@ -8,7 +8,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 from movie_brain.application.embed import embed_films
 from movie_brain.application.search import run_search
 from movie_brain.domain.models import CastRow, CrewRow, Film, OmdbRating, TmdbCredits
-from movie_brain.infrastructure.embeddings import VectorIndex
+from movie_brain.infrastructure.embeddings import SemanticUnavailable, VectorIndex
 
 scenarios("../features/search.feature")
 
@@ -74,6 +74,18 @@ def embedded(repo, fake_embedder):
 @when(parsers.parse('I search by meaning for "{text}"'))
 def search_semantic(repo, result, fake_embedder, text):
     result["r"] = run_search(repo, text.replace('\\"', '"'), index=VectorIndex(repo, fake_embedder))
+
+
+class _UnloadableEmbedder:
+    """Stands in for a model not cached and offline: every `encode` raises `SemanticUnavailable`."""
+
+    def encode(self, texts):
+        raise SemanticUnavailable("could not load: offline")
+
+
+@when(parsers.parse('I search by meaning with a model that cannot load for "{text}"'))
+def search_semantic_broken_model(repo, result, text):
+    result["r"] = run_search(repo, text.replace('\\"', '"'), index=VectorIndex(repo, _UnloadableEmbedder()))
 
 
 @then("the model was asked nothing")

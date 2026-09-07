@@ -193,7 +193,11 @@ def _semantic_stage(
     more SUMMED signal, never a replacement order, so a title hit stays first. Supply mode when
     it is empty: the films within MAX_DISTANCE, intersected with the exact set every field
     filter produces over the whole catalogue (parent D6), ordered by distance, and said so in
-    the hint. A model that cannot load leaves the lexical result untouched."""
+    the hint. A model that cannot load leaves the lexical result untouched. The score column
+    differs by mode — lexical + bonus in re-rank mode, 1 − distance in supply mode — and
+    `run_search` discards it; do not compare scores across modes."""
+    if len(index) == 0:
+        return ids, None  # no vectors yet — never load the model for nothing to search
     try:
         query = index.embed_query(free)
     except SemanticUnavailable:
