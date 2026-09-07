@@ -58,6 +58,23 @@ class ResolveReport:
     rate_limited: bool = False  # the run stopped early; the next one resumes where it left off
 
 
+@dataclass(frozen=True)
+class RecheckReport:
+    """`cheapcharts resolve --recheck`'s audit of every STORED id. `last_film_id` is the last
+    target scanned — the resume hint printed alongside `rate_limited`, None when nothing was
+    scanned at all."""
+
+    scanned: int = 0
+    live: int = 0
+    replaced: int = 0
+    dead: int = 0
+    unknown: int = 0
+    held: int = 0
+    failed: int = 0
+    rate_limited: bool = False
+    last_film_id: int | None = None
+
+
 def _batches(targets: Sequence[ItunesTarget], size: int) -> list[Sequence[ItunesTarget]]:
     return [targets[i : i + size] for i in range(0, len(targets), size)]
 
@@ -111,6 +128,10 @@ def resolve_itunes_ids(
         for target in batch:
             scanned += 1
             product = found.get(target.imdb_id)
+            if product is not None and product.removed:
+                # Apple has pulled this product — a miss by IMDb id exactly like a hole in
+                # CheapCharts' own index, so the search fallback runs unchanged below.
+                product = None
             source = "imdb"
             if product is None:
                 try:
@@ -143,3 +164,101 @@ def resolve_itunes_ids(
             by_imdb += source == "imdb"
             by_search += source == "search"
     return ResolveReport(scanned, resolved, by_imdb, by_search, unmatched, ambiguous, held, failed)
+
+
+def _rate_limited(
+    scanned: int, live: int, replaced: int, dead: int, unknown: int, held: int, failed: int,
+    last_film_id: int | None, log: Callable[[str], None],
+) -> RecheckReport:
+    hint = f" — resume with --after {last_film_id}" if last_film_id is not None else ""
+    log(f"CheapCharts is rate-limiting — stopping{hint}.")
+    return RecheckReport(
+        scanned, live, replaced, dead, unknown, held, failed, rate_limited=True, last_film_id=last_film_id
+    )
+
+
+def recheck_itunes_ids(
+    repo: Repository,
+    client: CheapChartsClient,
+    today: date,
+    *,
+    apply: bool = False,
+    limit: int | None = None,
+    after: int | None = None,
+    log: Callable[[str], None] = _stderr,
+) -> RecheckReport:
+    """Audit every STORED iTunes id: CheapCharts is re-asked by IMDb id, and a product Apple
+    has removed (`Product.removed`) is re-resolved through the same search fallback the
+    backfill uses. A confirmed re-listing REPLACES the dead id in place, one UPDATE, and the
+    old id is only ever printed here — never retired to a flag (owner ruling 2026-09-07)."""
+    targets = repo.films_holding_itunes_id(limit, after)
+    scanned = live = replaced = dead = unknown = held = failed = 0
+    last_film_id: int | None = None
+    for batch in _batches(targets, MAX_IMDB_IDS):
+        try:
+            found = client.products_by_imdb([t.imdb_id for t in batch])
+        except RateLimited:
+            return _rate_limited(scanned, live, replaced, dead, unknown, held, failed, last_film_id, log)
+        except requests.RequestException as exc:
+            log(f"  CheapCharts price lookup failed for {len(batch)} films: {exc}")
+            failed += len(batch)
+            scanned += len(batch)
+            last_film_id = batch[-1].film_id
+            continue
+        for target in batch:
+            scanned += 1
+            last_film_id = target.film_id
+            assert target.itunes_id is not None  # films_holding_itunes_id always fills this
+            product = found.get(target.imdb_id)
+            if product is None:
+                log(f"  #{target.film_id} {target.title!r}: CheapCharts no longer knows this imdb id")
+                unknown += 1
+                continue
+            if not product.removed:
+                if product.itunes_id != target.itunes_id:
+                    log(
+                        f"  #{target.film_id} {target.title!r}: itunes {target.itunes_id} still live "
+                        f"(CheapCharts now answers {product.itunes_id} — left alone)"
+                    )
+                live += 1
+                continue
+            try:
+                results = client.search(target.title)
+            except RateLimited:
+                return _rate_limited(scanned, live, replaced, dead, unknown, held, failed, last_film_id, log)
+            except requests.RequestException as exc:
+                log(f"  #{target.film_id} {target.title!r}: CheapCharts search failed: {exc}")
+                failed += 1
+                continue
+            confirmed, verdict = _confirm(target, results)
+            if confirmed is None:
+                log(
+                    f"  #{target.film_id} {target.title!r} ({target.year}): "
+                    f"itunes {target.itunes_id} removed, {verdict}"
+                )
+                dead += 1
+                continue
+            if confirmed.itunes_id == target.itunes_id:
+                log(f"  #{target.film_id} {target.title!r}: itunes {target.itunes_id} removed, no re-listing found")
+                dead += 1
+                continue
+            holder = repo.film_id_for_external(ITUNES_AUTHORITY, confirmed.itunes_id)
+            if holder == target.film_id:
+                # This film already holds the confirmed id under a second `itunes` row (a
+                # merge can leave a survivor with more than one) — it is live, not a
+                # replacement, and there's nothing to write.
+                log(f"  #{target.film_id} {target.title!r}: itunes {confirmed.itunes_id} already held by this film")
+                live += 1
+                continue
+            if holder is not None:
+                log(f"  #{target.film_id} {target.title!r}: itunes {confirmed.itunes_id} already held by #{holder}")
+                held += 1
+                continue
+            log(
+                f"  #{target.film_id} {target.title!r} ({target.year}): itunes {target.itunes_id} (removed) "
+                f"→ {confirmed.itunes_id}"
+            )
+            if apply:
+                repo.replace_external_id(target.film_id, ITUNES_AUTHORITY, target.itunes_id, confirmed.itunes_id)
+            replaced += 1
+    return RecheckReport(scanned, live, replaced, dead, unknown, held, failed, last_film_id=last_film_id)

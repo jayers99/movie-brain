@@ -1205,6 +1205,51 @@ class Repository:
             for r in rows
         ]
 
+    def films_holding_itunes_id(self, limit: int | None = None, after: int | None = None) -> list[ItunesTarget]:
+        """Films holding BOTH an IMDb id and an iTunes one — the audit worklist of
+        `cheapcharts resolve --recheck`, the mirror image of `films_needing_itunes_id`.
+        `after` resumes a run CheapCharts rate-limited partway through (only films with
+        `id > after`); `limit` batches it. Fills `itunes_id` with the currently stored value —
+        `itunes` is a claim authority and a survivor can hold more than one row (a merge), so
+        this is GROUPed to one row per film (MIN picks a stable value; `recheck_itunes_ids`
+        itself is what reconciles a film against every id it actually holds)."""
+        sql = (
+            "SELECT f.id, f.title, f.year, f.director, i.value AS imdb_id, MIN(x.value) AS itunes_id FROM films f "
+            "JOIN external_ids i ON i.film_id = f.id AND i.authority = 'imdb' "
+            "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'itunes' "
+            "WHERE " + _NOT_DISPOSED + _IS_MOVIE
+        )
+        params: list[object] = []
+        if after is not None:
+            sql += " AND f.id > ?"
+            params.append(after)
+        sql += " GROUP BY f.id ORDER BY f.id"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        with self._conn() as c:
+            rows = c.execute(sql, params).fetchall()
+        return [
+            ItunesTarget(
+                int(r["id"]), str(r["title"]), r["year"], r["director"], str(r["imdb_id"]), str(r["itunes_id"])
+            )
+            for r in rows
+        ]
+
+    def replace_external_id(self, film_id: int, authority: str, old: str, new: str) -> bool:
+        """Swap one existing claim's value in place — the ONLY path that changes an existing
+        claim-authority value (written for `cheapcharts resolve --recheck`). `first_seen` is
+        left untouched: it records when the film first got an id of this authority, and a
+        replacement is a repair, not a fresh sighting. Returns True when a row changed. The
+        caller checks `film_id_for_external` first exactly as the resolver does today — sqlite's
+        `UNIQUE(authority, value)` raises IntegrityError if another film already holds `new`."""
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE external_ids SET value = ? WHERE film_id = ? AND authority = ? AND value = ?",
+                (new, film_id, authority, old),
+            )
+            return cur.rowcount > 0
+
     # credits (power search, Plan A) -----------------------------------------
     def films_needing_credits(self, limit: int | None = None) -> list[CreditsTarget]:
         """Live movies holding a TMDB id whose `tmdb_facts` row is missing, unstamped, or

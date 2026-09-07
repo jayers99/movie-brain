@@ -45,6 +45,36 @@ def test_products_by_imdb_refuses_more_ids_than_the_api_accepts():
         CheapChartsClient().products_by_imdb(["tt1", "tt2", "tt3", "tt4", "tt5", "tt6"])
 
 
+REMOVED_OKLAHOMA = {
+    "title": "[❌Removed from iTunes] Oklahoma! (1955)",
+    "artist": "Fred Zinnemann",
+    "cheapChartsProductPageUrl": (
+        "https://www.cheapcharts.com/us/itunes/movies/394633809"
+        "?utm_source=api2-gptapi&utm_medium=api&utm_campaign=gptapi"
+    ),
+    "releaseDate": "1955-10-13",
+    "imdbId": "tt0048445",
+}
+
+
+@responses.activate
+def test_products_by_imdb_flags_a_product_apple_removed_and_cleans_its_title():
+    """CheapCharts still answers for a dead product, prefixing the title with a marker —
+    the only signal, since the product page itself is a JS shell that returns 200 either way."""
+    responses.get(PRICES_URL, json={"status": "success", "results": {"buymovies": [REMOVED_OKLAHOMA]}})
+    found = CheapChartsClient().products_by_imdb(["tt0048445"])
+    product = found["tt0048445"]
+    assert product.removed is True
+    assert product.title == "Oklahoma! (1955)"
+
+
+@responses.activate
+def test_products_by_imdb_normal_row_is_not_flagged_removed():
+    responses.get(PRICES_URL, json={"status": "success", "results": {"buymovies": [VERTIGO]}})
+    found = CheapChartsClient().products_by_imdb(["tt0052357"])
+    assert found["tt0052357"].removed is False
+
+
 @responses.activate
 def test_products_by_imdb_asks_the_us_itunes_store_for_all_ids_at_once():
     responses.get(PRICES_URL, json={"status": "success", "results": {"buymovies": []}})

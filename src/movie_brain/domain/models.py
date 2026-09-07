@@ -61,13 +61,15 @@ class ImdbBackfillTarget:
 class ItunesTarget:
     """A film holding an IMDb id and no iTunes one — the worklist of `cheapcharts resolve`.
     `director` is carried because the search fallback confirms through the shared matcher,
-    which scores a director agreement when both sides have one."""
+    which scores a director agreement when both sides have one. `itunes_id` is the id the
+    film ALREADY holds — only the `--recheck` worklist (`films_holding_itunes_id`) fills it."""
 
     film_id: int
     title: str
     year: int | None
     director: str | None
     imdb_id: str
+    itunes_id: str | None = None
 
 
 @dataclass(frozen=True)

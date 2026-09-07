@@ -27,6 +27,8 @@ COUNTRY = "us"
 STORE = "itunes"
 MAX_IMDB_IDS = 5  # the API's own documented cap, echoed in every response's additionalInfo
 DELAY_S = 1.5  # llms.txt promises "no rate limiting concerns"; the API answers 429. Pace anyway.
+REMOVED_MARKER = "[❌Removed from iTunes]"  # the only signal — the product page itself is a JS
+# shell that returns 200 for any id, dead or not
 
 
 class RateLimited(Exception):
@@ -48,6 +50,7 @@ class Product:
     year: int | None
     director: str | None = None  # CheapCharts calls the field `artist`
     imdb_id: str | None = None
+    removed: bool = False  # Apple has pulled this product; title has had REMOVED_MARKER stripped
 
 
 def _itunes_id_from_url(url: str) -> str | None:
@@ -91,12 +94,17 @@ class CheapChartsClient:
             itunes_id = _itunes_id_from_url(row.get("cheapChartsProductPageUrl") or "")
             if not imdb_id or not itunes_id:
                 continue
+            title = str(row.get("title") or "").lstrip()
+            removed = title.startswith(REMOVED_MARKER)
+            if removed:
+                title = title[len(REMOVED_MARKER) :].strip()
             found[str(imdb_id)] = Product(
                 itunes_id=itunes_id,
-                title=str(row.get("title") or ""),
+                title=title,
                 year=_year(row.get("releaseDate")),
                 director=str(row.get("artist") or "") or None,
                 imdb_id=str(imdb_id),
+                removed=removed,
             )
         return found
 

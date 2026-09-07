@@ -2,7 +2,7 @@ import json
 
 from typer.testing import CliRunner
 
-from movie_brain.application.cheapcharts import ResolveReport
+from movie_brain.application.cheapcharts import RecheckReport, ResolveReport
 from movie_brain.application.enrich import EnrichReport
 from movie_brain.application.repair import DupesReport, LinksReport, YearsFromTmdbReport, YearsReport
 from movie_brain.application.sync import SyncResult
@@ -854,6 +854,39 @@ def test_cheapcharts_resolve_is_dry_run_by_default_and_reports_both_paths(config
     assert r.exit_code == 0, r.output
     assert calls["apply"] is False
     assert "by imdb id: 4" in r.output and "by search: 1" in r.output
+
+
+def test_cheapcharts_resolve_after_without_recheck_exits_two(config_dir):
+    r = runner.invoke(app, ["cheapcharts", "resolve", "--after", "5"])
+    assert r.exit_code == 2
+    assert "--recheck" in r.output
+
+
+def test_cheapcharts_resolve_recheck_is_dry_run_by_default_and_prints_the_report(config_dir, monkeypatch):
+    calls = {}
+
+    def fake_recheck(repo, client, today, **kw):
+        calls.update(kw)
+        return RecheckReport(scanned=4, live=2, replaced=1, dead=1, unknown=0, held=0, failed=0)
+
+    monkeypatch.setattr("movie_brain.cli.recheck_itunes_ids", fake_recheck)
+    r = runner.invoke(app, ["cheapcharts", "resolve", "--recheck", "--after", "5"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is False
+    assert calls["after"] == 5
+    assert "scanned: 4" in r.output and "live: 2" in r.output and "replaced: 1" in r.output
+
+
+def test_cheapcharts_resolve_recheck_rate_limited_with_no_batches_omits_after_hint(config_dir, monkeypatch):
+    def fake_recheck(repo, client, today, **kw):
+        return RecheckReport(rate_limited=True, last_film_id=None)
+
+    monkeypatch.setattr("movie_brain.cli.recheck_itunes_ids", fake_recheck)
+    r = runner.invoke(app, ["cheapcharts", "resolve", "--recheck"])
+    assert r.exit_code == 0, r.output
+    assert "RATE-LIMITED, stopped early" in r.output
+    assert "--after" not in r.output
+    assert "None" not in r.output
 
 
 def test_enrich_credits_needs_a_tmdb_token(config_dir):

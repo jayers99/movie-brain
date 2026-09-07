@@ -11,7 +11,7 @@ from rich.table import Table
 
 from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
-from movie_brain.application.cheapcharts import resolve_itunes_ids
+from movie_brain.application.cheapcharts import recheck_itunes_ids, resolve_itunes_ids
 from movie_brain.application.embed import embed_films
 from movie_brain.application.enrich import enrich_credits
 from movie_brain.application.export import write_csv
@@ -998,6 +998,12 @@ def audit_verdicts(
 def cheapcharts_resolve_cmd(
     apply: Annotated[bool, typer.Option("--apply", help="Store the itunes ids (default: dry-run).")] = False,
     limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the worklist.")] = None,
+    recheck: Annotated[
+        bool, typer.Option("--recheck", help="Audit stored ids instead of resolving new ones.")
+    ] = False,
+    after: Annotated[
+        int | None, typer.Option("--after", help="With --recheck: resume after this film id.")
+    ] = None,
 ) -> None:
     """Resolve each film's CheapCharts product page and store the iTunes id its link needs.
 
@@ -1005,7 +1011,38 @@ def cheapcharts_resolve_cmd(
     where their IMDb index has a hole — a search answer is believed only when the shared
     matcher confirms it. A stored id is never re-fetched, so the pass is self-checkpointing:
     interrupt it and the next run resumes. Dry-run by default.
+
+    `--recheck` audits stored ids instead: it re-asks CheapCharts for every film that already
+    holds an iTunes id. A product Apple has removed comes back titled
+    `[❌Removed from iTunes]`, and is re-resolved through the same search fallback — a
+    confirmed re-listing REPLACES the dead id in place (one UPDATE), the old id is only ever
+    printed in the run report and otherwise forgotten. An unconfirmed removal is reported and
+    left alone. `--after FILM_ID` resumes a run CheapCharts rate-limited partway through, and
+    is only meaningful together with `--recheck`.
     """
+    if after is not None and not recheck:
+        err.print("--after only makes sense with --recheck")
+        raise typer.Exit(2)
+    if recheck:
+        recheck_report = recheck_itunes_ids(
+            _repo(), CheapChartsClient(), date.today(), apply=apply, limit=limit, after=after, log=_plain
+        )
+        console.print(
+            f"scanned: {recheck_report.scanned} · live: {recheck_report.live} · "
+            f"replaced: {recheck_report.replaced} · dead: {recheck_report.dead} · "
+            f"unknown: {recheck_report.unknown} · held: {recheck_report.held} · "
+            f"failed: {recheck_report.failed}"
+            + (
+                (
+                    f" · RATE-LIMITED, stopped early — resume with --after {recheck_report.last_film_id}"
+                    if recheck_report.last_film_id is not None
+                    else " · RATE-LIMITED, stopped early"
+                )
+                if recheck_report.rate_limited
+                else ""
+            )
+        )
+        return
     report = resolve_itunes_ids(
         _repo(), CheapChartsClient(), date.today(), apply=apply, limit=limit, log=_plain
     )

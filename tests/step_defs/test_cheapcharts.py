@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from movie_brain.application.cheapcharts import resolve_itunes_ids
+from movie_brain.application.cheapcharts import recheck_itunes_ids, resolve_itunes_ids
 from movie_brain.domain.models import Film
 from movie_brain.infrastructure.cheapcharts import MAX_IMDB_IDS, Product, RateLimited
 
@@ -71,6 +71,11 @@ def no_imdb_mapping(cheapcharts, tt):
     cheapcharts.by_imdb.pop(tt, None)
 
 
+@given(parsers.parse('CheapCharts maps "{tt}" to a REMOVED itunes id "{itunes_id}"'))
+def maps_imdb_removed(cheapcharts, tt, itunes_id):
+    cheapcharts.by_imdb[tt] = Product(itunes_id=itunes_id, title="Vertigo (1958)", year=1958, imdb_id=tt, removed=True)
+
+
 @given(parsers.parse('a CheapCharts search for "{query}" returns "{title}" ({year:d}) as itunes id "{itunes_id}"'))
 def search_returns(cheapcharts, query, title, year, itunes_id):
     cheapcharts.by_title.setdefault(query, []).append(Product(itunes_id=itunes_id, title=title, year=year))
@@ -110,6 +115,23 @@ def run_dry(repo, cheapcharts, today, result):
 @when("I resolve cheapcharts ids with apply")
 def run_apply(repo, cheapcharts, today, result):
     result["report"] = resolve_itunes_ids(repo, cheapcharts, today, apply=True, log=lambda _m: None)
+
+
+@when("I recheck cheapcharts ids with apply")
+def run_recheck_apply(repo, cheapcharts, today, result):
+    result["report"] = recheck_itunes_ids(repo, cheapcharts, today, apply=True, log=lambda _m: None)
+
+
+@when("I recheck cheapcharts ids without applying")
+def run_recheck_dry(repo, cheapcharts, today, result):
+    result["report"] = recheck_itunes_ids(repo, cheapcharts, today, apply=False, log=lambda _m: None)
+
+
+@when(parsers.parse('I recheck cheapcharts ids with apply after "{title}"'))
+def run_recheck_apply_after(repo, cheapcharts, today, films, result, title):
+    result["report"] = recheck_itunes_ids(
+        repo, cheapcharts, today, apply=True, after=films[title], log=lambda _m: None
+    )
 
 
 # Then ----------------------------------------------------------------------
@@ -187,3 +209,40 @@ def refuse_after(cheapcharts, n):
 @then("the report is marked rate limited")
 def marked_rate_limited(result):
     assert result["report"].rate_limited is True
+
+
+@then(parsers.parse("the report counts {n:d} replaced"))
+def counts_replaced(result, n):
+    assert result["report"].replaced == n
+
+
+@then(parsers.parse("the report counts {n:d} dead"))
+def counts_dead(result, n):
+    assert result["report"].dead == n
+
+
+@then(parsers.parse("the report counts {n:d} live"))
+def counts_live(result, n):
+    assert result["report"].live == n
+
+
+@then(parsers.parse("the report counts {n:d} scanned"))
+def counts_scanned_only(result, n):
+    assert result["report"].scanned == n
+
+
+@then(parsers.parse('the film "{title}" holds exactly one itunes id'))
+def holds_exactly_one_itunes(repo, films, title):
+    values = [v for a, v in repo.external_ids_all(films[title]) if a == "itunes"]
+    assert len(values) == 1, values
+
+
+@then(parsers.parse('the film "{title}" holds every itunes id "{a}" and "{b}"'))
+def holds_every_itunes(repo, films, title, a, b):
+    values = [v for auth, v in repo.external_ids_all(films[title]) if auth == "itunes"]
+    assert sorted(values) == sorted([a, b]), values
+
+
+@then("CheapCharts was never searched")
+def never_searched(cheapcharts):
+    assert cheapcharts.searches == []

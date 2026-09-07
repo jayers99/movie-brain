@@ -80,3 +80,63 @@ Feature: Resolving the CheapCharts product page for a film
     When I resolve cheapcharts ids with apply
     Then the report is marked rate limited
     And CheapCharts was asked in 1 batches of at most 5 imdb ids
+
+  Scenario: A product Apple removed is a miss by IMDb id and falls back to the search
+    Given CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    When I resolve cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "999"
+    And the report counts 1 resolved by search
+
+  Scenario: A recheck replaces a removed id in place with its confirmed re-listing
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    When I recheck cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "999"
+    And the film "Vertigo" holds exactly one itunes id
+    And the report counts 1 replaced
+
+  Scenario: A recheck leaves a removed id alone when nothing confirms a replacement
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo Zone" (2011) as itunes id "999"
+    When I recheck cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "284815525"
+    And the report counts 1 dead
+
+  Scenario: A recheck keeps a live id and asks nothing more
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And CheapCharts maps "tt0052357" to itunes id "284815525"
+    When I recheck cheapcharts ids with apply
+    Then the report counts 1 live
+    And the report counts 0 replaced
+    And CheapCharts was never searched
+
+  Scenario: A recheck resumes after a film id
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And a film "Rear Window" (1954) holding imdb id "tt0047396"
+    And the film "Rear Window" already holds itunes id "111"
+    And CheapCharts maps "tt0052357" to itunes id "284815525"
+    And CheapCharts maps "tt0047396" to itunes id "111"
+    When I recheck cheapcharts ids with apply after "Vertigo"
+    Then the report counts 1 scanned
+    And CheapCharts was never asked about "tt0052357"
+
+  Scenario: A recheck confirming an id the film already holds writes nothing
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    When I recheck cheapcharts ids with apply
+    Then the film "Vertigo" holds every itunes id "284815525" and "999"
+    And the report counts 1 live
+    And the report counts 0 replaced
+
+  Scenario: A recheck without apply changes nothing
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    When I recheck cheapcharts ids without applying
+    Then the film "Vertigo" holds itunes id "284815525"
+    And the report counts 1 replaced

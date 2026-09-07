@@ -1758,6 +1758,63 @@ def test_view_builds_the_direct_cheapcharts_link_from_the_stored_itunes_id(repo)
     assert views["Unresolved"].cheapcharts_url is None
 
 
+def test_films_holding_itunes_id_returns_only_films_with_both_ids(repo, today):
+    """The `--recheck` audit worklist — films_needing_itunes_id's mirror image."""
+    both = _film(repo, "Vertigo", 1958)
+    repo.set_external_id(both, "imdb", "tt0052357", today)
+    repo.set_external_id(both, "itunes", "284815525", today)
+    imdb_only = _film(repo, "No Itunes", 1960)
+    repo.set_external_id(imdb_only, "imdb", "tt0000001", today)
+    itunes_only = _film(repo, "No Imdb", 1961)
+    repo.set_external_id(itunes_only, "itunes", "111", today)
+
+    targets = repo.films_holding_itunes_id()
+    assert [t.film_id for t in targets] == [both]
+    assert (targets[0].imdb_id, targets[0].itunes_id) == ("tt0052357", "284815525")
+
+
+def test_films_holding_itunes_id_honours_after_and_limit(repo, today):
+    a = _film(repo, "Alpha", 1958)
+    repo.set_external_id(a, "imdb", "tt1", today)
+    repo.set_external_id(a, "itunes", "1", today)
+    b = _film(repo, "Beta", 1959)
+    repo.set_external_id(b, "imdb", "tt2", today)
+    repo.set_external_id(b, "itunes", "2", today)
+    c = _film(repo, "Gamma", 1960)
+    repo.set_external_id(c, "imdb", "tt3", today)
+    repo.set_external_id(c, "itunes", "3", today)
+
+    assert [t.film_id for t in repo.films_holding_itunes_id(after=a)] == [b, c]
+    assert [t.film_id for t in repo.films_holding_itunes_id(limit=1)] == [a]
+
+
+def test_films_holding_itunes_id_dedupes_a_film_with_two_itunes_rows(repo, today):
+    """`merge_film` can leave a survivor holding two `itunes` rows (a claim authority allows
+    several); the worklist must list that film once, not once per row."""
+    fid = _film(repo, "Vertigo", 1958)
+    repo.set_external_id(fid, "imdb", "tt0052357", today)
+    repo.set_external_id(fid, "itunes", "284815525", today)
+    repo.set_external_id(fid, "itunes", "999", today)
+
+    targets = repo.films_holding_itunes_id()
+    assert [t.film_id for t in targets] == [fid]
+
+
+def test_replace_external_id_swaps_the_value_in_place(repo, today):
+    fid = _film(repo, "Oklahoma!", 1955)
+    repo.set_external_id(fid, "itunes", "394633809", today)
+    assert repo.replace_external_id(fid, "itunes", "394633809", "1722399326") is True
+    assert repo.external_ids_for(fid)["itunes"] == "1722399326"
+    assert [v for a, v in repo.external_ids_all(fid) if a == "itunes"] == ["1722399326"]
+
+
+def test_replace_external_id_returns_false_when_old_value_is_not_held(repo, today):
+    fid = _film(repo, "Oklahoma!", 1955)
+    repo.set_external_id(fid, "itunes", "394633809", today)
+    assert repo.replace_external_id(fid, "itunes", "999999999", "1722399326") is False
+    assert repo.external_ids_for(fid)["itunes"] == "394633809"
+
+
 def test_migration_020_adds_the_listed_year_to_list_entries(repo):
     with sqlite3.connect(repo.db_path) as c:
         cols = {r[1] for r in c.execute("PRAGMA table_info(film_list_entry)")}
