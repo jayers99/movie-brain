@@ -1,5 +1,7 @@
 # Power search Phase 2 handoff — semantic search over prose (spec §12)
 
+**Status 2026-09-06 (later):** the parked hint defect is fixed (2d2bfaa); Phase 2 is specced (docs/superpowers/specs/2026-09-06-power-search-c-semantic-design.md) and built by docs/superpowers/plans/2026-09-06-power-search-c-semantic.md — the six open questions below are answered there as D14–D21.
+
 **Written:** 2026-09-06, end of the session that shipped Plan A (credits) and Plan B (the bar). **Branch state:** everything is on local `main` at `aeb9202`; `origin/main` is at `2968668` — **one commit (`aeb9202`, the billing-weighted name hits) is NOT pushed. Push first.** **Live DB:** schema 18, credits applied live (4,569 films, 168,511 persons, 286,429 credit rows, 37,986 keywords); backup `~/.config/movie-brain/backups/movie-brain.db.pre-credits-2026-09-06`.
 
 ## What is DONE (don't rebuild)

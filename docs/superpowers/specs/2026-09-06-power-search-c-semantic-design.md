@@ -1,8 +1,6 @@
 # Power search Phase 2 — semantic search over prose
 
-**Status:** design approved in conversation 2026-09-06 (six questions, five sections); awaiting owner review of this written form. Child of `2026-09-06-power-search-design.md` §12, D2, D6, D13.
-**Prior art:** yt-brain (`application/embed.py`, `infrastructure/database.py::search_similar`, `web/dashboard.py::api_search`), read from a fresh clone on 2026-09-06. What was taken and what was refused is in §10.
-**Evidence:** a throwaway spike run 2026-09-06 against the live catalogue, read-only (§1). Nothing from it is kept.
+**Status:** design approved in conversation 2026-09-06 (six questions, five sections); awaiting owner review of this written form. Child of `2026-09-06-power-search-design.md` §12, D2, D6, D13. **Prior art:** yt-brain (`application/embed.py`, `infrastructure/database.py::search_similar`, `web/dashboard.py::api_search`), read from a fresh clone on 2026-09-06. What was taken and what was refused is in §10. **Evidence:** a throwaway spike run 2026-09-06 against the live catalogue, read-only (§1). Nothing from it is kept.
 
 ## 0. What this is
 
@@ -53,7 +51,7 @@ CREATE TABLE film_embedding (
     vector      BLOB    NOT NULL,           -- dim × float32, little-endian, L2-normalised
     embedded_on TEXT    NOT NULL            -- ISO date
 );
-INSERT INTO schema_version (version, applied_on) VALUES (19, date('now'));
+INSERT INTO schema_version (version) VALUES (19);
 ```
 
 One row per film per model — `model` is a column, not part of the key, because a model change is a full re-embed and two models never coexist. Vectors are stored **normalised** so cosine is a dot product. The blob is `struct.pack("384f", …)`, yt-brain's `_to_blob` byte for byte, so a vector from either project reads in the other. `film_embedding` joins `_ONE_ROW_TABLES` in `merge_film`: the survivor's row wins, the loser's is dropped and recorded as `{"film_id": loser}` in the disposition note like `omdb`/`tmdb`. Nothing here is identity: no `KEY_AUTHORITY`, no `external_ids`, no keying or matching code is touched.
@@ -70,7 +68,7 @@ Parent §8's three stages stand: parse, resolve, filter-and-rank (`search_films`
 
 **Supply mode (lexical set empty).** The query is embedded once; `index.nearest(query_vector, MAX_DISTANCE)` returns `[(film_id, distance)]` ascending, over the whole catalogue. If the query has field terms, `search_films(filters, free="")` is asked for the exact set those filters alone produce, and the nearest list is intersected with it — the field filter stays a filter over the whole catalogue, never a post-filter over a top-N (D6). Ordered by distance; `ranked` true; hint `no exact match — showing the N closest by meaning` where N is the final count. An empty supply keeps today's hints (`no film matches all N words…`, now gated on `not parsed.terms` since 2d2bfaa).
 
-**Without the extra (`index is None`).** Stages 1–3 exactly as today. One addition: when the lexical set is empty and `parsed.free` is non-empty, the hint `semantic search is not installed — uv sync --extra semantic` is appended so the owner knows the bar could have done more. That hint never appears when the extra is installed but the model or table is absent — those cases are §8.
+**Without the extra (`index is None`).** Stages 1–3 exactly as today. One addition: when the lexical set is empty and `parsed.free` is non-empty, the hint `semantic search is not installed — uv sync --extra semantic` is appended so the owner knows the bar could have done more. That hint never appears when the extra is installed but the model or table is absent — those cases are §8. `dashboard` passes an embedder only when `SentenceTransformerEmbedder.available()` is true, so the install hint is the real path when the extra is absent.
 
 **Contract.** `GET /api/search?q=` still returns `{q, ids, ranked, corrections, suggestions, hints, total}` (D13). `app.js` changes nothing: it already intersects `ids`, ranks when `ranked`, and prints `hints`. `/api/config` gains nothing — the client does not need the floor.
 
@@ -83,7 +81,7 @@ Parent §8's three stages stand: parse, resolve, filter-and-rank (`search_films`
 - `application/search.py` — `run_search(repo, text, index=None)`; stage 4 as §5.
 - `web/app.py` — `create_app(repo, today=…, embedder=None)`; the app builds a `VectorIndex` when an embedder is given and passes it to `run_search`. `cli.py dashboard` constructs `SentenceTransformerEmbedder()` and passes it always — the lazy adapter makes the missing extra a `None` index at first query, not a start-up failure.
 - `cli.py` — `movie-brain embed [--apply] [--limit N]`; `status` gains one line, the `film_embedding` count against the prose count, so the owner can see whether an `embed --apply` is due.
-- `pyproject.toml` — `[project.optional-dependencies] semantic = ["sentence-transformers>=3.4", "numpy>=1.26"]`; mypy already has `ignore_missing_imports = true`.
+- `pyproject.toml` — `[project.optional-dependencies] semantic = ["sentence-transformers>=3.4", "numpy>=1.26"]`; a `[[tool.mypy.overrides]]` block for `sentence_transformers` with `ignore_missing_imports = true` (the existing override covers only `responses`).
 
 ## 7. The verb
 
@@ -97,7 +95,7 @@ Dry run by default: prints how many films the worklist holds and how many films 
 
 | Situation | Behaviour |
 |---|---|
-| Extra not installed | Phase 1 exactly; the install hint on an empty freeform result (§5) |
+| Extra not installed | Phase 1 exactly; the install hint on an empty freeform result (§5). `dashboard` passes an embedder only when `SentenceTransformerEmbedder.available()` is true, so the install hint is the real path when the extra is absent |
 | Extra installed, model not cached, offline | `SentenceTransformerEmbedder.encode` raises `SemanticUnavailable`; the app logs once and treats the index as `None` for the rest of its life. `embed --apply` exits 2 with the message |
 | Extra installed, `film_embedding` empty | `VectorIndex` is empty; stage 4 finds nothing to add or re-rank; result is Phase 1's. No hint — `embed` is the owner's manual step, and `status` reports the count |
 | Film without prose | Never embedded; lexical and field search unchanged for it |
