@@ -169,8 +169,7 @@
     const k = state.cols;
     if (k.title) p.set('title', k.title);
     if (k.director) p.set('director', k.director);
-    if (k.languages.size === 0) p.set('lang', 'any');
-    else if (!(k.languages.size === 1 && k.languages.has(DEFAULT_LANG))) p.set('lang', [...k.languages].join('|'));
+    if (k.languages.size) p.set('lang', [...k.languages].join('|'));  // the default (any language) is implicit
     for (const [name, lo, hi] of [['year', k.yearMin, k.yearMax], ['mc', k.mcMin, k.mcMax], ['rt', k.rtMin, k.rtMax], ['imdb', k.imdbMin, k.imdbMax]]) {
       if (lo != null || hi != null) p.set(name, `${lo ?? ''}-${hi ?? ''}`);
     }
@@ -193,7 +192,8 @@
     k.title = (p.get('title') || '').toLowerCase();
     k.director = (p.get('director') || '').toLowerCase();
     const lang = p.get('lang');
-    k.languages = lang === null ? new Set([DEFAULT_LANG]) : lang === 'any' ? new Set() : new Set(lang.split('|').filter(Boolean));
+    // Any language is the default (2026-09-07); `lang=any` is the pre-default spelling old links carry.
+    k.languages = lang === null || lang === 'any' ? new Set() : new Set(lang.split('|').filter(Boolean));
     const range = (name) => { const v = p.get(name); if (!v) return [null, null]; const [lo, hi] = v.split('-'); return [lo === '' ? null : +lo, hi === '' || hi == null ? null : +hi]; };
     [k.yearMin, k.yearMax] = range('year'); [k.mcMin, k.mcMax] = range('mc'); [k.rtMin, k.rtMax] = range('rt'); [k.imdbMin, k.imdbMax] = range('imdb');
     const s = p.get('sort');
@@ -228,7 +228,12 @@
   // ---- controls ----
   $('#chips').addEventListener('click', (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
-    if (b.id === 'chips-clear') { state.chips.clear(); state.list = null; }
+    if (b.id === 'chips-clear') {  // Clear means EVERYTHING: chips, list, search, column filters, sort
+      state.chips.clear(); state.list = null; state.sort = null;
+      state.q = ''; state.search = null; noteEl.hidden = true; noteEl.innerHTML = ''; searchEl.dataset.settled = '';
+      Object.assign(state.cols, { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null,
+        mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null });
+    }
     else if (b.dataset.cycle) {  // off → first key → … → last key → off; the keys are mutually exclusive
       const keys = b.dataset.cycle.split(',');
       const i = keys.findIndex((k) => state.chips.has(k));
@@ -270,7 +275,7 @@
   function populateLanguages() {
     const langs = new Set();
     state.films.forEach((f) => (f.language || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((l) => langs.add(l)));
-    langs.delete(DEFAULT_LANG);  // pinned first, ahead of "Any" — it's the default selection
+    langs.delete(DEFAULT_LANG);  // pinned first, ahead of "Any" — the owner's own language, even though Any is the default
     $('#f-lang-panel').innerHTML = `<label><input type="checkbox" value="${DEFAULT_LANG}"> ${DEFAULT_LANG}</label>`
       + '<label><input type="checkbox" id="f-lang-any"> Any language</label>'
       + [...langs].sort().map((l) => `<label><input type="checkbox" value="${esc(l)}"> ${esc(l)}</label>`).join('');

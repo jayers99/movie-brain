@@ -45,10 +45,9 @@ def clear_lang(page: Page) -> None:
     set_langs(page, [])
 
 
-def test_language_filter_defaults_to_english(dash: Page):
-    expect(dash.locator("#f-lang-input")).to_have_value("English")
-    assert count(dash) == 2  # Alpha (English), Echo (English, Spanish)
-    assert first_titles(dash, 2) == ["Alpha", "Echo"]
+def test_language_filter_defaults_to_any(dash: Page):
+    expect(dash.locator("#f-lang-input")).to_have_value("Any")
+    assert count(dash) == 8  # every seeded film: nothing is filtered by default
     assert "lang=" not in dash.url  # the default is implicit, not encoded
     set_langs(dash, ["Spanish"])
     assert count(dash) == 1
@@ -59,8 +58,39 @@ def test_language_filter_defaults_to_english(dash: Page):
     assert count(dash) == 1
     clear_lang(dash)
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
-    assert count(dash) == 8  # every seeded film: nothing is filtered by default now
-    assert "lang=any" in dash.url
+    assert count(dash) == 8
+    assert "lang=" not in dash.url
+
+
+def test_legacy_lang_any_url_still_reads_as_any(page, server):
+    page.goto(f"{server}/?lang=any")
+    page.wait_for_selector("#films tbody[data-count]")
+    expect(page.locator("#f-lang-input")).to_have_value("Any")
+    assert "lang=" not in page.url
+
+
+def test_clear_resets_every_control(dash: Page):
+    cycle(dash, "owned")
+    dash.fill("#f-title", "a")
+    dash.fill("#f-imdb-min", "7")
+    set_langs(dash, ["Spanish"])
+    dash.click("th.sortable[data-col=year]")
+    dash.select_option("#list-picker", "cahiers-100")
+    _search(dash, "director: hawks")
+    url = dash.url
+    assert all(k in url for k in ("chips=owned", "title=a", "imdb=7-", "lang=Spanish", "sort=year", "list=cahiers-100", "q="))
+
+    dash.click("#chips-clear")
+
+    assert dash.url.split("?")[-1] in ("", dash.url)  # nothing left to encode
+    assert count(dash) == 8
+    expect(dash.locator('.chip[data-group="owned"]')).to_have_text("Owned")
+    expect(dash.locator("#f-title")).to_have_value("")
+    expect(dash.locator("#f-imdb-min")).to_have_value("")
+    expect(dash.locator("#f-lang-input")).to_have_value("Any")
+    expect(dash.locator("#search")).to_have_value("")
+    expect(dash.locator("#list-picker")).to_have_value("")
+    expect(dash.locator("th.sortable[data-col=year]")).not_to_have_attribute("data-dir", re.compile(".+"))
 
 
 def test_english_heads_the_list_then_any_language(dash: Page):
@@ -69,8 +99,7 @@ def test_english_heads_the_list_then_any_language(dash: Page):
     assert labels[0] == "English"
     assert labels[1] == "Any language"
     assert labels[2:] == sorted(labels[2:]) and "English" not in labels[2:]
-    expect(dash.locator("#f-lang-any")).not_to_be_checked()  # English is the default selection
-    dash.locator("#f-lang-any").check()  # picking Any clears every language
+    expect(dash.locator("#f-lang-any")).to_be_checked()  # Any is the default selection
     assert count(dash) == 8
     dash.click("header h1")  # close the panel so the input shows the selection again
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
@@ -83,7 +112,7 @@ def test_english_heads_the_list_then_any_language(dash: Page):
 
 def test_language_typeahead_filters_options_and_builds_up_selection(dash: Page):
     inp = dash.locator("#f-lang-input")
-    expect(inp).to_have_value("English")  # default selection shown while closed
+    expect(inp).to_have_value("Any")  # default selection shown while closed
     inp.click()  # focusing opens the panel and clears the box for typing
     expect(dash.locator("#f-lang-panel")).to_be_visible()
     expect(inp).to_have_value("")
@@ -96,12 +125,12 @@ def test_language_typeahead_filters_options_and_builds_up_selection(dash: Page):
     inp.fill("FRE")
     dash.locator('#f-lang-panel input[value="French"]').check()
     dash.click("header h1")  # close
-    expect(inp).to_have_value("English, Spanish, French")  # builds up in selection order
-    assert count(dash) == 3  # Alpha + Echo (English/Spanish) + Bravo (French)
+    expect(inp).to_have_value("Spanish, French")  # builds up in selection order
+    assert count(dash) == 2  # Echo (English/Spanish) + Bravo (French)
     dash.goto(dash.url)  # selection round-trips through the URL
     dash.wait_for_selector("#films tbody[data-count]")
-    expect(dash.locator("#f-lang-input")).to_have_value("English, Spanish, French")
-    assert count(dash) == 3
+    expect(dash.locator("#f-lang-input")).to_have_value("Spanish, French")
+    assert count(dash) == 2
 
 
 def test_rating_columns_show_metacritic_then_rt_then_imdb(dash: Page):
@@ -240,7 +269,7 @@ def test_url_state_round_trips(dash: Page, server: str):
     dash.fill("#f-title", "a")
     dash.click("th.sortable[data-col=year]")
     url = dash.url
-    assert "chips=unrated" in url and "title=a" in url and "lang=any" in url
+    assert "chips=unrated" in url and "title=a" in url and "lang=" not in url
     assert ("sort=year%3Aasc" in url) or ("sort=year:asc" in url)
     dash.goto(url)
     dash.wait_for_selector("#films tbody[data-count]")
@@ -293,7 +322,7 @@ def test_drawer_opens_on_load_from_url(dash: Page, server: str):
 
 def test_row_click_opens_drawer_but_title_link_does_not(dash: Page):
     dash.click("#films tbody tr[data-id] .c-year >> nth=1")
-    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆⚐")
+    expect(dash.locator("#drawer h2")).to_have_text("Golf ☆⚐")  # second under the default sort: Alpha 92, Golf 88
     dash.click("#drawer-close")
     expect(dash.locator("#drawer")).to_be_hidden()
 
@@ -804,7 +833,7 @@ def test_list_picker_is_encoded_in_the_url(dash):
 
 def test_clear_chip_clears_the_list_picker(dash):
     dash.select_option("#list-picker", "cahiers-100")
-    dash.wait_for_selector('#films tbody[data-count="1"]')
+    dash.wait_for_selector('#films tbody[data-count="2"]')  # Charlie and Alpha, no language filter by default
     dash.click("#chips-clear")
     expect(dash.locator("#list-picker")).to_have_value("")
 
