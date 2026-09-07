@@ -1,10 +1,15 @@
 from movie_brain.domain.search import (
     ALIASES,
+    EMBED_DIM,
+    EMBED_MODEL,
     FIELDS,
+    MAX_DISTANCE,
+    SEMANTIC_WEIGHT,
     Candidate,
     Filter,
     ParsedQuery,
     Term,
+    embedding_text,
     fts_words,
     norm_genre,
     parse_query,
@@ -178,3 +183,17 @@ def test_length_penalty_only_bites_when_the_query_is_much_shorter_than_the_token
 def test_filter_is_a_frozen_value_with_defaults():
     f = Filter("year", lo=1940, hi=1949)
     assert (f.ids, f.values, f.credit_kind, f.jobs) == ((), (), None, ())
+
+
+def test_embedding_text_joins_the_three_prose_fields_in_order_and_strips():
+    assert embedding_text("  An overview. ", "A plot.", " Tag line ") == "An overview. A plot. Tag line"
+
+
+def test_embedding_text_skips_empty_fields_and_never_takes_a_title():
+    assert embedding_text(None, "Only a plot.", "") == "Only a plot."
+    assert embedding_text("", None, "   ") is None
+
+
+def test_semantic_constants_are_the_spec_values():
+    assert EMBED_MODEL == "all-MiniLM-L6-v2" and EMBED_DIM == 384
+    assert MAX_DISTANCE == 0.6 and SEMANTIC_WEIGHT == 5.0

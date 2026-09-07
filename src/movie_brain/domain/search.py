@@ -22,6 +22,14 @@ def trigram_query(text: str) -> str:
     return " OR ".join('"' + w.replace('"', '""') + '"' for w in windows)
 
 
+def embedding_text(overview: str | None, plot: str | None, tagline: str | None) -> str | None:
+    """The text one film is embedded from: overview, plot, tagline — stripped, non-empty ones
+    joined by a single space in that order. `None` when all three are empty: such a film is never
+    embedded (D15) and stays reachable lexically and by every field."""
+    parts = [p.strip() for p in (overview, plot, tagline) if p and p.strip()]
+    return " ".join(parts) if parts else None
+
+
 CORRECTION_FLOOR = 0.8  # a candidate at least this similar is used, and the correction is SHOWN (spec D7)
 SUGGESTION_FLOOR = 0.6  # below CORRECTION_FLOOR but above this: offered as "did you mean", nothing used
 MAX_SUGGESTIONS = 3
@@ -37,6 +45,14 @@ FREEFORM_MAX_BILLING = 10
 LENGTH_PENALTY_EXPONENT = 0.35  # in similarity(): plain difflib ratio over-rewards a short query in a long
 # token ('bogrt' inside 'Lena Brogren' scored 0.667 unpenalised); token scores are scaled by
 # (min_len / max_len) ** LENGTH_PENALTY_EXPONENT; equal lengths unpenalised
+
+# Semantic search (Plan C, spec D14–D18). The vector is over PROSE ONLY: the title is the
+# heaviest lexical signal already, and inside the vector it rewards string coincidence —
+# measured: title-in-vector put "Hard Boiled" (1992) first on the owner's own query.
+EMBED_MODEL = "all-MiniLM-L6-v2"
+EMBED_DIM = 384
+MAX_DISTANCE = 0.6  # cosine distance floor; one constant, no slider (owner decision, D18)
+SEMANTIC_WEIGHT = 5.0  # re-rank mode: one more SUMMED signal, 5 × (1 − distance), so a title hit (10) stays first
 
 
 @dataclass(frozen=True)
