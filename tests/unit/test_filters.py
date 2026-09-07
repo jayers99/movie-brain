@@ -6,14 +6,10 @@ from movie_brain.domain.filters import (
     CHIPS,
     MIN_LISTS,
     NEW_ARRIVAL_DAYS,
-    RECENT_DAYS,
-    TOP_IMDB,
-    TOP_MC,
-    TOP_RT,
-    acquisition_candidate,
     canon_score,
     is_canon,
     matches,
+    reachable,
     thresholds,
 )
 from movie_brain.domain.models import FilmView
@@ -42,23 +38,25 @@ def view(**kw) -> FilmView:
 
 
 def test_chip_names_are_stable():
+    # URL state encodes these keys; the ones that predate the 2026-09-07 bar redesign keep
+    # their names so saved links still resolve.
     assert CHIPS == (
-        "leaving",
+        "reachable",
+        "unreachable",
         "unrated",
         "mine",
-        "pending",
-        "top_ratings",
-        "recent",
-        "departed",
-        "new_arrivals",
+        "criterion",
+        "leaving",
+        "criterion_new",
         "watchlist",
         "owned",
         "not_owned",
-        "needs_revisit",
-        "suspect",
         "multi_list",
-        "acquire",
     )
+
+
+SVOD = {"name": "MUBI", "subscribed": False, "kind": "svod", "quality": 1, "has_apple_app": False}
+STORE = {"name": "Apple TV Store (iTunes)", "subscribed": True, "kind": "store", "quality": 1, "has_apple_app": True}
 
 
 @pytest.mark.parametrize(
@@ -67,15 +65,12 @@ def test_chip_names_are_stable():
         ("leaving", view(leaving_date="Aug 31"), view()),
         ("unrated", view(my_rating=None), view(my_rating=0)),
         ("mine", view(my_rating=1), view(my_rating=0)),
-        ("pending", view(pending=True, found=None), view()),
-        ("pending", view(found=False), view()),
-        # any one qualifying score is enough; the `no` views miss on every axis
-        # (the view() base is rt 80, imdb 7.0, metacritic None — below every threshold)
-        ("top_ratings", view(metacritic=TOP_MC), view(metacritic=TOP_MC - 1)),
-        ("top_ratings", view(rt=TOP_RT), view(rt=TOP_RT - 1)),
-        ("top_ratings", view(imdb=TOP_IMDB), view(imdb=TOP_IMDB - 0.1)),
-        ("recent", view(first_seen="2026-08-01"), view(first_seen="2026-01-01")),
-        ("departed", view(departed=True), view()),
+        ("criterion", view(criterion=True, departed=False), view(criterion=True, departed=True)),
+        ("criterion", view(criterion=True), view(criterion=False)),
+        ("reachable", view(criterion=True, departed=False), view(criterion=False)),
+        ("reachable", view(criterion=False, services=[SVOD]), view(criterion=False, services=[])),
+        ("reachable", view(criterion=False, services=[STORE]), view(criterion=True, departed=True)),
+        ("unreachable", view(criterion=False, services=[]), view(criterion=False, services=[SVOD])),
     ],
 )
 def test_single_chip(chip, yes, no):
@@ -83,8 +78,13 @@ def test_single_chip(chip, yes, no):
     assert not matches(no, [chip], TODAY)
 
 
-def test_all_null_ratings_never_match_top_ratings():
-    assert not matches(view(metacritic=None, rt=None, imdb=None), ["top_ratings"], TODAY)
+def test_reachable_is_about_the_market_not_the_shelf():
+    """Owned, rated and watchlisted films are NOT reachable by themselves: reachable means
+    there is somewhere to watch or buy it today. An unsubscribed service still counts."""
+    shelf = view(criterion=False, services=[], owned=True, my_rating=9, watchlisted=True)
+    assert reachable(shelf) is False
+    assert matches(shelf, ["unreachable"], TODAY)
+    assert reachable(view(criterion=False, services=[SVOD])) is True
 
 
 def test_chips_stack_with_and():
@@ -104,22 +104,19 @@ def test_unknown_chip_raises():
 
 def test_thresholds_exposes_constants():
     assert thresholds() == {
-        "top_mc": TOP_MC,
-        "top_rt": TOP_RT,
-        "top_imdb": TOP_IMDB,
-        "recent_days": RECENT_DAYS,
         "new_arrival_days": NEW_ARRIVAL_DAYS,
         "multi_list": MIN_LISTS,
     }
 
 
-def test_new_arrivals_chip_windows_on_appeared_date(today):
-    fresh = view(new_on=[{"source": "max", "name": "HBO Max", "appeared_on": today.isoformat()}])
-    stale = view(new_on=[{"source": "max", "name": "HBO Max", "appeared_on": "2026-08-01"}])
-    empty = view()
-    assert matches(fresh, ["new_arrivals"], today)
-    assert not matches(stale, ["new_arrivals"], today)  # 18 days > 14-day window
-    assert not matches(empty, ["new_arrivals"], today)
+def test_criterion_new_chip_counts_only_criterion_arrivals_this_month(today):
+    fresh = view(new_on=[{"source": "criterion", "name": "Criterion Channel", "appeared_on": today.isoformat()}])
+    other = view(new_on=[{"source": "max", "name": "HBO Max", "appeared_on": today.isoformat()}])
+    stale = view(new_on=[{"source": "criterion", "name": "Criterion Channel", "appeared_on": "2026-06-01"}])
+    assert matches(fresh, ["criterion_new"], today)
+    assert not matches(other, ["criterion_new"], today)  # an arrival elsewhere is not Criterion-new
+    assert not matches(stale, ["criterion_new"], today)  # older than the 30-day window
+    assert not matches(view(), ["criterion_new"], today)
 
 
 def test_watchlist_chip(today):
@@ -128,7 +125,7 @@ def test_watchlist_chip(today):
 
 
 def test_thresholds_expose_new_arrival_days():
-    assert thresholds()["new_arrival_days"] == 14
+    assert thresholds()["new_arrival_days"] == 30  # "new" means this month
 
 
 def test_owned_chip_matches_owned_views():
@@ -187,58 +184,3 @@ def test_a_film_on_no_list_scores_zero_and_is_not_canon():
     assert is_canon(v) is False
 
 
-def test_acquire_keeps_a_rated_film():
-    """C5: 'a lot of them I already have seen once, I just want to re-watch them.'"""
-    v = view(my_rating=8, metacritic=95, owned=False, criterion=False)
-    assert acquisition_candidate(v, TODAY) is True
-
-
-def test_acquire_keeps_a_streamable_film():
-    """D1 reversed: a streamable canon film appears, badged, rather than being hidden."""
-    v = view(metacritic=95, owned=False, criterion=False,
-             services=[{"name": "Kanopy", "subscribed": True, "kind": "svod", "quality": 1, "has_apple_app": False}])
-    assert acquisition_candidate(v, TODAY) is True
-
-
-def test_acquire_keeps_a_film_on_the_criterion_channel():
-    v = view(metacritic=95, owned=False, criterion=True, departed=False)
-    assert acquisition_candidate(v, TODAY) is True
-
-
-def test_acquire_keeps_a_canon_film_with_no_metascore():
-    """Tier 1 stands on its own: list membership alone qualifies, with no Metacritic score
-    to fall back on. Every other acquire test sets metacritic=95, which the second disjunct
-    satisfies by itself — this one fails if `is_canon(view) or` is ever dropped."""
-    v = view(
-        metacritic=None,
-        owned=False,
-        criterion=False,
-        lists=[{"trust": 10, "rank": 1, "rank_label": None, "size": 100, "ordered": True}],
-    )
-    assert acquisition_candidate(v, TODAY) is True
-
-
-def test_acquire_drops_an_owned_film():
-    v = view(metacritic=95, owned=True, criterion=False)
-    assert acquisition_candidate(v, TODAY) is False
-
-
-def test_acquire_drops_a_film_that_is_neither_canon_nor_acclaimed():
-    v = view(metacritic=40, owned=False, criterion=False, lists=[])
-    assert acquisition_candidate(v, TODAY) is False
-
-
-def test_acquire_is_a_registered_chip():
-    assert "acquire" in CHIPS
-
-
-def test_needs_revisit_chip():
-    from dataclasses import replace
-
-    from movie_brain.domain.filters import CHIPS, matches
-    from movie_brain.domain.models import FilmView
-
-    v = FilmView(1, "A", 1950, None, None, None, None, None, None, False, None, None, None)
-    assert "needs_revisit" in CHIPS
-    assert not matches(v, ["needs_revisit"], date(2026, 8, 19))
-    assert matches(replace(v, needs_revisit=True), ["needs_revisit"], date(2026, 8, 19))

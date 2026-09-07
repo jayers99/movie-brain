@@ -5,7 +5,7 @@
   const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
   const DEFAULT_LANG = 'English';
   const state = {
-    films: [], cfg: null, chips: new Set(), scope: 'reachable',
+    films: [], cfg: null, chips: new Set(),
     q: '', search: null,   // power search: state.search is null or {ids: Set, rank: Map|null}
     list: null, listCatalog: [],   // list picker: filter to one curated list and order by its rank
     cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null },
@@ -34,41 +34,31 @@
     const e = (f.lists || []).find((l) => l.slug === state.list);
     return e && e.ordered ? printedRank(e) : null;
   };
+  // reachable = somewhere to watch or buy it today: a current Criterion listing, or ANY current
+  // listing on a streaming service (subscribed or not) or the Apple store. Owned, rated and
+  // watchlisted films are not reachable by themselves — reachability is about the market, not
+  // the shelf. Mirrors domain/filters.py::reachable; the header count and the chip share it.
+  const reachable = (f) => (f.criterion && !f.departed) || (f.services || []).length > 0;
+  // Mirrors domain/filters.py::_PREDICATES — keep the two in lockstep. Keys are what `chips=`
+  // encodes in the URL; a cycle chip's keys are mutually exclusive in the UI only.
   const CHIP_PREDICATES = {
-    leaving: (f) => f.leaving_date != null,
+    reachable,
+    unreachable: (f) => !reachable(f),
     unrated: (f) => f.my_rating == null,
     mine: (f) => f.my_rating != null && f.my_rating >= 1,
-    pending: (f) => f.pending || f.found === false,
-    top_ratings: (f) => (f.metacritic != null && f.metacritic >= state.cfg.canned_thresholds.top_mc)
-      || (f.rt != null && f.rt >= state.cfg.canned_thresholds.top_rt)
-      || (f.imdb != null && f.imdb >= state.cfg.canned_thresholds.top_imdb),
-    recent: (f) => f.first_seen != null && daysBetween(f.first_seen, state.cfg.today) <= state.cfg.canned_thresholds.recent_days,
-    departed: (f) => f.departed,
-    new_arrivals: (f) => (f.new_on || []).some((t) => daysBetween(t.appeared_on, state.cfg.today) <= state.cfg.canned_thresholds.new_arrival_days),
+    criterion: (f) => f.criterion && !f.departed,
+    leaving: (f) => f.leaving_date != null,
+    criterion_new: (f) => (f.new_on || []).some((t) => t.source === 'criterion'
+      && daysBetween(t.appeared_on, state.cfg.today) <= state.cfg.canned_thresholds.new_arrival_days),
     watchlist: (f) => f.watchlisted,
     owned: (f) => f.owned,
     not_owned: (f) => !f.owned,
-    needs_revisit: (f) => f.needs_revisit,
-    suspect: (f) => f.audit != null,
     multi_list: (f) => (f.lists || []).length >= state.cfg.canned_thresholds.multi_list,
-    acquire: (f) => !f.owned
-      && (isCanon(f) || (f.metacritic != null && f.metacritic >= state.cfg.canned_thresholds.top_mc)),
   };
-
-  // ---- scope ----
-  // reachable = something I can act on today: a current listing on a service I pay for (svod or
-  // store, Criterion included), or a film I own, rated, or watchlisted. Discovery films with no
-  // listing (nothing to watch or buy) are hidden here, visible only under 'all'.
-  const SCOPES = ['reachable', 'criterion', 'all'];
-  const SCOPE_LABELS = { reachable: 'Reachable', criterion: 'Criterion only', all: 'All films' };
-  const reachable = (f) => (f.criterion && !f.departed) || (f.services || []).some((s) => s.subscribed)
-    || f.owned || f.watchlisted || f.my_rating != null;
-  const inScope = (f) => state.scope === 'all' || (state.scope === 'criterion' ? f.criterion : reachable(f));
 
   // ---- filtering / sorting ----
   const inRange = (v, lo, hi) => v != null && (lo == null || v >= lo) && (hi == null || v <= hi);
   function rowMatches(f) {
-    if (!inScope(f)) return false;
     if (state.search && !state.search.ids.has(f.id)) return false;
     if (state.list && !(f.lists || []).some((l) => l.slug === state.list)) return false;
     for (const c of state.chips) if (!CHIP_PREDICATES[c](f)) return false;
@@ -96,14 +86,8 @@
         const ra = listRank(a), rb = listRank(b);
         if (ra != null && rb != null && ra !== rb) return ra - rb;
       }
-      if (state.chips.has('acquire')) {  // tier 1 (on a list) above tier 2 (metacritic only), then canon score desc
-        const ta = isCanon(a) ? 1 : 0, tb = isCanon(b) ? 1 : 0;
-        if (ta !== tb) return tb - ta;
+      if (state.chips.has('multi_list')) {  // "On a list" active: canon score desc leads, so Citizen Kane outranks a one-list entry
         const c = canonScore(b) - canonScore(a);
-        if (c !== 0) return c;
-      }
-      if (state.chips.has('suspect')) {  // suspect chip active: audit score desc leads, then the usual hierarchy
-        const c = (b.audit?.score ?? 0) - (a.audit?.score ?? 0);
         if (c !== 0) return c;
       }
       for (const key of ['metacritic', 'rt', 'imdb']) {
@@ -121,15 +105,14 @@
   function applyFilters() {
     state.filtered = state.films.filter(rowMatches).sort(compare);
     tbody.dataset.count = state.filtered.length;
-    const scoped = state.films.filter(inScope).length;
-    $('#count-showing').textContent = `Showing ${state.filtered.length} of ${scoped}`;
+    $('#count-showing').textContent = `Showing ${state.filtered.length} of ${state.films.length}`;
     renderRows();
     syncUrl();
   }
 
   // ---- header counts ----
   // Four catalogue-wide numbers the owner acts on: the whole catalogue, what is reachable today
-  // (the default scope's own predicate, so the number and the toggle can never disagree), what
+  // (the same predicate the Reachable chip uses, so the number and the chip can never disagree), what
   // is owned, and what is rated. The old nine were Criterion-scoped and mostly OMDb plumbing
   // (found / pending / unmatched); that maintenance view lives in `movie-brain status` now.
   function renderCounts() {
@@ -183,7 +166,6 @@
   function syncUrl(push = false) {
     const p = new URLSearchParams();
     if (state.chips.size) p.set('chips', [...state.chips].join(','));
-    if (state.scope !== 'reachable') p.set('scope', state.scope);
     const k = state.cols;
     if (k.title) p.set('title', k.title);
     if (k.director) p.set('director', k.director);
@@ -202,7 +184,9 @@
   function readUrl() {
     const p = new URLSearchParams(location.search);
     state.chips = new Set((p.get('chips') || '').split(',').filter((c) => c in CHIP_PREDICATES));
-    state.scope = SCOPES.includes(p.get('scope')) ? p.get('scope') : 'reachable';
+    // Saved links from before the scope toggle was folded into the chips: `scope=criterion`
+    // becomes the Criterion chip; `scope=all` and the old default are simply the new default.
+    if (p.get('scope') === 'criterion') state.chips.add('criterion');
     const slug = p.get('list');
     state.list = state.listCatalog.some((l) => l.slug === slug) ? slug : null;
     const k = state.cols;
@@ -221,9 +205,13 @@
   function writeControlsFromState() {
     $('#search').value = state.q;
     $('#list-picker').value = state.list || '';
-    $('#scope-toggle').textContent = SCOPE_LABELS[state.scope];
-    $('#scope-toggle').classList.toggle('active', state.scope !== 'reachable');
     document.querySelectorAll('.chip[data-chip]').forEach((b) => b.classList.toggle('active', state.chips.has(b.dataset.chip)));
+    document.querySelectorAll('.chip[data-cycle]').forEach((b) => {
+      const keys = b.dataset.cycle.split(','), labels = b.dataset.labels.split('|');
+      const i = keys.findIndex((k) => state.chips.has(k));  // -1 = off; labels[0] is the off label
+      b.textContent = labels[i + 1];
+      b.classList.toggle('active', i >= 0);
+    });
     const k = state.cols;
     $('#f-title').value = k.title; $('#f-director').value = k.director;
     document.querySelectorAll('#f-lang-panel input[type=checkbox]:not(#f-lang-any)').forEach((cb) => { cb.checked = k.languages.has(cb.value); });
@@ -240,8 +228,13 @@
   // ---- controls ----
   $('#chips').addEventListener('click', (e) => {
     const b = e.target.closest('.chip'); if (!b) return;
-    if (b.id === 'scope-toggle') state.scope = SCOPES[(SCOPES.indexOf(state.scope) + 1) % SCOPES.length];
-    else if (b.id === 'chips-clear') { state.chips.clear(); state.list = null; }
+    if (b.id === 'chips-clear') { state.chips.clear(); state.list = null; }
+    else if (b.dataset.cycle) {  // off → first key → … → last key → off; the keys are mutually exclusive
+      const keys = b.dataset.cycle.split(',');
+      const i = keys.findIndex((k) => state.chips.has(k));
+      keys.forEach((k) => state.chips.delete(k));
+      if (i + 1 < keys.length) state.chips.add(keys[i + 1]);
+    }
     else if (!b.dataset.chip) return;  // a .chip with no data-chip would add `undefined` to the set
     else if (state.chips.has(b.dataset.chip)) state.chips.delete(b.dataset.chip); else state.chips.add(b.dataset.chip);
     writeControlsFromState(); applyFilters();
@@ -302,7 +295,7 @@
     state.list = e.target.value || null;
     // A list is reproduced WHOLE: 9 of the Cahiers 100 are unreachable, and a picker that
     // silently dropped them would answer a different question than the one it was asked.
-    if (state.list) state.scope = 'all';
+    if (state.list) { state.chips.delete('reachable'); state.chips.delete('unreachable'); }
     writeControlsFromState(); applyFilters();
   });
 

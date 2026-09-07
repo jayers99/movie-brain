@@ -6,25 +6,28 @@ from datetime import date, timedelta
 
 from .models import FilmView
 
-TOP_MC = 90
-TOP_RT = 90
-TOP_IMDB = 7.5
-RECENT_DAYS = 30
-NEW_ARRIVAL_DAYS = 14
+NEW_ARRIVAL_DAYS = 30  # "new" means this month: the drawer's "New on:" window and the Criterion-new chip
 MIN_LISTS = 1  # cross-list tally chip, labelled "On a list" (design 2026-08-29 §7, widened
 # from 2 to 1 on 2026-08-30 at the owner's request). The chip KEY stays `multi_list`: it is
 # encoded in dashboard URL state, so renaming it would drop the chip from saved links.
+CRITERION = "criterion"  # the listings/transitions source whose arrivals the Criterion-new chip counts
 
 Predicate = Callable[[FilmView, date], bool]
 
 
-def _recent(v: FilmView, today: date) -> bool:
-    return v.first_seen is not None and date.fromisoformat(v.first_seen) >= today - timedelta(days=RECENT_DAYS)
+def reachable(v: FilmView) -> bool:
+    """Somewhere to watch or buy it today: a current Criterion listing, or ANY current listing
+    on a streaming service (subscribed or not) or the Apple store. Owned, rated and watchlisted
+    films are not reachable by themselves — reachability is about the market, not the shelf.
+    Mirrored by `reachable` in app.js; the header's count and the chip share this definition."""
+    return (v.criterion and not v.departed) or bool(v.services)
 
 
-def _new_arrivals(v: FilmView, today: date) -> bool:
+def _criterion_new(v: FilmView, today: date) -> bool:
     cutoff = today - timedelta(days=NEW_ARRIVAL_DAYS)
-    return any(date.fromisoformat(str(t["appeared_on"])) >= cutoff for t in v.new_on)
+    return any(
+        t.get("source") == CRITERION and date.fromisoformat(str(t["appeared_on"])) >= cutoff for t in v.new_on
+    )
 
 
 _TIE = re.compile(r"^=?(\d+)$")
@@ -68,41 +71,25 @@ def is_canon(view: FilmView) -> bool:
     return bool(view.lists)
 
 
-def acquisition_candidate(view: FilmView, _today: date) -> bool:
-    """The canon shortlist I do not own yet.
-
-    The working filter is "not yet BOUGHT", not "not yet seen" (C5): the owner has seen many of
-    these once and wants to re-watch them, so a rating is not a reason to hide a film. Streaming
-    availability is likewise not a reason (D1, reversed): a film streaming somewhere is still
-    worth owning at $5 (C4), so it appears and the dashboard badges where to watch it instead of
-    dropping it. `owned` is the only possession test, because possession is the only thing that
-    settles the question.
-    """
-    if view.owned:
-        return False
-    return is_canon(view) or (view.metacritic is not None and view.metacritic >= TOP_MC)
-
-
+# The chip bar (2026-09-07 redesign): four three-way groups plus two plain chips, everything off
+# by default. A group's keys are mutually exclusive in the UI (the chip cycles off → A → B → off),
+# but each key is an ordinary predicate here so `matches` and the URL's `chips=` list need no
+# group logic. Keys already encoded in saved URLs (`unrated`, `mine`, `leaving`, `watchlist`,
+# `owned`, `not_owned`, `multi_list`) keep their names. The removed keys (`top_ratings`,
+# `recent`, `pending`, `departed`, `new_arrivals`, `needs_revisit`, `suspect`, `acquire`) are
+# simply unknown now — app.js drops unknown keys when it reads a URL.
 _PREDICATES: dict[str, Predicate] = {
-    "leaving": lambda v, _: v.leaving_date is not None,
+    "reachable": lambda v, _: reachable(v),
+    "unreachable": lambda v, _: not reachable(v),
     "unrated": lambda v, _: v.my_rating is None,
     "mine": lambda v, _: v.my_rating is not None and v.my_rating >= 1,
-    "pending": lambda v, _: v.pending or v.found is False,
-    "top_ratings": lambda v, _: (
-        (v.metacritic is not None and v.metacritic >= TOP_MC)
-        or (v.rt is not None and v.rt >= TOP_RT)
-        or (v.imdb is not None and v.imdb >= TOP_IMDB)
-    ),
-    "recent": _recent,
-    "departed": lambda v, _: v.departed,
-    "new_arrivals": _new_arrivals,
+    "criterion": lambda v, _: v.criterion and not v.departed,
+    "leaving": lambda v, _: v.leaving_date is not None,
+    "criterion_new": _criterion_new,
     "watchlist": lambda v, _: v.watchlisted,
     "owned": lambda v, _: v.owned,
     "not_owned": lambda v, _: not v.owned,
-    "needs_revisit": lambda v, _: v.needs_revisit,
-    "suspect": lambda v, _: v.audit is not None,
     "multi_list": lambda v, _: len(v.lists) >= MIN_LISTS,
-    "acquire": acquisition_candidate,
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)
@@ -114,10 +101,6 @@ def matches(view: FilmView, chips: Iterable[str], today: date) -> bool:
 
 def thresholds() -> dict[str, object]:
     return {
-        "top_mc": TOP_MC,
-        "top_rt": TOP_RT,
-        "top_imdb": TOP_IMDB,
-        "recent_days": RECENT_DAYS,
         "new_arrival_days": NEW_ARRIVAL_DAYS,
         "multi_list": MIN_LISTS,
     }

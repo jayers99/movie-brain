@@ -97,11 +97,7 @@ def test_summary_and_config(client):
     }
     cfg = client.get("/api/config").get_json()
     assert cfg["canned_thresholds"] == {
-        "top_mc": 90,
-        "top_rt": 90,
-        "top_imdb": 7.5,
-        "recent_days": 30,
-        "new_arrival_days": 14,
+        "new_arrival_days": 30,
         "multi_list": 1,
     }
     assert cfg["today"] == "2026-08-19" and "leaving" in cfg["chips"]
@@ -235,8 +231,8 @@ def test_films_payload_carries_new_on_and_watchlisted(client):
 
 def test_config_carries_new_arrival_days_and_chips(client):
     cfg = client.get("/api/config").get_json()
-    assert cfg["canned_thresholds"]["new_arrival_days"] == 14
-    assert "new_arrivals" in cfg["chips"] and "watchlist" in cfg["chips"]
+    assert cfg["canned_thresholds"]["new_arrival_days"] == 30
+    assert "criterion_new" in cfg["chips"] and "watchlist" in cfg["chips"]
 
 
 def test_films_include_discovery_with_null_url(seeded_repo):
@@ -269,7 +265,6 @@ def test_revisit_toggle_and_note(client):
     assert r.get_json() == {"needs_revisit": False}
     assert client.put(f"/api/films/{fid}/revisit", json={"note": "too late"}).status_code == 404
     assert client.post("/api/films/999/revisit").status_code == 404
-    assert "needs_revisit" in client.get("/api/config").get_json()["chips"]
 
 
 def test_suspect_chip_and_verdict_endpoint(client, repo):
@@ -277,7 +272,6 @@ def test_suspect_chip_and_verdict_endpoint(client, repo):
 
     fid = next(x["id"] for x in client.get("/api/films").get_json() if x["title"] == "Trio")
     repo.replace_audit_flags({fid: [AuditFlag("omdb-title", "OMDb title 'Trio Redux' vs 'Trio'", 2)]}, D)
-    assert "suspect" in client.get("/api/config").get_json()["chips"]
     trio = client.get(f"/api/films/{fid}").get_json()
     assert trio["audit"] == {"score": 2, "reasons": [{"code": "omdb-title", "detail": "OMDb title 'Trio Redux' vs 'Trio'"}]}
 

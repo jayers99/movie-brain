@@ -21,22 +21,15 @@
       <div id="search-note" class="search-note" hidden></div>
     </div>
     <div id="chips">
-      <button id="scope-toggle" class="chip" title="Scope: reachable (on my services, buyable, owned, rated, watchlisted) → Criterion only → all films">Reachable</button>
-      <button class="chip" data-chip="top_ratings">Top Ratings</button>
-      <button class="chip" data-chip="unrated">Unrated by me</button>
-      <button class="chip" data-chip="mine">My ratings</button>
-      <button class="chip" data-chip="leaving">Leaving soon</button>
-      <button class="chip" data-chip="recent">Recently added</button>
-      <button class="chip" data-chip="pending">Pending</button>
-      <button class="chip" data-chip="departed">Departed</button>
-      <button class="chip" data-chip="new_arrivals">New arrivals</button>
+      <!-- Four three-way chips (off → A → B → off) and two plain ones, everything off by default.
+           A cycle chip carries its keys in data-cycle and its labels (off first) in data-labels; the
+           keys are ordinary CHIP_PREDICATES entries, so URL state is still just `chips=`. -->
+      <button class="chip" data-cycle="reachable,unreachable" data-labels="Reachable|Reachable ✓|Not reachable" data-group="reach">Reachable</button>
+      <button class="chip" data-cycle="unrated,mine" data-labels="Rated|Unrated by me|Rated by me" data-group="rated">Rated</button>
+      <button class="chip" data-cycle="criterion,leaving,criterion_new" data-labels="Criterion|Criterion ✓|Criterion leaving|Criterion new" data-group="criterion">Criterion</button>
       <button class="chip" data-chip="watchlist">Watchlist</button>
-      <button class="chip" data-chip="owned">Owned</button>
-      <button class="chip" data-chip="not_owned">Not owned</button>
-      <button class="chip" data-chip="needs_revisit">Needs revisit</button>
-      <button class="chip" data-chip="suspect">Suspect</button>
+      <button class="chip" data-cycle="owned,not_owned" data-labels="Owned|Owned ✓|Not owned" data-group="owned">Owned</button>
       <button class="chip" data-chip="multi_list">On a list</button>
-      <button class="chip" data-chip="acquire">Canon, not owned</button>
       <select id="list-picker" class="picker" title="Filter to one curated list and order by its rank"></select>
       <button id="chips-clear" class="chip clear">Clear</button>
     </div>

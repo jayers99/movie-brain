@@ -35,6 +35,12 @@ def set_langs(page: Page, langs: list[str]) -> None:
     page.click("header h1")
 
 
+def cycle(page: Page, group: str, times: int = 1) -> None:
+    """Click a three-way chip `times` times: off → first key → second key (→ third) → off."""
+    for _ in range(times):
+        page.click(f'.chip[data-group="{group}"]')
+
+
 def clear_lang(page: Page) -> None:
     set_langs(page, [])
 
@@ -53,7 +59,7 @@ def test_language_filter_defaults_to_english(dash: Page):
     assert count(dash) == 1
     clear_lang(dash)
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
-    assert count(dash) == 7  # + buyable discovery film Hotel
+    assert count(dash) == 8  # every seeded film: nothing is filtered by default now
     assert "lang=any" in dash.url
 
 
@@ -65,7 +71,7 @@ def test_english_heads_the_list_then_any_language(dash: Page):
     assert labels[2:] == sorted(labels[2:]) and "English" not in labels[2:]
     expect(dash.locator("#f-lang-any")).not_to_be_checked()  # English is the default selection
     dash.locator("#f-lang-any").check()  # picking Any clears every language
-    assert count(dash) == 7
+    assert count(dash) == 8
     dash.click("header h1")  # close the panel so the input shows the selection again
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
     dash.click("#f-lang-input")  # reopen
@@ -109,70 +115,81 @@ def test_rating_columns_show_metacritic_then_rt_then_imdb(dash: Page):
 
 def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Page):
     clear_lang(dash)
-    assert count(dash) == 7
+    assert count(dash) == 8  # everything off by default: all eight seeded films, Golf included
     # mc desc: Alpha 92, then the Echo/Bravo mc-70 tie breaks on rt (60 vs 50, against title
     # order); missing values sort after present ones at each level, so imdb-only Foxtrot
     # follows, then the unrated Charlie/Delta by title.
     assert first_titles(dash, 6) == ["Alpha", "Echo", "Bravo", "Foxtrot", "Charlie", "Delta"]
-    # the header counts the whole catalogue (8 seeded films), and "reachable" is the default
-    # scope's own predicate: 6 Criterion + buyable Hotel, Golf excluded
+    # the header counts the whole catalogue (8 seeded films); "reachable" is the market test —
+    # 5 on Criterion now + buyable Hotel; departed Foxtrot and listing-less Golf are not
     expect(dash.locator("#count-films")).to_have_text("8")
-    expect(dash.locator("#count-reachable")).to_have_text("7")
+    expect(dash.locator("#count-reachable")).to_have_text("6")
     expect(dash.locator("#count-owned")).to_have_text("1")
-    expect(dash.locator("#count-showing")).to_have_text("Showing 7 of 7")
+    expect(dash.locator("#count-showing")).to_have_text("Showing 8 of 8")
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
 
 
 def test_chip_labels_and_order(dash: Page):
+    # Everything off by default: every cycle chip shows its off label.
     labels = [t.strip() for t in dash.locator("#chips .chip").all_inner_texts()]
-    assert labels == [
-        "Reachable",
-        "Top Ratings",
-        "Unrated by me",
-        "My ratings",
-        "Leaving soon",
-        "Recently added",
-        "Pending",
-        "Departed",
-        "New arrivals",
-        "Watchlist",
-        "Owned",
-        "Not owned",
-        "Needs revisit",
-        "Suspect",
-        "On a list",
-        "Canon, not owned",
-        "Clear",
-    ]
+    assert labels == ["Reachable", "Rated", "Criterion", "Watchlist", "Owned", "On a list", "Clear"]
+
+
+def test_cycle_chip_walks_off_a_b_off_and_encodes_one_key(dash: Page):
+    owned = dash.locator('.chip[data-group="owned"]')
+    cycle(dash, "owned")
+    expect(owned).to_have_text("Owned ✓")
+    expect(owned).to_have_class(re.compile("active"))
+    assert "chips=owned" in dash.url and "not_owned" not in dash.url
+    cycle(dash, "owned")
+    expect(owned).to_have_text("Not owned")
+    assert "chips=not_owned" in dash.url
+    cycle(dash, "owned")
+    expect(owned).to_have_text("Owned")
+    expect(owned).not_to_have_class(re.compile("active"))
+    assert "chips=" not in dash.url
+
+
+def test_criterion_chip_has_three_on_states(dash: Page):
+    crit = dash.locator('.chip[data-group="criterion"]')
+    for label, key in [("Criterion ✓", "criterion"), ("Criterion leaving", "leaving"), ("Criterion new", "criterion_new")]:
+        cycle(dash, "criterion")
+        expect(crit).to_have_text(label)
+        assert f"chips={key}" in dash.url
+    cycle(dash, "criterion")
+    expect(crit).to_have_text("Criterion")
 
 
 def test_chips_stack_with_and(dash: Page):
     clear_lang(dash)
-    dash.click(".chip[data-chip=unrated]")
-    assert count(dash) == 4  # Bravo, Charlie, Delta, Hotel
-    dash.click(".chip[data-chip=pending]")
-    assert count(dash) == 2  # Charlie (unmatched), Delta (pending)
-    expect(dash.locator(".chip[data-chip=unrated]")).to_have_class(re.compile("active"))
+    cycle(dash, "rated")  # Unrated by me
+    assert count(dash) == 5  # Bravo, Charlie, Delta, Golf, Hotel
+    cycle(dash, "criterion")  # Criterion ✓
+    assert count(dash) == 3  # Bravo, Charlie, Delta — Golf and Hotel have no Criterion listing
+    expect(dash.locator('.chip[data-group="rated"]')).to_have_class(re.compile("active"))
     dash.click("#chips-clear")
-    assert count(dash) == 7
+    assert count(dash) == 8
 
 
 def test_each_chip_alone(dash: Page):
     clear_lang(dash)
     expected = {
-        "leaving": 1,
-        "unrated": 4,  # Bravo, Charlie, Delta, Hotel
-        "mine": 2,
-        "pending": 2,
-        "top_ratings": 1,  # only Alpha (92 / 95% / 8.5) clears any threshold
-        "recent": 1,
-        "departed": 1,
-        "suspect": 2,  # Bravo, Echo
+        "reachable": ("reach", 1, 6),  # 5 on Criterion now + buyable Hotel
+        "unreachable": ("reach", 2, 2),  # departed Foxtrot, listing-less Golf
+        "unrated": ("rated", 1, 5),  # Bravo, Charlie, Delta, Golf, Hotel
+        "mine": ("rated", 2, 2),  # Alpha 9, Foxtrot 7 (Echo's 0 is not "mine")
+        "criterion": ("criterion", 1, 5),
+        "leaving": ("criterion", 2, 1),  # Alpha
+        "criterion_new": ("criterion", 3, 1),  # Delta, first seen on the Channel today
+        "owned": ("owned", 1, 1),
+        "not_owned": ("owned", 2, 7),
     }
-    for chip, n in expected.items():
-        dash.click(f".chip[data-chip={chip}]")
-        assert count(dash) == n, chip
-        dash.click(f".chip[data-chip={chip}]")
+    for key, (group, clicks, n) in expected.items():
+        dash.click("#chips-clear")
+        cycle(dash, group, clicks)
+        assert f"chips={key}" in dash.url, key
+        assert count(dash) == n, key
+    dash.click("#chips-clear")
 
 
 def test_departed_film_is_marked_in_table(dash: Page):
@@ -180,14 +197,6 @@ def test_departed_film_is_marked_in_table(dash: Page):
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Foxtrot")
     expect(row).to_have_class(re.compile("departed"))
     expect(row.locator(".c-title")).to_contain_text("gone")
-
-
-def test_departed_chip_filters_to_departed_films(dash: Page):
-    clear_lang(dash)
-    dash.click(".chip[data-chip=departed]")
-    assert count(dash) == 1
-    assert first_titles(dash, 1) == ["Foxtrot"]
-    dash.click("#chips-clear")
 
 
 def test_sort_cycles_and_keeps_nulls_last(dash: Page):
@@ -206,10 +215,10 @@ def test_column_filters_combine_with_chips(dash: Page):
     clear_lang(dash)
     dash.fill("#f-director", "ann")
     assert count(dash) == 2  # Alpha, Echo
-    dash.click(".chip[data-chip=mine]")
+    cycle(dash, "rated", 2)  # Rated by me
     assert count(dash) == 1  # Alpha (rated 9); Echo's 0 doesn't count as mine
     assert first_titles(dash, 1) == ["Alpha"]
-    dash.click(".chip[data-chip=mine]")
+    cycle(dash, "rated")  # off
     dash.fill("#f-director", "")
     set_langs(dash, ["Spanish"])
     assert count(dash) == 1
@@ -221,13 +230,13 @@ def test_column_filters_combine_with_chips(dash: Page):
     dash.fill("#f-imdb-min", "")
     dash.fill("#f-year-max", "")
     dash.fill("#f-mc-min", "72")
-    assert count(dash) == 1  # Alpha 88; Echo 70 misses, nulls excluded
+    assert count(dash) == 2  # Alpha 88 and discovery film Golf 88 (visible now nothing is off by default); Echo 70 misses
     dash.fill("#f-mc-min", "")
 
 
 def test_url_state_round_trips(dash: Page, server: str):
     clear_lang(dash)
-    dash.click(".chip[data-chip=unrated]")
+    cycle(dash, "rated")  # Unrated by me
     dash.fill("#f-title", "a")
     dash.click("th.sortable[data-col=year]")
     url = dash.url
@@ -235,7 +244,7 @@ def test_url_state_round_trips(dash: Page, server: str):
     assert ("sort=year%3Aasc" in url) or ("sort=year:asc" in url)
     dash.goto(url)
     dash.wait_for_selector("#films tbody[data-count]")
-    expect(dash.locator(".chip[data-chip=unrated]")).to_have_class(re.compile("active"))
+    expect(dash.locator('.chip[data-group="rated"]')).to_have_text("Unrated by me")
     expect(dash.locator("#f-title")).to_have_value("a")
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
     expect(dash.locator("th.sortable[data-col=year]")).to_have_attribute("data-dir", "asc")
@@ -450,44 +459,34 @@ def acquire_server() -> Generator[str, None, None]:
 
 @pytest.fixture
 def acquire_dash(page: Page, acquire_server: str) -> Page:
-    # scope=all: none of these films are "reachable" (list membership alone doesn't count),
-    # and lang=any: none carry OMDb language metadata, so the default English filter would
-    # hide every one of them.
-    page.goto(f"{acquire_server}/?scope=all&lang=any")
+    # lang=any: none of these films carry OMDb language metadata, so the default English
+    # filter would hide every one of them. (Everything else is off by default now.)
+    page.goto(f"{acquire_server}/?lang=any")
     page.wait_for_selector("#films tbody[data-count]")
     return page
 
 
-def test_acquire_chip_shows_canon_film_with_no_subscribed_listing(acquire_dash: Page):
-    acquire_dash.click('.chip[data-chip="acquire"]')
-    assert acquire_dash.locator("tr[data-id]", has_text="Yankee").count() == 1
+def test_on_a_list_chip_keeps_only_listed_films(acquire_dash: Page):
+    # Zulu is Metacritic-only (91, no list): the retired acquire chip kept it, On a list does not.
+    acquire_dash.click('.chip[data-chip="multi_list"]')
+    assert count(acquire_dash) == 4  # Yankee, Whiskey, Xray, Victor
+    assert acquire_dash.locator("tr[data-id]", has_text="Zulu").count() == 0
+    assert acquire_dash.locator("tr[data-id]", has_text="Whiskey").count() == 1  # on Criterion now, still listed
 
 
-def test_acquire_chip_includes_film_currently_on_criterion(acquire_dash: Page):
-    acquire_dash.click('.chip[data-chip="acquire"]')
-    assert count(acquire_dash) == 5  # Yankee, Whiskey, Xray, Victor, Zulu — all unowned and canon-adjacent
-    assert acquire_dash.locator("tr[data-id]", has_text="Whiskey").count() == 1
-
-
-def test_acquire_chip_orders_by_canon_score_desc(acquire_dash: Page):
-    # Yankee/Xray have no listing anywhere, so `f.url` is None and `.c-title` renders no <a>
-    # (first_titles assumes one) — read the plain title text instead.
-    acquire_dash.click('.chip[data-chip="acquire"]')
-    titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()[:3]]
-    assert titles == ["Yankee", "Whiskey", "Xray"]  # #1/3 (10.0), #2/3 (6.67), #3/3 (3.33)
-
-
-def test_acquire_chip_tier_1_outranks_tier_2_even_with_a_lower_raw_score(acquire_dash: Page):
-    # Zulu is Metacritic-only (91, no list membership) — its raw score dwarfs Xray's
-    # canon_score (3.33), but tier 1 (on a curated list) must still sort above tier 2
-    # (Metacritic-only) per the spec: on-a-list beats Metacritic-only, full stop. Victor sits
-    # on a trust-0 list, so canon_score(Victor) == 0.0 exactly TIES canon_score(Zulu) == 0.0 —
-    # only the tier check (not a score-magnitude comparison) can break that tie correctly, so
-    # this also proves the tier check is load-bearing, not merely a shortcut a nonneg
-    # canon_score comparison would already have produced on its own.
-    acquire_dash.click('.chip[data-chip="acquire"]')
+def test_on_a_list_chip_orders_by_canon_score_desc(acquire_dash: Page):
+    # The canon-score sort the acquire chip carried now rides on On a list. Yankee/Xray have no
+    # listing anywhere, so `.c-title` renders no <a> — read the plain title text.
+    acquire_dash.click('.chip[data-chip="multi_list"]')
     titles = [t.split(" ")[0] for t in acquire_dash.locator("#films tbody tr .c-title").all_inner_texts()]
-    assert titles == ["Yankee", "Whiskey", "Xray", "Victor", "Zulu"]
+    assert titles == ["Yankee", "Whiskey", "Xray", "Victor"]  # 10.0, 6.67, 3.33, then trust-0 Victor at 0.0
+
+
+def test_on_a_list_plus_not_owned_is_the_old_acquisition_shortlist(acquire_dash: Page):
+    acquire_dash.click('.chip[data-chip="multi_list"]')
+    cycle(acquire_dash, "owned", 2)  # Not owned
+    assert count(acquire_dash) == 4  # none of the four is owned
+    assert "chips=multi_list%2Cnot_owned" in acquire_dash.url or "chips=multi_list,not_owned" in acquire_dash.url
 
 
 def test_drawer_shows_also_streaming(dash):
@@ -567,10 +566,13 @@ def test_empty_db_shows_import_hint(empty_dash: Page):
     expect(empty_dash.locator("tr.empty-state")).to_be_visible()
 
 
-def test_new_arrivals_chip_filters_to_alpha(dash):
-    dash.click('button[data-chip="new_arrivals"]')
+def test_criterion_new_chip_filters_to_the_channels_arrivals(dash):
+    # Alpha arrived on HBO Max (a subscribed service) today — that is NOT Criterion-new. Delta
+    # is the one film whose Criterion listing first appeared today.
+    clear_lang(dash)  # Delta has no language on file
+    cycle(dash, "criterion", 3)  # Criterion new
     dash.wait_for_selector('#films tbody[data-count="1"]')
-    assert dash.locator("#films tbody tr").first.inner_text().startswith("Alpha")
+    assert dash.locator("#films tbody tr").first.inner_text().startswith("Delta")
 
 
 def test_watchlist_chip_filters_to_bravo(dash):
@@ -662,38 +664,38 @@ def test_drawer_shows_tied_rank_label_not_position(dash):
     expect(dash.locator("#drawer-body")).not_to_contain_text("Sight & Sound 2022 #1")
 
 
-def test_default_scope_is_reachable_hides_unreachable_discovery(dash):
+def test_everything_is_off_by_default_so_discovery_shows(dash):
     clear_lang(dash)  # Hotel is Hungarian
-    assert dash.locator("tr[data-id]", has_text="Golf").count() == 0  # no listing, unowned, unrated
+    assert dash.locator("tr[data-id]", has_text="Golf").count() == 1  # no listing anywhere, yet visible
+    assert dash.locator("tr[data-id]", has_text="Hotel").count() == 1
+    assert "chips=" not in dash.url
+
+
+def test_reachable_chip_is_the_market_test(dash):
+    clear_lang(dash)  # Hotel is Hungarian
+    cycle(dash, "reach")  # Reachable ✓
     assert dash.locator("tr[data-id]", has_text="Hotel").count() == 1  # buyable on the Apple TV store
-    expect(dash.locator("#scope-toggle")).to_have_text("Reachable")
+    assert dash.locator("tr[data-id]", has_text="Golf").count() == 0  # nothing to stream, nothing to buy
+    assert dash.locator("tr[data-id]", has_text="Foxtrot").count() == 0  # departed, rated — a rating is not a listing
+    cycle(dash, "reach")  # Not reachable
+    assert sorted(t.split()[0] for t in dash.locator("#films tbody tr").all_inner_texts()) == ["Foxtrot", "Golf"]
+    cycle(dash, "reach")  # off
+    assert count(dash) == 8
 
 
-def test_criterion_scope_hides_buyable_discovery(page, server):
+def test_legacy_scope_criterion_url_maps_onto_the_criterion_chip(page, server):
     page.goto(f"{server}/?scope=criterion&lang=any")
     page.wait_for_selector("#films tbody[data-count]")
     assert page.locator("tr[data-id]", has_text="Hotel").count() == 0
-    expect(page.locator("#scope-toggle")).to_have_text("Criterion only")
+    expect(page.locator('.chip[data-group="criterion"]')).to_have_text("Criterion ✓")
+    assert "chips=criterion" in page.url and "scope=" not in page.url
 
 
-def test_all_scope_reveals_discovery(page, server):
+def test_legacy_scope_all_url_is_just_the_default(page, server):
     page.goto(f"{server}/?scope=all&lang=any")
     page.wait_for_selector("#films tbody[data-count]")
     assert page.locator("tr[data-id]", has_text="Golf").count() == 1
-    expect(page.locator("#scope-toggle")).to_have_text("All films")
-
-
-def test_scope_toggle_cycles_reachable_criterion_all(dash):
-    toggle = dash.locator("#scope-toggle")
-    toggle.click()
-    expect(toggle).to_have_text("Criterion only")
-    assert "scope=criterion" in dash.url
-    toggle.click()
-    expect(toggle).to_have_text("All films")
-    assert "scope=all" in dash.url
-    toggle.click()
-    expect(toggle).to_have_text("Reachable")
-    assert "scope=" not in dash.url
+    assert "scope=" not in page.url
 
 
 def test_drawer_shows_buy_on_and_cheapcharts_link(dash):
@@ -729,7 +731,7 @@ def test_drawer_star_toggles_watchlist(dash):
 def test_owned_badge_and_chip(dash):
     row = dash.locator("tr[data-id]", has_text="Alpha")
     assert row.locator(".badge-owned").count() == 1
-    dash.click('[data-chip="owned"]')
+    cycle(dash, "owned")  # Owned ✓
     dash.wait_for_selector("#films tbody[data-count='1']")
     assert dash.locator("tr[data-id]").count() == 1
 
@@ -742,25 +744,14 @@ def test_drawer_shows_owned_link(dash):
 
 
 def test_not_owned_chip_hides_owned_films(dash: Page):
-    dash.click('[data-chip="not_owned"]')
+    cycle(dash, "owned", 2)  # Not owned
     dash.wait_for_selector("#films tbody[data-count]")
     assert dash.locator("tr[data-id]", has_text="Alpha").count() == 0  # Alpha is the owned seed
-    dash.click('[data-chip="not_owned"]')
-
-
-def test_suspect_chip_sorts_by_score_desc(dash: Page):
-    # Bravo (score 4: imdb-id 3 + year 1) outranks Echo (score 2: omdb-title) — even though
-    # under the old metacritic/rt/imdb hierarchy Echo (rt 60) would sort before Bravo (rt 50).
-    clear_lang(dash)
-    dash.click(".chip[data-chip=suspect]")
-    assert first_titles(dash, 2) == ["Bravo", "Echo"]
-    dash.click(".chip[data-chip=suspect]")
+    cycle(dash, "owned")  # off
 
 
 def test_drawer_shows_audit_reasons_and_records_a_verdict(dash: Page):
     clear_lang(dash)
-    dash.click(".chip[data-chip=suspect]")
-    assert count(dash) == 2  # Bravo, Echo
     dash.locator("#films tbody tr[data-id]").filter(has_text="Echo").click()
     block = dash.locator(".audit-block")
     expect(block.locator("li[data-code=omdb-title]")).to_contain_text("Bravo Two")
@@ -768,9 +759,8 @@ def test_drawer_shows_audit_reasons_and_records_a_verdict(dash: Page):
     block.locator("input.verdict-note").fill("wrong record")
     block.locator("button.verdict-btn[data-verdict=omdb-wrong]").click()
     expect(block.locator(".audit-verdict")).to_contain_text("omdb-wrong")
-    assert count(dash) == 2  # a non-fine verdict keeps the film a suspect
     block.locator("button.verdict-btn[data-verdict=fine]").click()
-    expect(dash.locator("#films tbody")).to_have_attribute("data-count", "1")  # fine hides Echo; Bravo remains
+    expect(block.locator(".audit-verdict")).to_contain_text("fine")  # the verdict round-trips; no chip hides the film any more
 
 
 def test_list_picker_offers_every_seeded_list_by_trust(dash):
@@ -798,10 +788,13 @@ def test_list_picker_filters_to_the_list_and_orders_by_printed_rank(dash):
     assert [r.split()[0] for r in rows] == ["Charlie", "Alpha"]
 
 
-def test_list_picker_switches_scope_to_all(dash):
-    # A list must be reproduced whole, so picking one widens the scope past `reachable`.
+def test_list_picker_turns_the_reachable_chip_off(dash):
+    # A list must be reproduced whole, so picking one releases the reachable filter.
+    cycle(dash, "reach")
+    expect(dash.locator('.chip[data-group="reach"]')).to_have_text("Reachable ✓")
     dash.select_option("#list-picker", "cahiers-100")
-    expect(dash.locator("#scope-toggle")).to_have_text("All films")
+    expect(dash.locator('.chip[data-group="reach"]')).to_have_text("Reachable")
+    assert "reachable" not in dash.url
 
 
 def test_list_picker_is_encoded_in_the_url(dash):
@@ -886,9 +879,9 @@ def test_chips_keep_working_mid_search(dash: Page):
     clear_lang(dash)
     _search(dash, "director: hawks")
     assert count(dash) == 2   # Alpha and Bravo
-    dash.click(".chip[data-chip=owned]")
+    cycle(dash, "owned")  # Owned ✓
     assert count(dash) == 1   # only Alpha is owned
-    dash.click(".chip[data-chip=owned]")
+    cycle(dash, "owned", 2)  # Not owned, then off
     assert count(dash) == 2
 
 

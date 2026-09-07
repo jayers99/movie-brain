@@ -660,7 +660,7 @@ def test_views_carry_new_on_and_watchlisted(repo, today):
     from datetime import timedelta
 
     films = [Film("Alpha", 1950, "Ann", "https://c/alpha")]
-    repo.record_catalog("criterion", films, today - timedelta(days=30))  # insert event, outside window
+    repo.record_catalog("criterion", films, today - timedelta(days=45))  # insert event, outside the 30-day window
     fid = repo.film_id_by_key("alpha (1950)")
     repo.toggle_watchlist(fid, today)
     repo.record_listing_with_transition(fid, "max", "https://tmdb/w/1", today - timedelta(days=3))
@@ -678,7 +678,7 @@ def test_new_on_ignores_an_unsubscribed_service(repo, today):
     and each one's first listing write fires a transition, which would swamp the chip."""
     from datetime import timedelta
 
-    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha")], today - timedelta(days=30))
+    repo.record_catalog("criterion", [Film("Alpha", 1950, "Ann", "https://c/alpha")], today - timedelta(days=45))
     fid = repo.film_id_by_key("alpha (1950)")
     repo.record_listing_with_transition(fid, "mubi", "https://tmdb/w/1", today - timedelta(days=3))
     repo.record_listing_with_transition(fid, "max", "https://tmdb/w/2", today - timedelta(days=3))
