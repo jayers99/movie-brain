@@ -5,8 +5,10 @@ from datetime import date
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
+from movie_brain.application.embed import embed_films
 from movie_brain.application.search import run_search
 from movie_brain.domain.models import CastRow, CrewRow, Film, OmdbRating, TmdbCredits
+from movie_brain.infrastructure.embeddings import VectorIndex
 
 scenarios("../features/search.feature")
 
@@ -41,6 +43,7 @@ def corpus(repo, films):
     repo.write_credits(a, _credits(910, "Alpha", "A private eye.", ("film noir",),
                                    (CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),),
                                    (CrewRow(2636, "Howard Hawks", "Director", "Directing"),)), DAY)
+    repo.upsert_omdb(b, OmdbRating(6.0, 50, True, "English", '{"Genre": "Drama", "Plot": "Alpha shift."}'), DAY)
     repo.write_credits(b, _credits(911, "Beta", "A nurse in the alpha ward.", ("hospital",),
                                    (CastRow(77, "Jane Bogart", "Nurse", 0),),
                                    (CrewRow(2636, "Howard Hawks", "Director", "Directing"),)), DAY)
@@ -60,6 +63,22 @@ def no_credits(repo, films):
 @when(parsers.parse('I search for "{text}"'))
 def search(repo, result, text):
     result["r"] = run_search(repo, text.replace('\\"', '"'))
+
+
+@given("the corpus is embedded by meaning")
+def embedded(repo, fake_embedder):
+    embed_films(repo, fake_embedder, DAY, apply=True, log=lambda _m: None)
+    fake_embedder.asked.clear()
+
+
+@when(parsers.parse('I search by meaning for "{text}"'))
+def search_semantic(repo, result, fake_embedder, text):
+    result["r"] = run_search(repo, text.replace('\\"', '"'), index=VectorIndex(repo, fake_embedder))
+
+
+@then("the model was asked nothing")
+def model_idle(fake_embedder):
+    assert fake_embedder.asked == []
 
 
 @then(parsers.parse("the result ids are {names}"))

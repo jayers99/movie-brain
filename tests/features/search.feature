@@ -87,3 +87,52 @@ Feature: Resolving a search into an exact film-id set
     When I search for "private eye actor: bacalllzz"
     Then the result is empty
     And the hints do not include "no film matches all 2 words — try fewer, or quote a phrase"
+
+  Scenario: Meaning supplies candidates when nothing matches by string
+    Given the corpus is embedded by meaning
+    When I search by meaning for "gumshoe sleuth"
+    Then the result ids are Alpha
+    And the result is ranked
+    And the hints include "no exact match — showing the 1 closest by meaning"
+
+  Scenario: Meaning-supplied candidates are ordered by distance
+    Given the corpus is embedded by meaning
+    When I search by meaning for "gumshoe caregiver"
+    Then the result ids are Alpha then Beta
+    And the hints include "no exact match — showing the 2 closest by meaning"
+
+  Scenario: A field still filters a meaning-supplied result over the whole catalogue
+    Given the corpus is embedded by meaning
+    When I search by meaning for "gumshoe caregiver actor: jane bogart"
+    Then the result ids are Beta
+    And the hints include "no exact match — showing the 1 closest by meaning"
+
+  Scenario: A field that excludes every near film leaves the result empty, not widened
+    Given the corpus is embedded by meaning
+    When I search by meaning for "gumshoe sleuth actor: jane bogart"
+    Then the result is empty
+    And the hints do not include "no exact match — showing the 1 closest by meaning"
+
+  Scenario: A title hit stays first when meaning re-ranks a lexical result
+    Given the corpus is embedded by meaning
+    When I search by meaning for "alpha"
+    Then the result ids are Alpha then Beta
+    And the result is ranked
+    And the hints do not include "no exact match — showing the 2 closest by meaning"
+
+  Scenario: Fields alone are never sent to the model
+    Given the corpus is embedded by meaning
+    When I search by meaning for "actor: humphrey bogart"
+    Then the result ids are Alpha
+    And the result is not ranked
+    And the model was asked nothing
+
+  Scenario: Without the extra, an empty freeform result says what the bar could have done
+    When I search for "gumshoe sleuth"
+    Then the result is empty
+    And the hints include "semantic search is not installed — uv sync --extra semantic"
+
+  Scenario: The install hint is not shown when a field emptied the result
+    When I search for "actor: bacalllzz"
+    Then the result is empty
+    And the hints do not include "semantic search is not installed — uv sync --extra semantic"

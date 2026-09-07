@@ -1,10 +1,13 @@
-"""Turn a typed query into an exact film-id set — the three stages of spec §8.
+"""Turn a typed query into an exact film-id set — the four stages of spec §8.
 
 1. Parse (pure, `domain/search.py`). 2. Resolve every fuzzy field to exact values through the
 repository's candidate queries: exact match first; else the trigram candidates ranked by
 `similarity`, the top one used when it clears CORRECTION_FLOOR and always reported in
 `corrections`; below that floor nothing is used and the nearest names are `suggestions`
 (spec D7, D8). A quoted value is exact and skips correction. 3. `search_films` filters and ranks.
+4. Semantic (optional, spec D16, D17): when a `VectorIndex` is supplied and the query has
+freeform text, meaning either re-ranks a non-empty lexical result as one more summed signal, or
+supplies candidates when the lexical result is empty.
 
 Resolution never touches SQL; it asks the repository for candidates and decides in Python,
 because the FTS trigram index is a candidate generator, not a ranker (Plan A's finding).
@@ -18,7 +21,9 @@ from dataclasses import asdict, dataclass
 from movie_brain.domain.search import (
     CORRECTION_FLOOR,
     FIELDS,
+    MAX_DISTANCE,
     MAX_SUGGESTIONS,
+    SEMANTIC_WEIGHT,
     SUGGESTION_FLOOR,
     Candidate,
     Filter,
@@ -30,8 +35,11 @@ from movie_brain.domain.search import (
     trigram_query,
 )
 from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.embeddings import SemanticUnavailable, VectorIndex
 
 NO_CREDITS_HINT = "no credits loaded — run `movie-brain enrich credits --apply`"
+SEMANTIC_HINT = "no exact match — showing the {n} closest by meaning"
+NO_SEMANTIC_HINT = "semantic search is not installed — uv sync --extra semantic"
 
 
 @dataclass(frozen=True)
@@ -125,7 +133,7 @@ class _Resolver:
         self.filters.append(Filter("text", values=(term.value,)))
 
 
-def run_search(repo: Repository, text: str) -> SearchResult:
+def run_search(repo: Repository, text: str, index: VectorIndex | None = None) -> SearchResult:
     parsed = parse_query(text)
     hints = list(parsed.hints)
     resolver = _Resolver(repo)
@@ -151,17 +159,57 @@ def run_search(repo: Repository, text: str) -> SearchResult:
     if people_asked and repo.credits_summary()["films_with_credits"] == 0:
         hints.append(NO_CREDITS_HINT)
     hints.extend(resolver.hints)
+    free = parsed.free.strip()
     ids = repo.search_films(resolver.filters, parsed.free)
+    if free and index is not None:
+        ids, semantic_hint = _semantic_stage(repo, index, free, ids, resolver.filters)
+        if semantic_hint:
+            hints.append(semantic_hint)
+    elif free and index is None and not ids and not parsed.terms:
+        hints.append(NO_SEMANTIC_HINT)
     # Only when the freeform words stood alone: a field term that emptied the result is
     # its own explanation (a correction, a suggestion or a too-short hint), and blaming the
     # words would send the user to fix the wrong thing.
-    if not ids and not parsed.terms and len(parsed.free.split()) >= 2:
-        n = len(parsed.free.split())
+    if not ids and not parsed.terms and len(free.split()) >= 2:
+        n = len(free.split())
         hints.append(f"no film matches all {n} words — try fewer, or quote a phrase")
     return SearchResult(
         ids=tuple(i for i, _ in ids),
-        ranked=bool(parsed.free.strip()) and bool(ids),
+        ranked=bool(free) and bool(ids),
         corrections=tuple(resolver.corrections),
         suggestions=tuple(resolver.suggestions),
         hints=tuple(hints),
     )
+
+
+def _semantic_stage(
+    repo: Repository,
+    index: VectorIndex,
+    free: str,
+    ids: list[tuple[int, float]],
+    filters: list[Filter],
+) -> tuple[list[tuple[int, float]], str | None]:
+    """Stage 4 (spec D16, D17). Re-rank mode when the lexical set has members: semantic is one
+    more SUMMED signal, never a replacement order, so a title hit stays first. Supply mode when
+    it is empty: the films within MAX_DISTANCE, intersected with the exact set every field
+    filter produces over the whole catalogue (parent D6), ordered by distance, and said so in
+    the hint. A model that cannot load leaves the lexical result untouched."""
+    try:
+        query = index.embed_query(free)
+    except SemanticUnavailable:
+        return ids, None
+    if ids:
+        dist = index.distances(query, [i for i, _ in ids])
+        rescored = [
+            (i, s + (SEMANTIC_WEIGHT * (1.0 - dist[i]) if i in dist and dist[i] <= MAX_DISTANCE else 0.0))
+            for i, s in ids
+        ]
+        rescored.sort(key=lambda t: -t[1])  # stable: ties keep search_films' title order
+        return rescored, None
+    near = index.nearest(query, MAX_DISTANCE)
+    if near and filters:
+        allowed = {i for i, _ in repo.search_films(filters, "")}
+        near = [(i, d) for i, d in near if i in allowed]
+    if not near:
+        return [], None
+    return [(i, 1.0 - d) for i, d in near], SEMANTIC_HINT.format(n=len(near))
