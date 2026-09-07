@@ -78,12 +78,13 @@ def test_single_chip(chip, yes, no):
     assert not matches(no, [chip], TODAY)
 
 
-def test_reachable_is_about_the_market_not_the_shelf():
-    """Owned, rated and watchlisted films are NOT reachable by themselves: reachable means
-    there is somewhere to watch or buy it today. An unsubscribed service still counts."""
-    shelf = view(criterion=False, services=[], owned=True, my_rating=9, watchlisted=True)
-    assert reachable(shelf) is False
-    assert matches(shelf, ["unreachable"], TODAY)
+def test_reachable_counts_owned_but_not_a_judgement():
+    """Owned IS watchable (and proof of an Apple store presence TMDB missed); rated and
+    watchlisted are judgements, not ways to watch. An unsubscribed service still counts."""
+    assert reachable(view(criterion=False, services=[], owned=True)) is True
+    judged = view(criterion=False, services=[], owned=False, my_rating=9, watchlisted=True)
+    assert reachable(judged) is False
+    assert matches(judged, ["unreachable"], TODAY)
     assert reachable(view(criterion=False, services=[SVOD])) is True
 
 

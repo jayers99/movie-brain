@@ -1783,49 +1783,59 @@ class Repository:
             return False if row is None else bool(row["found"])
 
     def record_tmdb_providers(self, film_id: int, checked: date, payload: str) -> None:
+        """A film we fetched providers for BY ITS TMDB ID is found by definition: the upsert
+        creates the `tmdb` row if keying never did, and flips the legacy title-matcher's
+        `found = 0` so `films_tmdb_missed` stops listing a keyed film as a miss."""
         with self._conn() as c:
             c.execute(
-                "UPDATE tmdb SET providers_checked_at = ?, payload = ? WHERE film_id = ?",
-                (checked.isoformat(), payload, film_id),
+                "INSERT INTO tmdb (film_id, found, looked_up, providers_checked_at, payload) VALUES (?, 1, ?, ?, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET found = 1, providers_checked_at = excluded.providers_checked_at, "
+                "payload = excluded.payload",
+                (film_id, checked.isoformat(), checked.isoformat(), payload),
             )
 
     def films_for_watchlist_refresh(self) -> list[tuple[int, str, bool]]:
         with self._conn() as c:
             rows = c.execute(
-                "SELECT t.film_id, x.value, (t.providers_checked_at IS NULL) AS first_check FROM tmdb t "
-                "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
-                "JOIN watchlist w ON w.film_id = t.film_id "
-                "WHERE t.found = 1 "
-                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = t.film_id) "
-                "ORDER BY t.film_id"
+                "SELECT x.film_id, x.value, (t.providers_checked_at IS NULL) AS first_check FROM external_ids x "
+                "LEFT JOIN tmdb t ON t.film_id = x.film_id "
+                "JOIN watchlist w ON w.film_id = x.film_id "
+                "WHERE x.authority = 'tmdb' "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = x.film_id) "
+                "ORDER BY x.film_id"
             ).fetchall()
             return [(int(r["film_id"]), str(r["value"]), bool(r["first_check"])) for r in rows]
 
     def films_for_first_check(self, limit: int) -> list[tuple[int, str, bool]]:
-        """Matched films whose providers have never been checked (first_check is always True)."""
+        """Keyed films whose providers have never been checked (first_check is always True)."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT t.film_id, x.value FROM tmdb t "
-                "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
-                "WHERE t.found = 1 AND t.providers_checked_at IS NULL "
-                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = t.film_id) "
-                "ORDER BY t.film_id LIMIT ?",
+                "SELECT x.film_id, x.value FROM external_ids x "
+                "LEFT JOIN tmdb t ON t.film_id = x.film_id "
+                "WHERE x.authority = 'tmdb' AND t.providers_checked_at IS NULL "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = x.film_id) "
+                "ORDER BY x.film_id LIMIT ?",
                 (limit,),
             ).fetchall()
             return [(int(r["film_id"]), str(r["value"]), True) for r in rows]
 
     def films_for_provider_refresh(self, skip_checked_on: date | None = None) -> list[tuple[int, str, bool]]:
+        """Every live film keyed to a TMDB id, stalest first. The film's TMDB id (external_ids) is
+        the identity; `tmdb.found` is the legacy title-matcher's verdict and must NOT gate this —
+        nine films the resolver keyed AFTER the matcher had marked them not-found (Blade Runner,
+        American Psycho, Ghost in the Shell…) sat outside the refresh for two weeks with no
+        listings at all, reading as unreachable (2026-09-07)."""
         where = "" if skip_checked_on is None else "AND COALESCE(t.providers_checked_at, '') != ? "
         params: tuple[object, ...] = () if skip_checked_on is None else (skip_checked_on.isoformat(),)
         with self._conn() as c:
             rows = c.execute(
-                "SELECT t.film_id, x.value, (t.providers_checked_at IS NULL) AS first_check FROM tmdb t "
-                "JOIN external_ids x ON x.film_id = t.film_id AND x.authority = 'tmdb' "
-                "WHERE t.found = 1 "
-                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = t.film_id) "
+                "SELECT x.film_id, x.value, (t.providers_checked_at IS NULL) AS first_check FROM external_ids x "
+                "LEFT JOIN tmdb t ON t.film_id = x.film_id "
+                "WHERE x.authority = 'tmdb' "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = x.film_id) "
                 + where
                 + "ORDER BY (t.providers_checked_at IS NOT NULL), "
-                "t.providers_checked_at, t.film_id",
+                "t.providers_checked_at, x.film_id",
                 params,
             ).fetchall()
             return [(int(r["film_id"]), str(r["value"]), bool(r["first_check"])) for r in rows]

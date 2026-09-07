@@ -34,11 +34,12 @@
     const e = (f.lists || []).find((l) => l.slug === state.list);
     return e && e.ordered ? printedRank(e) : null;
   };
-  // reachable = somewhere to watch or buy it today: a current Criterion listing, or ANY current
-  // listing on a streaming service (subscribed or not) or the Apple store. Owned, rated and
-  // watchlisted films are not reachable by themselves — reachability is about the market, not
-  // the shelf. Mirrors domain/filters.py::reachable; the header count and the chip share it.
-  const reachable = (f) => (f.criterion && !f.departed) || (f.services || []).length > 0;
+  // reachable = somewhere to watch it today: a current Criterion listing, ANY current listing on
+  // a streaming service (subscribed or not) or the Apple store — or the film is owned (it IS
+  // watchable, and ownership on Apple is proof of a store presence TMDB's US data missed). Rated
+  // and watchlisted do not count. Mirrors domain/filters.py::reachable; the header count and the
+  // chip share it.
+  const reachable = (f) => (f.criterion && !f.departed) || (f.services || []).length > 0 || f.owned;
   // Mirrors domain/filters.py::_PREDICATES — keep the two in lockstep. Keys are what `chips=`
   // encodes in the URL; a cycle chip's keys are mutually exclusive in the UI only.
   const CHIP_PREDICATES = {

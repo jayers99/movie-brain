@@ -521,6 +521,26 @@ class TestTmdbPrimitives:
             (trio, "11", False),
         ]  # NULL checked_at first
 
+    def test_provider_refresh_follows_the_tmdb_id_not_the_legacy_found_flag(self, repo):
+        """The title matcher marked a film not-found; the resolver later keyed it. The key is the
+        identity, so the refresh must visit it — or it never gets a listing and reads as unreachable."""
+        trio, quartet = self.seed_two(repo)
+        repo.upsert_tmdb(trio, found=False, looked_up=date(2026, 8, 24))
+        repo.set_external_id(trio, "tmdb", "1359", date(2026, 9, 7))
+        repo.set_external_id(quartet, "tmdb", "22", date(2026, 9, 7))  # keyed, no tmdb row at all
+        assert repo.films_for_provider_refresh() == [(trio, "1359", True), (quartet, "22", True)]
+        assert repo.films_for_first_check(10) == [(trio, "1359", True), (quartet, "22", True)]
+
+    def test_recording_providers_marks_a_keyed_film_found(self, repo):
+        trio, quartet = self.seed_two(repo)
+        repo.upsert_tmdb(trio, found=False, looked_up=date(2026, 8, 24))  # the old matcher's verdict
+        repo.set_external_id(trio, "tmdb", "1359", date(2026, 9, 7))
+        repo.set_external_id(quartet, "tmdb", "22", date(2026, 9, 7))  # keyed, no tmdb row at all
+        repo.record_tmdb_providers(trio, date(2026, 9, 7), "{}")
+        repo.record_tmdb_providers(quartet, date(2026, 9, 7), "{}")
+        assert repo.films_tmdb_missed() == []  # neither is a miss any more
+        assert repo.films_for_first_check(10) == []  # both checked
+
     def test_missed_films_and_provider_map(self, repo):
         trio, _ = self.seed_two(repo)
         repo.upsert_tmdb(trio, found=False, looked_up=date(2026, 8, 19))
