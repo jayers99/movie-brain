@@ -152,7 +152,10 @@ def run_search(repo: Repository, text: str) -> SearchResult:
         hints.append(NO_CREDITS_HINT)
     hints.extend(resolver.hints)
     ids = repo.search_films(resolver.filters, parsed.free)
-    if not ids and len(parsed.free.split()) >= 2:
+    # Only when the freeform words stood alone: a field term that emptied the result is
+    # its own explanation (a correction, a suggestion or a too-short hint), and blaming the
+    # words would send the user to fix the wrong thing.
+    if not ids and not parsed.terms and len(parsed.free.split()) >= 2:
         n = len(parsed.free.split())
         hints.append(f"no film matches all {n} words — try fewer, or quote a phrase")
     return SearchResult(

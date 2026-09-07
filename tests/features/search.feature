@@ -82,3 +82,8 @@ Feature: Resolving a search into an exact film-id set
     When I search for "purple elephant parade"
     Then the result is empty
     And the hints include "no film matches all 3 words — try fewer, or quote a phrase"
+
+  Scenario: A field that emptied the result is not blamed on the freeform words
+    When I search for "private eye actor: bacalllzz"
+    Then the result is empty
+    And the hints do not include "no film matches all 2 words — try fewer, or quote a phrase"

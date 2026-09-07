@@ -106,3 +106,8 @@ def suggestion(result, field, name):
 @then(parsers.parse('the hints include "{hint}"'))
 def hint(result, hint):
     assert hint in result["r"].hints, result["r"].hints
+
+
+@then(parsers.parse('the hints do not include "{hint}"'))
+def no_hint(result, hint):
+    assert hint not in result["r"].hints, result["r"].hints
