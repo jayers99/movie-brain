@@ -2272,3 +2272,40 @@ def test_register_provider_never_touches_a_search_url(repo):
     repo.set_service_search_url("mubi", "https://mubi.com/search?q={title}")
     assert repo.register_provider(11, "MUBI") == "mubi"
     assert repo.movie_service("mubi").search_url == "https://mubi.com/search?q={title}"
+
+
+def test_best_source_url_fills_the_registry_template(repo, film_with_two_listings):
+    repo.set_service_subscribed("max", True)
+    repo.set_service_subscribed("mubi", False)
+    repo.set_service_search_url("max", "https://play.max.com/search?q={title}")
+    assert repo.get_view(film_with_two_listings).best_source["url"] == "https://play.max.com/search?q=Two%20Listings"
+
+
+def test_best_source_url_falls_back_to_the_listing_url(repo, film_with_two_listings):
+    repo.set_service_subscribed("max", True)
+    repo.set_service_subscribed("mubi", False)
+    assert repo.get_view(film_with_two_listings).best_source["url"] == "https://tmdb/w/max"
+
+
+def test_criterion_best_source_lands_on_the_channel_page(repo, criterion_film):
+    """Criterion is re-joined at the ranking site (watch.md); its landing page is the film's own
+    listing URL from _VIEW_SQL, not a template."""
+    assert repo.get_view(criterion_film).best_source["url"] == "https://c/criterion-film"
+
+
+def test_owned_best_source_url_follows_the_store_template(repo, film_with_two_listings):
+    repo.mark_owned(film_with_two_listings, date(2026, 8, 29))
+    assert repo.get_view(film_with_two_listings).best_source["url"] is None
+    repo.set_service_search_url("apple-tv-store", "https://tv.apple.com/search?term={title}")
+    assert repo.get_view(film_with_two_listings).best_source["url"] == "https://tv.apple.com/search?term=Two%20Listings"
+
+
+def test_services_entries_never_carry_urls(repo, film_with_two_listings):
+    """Spec D10: 14,717 listings × a URL would put ~1 MB on the list payload."""
+    view = repo.get_view(film_with_two_listings)
+    assert view.services
+    assert all(set(s) == {"name", "subscribed", "kind", "quality", "has_apple_app"} for s in view.services)
+    assert set(view.best_source) == {"name", "subscribed", "kind", "quality", "has_apple_app", "url"}
+    listed = next(v for v in repo.list_views("criterion") if v.id == film_with_two_listings)
+    assert all(set(s) == {"name", "subscribed", "kind", "quality", "has_apple_app"} for s in listed.services)
+    assert listed.best_source["url"] == view.best_source["url"]

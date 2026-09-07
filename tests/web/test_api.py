@@ -31,6 +31,20 @@ def test_film_json_carries_best_source(client):
     assert "best_source" in films[0]
 
 
+def test_list_payload_carries_the_watch_url_only_on_best_source(client, repo):
+    trio = repo.film_id_by_key("trio (1950)")
+    repo.record_listing(trio, "max", "https://tmdb/w/trio", D)
+    repo.set_service_search_url("max", "https://play.max.com/search?q={title}")
+    # Trio also carries a live Criterion listing; unsubscribe it so Max (subscribed by
+    # default) wins the ranking outright rather than tying and taking it on the
+    # "Criterion Channel" < "HBO Max" name tiebreak — a ranking question watch.md already
+    # settles and this test isn't about.
+    repo.set_service_subscribed("criterion", False)
+    films = {x["title"]: x for x in client.get("/api/films").get_json()}
+    assert films["Trio"]["best_source"]["url"] == "https://play.max.com/search?q=Trio"
+    assert all("listing_url" not in s and "search_url" not in s for s in films["Trio"]["services"])
+
+
 def test_list_films(client):
     r = client.get("/api/films")
     assert r.status_code == 200

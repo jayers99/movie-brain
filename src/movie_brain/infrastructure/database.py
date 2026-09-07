@@ -49,7 +49,7 @@ from movie_brain.domain.search import (
     trigram_query,
 )
 from movie_brain.domain.thumbprint import edition_label, title_norm
-from movie_brain.domain.watch import best_source
+from movie_brain.domain.watch import best_source, watch_url
 from movie_brain.infrastructure.cheapcharts import product_url
 
 MISS_RETRY_DAYS = 30
@@ -311,7 +311,8 @@ LEFT JOIN metacritic mc ON mc.slug = x.value
 
 
 _SERVICES_SQL = f"""
-SELECT l.film_id, s.name, s.subscribed, s.kind, s.quality, s.has_apple_app FROM listings l
+SELECT l.film_id, s.name, s.subscribed, s.kind, s.quality, s.has_apple_app, s.search_url, l.url AS listing_url
+FROM listings l
 JOIN movie_service s ON s.slug = l.source
 WHERE l.source != 'criterion'
   AND l.last_seen >= COALESCE(
@@ -319,6 +320,16 @@ WHERE l.source != 'criterion'
       (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = l.source))
 ORDER BY l.film_id, s.subscribed DESC, s.quality DESC, s.has_apple_app DESC, s.name
 """
+
+# `search_url` and `listing_url` ride on an option ONLY so the ranking can build the watch
+# link; `_row_to_view` strips them from FilmView.services (drawer-redesign spec D10 — 14,717
+# listings × a URL would put ~1 MB on the list payload) and keeps the resolved `url` on
+# best_source alone.
+_PRIVATE_OPTION_KEYS = frozenset({"search_url", "listing_url"})
+
+
+def _public_option(option: dict[str, object]) -> dict[str, object]:
+    return {k: v for k, v in option.items() if k not in _PRIVATE_OPTION_KEYS}
 
 
 def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
@@ -331,6 +342,8 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
                 "kind": str(r["kind"]),
                 "quality": int(r["quality"]),
                 "has_apple_app": bool(r["has_apple_app"]),
+                "search_url": r["search_url"],
+                "listing_url": str(r["listing_url"]),
             }
         )
     return out
@@ -355,6 +368,8 @@ def _service_option(c: sqlite3.Connection, slug: str) -> dict[str, object] | Non
         "kind": str(row["kind"]),
         "quality": int(row["quality"]),
         "has_apple_app": bool(row["has_apple_app"]),
+        "search_url": row["search_url"],
+        "listing_url": None,
     }
 
 
@@ -528,7 +543,14 @@ def _row_to_view(
         audit=audit[0],
         verdict=audit[1],
     )
-    return replace(view, best_source=best_source(view, criterion_option, store_option))
+    # The Criterion option's landing page is this film's own listing URL (the LEFT JOIN in
+    # _VIEW_SQL); a fresh dict per film, never a mutation of the option shared across the build.
+    if criterion_option is not None:
+        criterion_option = {**criterion_option, "listing_url": row["url"]}
+    winner = best_source(view, criterion_option, store_option)
+    if winner is not None:
+        winner = {**_public_option(winner), "url": watch_url(winner, view.title)}
+    return replace(view, services=[_public_option(s) for s in view.services], best_source=winner)
 
 
 class Repository:
