@@ -880,3 +880,27 @@ def test_status_reports_credit_coverage(config_dir):
     r = runner.invoke(app, ["status"])
     assert r.exit_code == 0
     assert "credits" in r.output
+
+
+def test_embed_dry_run_needs_no_extra_and_writes_nothing(config_dir, monkeypatch):
+    monkeypatch.setattr("movie_brain.cli.SentenceTransformerEmbedder.available", staticmethod(lambda: False))
+    r = runner.invoke(app, ["embed"])
+    assert r.exit_code == 0, r.output
+    assert "dry run" in r.output
+
+
+def test_embed_apply_without_the_extra_exits_2_with_the_install_line(config_dir, monkeypatch):
+    monkeypatch.setattr("movie_brain.cli.SentenceTransformerEmbedder.available", staticmethod(lambda: False))
+    r = runner.invoke(app, ["embed", "--apply"])
+    assert r.exit_code == 2
+    assert "uv sync --extra semantic" in r.output
+
+
+def test_embed_apply_reports_counts(config_dir, monkeypatch):
+    from movie_brain.application.embed import EmbedReport
+
+    monkeypatch.setattr("movie_brain.cli.SentenceTransformerEmbedder.available", staticmethod(lambda: True))
+    monkeypatch.setattr("movie_brain.cli.embed_films", lambda *a, **kw: EmbedReport(3, 3, 1))
+    r = runner.invoke(app, ["embed", "--apply", "--limit", "3"])
+    assert r.exit_code == 0, r.output
+    assert "embedded: 3" in r.output and "no prose: 1" in r.output

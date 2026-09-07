@@ -12,6 +12,7 @@ from rich.table import Table
 from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.application.cheapcharts import resolve_itunes_ids
+from movie_brain.application.embed import embed_films
 from movie_brain.application.enrich import enrich_credits
 from movie_brain.application.export import write_csv
 from movie_brain.application.legacy_import import import_legacy
@@ -46,6 +47,7 @@ from movie_brain.domain.models import ServiceMeta
 from movie_brain.infrastructure.cheapcharts import CheapChartsClient
 from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
+from movie_brain.infrastructure.embeddings import SemanticUnavailable, SentenceTransformerEmbedder
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
 from movie_brain.infrastructure.notify import notify
 from movie_brain.infrastructure.tmdb import TmdbClient
@@ -140,8 +142,13 @@ def dashboard(
     """Run the local web dashboard."""
     from movie_brain.web.app import create_app
 
+    embedder = SentenceTransformerEmbedder() if SentenceTransformerEmbedder.available() else None
     console.print(f"movie-brain dashboard → http://{host}:{port}")
-    create_app(_repo()).run(host=host, port=port, debug=False)
+    console.print(
+        "semantic search: "
+        + ("on (loads the model on the first meaning query)" if embedder else "off — uv sync --extra semantic")
+    )
+    create_app(_repo(), embedder=embedder).run(host=host, port=port, debug=False)
 
 
 @app.command("import-legacy")
@@ -999,5 +1006,28 @@ def enrich_credits_cmd(
     console.print(
         f"scanned: {report.scanned} · enriched: {report.enriched} · failed: {report.failed}"
         + (" · ABORTED" if report.aborted else "")
+        + ("" if apply else "   (dry run — nothing written)")
+    )
+
+
+@app.command("embed")
+def embed_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Write the vectors (default: dry-run).")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the worklist.")] = None,
+) -> None:
+    """Embed every film's prose (overview, plot, tagline — never the title) for the bar's
+    semantic stage. Stamped films are never re-encoded unless re-enriched, so the run can be
+    interrupted and resumed. Never part of sync. Dry-run by default; needs `uv sync --extra semantic` to apply.
+    """
+    if apply and not SentenceTransformerEmbedder.available():
+        err.print("semantic search is not installed — uv sync --extra semantic")
+        raise typer.Exit(2)
+    try:
+        report = embed_films(_repo(), SentenceTransformerEmbedder(), date.today(), apply=apply, limit=limit, log=_plain)
+    except SemanticUnavailable as exc:
+        err.print(str(exc))
+        raise typer.Exit(2) from exc
+    console.print(
+        f"scanned: {report.scanned} · embedded: {report.embedded} · no prose: {report.skipped_no_prose}"
         + ("" if apply else "   (dry run — nothing written)")
     )

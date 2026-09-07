@@ -334,3 +334,30 @@ def test_search_freeform_is_ranked_and_reaches_titles_without_credits(client, re
 @pytest.mark.parametrize("q", ["***", "NOT AND OR", "{}", "^", "%", '""', "plot: (", 'actor: "'])
 def test_search_survives_hostile_fts_syntax(client, q):
     assert client.get("/api/search", query_string={"q": q}).status_code == 200
+
+
+@pytest.fixture
+def semantic_client(client, repo, fake_embedder):
+    # `client` seeds Trio/Quartet via record_catalog; _enrich_trio only enriches an existing film.
+    _enrich_trio(repo)
+    from movie_brain.application.embed import embed_films
+
+    embed_films(repo, fake_embedder, D, apply=True, log=lambda _m: None)
+    app = create_app(repo, today=lambda: D, embedder=fake_embedder)
+    app.testing = True
+    return app.test_client()
+
+
+def test_search_contract_is_unchanged_when_meaning_supplies_the_result(semantic_client, repo):
+    # Shape only (parent D13): a field query (unranked, never sent to the model) and a freeform
+    # query that re-ranks a lexical hit ("three tales" is Trio's OMDb plot) both return the same keys.
+    body = semantic_client.get("/api/search?q=actor:%20bogrt").get_json()
+    assert set(body) == {"q", "ids", "ranked", "corrections", "suggestions", "hints", "total"}
+    body = semantic_client.get("/api/search?q=three%20tales").get_json()
+    assert set(body) == {"q", "ids", "ranked", "corrections", "suggestions", "hints", "total"}
+    assert body["ids"] == [repo.film_id_by_key("trio (1950)")] and body["ranked"] is True
+
+
+def test_search_without_an_embedder_offers_the_install_hint_on_an_empty_freeform_result(client):
+    body = client.get("/api/search?q=gumshoe%20sleuth").get_json()
+    assert body["ids"] == [] and "semantic search is not installed — uv sync --extra semantic" in body["hints"]

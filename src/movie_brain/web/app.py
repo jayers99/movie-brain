@@ -12,10 +12,16 @@ from movie_brain.application.sync import SOURCE
 from movie_brain.domain.audit import VERDICTS
 from movie_brain.domain.filters import CHIPS, thresholds
 from movie_brain.infrastructure.database import Repository
+from movie_brain.infrastructure.embeddings import Embedder, VectorIndex
 
 
-def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flask:
+def create_app(repo: Repository, today: Callable[[], date] = date.today, embedder: Embedder | None = None) -> Flask:
     app = Flask(__name__)
+    # Stage 4 of the bar (Plan C). The index is built lazily on the first semantic query and
+    # refreshed when `film_embedding` changes; with no embedder the bar is exactly Phase 1.
+    # Named `vector_index`, not `index`, to avoid shadowing the `/` route handler below (same
+    # function scope; a closure over `index` would otherwise resolve to that view function).
+    vector_index = VectorIndex(repo, embedder) if embedder is not None else None
 
     @app.get("/")
     def index() -> str:
@@ -111,7 +117,7 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today) -> Flas
         q = (request.args.get("q") or "").strip()
         if not q:
             return jsonify({"error": "q is required"}), 400
-        result = run_search(repo, q)
+        result = run_search(repo, q, index=vector_index)
         return jsonify({"q": q, **result.to_dict()}), 200
 
     return app
