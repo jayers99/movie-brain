@@ -275,9 +275,9 @@
   function populateLanguages() {
     const langs = new Set();
     state.films.forEach((f) => (f.language || '').split(',').map((s) => s.trim()).filter(Boolean).forEach((l) => langs.add(l)));
-    langs.delete(DEFAULT_LANG);  // pinned first, ahead of "Any" — the owner's own language, even though Any is the default
-    $('#f-lang-panel').innerHTML = `<label><input type="checkbox" value="${DEFAULT_LANG}"> ${DEFAULT_LANG}</label>`
-      + '<label><input type="checkbox" id="f-lang-any"> Any language</label>'
+    langs.delete(DEFAULT_LANG);  // "Any" (the default) first, then the owner's own language pinned, then the rest A–Z
+    $('#f-lang-panel').innerHTML = '<label><input type="checkbox" id="f-lang-any"> Any language</label>'
+      + `<label><input type="checkbox" value="${DEFAULT_LANG}"> ${DEFAULT_LANG}</label>`
       + [...langs].sort().map((l) => `<label><input type="checkbox" value="${esc(l)}"> ${esc(l)}</label>`).join('');
   }
   // The picker's options come from the films payload — every film carries its list entries with

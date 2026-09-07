@@ -93,11 +93,11 @@ def test_clear_resets_every_control(dash: Page):
     expect(dash.locator("th.sortable[data-col=year]")).not_to_have_attribute("data-dir", re.compile(".+"))
 
 
-def test_english_heads_the_list_then_any_language(dash: Page):
+def test_any_heads_the_list_then_english(dash: Page):
     dash.click("#f-lang-input")
     labels = [t.strip() for t in dash.locator("#f-lang-panel label").all_inner_texts()]
-    assert labels[0] == "English"
-    assert labels[1] == "Any language"
+    assert labels[0] == "Any language"  # the default leads
+    assert labels[1] == "English"  # the owner's own language pinned just under it
     assert labels[2:] == sorted(labels[2:]) and "English" not in labels[2:]
     expect(dash.locator("#f-lang-any")).to_be_checked()  # Any is the default selection
     assert count(dash) == 8
