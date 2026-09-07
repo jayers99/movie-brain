@@ -24,6 +24,8 @@ All from the live DB at schema 18 on 2026-09-06, `all-MiniLM-L6-v2` via sentence
 | `hard boiled private eye`, prose only | Farewell, My Lovely #1, Chinatown #2, Maltese Falcon #30, Big Sleep #17 — 2 films within 0.6 |
 | `lonely samurai wanders japan`, prose only | Seven Samurai, Samurai I, Three Outlaw Samurai, Samurai Rebellion, Ronin Gai — all within 0.45 |
 
+**UAT 2026-09-06 (live, after `embed --apply` — 4,566 films in 8.5 s, first meaning query 4.8 s for the model load, then under 30 ms):** `hard boiled San Francisco private investigator` → 7 films by meaning, The Maltese Falcon #1, The Big Sleep #2, hint "no exact match — showing the 7 closest by meaning"; `big sleep` → The Big Sleep alone, still first (re-rank mode, no hint); `genre: film noir` → 45, unranked, unchanged; `lonely samurai wanders japan` → 111 within the floor, Seven Samurai first; `hard boiled private eye` → 2 (Farewell, My Lovely; Chinatown), the slang limit as measured. Owner proceeded on these results.
+
 Three consequences. **sqlite-vec is unnecessary** (D14): a tenth of a millisecond for brute force means a virtual table that must be loaded on every `Repository` open buys nothing and costs a failure mode. **The title is not embedded** (D15): it is already the heaviest lexical signal, and inside the vector it rewards string coincidence. **The model rewards specific nouns over genre slang**: descriptive queries are strong, three-word slang is weak. The spec states the limit rather than tuning around it.
 
 ## 2. Decisions
