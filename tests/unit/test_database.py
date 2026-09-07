@@ -2309,3 +2309,30 @@ def test_services_entries_never_carry_urls(repo, film_with_two_listings):
     listed = next(v for v in repo.list_views("criterion") if v.id == film_with_two_listings)
     assert all(set(s) == {"name", "subscribed", "kind", "quality", "has_apple_app"} for s in listed.services)
     assert listed.best_source["url"] == view.best_source["url"]
+
+
+def test_film_credits_shapes_the_drawer_rows(repo):
+    day = date(2026, 9, 7)
+    fid = repo.create_film(Film("The Big Sleep", 1946, "Howard Hawks", ""))
+    repo.set_external_id(fid, "tmdb", "910", day)
+    repo.write_credits(fid, _credits(crew=(
+        CrewRow(2636, "Howard Hawks", "Director", "Directing"),
+        CrewRow(4301, "Leigh Brackett", "Screenplay", "Writing"),
+        CrewRow(4302, "William Faulkner", "Story", "Writing"),
+        CrewRow(4302, "William Faulkner", "Screenplay", "Writing"),
+        CrewRow(4303, "Raymond Chandler", "Novel", "Writing"),
+    )), day)
+    fc = repo.film_credits(fid)
+    assert fc is not None
+    assert fc.director == "Howard Hawks"
+    assert [(c.name, c.character) for c in fc.cast] == [
+        ("Humphrey Bogart", "Philip Marlowe"), ("Lauren Bacall", "Vivian Sternwood Rutledge"),
+    ]
+    assert [w.label for w in fc.writers] == ["Leigh Brackett", "William Faulkner", "Raymond Chandler (novel)"]
+    assert repo.overview_for(fid) == _credits().overview
+
+
+def test_film_credits_and_overview_are_none_for_an_unenriched_film(repo):
+    fid = repo.create_film(Film("Bare", 2000, None, ""))
+    assert repo.film_credits(fid) is None
+    assert repo.overview_for(fid) is None

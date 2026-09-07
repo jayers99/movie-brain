@@ -43,7 +43,16 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today, embedde
                 payload = json.loads(raw)
             except json.JSONDecodeError:
                 payload = {"_raw": raw}
-        return jsonify({**view.to_dict(), "payload": payload}), 200
+        ids = repo.external_ids_for(film_id)
+        credits = repo.film_credits(film_id)
+        return jsonify({
+            **view.to_dict(),
+            "payload": payload,
+            # Detail-only (spec D10): credits and prose never ride on /api/films.
+            "credits": credits.to_dict() if credits is not None else None,
+            "overview": repo.overview_for(film_id),
+            "tmdb_url": f"https://www.themoviedb.org/movie/{ids['tmdb']}" if "tmdb" in ids else None,
+        }), 200
 
     @app.post("/api/films/<int:film_id>/watchlist")
     def toggle_watchlist(film_id: int) -> tuple[Response, int]:

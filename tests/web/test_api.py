@@ -317,6 +317,25 @@ def _enrich_trio(repo):
     return trio
 
 
+def test_detail_carries_credits_overview_and_the_tmdb_link(client, repo):
+    trio = _enrich_trio(repo)
+    body = client.get(f"/api/films/{trio}").get_json()
+    assert body["overview"] == "Three tales of a private eye."
+    assert body["tmdb_url"] == "https://www.themoviedb.org/movie/3"
+    assert body["credits"] == {
+        "director": "Ken",
+        "cast": [{"name": "Humphrey Bogart", "character": "Philip Marlowe"}],
+        "writers": [],
+    }
+    assert "credits" not in client.get("/api/films").get_json()[0]  # detail-only (spec D10)
+
+
+def test_detail_of_an_unenriched_film_has_null_credits(client):
+    fid = next(x["id"] for x in client.get("/api/films").get_json() if x["title"] == "Quartet")
+    body = client.get(f"/api/films/{fid}").get_json()
+    assert body["credits"] is None and body["overview"] is None and body["tmdb_url"] is None
+
+
 def test_search_requires_q(client):
     assert client.get("/api/search").status_code == 400
     assert client.get("/api/search?q=%20").status_code == 400

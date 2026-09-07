@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
+from movie_brain.domain.credits import build_credits
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import (
     CreditsTarget,
     EmbedTarget,
     Film,
+    FilmCredits,
     FilmView,
     ImdbBackfillTarget,
     ItunesTarget,
@@ -1300,6 +1302,27 @@ class Repository:
                 (film_id,),
             ).fetchall()
             return [(str(r["kind"]), str(r["name"]), str(r["character"]), str(r["job"])) for r in rows]
+
+    def film_credits(self, film_id: int) -> FilmCredits | None:
+        """The drawer's credit rows — cast in billing order, then crew in TMDB's order — shaped
+        by domain/credits.py::build_credits. None when the film was never enriched, so the
+        drawer falls back to OMDb's strings. `credits_for` (tuples) stays for the enrichment
+        tests and merge; this is the display shape."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT fc.kind, p.name, fc.character, fc.job, fc.department FROM film_credit fc "
+                "JOIN person p ON p.id = fc.person_id WHERE fc.film_id = ? ORDER BY fc.kind, fc.ord, p.name",
+                (film_id,),
+            ).fetchall()
+        return build_credits(
+            (str(r["kind"]), str(r["name"]), str(r["character"]), str(r["job"]), str(r["department"])) for r in rows
+        )
+
+    def overview_for(self, film_id: int) -> str | None:
+        """TMDB's overview from `film_text`, or None when absent or empty (drawer spec D1)."""
+        with self._conn() as c:
+            row = c.execute("SELECT overview FROM film_text WHERE film_id = ?", (film_id,)).fetchone()
+        return str(row["overview"]) if row is not None and row["overview"] else None
 
     def keywords_for(self, film_id: int) -> list[str]:
         with self._conn() as c:
