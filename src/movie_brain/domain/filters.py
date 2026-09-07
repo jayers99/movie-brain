@@ -17,12 +17,15 @@ Predicate = Callable[[FilmView, date], bool]
 
 def reachable(v: FilmView) -> bool:
     """Somewhere to watch it today: a current Criterion listing, ANY current listing on a
-    streaming service (subscribed or not) or the Apple store — or the film is owned. Owned counts
-    because it IS watchable, and because ownership on Apple is proof of an Apple store presence
-    TMDB's patchy US data missed (2026-09-07: 18 of 28 owned "unreachable" films). Rated and
-    watchlisted do not count — a judgement is not a way to watch. Mirrored by `reachable` in
-    app.js; the header's count and the chip share this definition."""
-    return (v.criterion and not v.departed) or bool(v.services) or v.owned
+    streaming service (subscribed or not) or the Apple store, the film is owned, or it holds an
+    iTunes id. Owned counts because it IS watchable, and because ownership on Apple is proof of
+    an Apple store presence TMDB's patchy US data missed (2026-09-07: 18 of 28 owned
+    "unreachable" films). An iTunes id counts for the same reason from the other side: CheapCharts
+    keys a product page only for a title the Apple store sells, and TMDB's feed lags new digital
+    releases by weeks (The Odyssey, 2026 — buyable on Apple, no provider anywhere on TMDB; 23 of
+    163 unreachable films held one). Rated and watchlisted do not count — a judgement is not a
+    way to watch. Mirrored by `reachable` in app.js; the header's count and the chip share it."""
+    return (v.criterion and not v.departed) or bool(v.services) or v.owned or v.cheapcharts_url is not None
 
 
 def _criterion_new(v: FilmView, today: date) -> bool:

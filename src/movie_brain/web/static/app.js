@@ -35,11 +35,12 @@
     return e && e.ordered ? printedRank(e) : null;
   };
   // reachable = somewhere to watch it today: a current Criterion listing, ANY current listing on
-  // a streaming service (subscribed or not) or the Apple store — or the film is owned (it IS
-  // watchable, and ownership on Apple is proof of a store presence TMDB's US data missed). Rated
-  // and watchlisted do not count. Mirrors domain/filters.py::reachable; the header count and the
-  // chip share it.
-  const reachable = (f) => (f.criterion && !f.departed) || (f.services || []).length > 0 || f.owned;
+  // a streaming service (subscribed or not) or the Apple store, the film is owned (it IS
+  // watchable, and ownership on Apple is proof of a store presence TMDB's US data missed), or it
+  // holds an iTunes id (a CheapCharts product page exists only for a title Apple sells — TMDB's
+  // feed lags new digital releases). Rated and watchlisted do not count. Mirrors
+  // domain/filters.py::reachable; the header count and the chip share it.
+  const reachable = (f) => (f.criterion && !f.departed) || (f.services || []).length > 0 || f.owned || !!f.cheapcharts_url;
   // Mirrors domain/filters.py::_PREDICATES — keep the two in lockstep. Keys are what `chips=`
   // encodes in the URL; a cycle chip's keys are mutually exclusive in the UI only.
   const CHIP_PREDICATES = {

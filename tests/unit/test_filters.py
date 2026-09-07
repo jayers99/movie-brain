@@ -91,6 +91,13 @@ def test_reachable_counts_owned_but_not_a_judgement():
     assert reachable(view(criterion=False, services=[SVOD])) is True
 
 
+def test_an_itunes_id_is_an_apple_store_presence_tmdb_missed():
+    """The Odyssey (2026): buyable on Apple, no provider anywhere on TMDB, but CheapCharts had
+    resolved its iTunes product page — that id is the Apple buy option the rule asks for."""
+    assert reachable(view(criterion=False, services=[], cheapcharts_url="https://www.cheapcharts.com/us/itunes/movies/6802719657")) is True
+    assert reachable(view(criterion=False, services=[], cheapcharts_url=None)) is False
+
+
 def test_chips_stack_with_and():
     v = view(leaving_date="Aug 31", my_rating=None)
     assert matches(v, ["leaving", "unrated"], TODAY)
