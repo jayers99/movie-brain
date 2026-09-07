@@ -14,7 +14,8 @@ from movie_brain.domain.models import CastEntry, FilmCredits, WriterEntry
 BARE_JOBS = frozenset({"Screenplay", "Writer"})
 WRITING_DEPARTMENT = "Writing"
 DIRECTOR_JOB = "Director"
-UNCREDITED_MARKER = "(uncredited)"  # TMDB's convention, matched case-insensitively; the row stays in film_credit for `actor:` search
+# TMDB's convention, matched case-insensitively. The row stays in film_credit, so `actor:` still finds it.
+UNCREDITED_MARKER = "(uncredited)"
 
 CreditRow = tuple[str, str, str, str, str]  # (kind, name, character, job, department)
 
