@@ -126,7 +126,9 @@ def make_query(
     runtime_min: int | None = None,
 ) -> Query:
     p = parse_title(raw_title)
-    if source in ("criterion", "benchmark") or p.embedded_year is not None:
+    # "list": a curated list prints the work's year (when it prints one at all), never a
+    # remaster or re-release date, so it is trusted like the database's own.
+    if source in ("criterion", "benchmark", "list") or p.embedded_year is not None:
         yc = YearClass.DATABASE
     elif source == "metacritic":
         yc = YearClass.MC

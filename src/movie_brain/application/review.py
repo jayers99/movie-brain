@@ -299,7 +299,7 @@ def resolve_review(
             # Unkeyed on purpose: the next sync's keying step keys it, exactly as an apple-tv
             # --create film is keyed. A films.key collision means the identity already exists
             # under some other title — canonicalize and link to it, never mint a twin.
-            film = Film(entry.title_listed, None, entry.director_listed, "")
+            film = Film(entry.title_listed, entry.year_listed, entry.director_listed, "")
             new_id = repo.create_film(film)
             if new_id is None:
                 new_id = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)

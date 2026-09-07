@@ -146,11 +146,37 @@ def test_whitespace_only_fourth_column_reads_as_no_id():
     assert parse_list_file(text).entries[0].tt_listed is None
 
 
-def test_a_fifth_column_raises_rather_than_being_ignored():
-    # The file is hand-checked-in and this parser's whole rationale is that a typo here is
-    # silent forever. A future fifth column should be a deliberate parser change, not a
-    # stray cell nobody notices.
+def test_fifth_column_parses_the_listed_year():
     text = "# slug: s\n# name: n\n1\tA Title\tA Director\ttt0004972\t1941\n"
+    e = parse_list_file(text).entries[0]
+    assert (e.tt_listed, e.year_listed) == ("tt0004972", 1941)
+
+
+def test_year_without_an_id_leaves_the_fourth_column_empty():
+    # A title-and-year source (List Obsession, Rotten Tomatoes) prints no director and no id:
+    # both cells stay empty and the year still lands in its own column.
+    text = "# slug: s\n# name: n\n1\tAirplane!\t\t\t1980\n"
+    e = parse_list_file(text).entries[0]
+    assert (e.director_listed, e.tt_listed, e.year_listed) == (None, None, 1980)
+
+
+def test_empty_or_absent_fifth_column_yields_none_year():
+    text = "# slug: s\n# name: n\n1\tA\tD\ttt0000001\t\n2\tB\tD\n"
+    assert [e.year_listed for e in parse_list_file(text).entries] == [None, None]
+
+
+@pytest.mark.parametrize("bad_year", ["41", "1941 ", "nineteen41", "19410"], ids=["short", "padded", "words", "long"])
+def test_malformed_year_listed_raises(bad_year: str):
+    text = f"# slug: s\n# name: n\n1\tA Title\tA Director\t\t{bad_year}\n"
+    with pytest.raises(ListFileError):
+        parse_list_file(text)
+
+
+def test_a_sixth_column_raises_rather_than_being_ignored():
+    # The file is hand-checked-in and this parser's whole rationale is that a typo here is
+    # silent forever. A further column should be a deliberate parser change, not a stray
+    # cell nobody notices.
+    text = "# slug: s\n# name: n\n1\tA Title\tA Director\ttt0004972\t1941\textra\n"
     with pytest.raises(ListFileError):
         parse_list_file(text)
 

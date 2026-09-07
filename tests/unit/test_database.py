@@ -1738,6 +1738,13 @@ def test_view_builds_the_direct_cheapcharts_link_from_the_stored_itunes_id(repo)
     assert views["Unresolved"].cheapcharts_url is None
 
 
+def test_migration_020_adds_the_listed_year_to_list_entries(repo):
+    with sqlite3.connect(repo.db_path) as c:
+        cols = {r[1] for r in c.execute("PRAGMA table_info(film_list_entry)")}
+        assert "year_listed" in cols
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 20
+
+
 def test_migration_018_creates_credit_tables_and_trigram_indexes(repo):
     """A fresh repo bootstraps 018. The FTS indexes are external-content tables kept in step
     by triggers, so a plain INSERT into the base table must be enough to make a row findable;

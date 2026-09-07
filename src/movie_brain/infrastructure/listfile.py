@@ -2,9 +2,9 @@
 
 One list per file, hand-extracted once (Claude Extracts It, per the design doc) and
 checked in under `lists/`. `parse_list_file` is pure; `read_list_file` is the one I/O
-function. Titles and directors are kept byte-for-byte — no normalization, stripping,
-or case-folding — a list is a historical artifact and later re-readings must see
-exactly what the curator wrote.
+function. Titles and directors are kept byte-for-byte, and the optional id and year columns
+verbatim — no normalization, stripping, or case-folding — a list is a historical artifact and
+later re-readings must see exactly what the curator wrote.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from movie_brain.domain.models import ListEntry, ListMeta
 _TRUE = {"true", "1", "yes"}
 _FALSE = {"false", "0", "no"}
 _TT_RE = re.compile(r"^tt\d+$")
+_YEAR_RE = re.compile(r"^\d{4}$")
 _RANK_LABEL_RE = re.compile(r"^=?[1-9]\d*$")
 
 
@@ -80,11 +81,11 @@ def parse_list_file(text: str) -> ParsedList:
         parts = line.split("\t")
         if len(parts) < 2:
             raise ListFileError(f"malformed data row (need at least rank and title): {line!r}")
-        if len(parts) > 4:
+        if len(parts) > 5:
             # This file is hand-checked-in and a typo in it is silent forever, which is the
-            # whole reason this parser refuses rather than shrugs. A future fifth column
-            # should be a deliberate change here, not a stray cell nobody notices.
-            raise ListFileError(f"too many columns (rank, title, director, tt id): {line!r}")
+            # whole reason this parser refuses rather than shrugs. A further column should be
+            # a deliberate change here, not a stray cell nobody notices.
+            raise ListFileError(f"too many columns (rank, title, director, tt id, year): {line!r}")
         rank_raw, title_listed = parts[0], parts[1]
         director_listed = parts[2] if len(parts) >= 3 and parts[2] else None
         # A cell of spaces is an EMPTY cell, exactly as the header values read one. Whitespace
@@ -92,6 +93,13 @@ def parse_list_file(text: str) -> ParsedList:
         tt_listed = parts[3] if len(parts) >= 4 and parts[3].strip() else None
         if tt_listed is not None and not _TT_RE.match(tt_listed):
             raise ListFileError(f"malformed tt id: {tt_listed!r}")
+        # Fifth column: the year AS PRINTED by the source, for the title-and-year sources that
+        # print no director (List Obsession, Rotten Tomatoes). Same rules as the id: verbatim,
+        # a cell of spaces is empty, anything but four digits is a typo worth stopping on.
+        year_raw = parts[4] if len(parts) >= 5 and parts[4].strip() else None
+        if year_raw is not None and not _YEAR_RE.match(year_raw):
+            raise ListFileError(f"malformed year: {year_raw!r}")
+        year_listed = int(year_raw) if year_raw is not None else None
 
         # column one is the rank AS PRINTED (design §3): an optional leading `=` tie marker
         # then a positive integer, nothing else. `entry.rank` is derived below from line
@@ -116,7 +124,7 @@ def parse_list_file(text: str) -> ParsedList:
             raise ListFileError(f"empty title at rank {rank}")
         rank_label = rank_raw if rank_raw != str(rank) else None
 
-        entries.append(ListEntry(rank, title_listed, director_listed, tt_listed, rank_label))
+        entries.append(ListEntry(rank, title_listed, director_listed, tt_listed, rank_label, year_listed))
 
     return ParsedList(meta=meta, entries=tuple(entries))
 

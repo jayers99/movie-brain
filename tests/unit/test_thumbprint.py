@@ -47,6 +47,7 @@ def test_year_class_rule():
     assert make_query("X", 2011, "apple").year_class is YearClass.APPLE_FIELD
     assert make_query("X", 2011, "metacritic").year_class is YearClass.MC
     assert make_query("X", 2011, "criterion").year_class is YearClass.DATABASE
+    assert make_query("X", 2011, "list").year_class is YearClass.DATABASE  # a curator's printed year
 
 
 def cand(tt, title, year, director="", votes=0, tmdb=1, in_omdb=True, kind="movie", titles=()):

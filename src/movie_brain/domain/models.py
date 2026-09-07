@@ -193,6 +193,7 @@ class ListEntry:
     director_listed: str | None
     tt_listed: str | None = None
     rank_label: str | None = None
+    year_listed: int | None = None  # the year AS PRINTED (fifth column); a curator's year is the work's year
 
 
 @dataclass(frozen=True)

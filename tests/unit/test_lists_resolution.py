@@ -65,7 +65,7 @@ def test_single_form_title_issues_exactly_one_query():
     assert (verdict.kind, verdict.tt, form) == ("match", "tt0016654", "Greed")
 
 
-def test_the_query_carries_the_listed_director_and_never_a_year():
+def test_the_query_carries_the_listed_director_and_no_year_when_the_file_prints_none():
     fetcher = RecordingFetcher()
 
     resolve_entry(fetcher, ListEntry(1, "Greed", "Erich von Stroheim"))
@@ -74,15 +74,28 @@ def test_the_query_carries_the_listed_director_and_never_a_year():
     assert (q.year, q.source, q.director) == (None, "list", "Erich von Stroheim")
 
 
+def test_a_listed_year_reaches_the_query_as_a_trusted_year():
+    # A curator's printed year is the work's year, not a remaster or re-release date, so it
+    # carries the DATABASE class: it must separate The Pink Panther 1963 from 2006 outright
+    # rather than trip the commerce-year "rerelease-ambiguous" refusal.
+    fetcher = RecordingFetcher()
+
+    resolve_entry(fetcher, ListEntry(1, "The Pink Panther", None, None, None, 2006))
+
+    (q,) = fetcher.queries
+    assert (q.year, q.year_class.value, q.director) == (2006, "database", None)
+
+
 def test_an_embedded_year_never_reaches_the_query():
-    # "the year is always None" is a governing constraint: a year in the listed title would
-    # otherwise flip the query to YearClass.DATABASE and let a wrong year decide the verdict.
+    # A year in the listed TITLE is not a listed year: only the fifth column is. A parenthetical
+    # year in a title would otherwise let a wrong year decide the verdict. (The query's year
+    # class is DATABASE for every list query now, and inert while the year is None.)
     fetcher = RecordingFetcher()
 
     resolve_entry(fetcher, ListEntry(1, "Napoléon (1927)", "Abel Gance"))
 
     (q,) = fetcher.queries
-    assert (q.title, q.year, q.year_class.value) == ("Napoléon", None, "apple-field")
+    assert (q.title, q.year) == ("Napoléon", None)
 
 
 def test_a_parenthetical_whose_primary_misses_falls_back_to_base_then_alt():

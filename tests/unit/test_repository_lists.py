@@ -55,27 +55,27 @@ def test_upsert_list_entry_is_idempotent_and_never_clears_film_id(repo, today):
     repo.link_list_entry("cahiers-100", 1, fid)
 
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", None, None)]
+    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", None, None, None)]
 
     # Re-importing the same file (e.g. a corrected director spelling) must update the
     # verbatim text but must NOT clear the film_id a human already linked.
     repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Wells"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, fid, "Citizen Kane", "Orson Wells", None, None)]
+    assert entries == [(1, fid, "Citizen Kane", "Orson Wells", None, None, None)]
 
 
 def test_upsert_list_entry_creates_unlinked_entry(repo, today):
     repo.upsert_film_list(CAHIERS, today)
     repo.upsert_list_entry("cahiers-100", ListEntry(2, "The Night of the Hunter", "Charles Laughton"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(2, None, "The Night of the Hunter", "Charles Laughton", None, None)]
+    assert entries == [(2, None, "The Night of the Hunter", "Charles Laughton", None, None, None)]
 
 
 def test_upsert_list_entry_persists_tt_listed(repo, today):
     repo.upsert_film_list(CAHIERS, today)
     repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles", "tt0033467"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, None, "Citizen Kane", "Orson Welles", "tt0033467", None)]
+    assert entries == [(1, None, "Citizen Kane", "Orson Welles", "tt0033467", None, None)]
 
 
 def test_upsert_list_entry_updates_tt_listed_without_clearing_film_id(repo, today):
@@ -89,14 +89,32 @@ def test_upsert_list_entry_updates_tt_listed_without_clearing_film_id(repo, toda
     # update tt_listed but still must NOT clear the film_id a human already linked.
     repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles", "tt0033467"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", "tt0033467", None)]
+    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", "tt0033467", None, None)]
+
+
+def test_upsert_list_entry_persists_year_listed(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Airplane!", None, None, None, 1980))
+    entries = repo.list_entries("cahiers-100")
+    assert entries == [(1, None, "Airplane!", None, None, None, 1980)]
+
+
+def test_upsert_list_entry_updates_year_listed_without_clearing_film_id(repo, today):
+    repo.upsert_film_list(CAHIERS, today)
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Airplane!", None))
+    fid = repo.create_film(Film("Airplane!", 1980, None, ""))
+    assert fid is not None
+    repo.link_list_entry("cahiers-100", 1, fid)
+
+    repo.upsert_list_entry("cahiers-100", ListEntry(1, "Airplane!", None, None, None, 1980))
+    assert repo.list_entries("cahiers-100") == [(1, fid, "Airplane!", None, None, None, 1980)]
 
 
 def test_upsert_list_entry_persists_rank_label(repo, today):
     repo.upsert_film_list(CAHIERS, today)
     repo.upsert_list_entry("cahiers-100", ListEntry(3, "Born in Flames", "Lizzie Borden", rank_label="=243"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(3, None, "Born in Flames", "Lizzie Borden", None, "=243")]
+    assert entries == [(3, None, "Born in Flames", "Lizzie Borden", None, "=243", None)]
 
 
 def test_upsert_list_entry_updates_rank_label_without_clearing_film_id(repo, today):
@@ -110,7 +128,7 @@ def test_upsert_list_entry_updates_rank_label_without_clearing_film_id(repo, tod
     # but still must NOT clear the film_id a human already linked.
     repo.upsert_list_entry("cahiers-100", ListEntry(1, "Citizen Kane", "Orson Welles"))
     entries = repo.list_entries("cahiers-100")
-    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", None, None)]
+    assert entries == [(1, fid, "Citizen Kane", "Orson Welles", None, None, None)]
 
 
 def test_list_entries_ordered_by_rank(repo, today):

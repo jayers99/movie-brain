@@ -122,7 +122,10 @@ def resolve_entry(
         # The literal, not AUTHORITY: the resolver's `source` and the claim/review authority
         # are different concepts that happen to share a string. Renaming one must not move
         # the query's YearClass.
-        q = make_query(form, None, "list", director=entry.director_listed)
+        # The listed year (fifth column) rides along as a DATABASE-class year — a curator's
+        # printed year is the work's year — and corroborates exactly as the director does.
+        # Lists that print none pass None, and behave as they always have.
+        q = make_query(form, entry.year_listed, "list", director=entry.director_listed)
         try:
             verdict = resolve(q, fetcher.fetch(q))
         except (CacheMiss, requests.RequestException, AuthError, QuotaExceeded) as exc:
@@ -410,7 +413,8 @@ def _outcome(
 
 
 def _listed(entry: ListEntry) -> str:
-    return f"{entry.title_listed!r} / {entry.director_listed or '?'}"
+    who = entry.director_listed or (str(entry.year_listed) if entry.year_listed else "?")
+    return f"{entry.title_listed!r} / {who}"
 
 
 def _review_detail(entry: ListEntry, form: str, detail: str) -> str:
@@ -791,7 +795,7 @@ def create_films(
     human_owned: set[str] = {str(r["value"]) for r in repo.open_reviews(AUTHORITY) if r["value"]}
     human_owned |= {str(v) for _reason, _film_id, v in repo.resolved_review_keys(AUTHORITY) if v}
     worklist = [
-        ListEntry(row.rank, row.title_listed, row.director_listed, row.tt_listed, row.rank_label)
+        ListEntry(row.rank, row.title_listed, row.director_listed, row.tt_listed, row.rank_label, row.year_listed)
         for row in stored
         if row.film_id is None and f"{slug}#{row.rank}" not in human_owned
     ]
