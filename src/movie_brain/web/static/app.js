@@ -590,6 +590,24 @@
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
     state.openFilm = null;
   }
+  // Person links (drawer spec D4). Close WITHOUT walking history back: closeDrawer() would call
+  // history.back(), and the popstate handler then re-reads state from the previous URL, wiping
+  // the query set here (spec §4's ordering hazard). Pushing a fresh entry instead leaves the
+  // open-drawer entry behind it, so Back reopens the film — the undo the spec asks for. Touches
+  // no chip, column filter, language or list (the list-picker ruling).
+  body.addEventListener('click', (e) => {
+    const a = e.target.closest('a.person'); if (!a) return;
+    e.preventDefault();
+    if (searchTimer) clearTimeout(searchTimer);
+    drawerSeq++;              // supersede any in-flight open
+    hideDrawer();
+    drawerOpenPushed = false;
+    state.q = a.dataset.query;
+    searchEl.value = state.q;
+    delete searchEl.dataset.settled;
+    syncUrl(true);
+    runSearch();
+  });
   async function openDrawer(id, push = true) {
     const seq = ++drawerSeq;
     const r = await fetch(`/api/films/${id}`);
