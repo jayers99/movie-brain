@@ -88,6 +88,7 @@ _PREDICATES: dict[str, Predicate] = {
     "criterion": lambda v, _: v.criterion and not v.departed,
     "leaving": lambda v, _: v.leaving_date is not None,
     "criterion_new": _criterion_new,
+    "not_criterion": lambda v, _: not (v.criterion and not v.departed),  # nothing on the Channel now
     "watchlist": lambda v, _: v.watchlisted,
     "owned": lambda v, _: v.owned,
     "not_owned": lambda v, _: not v.owned,

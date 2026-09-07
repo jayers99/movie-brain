@@ -51,6 +51,7 @@
     leaving: (f) => f.leaving_date != null,
     criterion_new: (f) => (f.new_on || []).some((t) => t.source === 'criterion'
       && daysBetween(t.appeared_on, state.cfg.today) <= state.cfg.canned_thresholds.new_arrival_days),
+    not_criterion: (f) => !(f.criterion && !f.departed),
     watchlist: (f) => f.watchlisted,
     owned: (f) => f.owned,
     not_owned: (f) => !f.owned,

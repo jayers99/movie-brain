@@ -179,9 +179,9 @@ def test_cycle_chip_walks_off_a_b_off_and_encodes_one_key(dash: Page):
     assert "chips=" not in dash.url
 
 
-def test_criterion_chip_has_three_on_states(dash: Page):
+def test_criterion_chip_has_four_on_states(dash: Page):
     crit = dash.locator('.chip[data-group="criterion"]')
-    for label, key in [("Criterion", "criterion"), ("Criterion leaving", "leaving"), ("Criterion new", "criterion_new")]:
+    for label, key in [("Criterion", "criterion"), ("Criterion leaving", "leaving"), ("Criterion new", "criterion_new"), ("Not Criterion", "not_criterion")]:
         cycle(dash, "criterion")
         expect(crit).to_have_text(label)
         assert f"chips={key}" in dash.url
@@ -210,6 +210,7 @@ def test_each_chip_alone(dash: Page):
         "criterion": ("criterion", 1, 5),
         "leaving": ("criterion", 2, 1),  # Alpha
         "criterion_new": ("criterion", 3, 1),  # Delta, first seen on the Channel today
+        "not_criterion": ("criterion", 4, 3),  # departed Foxtrot, discovery Golf, buyable Hotel
         "owned": ("owned", 1, 1),
         "not_owned": ("owned", 2, 7),
     }
