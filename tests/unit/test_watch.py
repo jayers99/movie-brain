@@ -1,5 +1,5 @@
 from movie_brain.domain.models import FilmView
-from movie_brain.domain.watch import best_source, rank_key, watch_options
+from movie_brain.domain.watch import best_source, rank_key, watch_options, watch_url
 
 CRITERION = {"name": "Criterion Channel", "subscribed": True, "kind": "svod", "quality": 5, "has_apple_app": True}
 
@@ -128,3 +128,17 @@ def test_owned_does_not_leak_into_watch_options():
     """The store is the BEST-SOURCE answer only; it is never a streaming option."""
     v = view(services=[svc("Kanopy")], criterion=False, owned=True)
     assert [o["name"] for o in watch_options(v, CRITERION)] == ["Kanopy"]
+
+
+def test_watch_url_fills_the_template_with_the_encoded_title():
+    assert watch_url({"search_url": "https://play.max.com/search?q={title}"}, "Two Listings") == "https://play.max.com/search?q=Two%20Listings"
+    assert watch_url({"search_url": "https://x/s?q={title}"}, "Fast & Furious") == "https://x/s?q=Fast%20%26%20Furious"
+
+
+def test_watch_url_falls_back_to_the_listing_url():
+    assert watch_url({"search_url": None, "listing_url": "https://c/alpha"}, "Alpha") == "https://c/alpha"
+    assert watch_url({"search_url": "", "listing_url": "https://c/alpha"}, "Alpha") == "https://c/alpha"
+
+
+def test_watch_url_is_none_when_nothing_is_known():
+    assert watch_url({"name": "Kanopy"}, "Alpha") is None

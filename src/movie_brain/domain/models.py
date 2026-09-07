@@ -208,6 +208,38 @@ class ServiceMeta:
     region: str
     quality: int
     has_apple_app: bool
+    # title-search template with a {title} placeholder; migration 021, written only by 'services url'
+    search_url: str | None = None
+
+
+@dataclass(frozen=True)
+class CastEntry:
+    name: str
+    character: str  # '' when TMDB lists no role
+
+
+@dataclass(frozen=True)
+class WriterEntry:
+    name: str
+    label: str  # domain/credits.py::writer_label — the name alone, or "Name (novel)"
+
+
+@dataclass(frozen=True)
+class FilmCredits:
+    """The drawer's credit rows for one film, built by domain/credits.py::build_credits from
+    `film_credit` rows. Detail-only: never part of FilmView or the list payload (drawer
+    redesign spec D10)."""
+
+    director: str | None
+    cast: tuple[CastEntry, ...]
+    writers: tuple[WriterEntry, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "director": self.director,
+            "cast": [{"name": c.name, "character": c.character} for c in self.cast],
+            "writers": [{"name": w.name, "label": w.label} for w in self.writers],
+        }
 
 
 @dataclass(frozen=True)

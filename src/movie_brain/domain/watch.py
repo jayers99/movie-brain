@@ -16,6 +16,8 @@ the two in lockstep.
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from movie_brain.domain.models import FilmView
 
 WatchOption = dict[str, object]
@@ -63,3 +65,19 @@ def best_source(
         return dict(store)
     options = watch_options(view, criterion)
     return options[0] if options else None
+
+
+def watch_url(option: WatchOption, title: str) -> str | None:
+    """Where "Watch on <name>" lands (drawer-redesign spec D6/D7).
+
+    The service's own title search when the registry holds a `search_url` template (owner-set,
+    `movie-brain services url`), else the listing's stored URL — Criterion's direct page, or
+    TMDB's watch page for a provider-fed service, which is one click from the service — else
+    nothing. The title is percent-encoded with no safe characters, so "Two Listings" fills as
+    Two%20Listings and an ampersand cannot split the query string.
+    """
+    template = option.get("search_url")
+    if template:
+        return str(template).replace("{title}", quote(title, safe=""))
+    listing = option.get("listing_url")
+    return str(listing) if listing else None
