@@ -817,13 +817,13 @@ def test_list_picker_filters_to_the_list_and_orders_by_printed_rank(dash):
     assert [r.split()[0] for r in rows] == ["Charlie", "Alpha"]
 
 
-def test_list_picker_turns_the_reachable_chip_off(dash):
-    # A list must be reproduced whole, so picking one releases the reachable filter.
+def test_list_picker_leaves_the_reachable_chip_alone(dash):
+    # A chip the owner set stays set: picking a list narrows within it rather than resetting it.
     cycle(dash, "reach")
     expect(dash.locator('.chip[data-group="reach"]')).to_have_text("Reachable ✓")
     dash.select_option("#list-picker", "cahiers-100")
-    expect(dash.locator('.chip[data-group="reach"]')).to_have_text("Reachable")
-    assert "reachable" not in dash.url
+    expect(dash.locator('.chip[data-group="reach"]')).to_have_text("Reachable ✓")
+    assert "chips=reachable" in dash.url and "list=cahiers-100" in dash.url
 
 
 def test_list_picker_is_encoded_in_the_url(dash):

@@ -298,9 +298,10 @@
   }
   $('#list-picker').addEventListener('change', (e) => {
     state.list = e.target.value || null;
-    // A list is reproduced WHOLE: 9 of the Cahiers 100 are unreachable, and a picker that
-    // silently dropped them would answer a different question than the one it was asked.
-    if (state.list) { state.chips.delete('reachable'); state.chips.delete('unreachable'); }
+    // Picking a list touches no other control (2026-09-07): the old picker forced the scope to
+    // "all" so a list came out whole, but now every filter is off by default, and a Reachable
+    // chip the owner set on purpose must stay set — "which of the Cahiers 100 can I watch" is a
+    // question, not an accident.
     writeControlsFromState(); applyFilters();
   });
 
