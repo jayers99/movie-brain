@@ -602,7 +602,7 @@ def test_drawer_on_lists_line_orders_by_trust_descending(dash):
     dash.locator("#films tbody tr", has_text="Alpha").first.click()
     dash.wait_for_selector("#drawer:not([hidden])")
     expect(dash.locator("#drawer-body")).to_contain_text(
-        "On lists: Backlog Ten, Sight & Sound 2022 #2, Cahiers du Cinéma 2008 #3"
+        "On lists: Backlog Ten, Sight & Sound 2022 #2, 100 Films for an Ideal Cinematheque #3"
     )
 
 
@@ -773,15 +773,15 @@ def test_drawer_shows_audit_reasons_and_records_a_verdict(dash: Page):
 def test_list_picker_offers_every_seeded_list_by_trust(dash):
     # Trust order (backlog-10 7, sight-sound-2022 5, cahiers-100 1) disagrees with name order,
     # so this proves the picker sorts by trust rather than falling back to the label.
-    # The two Sight & Sound lists share a curator AND a year, so both fall back to their full
-    # names; the unambiguous two keep the shorter "curator published" form.
+    # Every label is the list's NAME plus its size — the owner writes the name to read well here,
+    # and it is unique where "curator published" was not (the two Sight & Sound polls collide).
     labels = dash.locator("#list-picker option").all_inner_texts()
     assert labels == [
         "— all films —",
         "Backlog Ten (2)",
-        "Sight & Sound 2022 (2)",             # Charlie and Alpha — full name, not "curator year"
+        "Sight & Sound 2022 (2)",
         "Sight & Sound 2022 Directors (1)",
-        "Cahiers du Cinéma 2008 (2)",
+        "100 Films for an Ideal Cinematheque (2)",
     ]
 
 

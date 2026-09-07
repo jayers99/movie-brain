@@ -140,7 +140,7 @@ def seed(repo: Repository) -> None:
     # only seed that proves the picker falls back to the full name instead of printing a duplicate.
     ss_dir_meta = ListMeta("sight-sound-2022-directors", "Sight & Sound 2022 Directors", "Sight & Sound", 2022, None, True)
     repo.upsert_film_list(ss_dir_meta, TODAY)
-    # Linked to DELTA, not Charlie: the drawer labels a list "curator published" too, so hanging a
+    # Linked to DELTA, not Charlie: the drawer labels a list by its NAME (as does the picker), so hanging a
     # second "Sight & Sound 2022" off Charlie would make its "On lists:" line print that name twice
     # and blunt test_drawer_shows_tied_rank_label_not_position's guard against the line position.
     repo.upsert_list_entry(ss_dir_meta.slug, ListEntry(1, "Delta", "Dee"))

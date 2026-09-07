@@ -292,13 +292,11 @@
     state.films.forEach((f) => (f.lists || []).forEach((l) => { if (!by.has(l.slug)) by.set(l.slug, l); }));
     // trust desc then name — the order `movie-brain lists trust` prints and the drawer uses.
     state.listCatalog = [...by.values()].sort((a, b) => b.trust - a.trust || a.name.localeCompare(b.name));
-    // "curator published" reads best ("Cahiers du Cinéma 2008"), but it is not unique: the two
-    // 1992 Sight & Sound polls (critics' and directors') share a curator AND a year, so that form
-    // would print the same label twice. Any label that collides falls back to the list's own name.
-    const short = (l) => `${l.curator || l.name}${l.published ? ' ' + l.published : ''}`;
-    const seen = new Map();
-    state.listCatalog.forEach((l) => seen.set(short(l), (seen.get(short(l)) || 0) + 1));
-    const label = (l) => `${seen.get(short(l)) > 1 ? l.name : short(l)} (${l.size})`;
+    // The label is the list's NAME, which the owner writes in the file header to read well here
+    // ("BFI: 100 Film Noir") and which is unique by construction — the earlier "curator published"
+    // form ("Cahiers du Cinéma 2008") collided on the two 1992 Sight & Sound polls and had to
+    // fall back to the name anyway.
+    const label = (l) => `${l.name} (${l.size})`;
     $('#list-picker').innerHTML = '<option value="">— all films —</option>'
       + state.listCatalog.map((l) => `<option value="${esc(l.slug)}">${esc(label(l))}</option>`).join('');
   }
@@ -495,7 +493,7 @@
     const buyable = collapse(svc.filter((s) => s.kind === 'store').map((s) => esc(s.name)));
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     const lists = (d.lists || []).map((l) => {
-      const label = l.published ? `${esc(l.curator || l.name)} ${esc(l.published)}` : esc(l.curator || l.name);
+      const label = esc(l.name);  // the same name the picker shows, so the two agree
       // rank_label is the cell AS PRINTED, so a tie arrives as "=54"; the drawer shows the
       // number alone (#54) — whether the placing was tied is not what this line is for.
       const rank = String(l.rank_label ?? l.rank).replace(/^=/, '');
