@@ -114,8 +114,12 @@ def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Pa
     # order); missing values sort after present ones at each level, so imdb-only Foxtrot
     # follows, then the unrated Charlie/Delta by title.
     assert first_titles(dash, 6) == ["Alpha", "Echo", "Bravo", "Foxtrot", "Charlie", "Delta"]
-    expect(dash.locator("#count-films")).to_have_text("6")
-    expect(dash.locator("#count-showing")).to_have_text("Showing 7 of 7")  # reachable: 6 Criterion + buyable Hotel; Golf excluded
+    # the header counts the whole catalogue (8 seeded films), and "reachable" is the default
+    # scope's own predicate: 6 Criterion + buyable Hotel, Golf excluded
+    expect(dash.locator("#count-films")).to_have_text("8")
+    expect(dash.locator("#count-reachable")).to_have_text("7")
+    expect(dash.locator("#count-owned")).to_have_text("1")
+    expect(dash.locator("#count-showing")).to_have_text("Showing 7 of 7")
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
 
 
@@ -171,12 +175,11 @@ def test_each_chip_alone(dash: Page):
         dash.click(f".chip[data-chip={chip}]")
 
 
-def test_departed_film_is_marked_in_table_and_counts(dash: Page):
+def test_departed_film_is_marked_in_table(dash: Page):
     clear_lang(dash)
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Foxtrot")
     expect(row).to_have_class(re.compile("departed"))
     expect(row.locator(".c-title")).to_contain_text("gone")
-    expect(dash.locator("#count-departed")).to_have_text("1")
 
 
 def test_departed_chip_filters_to_departed_films(dash: Page):

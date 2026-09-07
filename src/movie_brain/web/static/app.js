@@ -127,19 +127,17 @@
     syncUrl();
   }
 
-  // ---- summary (mirrors Repository.summary) ----
+  // ---- header counts ----
+  // Four catalogue-wide numbers the owner acts on: the whole catalogue, what is reachable today
+  // (the default scope's own predicate, so the number and the toggle can never disagree), what
+  // is owned, and what is rated. The old nine were Criterion-scoped and mostly OMDb plumbing
+  // (found / pending / unmatched); that maintenance view lives in `movie-brain status` now.
   function renderCounts() {
-    const f = state.films.filter((x) => x.criterion);
-    const n = (p) => f.filter(p).length;
-    $('#count-films').textContent = f.length;
-    $('#count-rated').textContent = n((x) => x.found === true);
-    $('#count-pending').textContent = n((x) => x.pending);
-    $('#count-unmatched').textContent = n((x) => x.found === false);
-    $('#count-leaving').textContent = n((x) => x.leaving_date != null);
+    const n = (p) => state.films.filter(p).length;
+    $('#count-films').textContent = state.films.length;
+    $('#count-reachable').textContent = n(reachable);
+    $('#count-owned').textContent = n((x) => x.owned);
     $('#count-mine').textContent = n((x) => x.my_rating != null);
-    $('#count-departed').textContent = n((x) => x.departed);
-    $('#count-discovery').textContent = state.films.length - f.length;
-    $('#count-owned').textContent = state.films.filter((x) => x.owned).length;
   }
 
   // ---- virtual-scrolled rows ----
