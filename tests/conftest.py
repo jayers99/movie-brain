@@ -86,8 +86,10 @@ class FakeEmbedder:
 
     def __init__(self) -> None:
         self.asked: list[str] = []
+        self.calls = 0
 
     def encode(self, texts: Sequence[str]) -> list[list[float]]:
+        self.calls += 1
         out = []
         for text in texts:
             self.asked.append(text)
