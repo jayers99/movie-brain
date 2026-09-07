@@ -1084,6 +1084,9 @@ def test_cast_link_closes_the_drawer_and_searches_the_exact_name(dash: Page):
     assert count(dash) == 1
     assert "q=" in dash.url and "film=" not in dash.url
     dash.go_back()  # the open-drawer entry is still behind the search: Back reopens the film
+    _settled(dash)
+    expect(dash.locator("#search")).to_have_value("")
+    assert count(dash) == 8  # the stale search filter must not survive the walk back
     expect(dash.locator("#drawer h2")).to_contain_text("Alpha")
 
 

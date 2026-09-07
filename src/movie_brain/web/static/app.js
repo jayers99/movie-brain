@@ -718,7 +718,11 @@
     closeDrawer();
   });
   window.addEventListener('popstate', () => {
-    readUrl(); writeControlsFromState(); applyFilters();
+    readUrl(); writeControlsFromState();
+    // A pushed q= entry (a person link) can be walked back: state.search must follow the URL,
+    // or the table stays filtered by a query that is no longer in the box or the address bar.
+    if (state.q !== (searchEl.dataset.settled ?? '')) { delete searchEl.dataset.settled; runSearch(); }
+    else applyFilters();
     if (state.openFilm != null) openDrawer(state.openFilm, false); else closeDrawer(true);
   });
 
