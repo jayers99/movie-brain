@@ -1062,16 +1062,18 @@ def test_cast_row_shows_six_names_then_everyone_with_roles(dash: Page):
     inline = body.locator(".cast-inline")
     expect(inline).to_have_text("Humphrey Bogart, Lauren Bacall, John Ridgely, Martha Vickers, Louis Jean Heydt, Charles Waldron")
     summary = body.locator(".cast-more summary")
-    expect(summary).to_have_text("⋯ 2 more", use_inner_text=True)  # innerText: the hidden "⋯ fewer" span is not rendered
+    # Alpha seeds EIGHT cast rows; Sonia Darrin is "(uncredited)" and never shown, so seven remain.
+    expect(summary).to_have_text("⋯ 1 more", use_inner_text=True)  # innerText: the hidden "⋯ fewer" span is not rendered
     expect(body.locator(".cast-full")).not_to_be_visible()  # a closed <details> still holds its text — test VISIBILITY (watch.md)
     summary.click()
     expect(body.locator(".cast-full")).to_be_visible()
     expect(inline).not_to_be_visible()
     expect(summary).to_have_text("⋯ fewer", use_inner_text=True)
     items = body.locator(".cast-full li")
-    expect(items).to_have_count(8)
+    expect(items).to_have_count(7)
     expect(items.nth(0)).to_have_text("Humphrey Bogart as Philip Marlowe")
-    expect(items.nth(7)).to_have_text("Sonia Darrin as Agnes (uncredited)")
+    expect(items.nth(6)).to_have_text("Regis Toomey as Bernie Ohls")
+    expect(body).not_to_contain_text("Sonia Darrin")
 
 
 def test_writer_row_labels_the_novelist_and_links_the_name(dash: Page):

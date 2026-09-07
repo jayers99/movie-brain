@@ -51,3 +51,20 @@ def test_to_dict_is_the_api_shape():
         "cast": [{"name": "Humphrey Bogart", "character": "Philip Marlowe"}],
         "writers": [],
     }
+
+
+def test_uncredited_cast_is_dropped_from_the_drawer():
+    """The owner sees no sense in listing uncredited players, even in the full list (2026-09-07)."""
+    rows = [
+        ("cast", "Humphrey Bogart", "Philip Marlowe", "", ""),
+        ("cast", "Sonia Darrin", "Agnes Lowzier (uncredited)", "", ""),
+        ("cast", "Bess Flowers", "Woman with Bumped Man (Uncredited)", "", ""),
+    ]
+    fc = build_credits(rows)
+    assert fc is not None
+    assert fc.cast == (CastEntry("Humphrey Bogart", "Philip Marlowe"),)
+
+
+def test_a_film_with_only_uncredited_cast_still_counts_as_enriched():
+    fc = build_credits([("cast", "Extra", "Patron (uncredited)", "", "")])
+    assert fc is not None and fc.cast == ()

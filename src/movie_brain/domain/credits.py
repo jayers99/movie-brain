@@ -14,6 +14,7 @@ from movie_brain.domain.models import CastEntry, FilmCredits, WriterEntry
 BARE_JOBS = frozenset({"Screenplay", "Writer"})
 WRITING_DEPARTMENT = "Writing"
 DIRECTOR_JOB = "Director"
+UNCREDITED_MARKER = "(uncredited)"  # TMDB's convention, matched case-insensitively; the row stays in film_credit for `actor:` search
 
 CreditRow = tuple[str, str, str, str, str]  # (kind, name, character, job, department)
 
@@ -44,6 +45,8 @@ def build_credits(rows: Iterable[CreditRow]) -> FilmCredits | None:
     for kind, name, character, job, department in rows:
         seen = True
         if kind == "cast":
+            if UNCREDITED_MARKER in character.lower():
+                continue  # the owner sees no sense in listing uncredited players, even in the full list
             cast.append(CastEntry(name, character))
         elif job == DIRECTOR_JOB and director is None:
             director = name
