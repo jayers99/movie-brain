@@ -95,6 +95,53 @@ def test_fetcher_fetches_article_folded_hit_beyond_top_three():
     assert any(c.tt == "tt0026138" and c.in_tmdb for c in cands)
 
 
+def test_fetcher_skips_a_candidate_whose_detail_answers_404():
+    """TMDB's search can return a ghost entry whose detail call answers 404 (Roger & Me,
+    2026-09-07: movie 1705292). One dead candidate must not fail the whole lookup — the
+    other candidates are still real — and the ghost is remembered as an empty detail so it
+    is not fetched again."""
+    import requests
+
+    class Ghosting:
+        def movie_detail(self, i):
+            if i == 1705292:
+                resp = requests.Response()
+                resp.status_code = 404
+                raise requests.HTTPError("404 Client Error: Not Found", response=resp)
+            return {
+                "id": i, "title": "Roger & Me", "original_title": "Roger & Me", "release_date": "1989-09-01",
+                "runtime": 91, "external_ids": {"imdb_id": "tt0098213"},
+                "credits": {"crew": [{"job": "Director", "name": "Michael Moore"}]},
+                "alternative_titles": {"titles": []},
+            }
+
+    data = {
+        "ts:Roger & Me|None": [{"id": 1705292, "title": "Roger & Me"}, {"id": 2044, "title": "Roger & Me"}],
+        'o:{"s": "Roger & Me"}': {"Search": []},
+        'o:{"i": "tt0098213"}': {"imdbID": "tt0098213", "Title": "Roger & Me", "Year": "1989", "Type": "movie"},
+    }
+    cache = CandidateCache(data, read_only=False)
+    cands = CandidateFetcher(cache, Ghosting(), None).fetch(make_query("Roger & Me", None, "list"))
+    assert [c.tt for c in cands] == ["tt0098213"]
+    assert cache.data["td:1705292"] == {}
+
+
+def test_fetcher_still_raises_on_a_detail_call_that_fails_for_any_other_reason():
+    """Only a 404 is a fact about the candidate; a 5xx or a dropped connection is transient
+    and must still surface as a failed lookup rather than a silently thinner pool."""
+    import requests
+
+    class Flaky:
+        def movie_detail(self, i):
+            resp = requests.Response()
+            resp.status_code = 503
+            raise requests.HTTPError("503 Server Error", response=resp)
+
+    data = {"ts:X|None": [{"id": 1, "title": "X"}], 'o:{"s": "X"}': {"Search": []}}
+    with pytest.raises(requests.HTTPError):
+        CandidateFetcher(CandidateCache(data, read_only=False), Flaky(), None).fetch(make_query("X", None, "list"))
+
+
 def test_session_fetcher_needs_both_clients(tmp_path):
     from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
 

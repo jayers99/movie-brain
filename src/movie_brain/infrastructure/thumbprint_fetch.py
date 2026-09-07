@@ -16,6 +16,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from movie_brain.domain.matching import norm_title
 from movie_brain.domain.thumbprint import Candidate, Query, article_norm
 from movie_brain.infrastructure.omdb import OmdbClient
@@ -179,7 +181,20 @@ class CandidateFetcher:
         return [x for x in (res or []) if isinstance(x, dict) and "id" in x]
 
     def _td(self, i: int) -> dict[str, Any]:
-        d = self.cache.get(k_td(i), lambda: self._need(self.tmdb, k_td(i)).movie_detail(i), soft=True)
+        def detail() -> dict[str, Any]:
+            try:
+                return dict(self._need(self.tmdb, k_td(i)).movie_detail(i))
+            except requests.HTTPError as exc:
+                # A search hit whose detail answers 404 is a ghost TMDB has since deleted
+                # (Roger & Me, movie 1705292, 2026-09-07). That is a fact about ONE candidate,
+                # not a failed lookup: record it as an empty detail — cached, so it is never
+                # fetched again — and let the rest of the pool stand. Anything else (5xx, a
+                # dropped connection) is transient and still surfaces as a failed form.
+                if exc.response is not None and exc.response.status_code == 404:
+                    return {}
+                raise
+
+        d = self.cache.get(k_td(i), detail, soft=True)
         return d if isinstance(d, dict) else {}
 
     def _person(self, name: str) -> list[dict[str, Any]]:
