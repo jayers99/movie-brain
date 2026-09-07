@@ -904,3 +904,22 @@ def test_embed_apply_reports_counts(config_dir, monkeypatch):
     r = runner.invoke(app, ["embed", "--apply", "--limit", "3"])
     assert r.exit_code == 0, r.output
     assert "embedded: 3" in r.output and "no prose: 1" in r.output
+
+
+def test_services_url_sets_shows_lists_and_clears(config_dir):
+    tpl = "https://play.max.com/search?q={title}"
+    assert runner.invoke(app, ["services", "url", "max", tpl]).exit_code == 0
+    assert tpl in runner.invoke(app, ["services", "url", "max"]).output
+    assert tpl in runner.invoke(app, ["services", "list"]).output
+    assert runner.invoke(app, ["services", "url", "max", "-"]).exit_code == 0
+    assert "falls back" in runner.invoke(app, ["services", "url", "max"]).output
+
+
+def test_services_url_requires_the_title_placeholder(config_dir):
+    r = runner.invoke(app, ["services", "url", "max", "https://play.max.com/search"])
+    assert r.exit_code == 2
+    assert "{title}" in r.output
+
+
+def test_services_url_unknown_slug_exits_2(config_dir):
+    assert runner.invoke(app, ["services", "url", "nope", "https://x/{title}"]).exit_code == 2

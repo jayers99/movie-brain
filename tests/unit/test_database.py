@@ -2245,3 +2245,30 @@ def test_merge_moves_the_embedding_survivor_wins(repo):
     with sqlite3.connect(repo.db_path) as conn:
         note = conn.execute("SELECT note FROM film_disposition WHERE film_id = ?", (c,)).fetchone()[0]
     assert "film_embedding" in note
+
+
+def test_migration_021_adds_the_search_url_to_the_registry(repo):
+    with sqlite3.connect(repo.db_path) as c:
+        cols = {r[1] for r in c.execute("PRAGMA table_info(movie_service)")}
+        assert "search_url" in cols
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 21
+    assert repo.movie_service("max").search_url is None  # inert by default
+
+
+def test_set_service_search_url_round_trips_and_clears(repo):
+    assert repo.set_service_search_url("max", "https://play.max.com/search?q={title}")
+    assert repo.movie_service("max").search_url == "https://play.max.com/search?q={title}"
+    assert repo.set_service_search_url("max", None)
+    assert repo.movie_service("max").search_url is None
+    assert repo.set_service_search_url("max", "https://play.max.com/search?q={title}")
+    assert repo.set_service_search_url("max", "")  # empty clears too
+    assert repo.movie_service("max").search_url is None
+    assert not repo.set_service_search_url("no-such-service", "https://x/{title}")
+
+
+def test_register_provider_never_touches_a_search_url(repo):
+    """The nightly sync calls register_provider for every provider TMDB reports; the owner's
+    template must survive it exactly as quality/has_apple_app/subscribed do."""
+    repo.set_service_search_url("mubi", "https://mubi.com/search?q={title}")
+    assert repo.register_provider(11, "MUBI") == "mubi"
+    assert repo.movie_service("mubi").search_url == "https://mubi.com/search?q={title}"

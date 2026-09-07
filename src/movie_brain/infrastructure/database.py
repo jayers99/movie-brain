@@ -336,7 +336,7 @@ def _services_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]
     return out
 
 
-_SERVICE_SELECT = "SELECT slug, name, kind, subscribed, region, quality, has_apple_app FROM movie_service "
+_SERVICE_SELECT = "SELECT slug, name, kind, subscribed, region, quality, has_apple_app, search_url FROM movie_service "
 
 
 def _service_option(c: sqlite3.Connection, slug: str) -> dict[str, object] | None:
@@ -391,6 +391,7 @@ def _row_to_service(row: sqlite3.Row) -> ServiceMeta:
         region=str(row["region"]),
         quality=int(row["quality"]),
         has_apple_app=bool(row["has_apple_app"]),
+        search_url=str(row["search_url"]) if row["search_url"] else None,
     )
 
 
@@ -1862,8 +1863,8 @@ class Repository:
             row = c.execute(_SERVICE_SELECT + "WHERE slug = ?", (slug,)).fetchone()
             return None if row is None else _row_to_service(row)
 
-    def _set_service_column(self, slug: str, column: str, value: int) -> bool:
-        # column is never user input — the three public setters below name it literally.
+    def _set_service_column(self, slug: str, column: str, value: int | str | None) -> bool:
+        # column is never user input — the four public setters below name it literally.
         with self._conn() as c:
             cur = c.execute(f"UPDATE movie_service SET {column} = ? WHERE slug = ?", (value, slug))
             return cur.rowcount > 0
@@ -1879,6 +1880,11 @@ class Repository:
     def set_service_subscribed(self, slug: str, subscribed: bool) -> bool:
         """The ONLY writer of `movie_service.subscribed`. False when the slug is unknown."""
         return self._set_service_column(slug, "subscribed", 1 if subscribed else 0)
+
+    def set_service_search_url(self, slug: str, template: str | None) -> bool:
+        """The ONLY writer of `movie_service.search_url` (migration 021). None or "" clears it.
+        False when the slug is unknown."""
+        return self._set_service_column(slug, "search_url", template or None)
 
     def provider_map(self) -> dict[int, str]:
         with self._conn() as c:

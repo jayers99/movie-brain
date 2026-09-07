@@ -407,11 +407,12 @@ def lists_trust_cmd(
 
 
 def _service_line(m: ServiceMeta) -> str:
-    return (
+    line = (
         f"{m.slug:<24} quality {m.quality}   "
         f"apple-app {'yes' if m.has_apple_app else 'no':<3}   "
         f"subscribed {'yes' if m.subscribed else 'no':<3}   {m.kind:<5} {m.name}"
     )
+    return f"{line}   url {m.search_url}" if m.search_url else line
 
 
 def _service_or_exit(repo: Repository, slug: str) -> ServiceMeta:
@@ -432,7 +433,7 @@ def services_list_cmd() -> None:
         console.print("no services registered")
         return
     for m in services:
-        console.print(_service_line(m))
+        console.print(_service_line(m), soft_wrap=True)
 
 
 @services_app.command("quality")
@@ -482,6 +483,37 @@ def services_subscribe_cmd(
         return
     repo.set_service_subscribed(slug, bool(flag))
     console.print(f"{slug}: subscribed set to {'yes' if flag else 'no'}")
+
+
+@services_app.command("url")
+def services_url_cmd(
+    slug: Annotated[str, typer.Argument(help="Service slug (e.g. max).")],
+    template: Annotated[
+        str | None, typer.Argument(help="Title-search URL with a {title} placeholder; `-` clears it.")
+    ] = None,
+) -> None:
+    """Show or set one service's title-search template — where the drawer's "Watch on <service>"
+    link lands. With no template the link falls back to the listing's stored URL (Criterion's
+    own page; TMDB's watch page for provider-fed services).
+
+    Nothing but this verb writes `movie_service.search_url`, so provider auto-registration
+    during sync can never reset it."""
+    repo = _repo()
+    meta = _service_or_exit(repo, slug)
+    if template is None:
+        console.print(_service_line(meta), soft_wrap=True)
+        if not meta.search_url:
+            console.print("  url (none — the watch link falls back to the listing URL)")
+        return
+    if template == "-":
+        repo.set_service_search_url(slug, None)
+        console.print(f"{slug}: url cleared")
+        return
+    if "{title}" not in template:
+        err.print("the template must contain {title} — e.g. https://play.max.com/search?q={title}", soft_wrap=True)
+        raise typer.Exit(2)
+    repo.set_service_search_url(slug, template)
+    console.print(f"{slug}: url set to {template}", soft_wrap=True)
 
 
 @app.command("rematch")
