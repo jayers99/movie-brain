@@ -2,6 +2,10 @@
 
 Immutable source texts for the MovieBrain film LLM-wiki. **Read, never edit** — same three-layer discipline as the Halo vault: `docs/raw/` is source, `docs/wiki/` is the synthesis you build from it, and citations point back here by filename.
 
+## Where the PDFs live
+
+Copyrighted source material is **never committed**: the PDFs listed below live outside the repo at `~/iCloud/movie-brain-corpus/` (the home for all copyrighted materials), and `.gitignore` blocks any `docs/raw/*.pdf` from coming back. They were purged from git history on 2026-09-11. Only the notes and tables of contents here are tracked.
+
 ## What's here (pulled 2026-09-01)
 
 All files below are **free, DRM-free PDFs released by the authors** on davidbordwell.net — Bordwell and Thompson made their previously-paid online books free on 2022-05-17 and describe them as "unlocked pdf files."

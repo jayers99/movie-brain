@@ -8,3 +8,6 @@ dist/
 *.egg-info/
 .playwright/
 .superpowers/
+
+# copyrighted source texts live in ~/iCloud/movie-brain-corpus, never in the repo
+docs/raw/*.pdf
