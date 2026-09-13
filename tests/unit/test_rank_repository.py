@@ -251,3 +251,61 @@ def test_marking_unseen_removes_the_film_from_the_order_and_every_verdict_naming
     assert repo.order_verdicts_for(sid, d) == []   # the verdict AGAINST b is gone too
     assert repo.order_verdicts_for(sid, b) == []
     assert repo.order_deferrals(sid) == {}
+
+
+def test_merge_moves_the_order_survivor_wins_and_compacts(repo):
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    c = _film(repo, "Gamma", 1960)
+    sid = repo.create_rank_session("owned", 1, {1: a}, {a: 1, b: 1, c: 1}, D)
+    repo.insert_ordered(sid, 1, a, 0, D)
+    repo.insert_ordered(sid, 1, b, 1, D)
+    repo.insert_ordered(sid, 1, c, 2, D)          # [a, b, c]
+    repo.defer_order_film(sid, b, "2026-09-13")
+    repo.merge_film(b, a, D)
+    assert repo.rank_order(sid, 1) == [a, c]      # survivor's row wins, loser's dropped, gap closed
+    assert repo.order_deferrals(sid) == {a: "2026-09-13"}
+    other = repo.create_rank_session("list", 2, {1: c}, {c: 1}, D)   # a second session: loser only
+    d, e = _film(repo, "Delta", 1970), _film(repo, "Delta", 1971)
+    repo.insert_ordered(other, 1, e, 0, D)
+    repo.merge_film(e, d, D)
+    assert repo.rank_order(other, 1) == [d]       # loser's row moves when the survivor has none
+
+
+def test_merge_repoints_order_verdicts_and_drops_self_comparisons(repo):
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    c, x = _film(repo, "Gamma", 1960), _film(repo, "Xi", 1970)
+    sid = repo.create_rank_session("owned", 1, {1: a}, {a: 1, b: 1, c: 1, x: 1}, D)
+    repo.append_order_comparison(sid, 1, c, b, "better", D)   # c judged against the loser → re-points to a
+    repo.append_order_comparison(sid, 1, b, x, "worse", D)    # loser mid-search → moves (survivor has none)
+    repo.append_order_comparison(sid, 1, a, b, "worse", D)    # survivor judged against loser → would be a vs a
+    report = repo.merge_film(b, a, D)
+    assert repo.order_verdicts_for(sid, c) == [(a, "better")]
+    # a already had a candidate row (a-vs-b), so b's own row is DROPPED, not moved (survivor
+    # wins per session); the a-vs-b row re-points to a-vs-a and is then deleted. Two drops.
+    assert repo.order_verdicts_for(sid, a) == []
+    assert repo.order_verdicts_for(sid, b) == []
+    assert report.dropped.get("rank_order_comparison") == 2
+
+
+def test_merge_drops_losers_order_verdicts_when_survivor_is_also_mid_insertion(repo):
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    x = _film(repo, "Xi", 1970)
+    sid = repo.create_rank_session("owned", 1, {1: x}, {a: 1, b: 1, x: 1}, D)
+    repo.append_order_comparison(sid, 1, a, x, "better", D)
+    repo.append_order_comparison(sid, 1, b, x, "worse", D)
+    repo.merge_film(b, a, D)
+    assert repo.order_verdicts_for(sid, a) == [(x, "better")]   # its OWN log, untouched
+    assert repo.order_verdicts_for(sid, b) == []
+
+
+def test_merge_onto_an_unseen_survivor_purges_the_losers_order_rows(repo):
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    x = _film(repo, "Xi", 1970)
+    sid = repo.create_rank_session("owned", 1, {1: x}, {b: 1, x: 1}, D)
+    repo.insert_ordered(sid, 1, x, 0, D)
+    repo.insert_ordered(sid, 1, b, 1, D)
+    repo.append_order_comparison(sid, 1, b, x, "worse", D)
+    repo.set_unseen(a, True, D)
+    repo.merge_film(b, a, D)
+    assert repo.rank_order(sid, 1) == [x]
+    assert repo.order_verdicts_for(sid, a) == [] and repo.order_verdicts_for(sid, b) == []

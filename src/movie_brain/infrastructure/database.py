@@ -2869,7 +2869,7 @@ class Repository:
             if n_list_entries:
                 moved["film_list_entry"] = n_list_entries
             # Ranker rows (spec §3): per-session one-row tables survivor-wins; the log re-points.
-            for table in ("rank_placement", "rank_deferral"):
+            for table in ("rank_placement", "rank_deferral", "rank_order_deferral"):
                 for row in c.execute(f"SELECT session_id FROM {table} WHERE film_id = ?", (loser_id,)).fetchall():
                     sid = int(row["session_id"])
                     twin = c.execute(
@@ -2884,6 +2884,22 @@ class Repository:
                             (survivor_id, sid, loser_id),
                         )
                         moved[table] = moved.get(table, 0) + 1
+            # rank_order (order spec §4.4): per session, the survivor's row wins and the loser's
+            # is dropped with its gap closed; where the survivor has none, the loser's moves.
+            for row in c.execute("SELECT session_id FROM rank_order WHERE film_id = ?", (loser_id,)).fetchall():
+                sid = int(row["session_id"])
+                twin = c.execute(
+                    "SELECT 1 FROM rank_order WHERE session_id = ? AND film_id = ?", (sid, survivor_id)
+                ).fetchone()
+                if twin:
+                    self._remove_ordered(c, loser_id, sid)
+                    dropped["rank_order"] = dropped.get("rank_order", 0) + 1
+                else:
+                    c.execute(
+                        "UPDATE rank_order SET film_id = ? WHERE session_id = ? AND film_id = ?",
+                        (survivor_id, sid, loser_id),
+                    )
+                    moved["rank_order"] = moved.get("rank_order", 0) + 1
             n = c.execute("UPDATE rank_anchor SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)).rowcount
             if n:
                 moved["rank_anchor"] = n
@@ -2919,6 +2935,39 @@ class Repository:
             ).rowcount
             if n:
                 moved["rank_comparison"] = moved.get("rank_comparison", 0) + n
+            # rank_order_comparison: candidate side survivor-wins per session (a concatenated
+            # log could cross the derived bounds); other side re-points unconditionally; a row
+            # that would then compare the survivor with itself audits nothing and is deleted.
+            for row in c.execute(
+                "SELECT DISTINCT session_id FROM rank_order_comparison WHERE film_id = ?", (loser_id,)
+            ).fetchall():
+                sid = int(row["session_id"])
+                twin = c.execute(
+                    "SELECT 1 FROM rank_order_comparison WHERE session_id = ? AND film_id = ? LIMIT 1",
+                    (sid, survivor_id),
+                ).fetchone()
+                if twin is not None:
+                    n = c.execute(
+                        "DELETE FROM rank_order_comparison WHERE session_id = ? AND film_id = ?", (sid, loser_id)
+                    ).rowcount
+                    dropped["rank_order_comparison"] = dropped.get("rank_order_comparison", 0) + n
+                else:
+                    n = c.execute(
+                        "UPDATE rank_order_comparison SET film_id = ? WHERE session_id = ? AND film_id = ?",
+                        (survivor_id, sid, loser_id),
+                    ).rowcount
+                    moved["rank_order_comparison"] = moved.get("rank_order_comparison", 0) + n
+            n = c.execute(
+                "UPDATE rank_order_comparison SET other_film_id = ? WHERE other_film_id = ?", (survivor_id, loser_id)
+            ).rowcount
+            if n:
+                moved["rank_order_comparison"] = moved.get("rank_order_comparison", 0) + n
+            n = c.execute(
+                "DELETE FROM rank_order_comparison WHERE film_id = ? AND other_film_id = ?",
+                (survivor_id, survivor_id),
+            ).rowcount
+            if n:
+                dropped["rank_order_comparison"] = dropped.get("rank_order_comparison", 0) + n
             # Whichever side's `unseen` row the survivor now holds (its own, kept over the
             # loser's; or the loser's, moved over because the survivor held none), the
             # survivor's placement and verdict log must be purged too — mirroring `set_unseen`
@@ -2928,6 +2977,7 @@ class Repository:
             if c.execute("SELECT 1 FROM unseen WHERE film_id = ?", (survivor_id,)).fetchone() is not None:
                 c.execute("DELETE FROM rank_placement WHERE film_id = ?", (survivor_id,))
                 c.execute("DELETE FROM rank_comparison WHERE film_id = ?", (survivor_id,))
+                self._purge_order_rows(c, survivor_id)
             # Credits follow the survivor-wins rule the one-row tables use: a survivor that
             # already carries credits keeps them and the loser's are dropped; otherwise the
             # loser's rows move. `film_text` moves through DELETE+INSERT rather than UPDATE
