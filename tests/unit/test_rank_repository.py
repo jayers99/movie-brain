@@ -62,10 +62,72 @@ def test_owned_seed_films_is_owned_and_rated_minus_unseen(repo):
     _film(repo, "Charlie", 1970)  # neither owned nor rated
     c = _owned_rated(repo, "Delta", 1980, 7)
     repo.set_unseen(c, True, D)
-    got = {s.film_id: s for s in repo.owned_seed_films()}
+    got = {s.film_id: s for s in repo.pool_seed_films()}
     assert set(got) == {a, b}
     assert got[a].score == 10 and got[a].imdb == 8.1 and got[a].title == "Alpha" and got[a].year == 1950
     assert got[b].imdb is None
+
+
+def test_rank_mark_round_trips_and_reports_missing(repo):
+    a = _film(repo, "Alpha", 1950)
+    assert repo.set_rank_mark(a, True, D) is True
+    assert repo.rank_mark_film_ids() == {a}
+    assert repo.get_view(a, D).rank_marked is True
+    assert repo.set_rank_mark(a, True, D) is True   # idempotent
+    assert repo.set_rank_mark(a, False, D) is False
+    assert repo.rank_mark_film_ids() == set()
+    assert repo.set_rank_mark(999, True, D) is None
+
+
+def test_rank_pool_is_owned_or_marked_or_rated_6_plus_minus_low_scores_unseen_and_disposed(repo):
+    owned = _film(repo, "Owned", 1950)
+    repo.mark_owned(owned, D)
+    marked = _film(repo, "Marked", 1951)
+    repo.set_rank_mark(marked, True, D)
+    rated6 = _film(repo, "Rated6", 1952)
+    repo.set_rating(rated6, 6, D)
+    rated5 = _film(repo, "Rated5", 1953)
+    repo.set_rating(rated5, 5, D)
+    owned0 = _film(repo, "Owned0", 1954)
+    repo.mark_owned(owned0, D)
+    repo.set_rating(owned0, 0, D)
+    marked4 = _film(repo, "Marked4", 1955)
+    repo.set_rank_mark(marked4, True, D)
+    repo.set_rating(marked4, 4, D)
+    unseen_owned = _film(repo, "UnseenOwned", 1956)
+    repo.mark_owned(unseen_owned, D)
+    repo.set_unseen(unseen_owned, True, D)
+    gone = _film(repo, "Gone", 1957)
+    repo.mark_owned(gone, D)
+    repo.tombstone_film(gone, D)
+    _film(repo, "Nobody", 1958)
+    assert repo.rank_pool_film_ids() == {owned, marked, rated6}
+
+
+def test_pool_seed_films_is_pool_and_rated_6_plus(repo):
+    a = _owned_rated(repo, "Alpha", 1950, 10, imdb=8.1)
+    b = _film(repo, "Bravo", 1960)
+    repo.set_rating(b, 8, D)  # rated, not owned: in
+    _owned_rated(repo, "Charlie", 1970, 5)  # owned but 5: out
+    d = _film(repo, "Delta", 1980)
+    repo.set_rank_mark(d, True, D)  # marked, unrated: not a seed
+    e = _owned_rated(repo, "Echo", 1990, 7)
+    repo.set_unseen(e, True, D)
+    got = {s.film_id: s for s in repo.pool_seed_films()}
+    assert set(got) == {a, b}
+    assert got[a].score == 10 and got[a].imdb == 8.1 and got[b].imdb is None
+
+
+def test_merge_moves_rank_mark_survivor_wins(repo):
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    repo.set_rank_mark(b, True, D)
+    repo.merge_film(b, a, D)
+    assert repo.rank_mark_film_ids() == {a}
+    c, d = _film(repo, "Beta", 1960), _film(repo, "Beta", 1961)
+    repo.set_rank_mark(c, True, D)
+    repo.set_rank_mark(d, True, D)
+    report = repo.merge_film(d, c, D)
+    assert report.dropped.get("rank_mark") == 1 and repo.rank_mark_film_ids() == {a, c}
 
 
 def test_session_round_trip(repo):

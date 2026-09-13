@@ -193,6 +193,7 @@ _ONE_ROW_TABLES = (
     "owned",
     "film_embedding",
     "unseen",
+    "rank_mark",
 )  # film_id PRIMARY KEY tables
 
 
@@ -484,6 +485,10 @@ def _unseen_ids(c: sqlite3.Connection) -> set[int]:
     return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM unseen")}
 
 
+def _rank_mark_ids(c: sqlite3.Connection) -> set[int]:
+    return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM rank_mark")}
+
+
 def _revisit_by_film(c: sqlite3.Connection) -> dict[int, str | None]:
     return {int(r["film_id"]): r["note"] for r in c.execute("SELECT film_id, note FROM needs_revisit")}
 
@@ -528,6 +533,7 @@ def _row_to_view(
     new_on: list[dict[str, object]] | None = None,
     owned: bool = False,
     unseen: bool = False,
+    rank_marked: bool = False,
     revisit: tuple[bool, str | None] = (False, None),
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
@@ -559,6 +565,7 @@ def _row_to_view(
         criterion=bool(row["criterion"]),
         owned=owned,
         unseen=unseen,
+        rank_marked=rank_marked,
         needs_revisit=revisit[0],
         revisit_note=revisit[1],
         audit=audit[0],
@@ -2514,19 +2521,58 @@ class Repository:
             c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
             return False
 
-    # tier ranker (spec 2026-09-13 §3) ----------------------------------------
-    def owned_seed_films(self) -> list[SeedFilm]:
-        """Owned ∩ rated, minus unseen and disposed: the seed placements and anchor pool."""
+    # rank_mark ("Rank this", ranking-pool spec P2) ------------------------------
+    def rank_mark_film_ids(self) -> set[int]:
+        with self._conn() as c:
+            return _rank_mark_ids(c)
+
+    def set_rank_mark(self, film_id: int, marked: bool, today: date) -> bool | None:
+        """Idempotent set/clear; None when the film does not exist. Touches nothing else:
+        a marked film that is unseen or scored 0–5 is simply outside the pool (P1)."""
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                return None
+            if marked:
+                c.execute(
+                    "INSERT OR IGNORE INTO rank_mark (film_id, marked_on) VALUES (?, ?)",
+                    (film_id, today.isoformat()),
+                )
+                return True
+            c.execute("DELETE FROM rank_mark WHERE film_id = ?", (film_id,))
+            return False
+
+    # the pool (ranking-pool spec §4.1, P1) ---------------------------------------
+    _POOL_SQL = (
+        "SELECT f.id FROM films f "
+        "LEFT JOIN my_ratings r ON r.film_id = f.id "
+        "WHERE " + _NOT_DISPOSED + " "
+        "AND NOT EXISTS (SELECT 1 FROM unseen u WHERE u.film_id = f.id) "
+        "AND (r.score IS NULL OR r.score >= 6) "
+        "AND (EXISTS (SELECT 1 FROM owned o WHERE o.film_id = f.id) "
+        "     OR EXISTS (SELECT 1 FROM rank_mark m WHERE m.film_id = f.id) "
+        "     OR r.score >= 6)"
+    )
+
+    def rank_pool_film_ids(self) -> set[int]:
+        """Owned ∪ marked ∪ rated 6–10, minus disposed, unseen and any film scored 0–5 — the ONE
+        definition of who the ranker asks and seeds."""
+        with self._conn() as c:
+            return {int(r["id"]) for r in c.execute(self._POOL_SQL)}
+
+    def pool_seed_films(self) -> list[SeedFilm]:
+        """Pool ∩ rated 6–10: the seed placements and anchor pool (P3, P4)."""
         with self._conn() as c:
             rows = c.execute(
-                "SELECT f.id, f.title, f.year, r.score, o2.imdb FROM owned o "
-                "JOIN films f ON f.id = o.film_id JOIN my_ratings r ON r.film_id = f.id "
-                "LEFT JOIN omdb o2 ON o2.film_id = f.id "
-                "WHERE " + _NOT_DISPOSED + " AND NOT EXISTS (SELECT 1 FROM unseen u WHERE u.film_id = f.id) "
-                "ORDER BY f.id"
+                "SELECT f.id, f.title, f.year, r.score, o2.imdb FROM films f "
+                "JOIN my_ratings r ON r.film_id = f.id LEFT JOIN omdb o2 ON o2.film_id = f.id "
+                "WHERE f.id IN (" + self._POOL_SQL + ") AND r.score >= 6 ORDER BY f.id"
             ).fetchall()
             return [SeedFilm(int(r["id"]), int(r["score"]), r["imdb"], str(r["title"]), r["year"]) for r in rows]
 
+    def owned_seed_films(self) -> list[SeedFilm]:  # transitional alias, removed in Task 4
+        return self.pool_seed_films()
+
+    # tier ranker (spec 2026-09-13 §3) ----------------------------------------
     def film_facts(self, film_ids: Iterable[int]) -> dict[int, tuple[str, int | None, str | None]]:
         ids = list(film_ids)
         if not ids:
@@ -2841,6 +2887,8 @@ class Repository:
                         kept[table] = {"film_id": loser_id}
                     elif table == "unseen":
                         kept[table] = {"marked_on": loser_row["marked_on"], "note": loser_row["note"]}
+                    elif table == "rank_mark":
+                        kept[table] = {"marked_on": loser_row["marked_on"]}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -3221,6 +3269,7 @@ class Repository:
             wl = _watchlist_ids(c)
             ow = _owned_ids(c)
             un = _unseen_ids(c)
+            rm = _rank_mark_ids(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
             criterion_option = _service_option(c, 'criterion')
@@ -3234,6 +3283,7 @@ class Repository:
                     new_on=new_on.get(r["id"]),
                     owned=r["id"] in ow,
                     unseen=r["id"] in un,
+                    rank_marked=r["id"] in rm,
                     revisit=(r["id"] in rv, rv.get(r["id"])),
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
@@ -3258,6 +3308,7 @@ class Repository:
                 new_on=_new_on_by_film(c, cutoff).get(row["id"]),
                 owned=row["id"] in _owned_ids(c),
                 unseen=row["id"] in _unseen_ids(c),
+                rank_marked=row["id"] in _rank_mark_ids(c),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
                 audit=au.get(row["id"], (None, None)),
                 criterion_option=_service_option(c, 'criterion'),
