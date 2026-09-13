@@ -330,6 +330,7 @@ class FilmView:
     owned: bool = False  # in my Apple TV library (owned table); import is the only writer
     needs_revisit: bool = False  # drawer-flagged as factually suspect; drawer toggle is the only writer
     revisit_note: str | None = None
+    unseen: bool = False  # the ranker's durable pass bucket (spec D5); drawer toggle + /rank page are the only writers
     audit: dict[str, object] | None = None  # {score, reasons:[{code, detail}]} from audit_flags; None = not a suspect
     verdict: dict[str, object] | None = None  # latest audit_verdict row; the dashboard endpoint is its only writer
     # verdict["reasons"] is a comma-joined sorted string (asymmetric with audit["reasons"] above, a list of dicts)

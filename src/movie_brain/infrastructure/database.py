@@ -181,7 +181,15 @@ class RepairFilm(NamedTuple):
     omdb_found: bool
 
 
-_ONE_ROW_TABLES = ("omdb", "tmdb", "my_ratings", "watchlist", "owned", "film_embedding")  # film_id PRIMARY KEY tables
+_ONE_ROW_TABLES = (
+    "omdb",
+    "tmdb",
+    "my_ratings",
+    "watchlist",
+    "owned",
+    "film_embedding",
+    "unseen",
+)  # film_id PRIMARY KEY tables
 
 
 def _tmdb_target(r: sqlite3.Row) -> TmdbMatchTarget:
@@ -468,6 +476,10 @@ def _owned_ids(c: sqlite3.Connection) -> set[int]:
     return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM owned")}
 
 
+def _unseen_ids(c: sqlite3.Connection) -> set[int]:
+    return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM unseen")}
+
+
 def _revisit_by_film(c: sqlite3.Connection) -> dict[int, str | None]:
     return {int(r["film_id"]): r["note"] for r in c.execute("SELECT film_id, note FROM needs_revisit")}
 
@@ -511,6 +523,7 @@ def _row_to_view(
     watchlisted: bool = False,
     new_on: list[dict[str, object]] | None = None,
     owned: bool = False,
+    unseen: bool = False,
     revisit: tuple[bool, str | None] = (False, None),
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
@@ -541,6 +554,7 @@ def _row_to_view(
         new_on=new_on or [],
         criterion=bool(row["criterion"]),
         owned=owned,
+        unseen=unseen,
         needs_revisit=revisit[0],
         revisit_note=revisit[1],
         audit=audit[0],
@@ -2468,6 +2482,29 @@ class Repository:
             ).fetchall()
             return [(int(r["film_id"]), str(r["title"]), r["year"], str(r["marked_on"]), r["note"]) for r in rows]
 
+    # unseen (the ranker's pass bucket, spec D5 / §4.6) ----------------------
+    def unseen_film_ids(self) -> set[int]:
+        with self._conn() as c:
+            return _unseen_ids(c)
+
+    def set_unseen(self, film_id: int, unseen: bool, today: date, note: str | None = None) -> bool | None:
+        """Idempotent set/clear. None when the film does not exist. Marking a film unseen also
+        deletes its `rank_placement` rows in EVERY session (§4.6): an unseen film is out of any
+        later save, and unmarking returns it to the queue, never to its old tier."""
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                return None
+            if unseen:
+                c.execute(
+                    "INSERT INTO unseen (film_id, marked_on, note) VALUES (?, ?, ?) "
+                    "ON CONFLICT(film_id) DO UPDATE SET note = COALESCE(excluded.note, unseen.note)",
+                    (film_id, today.isoformat(), note),
+                )
+                c.execute("DELETE FROM rank_placement WHERE film_id = ?", (film_id,))
+                return True
+            c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
+            return False
+
     def _assert_repairable(self, c: sqlite3.Connection, film_id: int) -> None:
         if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
             raise ValueError(f"unknown film {film_id}")
@@ -2527,6 +2564,8 @@ class Repository:
                         kept[table] = {"first_imported": loser_row["first_imported"]}
                     elif table == "film_embedding":
                         kept[table] = {"film_id": loser_id}
+                    elif table == "unseen":
+                        kept[table] = {"marked_on": loser_row["marked_on"], "note": loser_row["note"]}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -2789,6 +2828,7 @@ class Repository:
             new_on = _new_on_by_film(c, cutoff)
             wl = _watchlist_ids(c)
             ow = _owned_ids(c)
+            un = _unseen_ids(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
             criterion_option = _service_option(c, 'criterion')
@@ -2801,6 +2841,7 @@ class Repository:
                     watchlisted=r["id"] in wl,
                     new_on=new_on.get(r["id"]),
                     owned=r["id"] in ow,
+                    unseen=r["id"] in un,
                     revisit=(r["id"] in rv, rv.get(r["id"])),
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
@@ -2824,6 +2865,7 @@ class Repository:
                 watchlisted=row["id"] in _watchlist_ids(c),
                 new_on=_new_on_by_film(c, cutoff).get(row["id"]),
                 owned=row["id"] in _owned_ids(c),
+                unseen=row["id"] in _unseen_ids(c),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
                 audit=au.get(row["id"], (None, None)),
                 criterion_option=_service_option(c, 'criterion'),
