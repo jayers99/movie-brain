@@ -214,6 +214,20 @@ def undo_returned_order(ctx):
     assert "ordered" in result and "tally" not in result
 
 
+@then(parsers.parse("the undo returned the tier {tier:d} order state"))
+def undo_returned_tier_order(ctx, tier):
+    """The undo's OWN answer, not a re-read: hard-coding a tier in `undo` would pass a re-read."""
+    assert ctx["undo_result"]["tier"] == tier
+
+
+@when("the stored undo action loses its tier, as an old row has")
+def strip_action_tier(ctx):
+    """Exactly the shape the live DB's row has: an order action written before tier 2 existed."""
+    s = ctx["repo"].open_rank_session(SRC)
+    assert s.last_action is not None and "tier" in s.last_action
+    ctx["repo"].set_last_action(s.id, {k: v for k, v in s.last_action.items() if k != "tier"})
+
+
 @then("the undo returned the tiering state")
 def undo_returned_tiering(ctx):
     result = ctx["undo_result"]

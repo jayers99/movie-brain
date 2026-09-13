@@ -101,9 +101,17 @@ Feature: Order a tier — strict order inside tiers 1 and 2 by binary insertion
     Then the tier 2 order has 2 films and 0 remaining
     And the tier 1 order still has 1 film and 3 remaining
     When I undo
-    Then the tier 2 order has 1 film and 1 remaining
+    Then the undo returned the tier 2 order state
+    And the tier 2 order has 1 film and 1 remaining
     When I pass in tier 2 order mode
     Then "Nine-b" is deferred in tier 2
+
+  Scenario: Undo of an order click logged before tiers existed lands on tier 1
+    When I answer worse in order mode
+    And the stored undo action loses its tier, as an old row has
+    And I undo
+    Then the undo returned the tier 1 order state
+    And 1 film is ordered and the same candidate is asked with 0 verdicts
 
   Scenario: An order tier outside 1 and 2 is refused
     Then reading the tier 3 order is refused with 400

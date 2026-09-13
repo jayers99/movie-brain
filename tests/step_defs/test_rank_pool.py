@@ -151,4 +151,4 @@ def choices_include(ctx, tier, title):
 @then(parsers.parse("the tier {tier:d} order has {n:d} films and {m:d} remaining"))
 def order_counts(ctx, tier, n, m):
     s = order_state(ctx["repo"], SRC, tier, TODAY)
-    assert (s["ordered"], s["remaining"]) == (n, m)
+    assert (s["tier"], s["ordered"], s["remaining"]) == (tier, n, m)

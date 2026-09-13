@@ -218,6 +218,7 @@ def create_app(
 
     @app.get("/api/rank/order")
     def rank_order_state() -> Response:
+        # tier is wired through by Task 5 of the ranking-pool plan; 1 keeps today's page working until then
         return jsonify(ranker.order_state(repo, RANK_SOURCE, 1, today()))
 
     @app.post("/api/rank/order/verdict")
