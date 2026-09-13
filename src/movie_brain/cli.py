@@ -303,6 +303,12 @@ def lists_import_cmd(
         err.print(str(exc))
         raise typer.Exit(2) from exc
 
+    from movie_brain.domain.rank import RANKER_LIST_SLUGS
+
+    if parsed.meta.slug in RANKER_LIST_SLUGS:
+        err.print(f"{parsed.meta.slug!r} belongs to the tier ranker (saved from /rank), not to a list file — refusing")
+        raise typer.Exit(2)
+
     repo = _repo()  # outside the try below: typer.Exit subclasses RuntimeError, so the migrate guard would be swallowed
     cfg = load_config()
     token, key = load_tmdb_token(cfg), load_api_key(cfg)

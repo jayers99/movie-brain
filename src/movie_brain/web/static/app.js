@@ -571,7 +571,7 @@
     }
     const credited = d.credits && d.credits.director;
     const director = d.director ? personLink('director', d.director, !!credited, credited || d.director) : '—';
-    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
+    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button></h2>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       <div class="meta">${fmt(d.year)} · ${director}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${summary ? `<p>${poster}${esc(summary)}</p>` : poster}
@@ -688,6 +688,16 @@
     } else if (!needs_revisit && note) {
       note.remove();
     }
+  });
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.unseen-toggle'); if (!b) return;
+    const next = b.getAttribute('aria-pressed') !== 'true';
+    const r = await fetch(`/api/films/${b.dataset.id}/unseen`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ unseen: next }) });
+    if (!r.ok) { toast('Could not update unseen'); return; }
+    const { unseen } = await r.json();
+    b.setAttribute('aria-pressed', String(unseen));
+    const film = state.films.find((f) => f.id === Number(b.dataset.id));
+    if (film) film.unseen = unseen;
   });
   async function commitRevisitNote(input) {
     if (input.dataset.busy) return;

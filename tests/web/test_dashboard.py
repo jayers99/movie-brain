@@ -1142,3 +1142,21 @@ def test_audit_block_sits_just_above_the_raw_payload(dash: Page):
     assert text.index("Audit") > text.index("My rating")
     assert text.index("Audit") < text.index("Raw OMDb payload")
     expect(body.locator(".audit-block + details summary")).to_have_text("Raw OMDb payload")
+
+
+def test_header_links_to_the_rank_page(dash: Page):
+    expect(dash.locator("header a.rank-link")).to_have_attribute("href", "/rank")
+
+
+def test_drawer_unseen_toggle_round_trips(dash: Page):
+    body = _open(dash, "Charlie")
+    toggle = body.locator("button.unseen-toggle")
+    expect(toggle).to_have_attribute("aria-pressed", "false")
+    toggle.click()
+    expect(toggle).to_have_attribute("aria-pressed", "true")
+    dash.reload()
+    dash.wait_for_selector("#films tbody[data-count]")
+    body = _open(dash, "Charlie")
+    expect(body.locator("button.unseen-toggle")).to_have_attribute("aria-pressed", "true")
+    body.locator("button.unseen-toggle").click()
+    expect(body.locator("button.unseen-toggle")).to_have_attribute("aria-pressed", "false")

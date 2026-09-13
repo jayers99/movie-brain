@@ -956,3 +956,11 @@ def test_services_url_requires_the_title_placeholder(config_dir):
 
 def test_services_url_unknown_slug_exits_2(config_dir):
     assert runner.invoke(app, ["services", "url", "nope", "https://x/{title}"]).exit_code == 2
+
+
+def test_lists_import_refuses_a_ranker_slug(config_dir, tmp_path):
+    f = tmp_path / "my-owned-tiers.tsv"
+    f.write_text("# slug: my-owned-tiers\n# name: Mine\n1\tAlpha\tAnn\n")
+    r = runner.invoke(app, ["lists", "import", str(f)])
+    assert r.exit_code == 2
+    assert "ranker" in r.output
