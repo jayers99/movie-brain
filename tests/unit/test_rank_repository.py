@@ -163,3 +163,19 @@ def test_merge_drops_losers_verdicts_when_survivor_is_also_mid_search(repo):
         ).fetchone()
     assert row["anchor_film_id"] == a  # anchor_film_id re-points unconditionally
     assert report.dropped.get("rank_comparison") == 1
+
+
+def test_merge_onto_an_already_unseen_survivor_purges_the_losers_rank_rows(repo):
+    # The mirror of test_merge_moves_unseen_survivor_wins: the SURVIVOR is the unseen one and the
+    # LOSER is placed and mid-search. The cascade must run after the loser's rank rows have moved,
+    # or the unseen survivor comes out of the merge holding a placement a Save would write.
+    a = _film(repo, "Alpha", 1950)
+    b = _film(repo, "Alpha", 1951)
+    anchor = _film(repo, "Anchor", 1960)
+    sid = repo.create_rank_session("owned", 1, {3: anchor}, {b: 2}, D)
+    repo.append_comparison(sid, b, anchor, 3, "worse", D)
+    repo.set_unseen(a, True, D)
+    repo.merge_film(b, a, D)
+    assert repo.unseen_film_ids() == {a}
+    assert repo.rank_placements(sid) == {}
+    assert repo.verdicts_for(sid, a) == []

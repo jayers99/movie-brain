@@ -2724,14 +2724,6 @@ class Repository:
                         kept[table] = {"film_id": loser_id}
                     elif table == "unseen":
                         kept[table] = {"marked_on": loser_row["marked_on"], "note": loser_row["note"]}
-            # Finding 3: whichever side's `unseen` row the survivor now holds (its own, kept
-            # over the loser's; or the loser's, moved over because the survivor held none),
-            # the survivor's placement and verdict log must be purged too — mirroring
-            # `set_unseen` itself, so an unseen film can never come out of a merge still
-            # holding a placement a later `session_state` would save into the tiered list.
-            if c.execute("SELECT 1 FROM unseen WHERE film_id = ?", (survivor_id,)).fetchone() is not None:
-                c.execute("DELETE FROM rank_placement WHERE film_id = ?", (survivor_id,))
-                c.execute("DELETE FROM rank_comparison WHERE film_id = ?", (survivor_id,))
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -2810,6 +2802,15 @@ class Repository:
             ).rowcount
             if n:
                 moved["rank_comparison"] = moved.get("rank_comparison", 0) + n
+            # Whichever side's `unseen` row the survivor now holds (its own, kept over the
+            # loser's; or the loser's, moved over because the survivor held none), the
+            # survivor's placement and verdict log must be purged too — mirroring `set_unseen`
+            # itself. This runs AFTER the loser's rank rows have moved onto the survivor, or a
+            # survivor that was already unseen would inherit the loser's placement and a later
+            # Save would write an unseen film into the tiered list.
+            if c.execute("SELECT 1 FROM unseen WHERE film_id = ?", (survivor_id,)).fetchone() is not None:
+                c.execute("DELETE FROM rank_placement WHERE film_id = ?", (survivor_id,))
+                c.execute("DELETE FROM rank_comparison WHERE film_id = ?", (survivor_id,))
             # Credits follow the survivor-wins rule the one-row tables use: a survivor that
             # already carries credits keeps them and the loser's are dropped; otherwise the
             # loser's rows move. `film_text` moves through DELETE+INSERT rather than UPDATE
