@@ -2,7 +2,10 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const $ = (sel) => document.querySelector(sel);
   const main = $('#rank');
-  const state = { session: null, details: {} };
+  const state = { session: null, order: null, details: {} };
+  // Two modes on one page (order spec O3): the hash carries the mode so a reload stays put.
+  const mode = () => (location.hash === '#order' ? 'order' : 'tiers');
+  const setMode = (m) => { if (mode() !== m) location.hash = m === 'order' ? '#order' : ''; };
 
   // Every user action (click or key) that touches the session must run strictly after the
   // previous one's request-and-re-render has finished, or a fast second action reads
@@ -22,8 +25,11 @@
   const note = (text) => { const n = $('#note'); n.textContent = text; setTimeout(() => { if (n.textContent === text) n.textContent = ''; }, 4000); };
 
   const show = (which) => {
-    for (const id of ['setup', 'pair', 'done']) $('#' + id).hidden = id !== which;
+    for (const id of ['setup', 'pair', 'done', 'order-empty', 'order-done']) $('#' + id).hidden = id !== which;
     $('#progress').hidden = !state.session || !state.session.session;
+    for (const el of document.querySelectorAll('.tiers-only')) el.hidden = mode() !== 'tiers';
+    for (const el of document.querySelectorAll('.order-only')) el.hidden = mode() !== 'order';
+    for (const t of document.querySelectorAll('.tab')) t.setAttribute('aria-current', String(t.dataset.mode === mode()));
   };
 
   // --- setup / needs-anchor -------------------------------------------------
@@ -64,7 +70,7 @@
     return state.details[id];
   };
 
-  const sideHtml = (side, d, heading) => {
+  const sideHtml = (side, d, heading, opts = { unseen: true }) => {
     const p = d.payload || {};
     const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '<div class="poster placeholder"></div>';
     const cast = d.credits && d.credits.cast && d.credits.cast.length ? d.credits.cast.slice(0, 4).map((c) => c.name).join(', ') : (p.Actors && p.Actors !== 'N/A' ? p.Actors : '');
@@ -77,10 +83,12 @@
       d.my_rating != null ? `<div><dt>My rating</dt><dd>${d.my_rating}</dd></div>` : '',
     ].join('');
     const dirYear = [d.year, d.director].filter(Boolean).join(' · ');
+    const unseenBtn = opts.unseen ? `<button class="chip unseen" data-side="${side}" title="${side === 'candidate' ? '1' : '2'}">Have not seen</button>` : '';
+    const titleHtml = opts.unseen ? `<button class="title-unseen" data-side="${side}">${esc(d.title)}</button>` : esc(d.title);
     return `<div class="heading">${esc(heading)}</div>
-      <div class="buttons"><button class="chip primary better" data-side="${side}" title="${side === 'candidate' ? '←' : '→'}">Better</button><button class="chip unseen" data-side="${side}" title="${side === 'candidate' ? '1' : '2'}">Have not seen</button></div>
+      <div class="buttons"><button class="chip primary better" data-side="${side}" title="${side === 'candidate' ? '←' : '→'}">Better</button>${unseenBtn}</div>
       ${poster}
-      <div class="title"><button class="title-unseen" data-side="${side}">${esc(d.title)}</button></div>
+      <div class="title">${titleHtml}</div>
       <div class="meta">${esc(dirYear)}</div>
       <dl class="prompt">${prompts}</dl>`;
   };
@@ -94,18 +102,37 @@
     main.dataset.state = 'pair';
   };
 
+  const renderOrderPair = async () => {
+    const p = state.order.pair;
+    const [c, o] = await Promise.all([detail(p.candidate.film_id), detail(p.other.film_id)]);
+    $('.side.candidate').innerHTML = sideHtml('candidate', c, 'Candidate', { unseen: false });
+    $('.side.anchor').innerHTML = sideHtml('anchor', o, `Position ${p.position} of ${p.of}`, { unseen: false });
+    show('pair');
+    main.dataset.state = 'order';
+  };
+
   const renderProgress = () => {
     const s = state.session;
     if (!s || !s.session) return;
     $('#placed').textContent = s.placed; $('#remaining').textContent = s.remaining; $('#unseen-count').textContent = s.unseen;
     for (const [t, n] of Object.entries(s.tally)) $(`#progress .tally span[data-tier="${t}"]`).textContent = n;
-    $('#undo').disabled = !s.can_undo;
+    if (state.order) { $('#ordered').textContent = state.order.ordered; $('#order-remaining').textContent = state.order.remaining; }
+    $('#undo').disabled = !(mode() === 'order' && state.order ? state.order.can_undo : s.can_undo);
   };
 
   const refresh = async () => {
     state.session = await api('GET', '/api/rank/session');
-    renderProgress();
+    state.order = null;
     const s = state.session;
+    if (mode() === 'order') {
+      if (!s.session) { show('order-empty'); main.dataset.state = 'order_nosession'; return; }
+      state.order = await api('GET', '/api/rank/order');
+      if (state.order.corrupt.length) note(`${state.order.corrupt.length} film(s) have an unreadable order log and were skipped`);
+      renderProgress();
+      if (state.order.done) { show('order-done'); main.dataset.state = 'order_done'; return; }
+      return renderOrderPair();
+    }
+    renderProgress();
     if (!s.session) return renderSetup([1, 2, 3, 4, 5], 'Confirm or swap the five anchors, then start.');
     if (s.needs_anchor.length) return renderSetup(s.needs_anchor, 'That anchor is out. Pick a replacement for the tier.');
     if (s.done) { show('done'); main.dataset.state = 'done'; return; }
@@ -113,6 +140,11 @@
   };
 
   const verdict = async (side) => {
+    if (mode() === 'order') {
+      const o = state.order; if (!o || !o.pair) return;
+      await api('POST', '/api/rank/order/verdict', { film_id: o.pair.candidate.film_id, other_film_id: o.pair.other.film_id, verdict: side === 'candidate' ? 'better' : 'worse' });
+      return refresh();
+    }
     const s = state.session; if (!s || !s.pair) return;
     await api('POST', '/api/rank/verdict', { film_id: s.pair.candidate.film_id, anchor_tier: s.pair.tier, verdict: side === 'candidate' ? 'better' : 'worse' });
     await refresh();
@@ -121,11 +153,16 @@
   // is that same pass with the side's flag set, sent at once (owner ruling 2026-09-13 —
   // the spec's D9 mark-then-Pass two-step is gone, so nothing is ever "marked" client-side).
   const pass = async (unseen = {}) => {
+    if (mode() === 'order') {
+      const o = state.order; if (!o || !o.pair) return;
+      await api('POST', '/api/rank/order/pass', { film_id: o.pair.candidate.film_id });
+      return refresh();
+    }
     const s = state.session; if (!s || !s.pair) return;
     await api('POST', '/api/rank/pass', { film_id: s.pair.candidate.film_id, candidate_unseen: unseen.candidate === true, anchor_unseen: unseen.anchor === true });
     await refresh();
   };
-  const unseen = (side) => pass({ [side]: true });
+  const unseen = (side) => (mode() === 'order' ? Promise.resolve() : pass({ [side]: true }));   // O6: inert in order mode
   const undo = async () => { if ($('#undo').disabled) return; await api('POST', '/api/rank/undo'); await refresh(); };
 
   $('#pair').addEventListener('click', (e) => {
@@ -137,11 +174,21 @@
   $('#save').addEventListener('click', () => enqueue(async () => {
     const r = await api('POST', '/api/rank/save', { name: $('#list-name').value });
     note(`saved ${r.entries} films as “${r.name}”`);
+    // The save name is one list per source, replaced whole on every call: a later save from
+    // the other tab with the field left blank would otherwise fall through to the server's
+    // generic default and silently rename the list the owner already named. Remembering the
+    // last-used name across a reload (localStorage survives one; a module-level var wouldn't)
+    // keeps a same-session resave under the name already in play.
+    try { localStorage.setItem('rank-list-name', r.name); } catch { /* private mode, etc. */ }
   }));
+  try { const savedName = localStorage.getItem('rank-list-name'); if (savedName) $('#list-name').value = savedName; } catch { /* ditto */ }
+
+  for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => setMode(t.dataset.mode));
+  window.addEventListener('hashchange', () => enqueue(refresh));
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return; // Cmd/Ctrl+Left is browser back on some platforms, not a verdict
-    if (e.target.matches('input, select, textarea') || main.dataset.state !== 'pair') return;
+    if (e.target.matches('input, select, textarea') || !['pair', 'order', 'order_done'].includes(main.dataset.state)) return;
     const k = e.key;
     if (k === 'ArrowLeft') { e.preventDefault(); enqueue(() => verdict('candidate')); }
     else if (k === 'ArrowRight') { e.preventDefault(); enqueue(() => verdict('anchor')); }

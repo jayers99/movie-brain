@@ -109,3 +109,35 @@ def test_rank_flow(page: Page, rank_server: str):
     page.goto(rank_server + "/")
     page.wait_for_selector("#films tbody[data-count]")
     expect(page.locator("#list-picker option", has_text="Mine (")).to_have_count(1)
+
+    # --- Order tier 1 ------------------------------------------------------------------
+    # Tier 1 holds Ten (seed) and `first` (placed above). Switching tabs orders the queue's
+    # head for free (O7) and asks the other film against it: "Position 1 of 1".
+    page.goto(rank_server + "/rank")
+    page.click('.tab[data-mode="order"]')
+    page.wait_for_selector('#rank[data-state="order"]')
+    assert page.url.endswith("#order")
+    expect(page.locator(".side.anchor .heading")).to_have_text("Position 1 of 1")
+    expect(page.locator("#ordered")).to_have_text("1")
+    expect(page.locator("#order-remaining")).to_have_text("1")
+    expect(page.locator(".side button.unseen")).to_have_count(0)   # no Have-not-seen in order mode
+    top = page.locator(".side.candidate .title").inner_text()
+    page.keyboard.press("1")   # inert here
+    expect(page.locator(".side.candidate .title")).to_have_text(top)
+    page.keyboard.press("ArrowLeft")   # candidate better → slot 0
+    page.wait_for_selector('#rank[data-state="order_done"]')
+    expect(page.locator("#ordered")).to_have_text("2")
+    page.keyboard.press("u")
+    page.wait_for_selector('#rank[data-state="order"]')
+    expect(page.locator(".side.candidate .title")).to_have_text(top)
+    page.keyboard.press("ArrowLeft")
+    page.wait_for_selector('#rank[data-state="order_done"]')
+    page.reload()
+    page.wait_for_selector('#rank[data-state="order_done"]')   # the hash keeps the mode
+    page.click("#save")
+    expect(page.locator("#note")).to_contain_text("saved")
+    page.goto(rank_server + "/")
+    page.wait_for_selector("#films tbody[data-count]")
+    value = page.locator("#list-picker option", has_text="Mine (").get_attribute("value")
+    page.select_option("#list-picker", value)
+    expect(page.locator("#films tbody tr[data-id]").first).to_contain_text(top)   # bare rank 1 sorts first
