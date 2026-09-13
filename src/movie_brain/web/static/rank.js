@@ -2,7 +2,7 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const $ = (sel) => document.querySelector(sel);
   const main = $('#rank');
-  const state = { session: null, marked: { candidate: false, anchor: false }, details: {} };
+  const state = { session: null, details: {} };
 
   // Every user action (click or key) that touches the session must run strictly after the
   // previous one's request-and-re-render has finished, or a fast second action reads
@@ -64,7 +64,7 @@
     return state.details[id];
   };
 
-  const sideHtml = (side, d, heading, marked) => {
+  const sideHtml = (side, d, heading) => {
     const p = d.payload || {};
     const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '<div class="poster placeholder"></div>';
     const cast = d.credits && d.credits.cast && d.credits.cast.length ? d.credits.cast.slice(0, 4).map((c) => c.name).join(', ') : (p.Actors && p.Actors !== 'N/A' ? p.Actors : '');
@@ -78,7 +78,7 @@
     ].join('');
     const dirYear = [d.year, d.director].filter(Boolean).join(' · ');
     return `<div class="heading">${esc(heading)}</div>
-      <div class="buttons"><button class="chip primary better" data-side="${side}" title="${side === 'candidate' ? '←' : '→'}">Better</button><button class="chip unseen" data-side="${side}" aria-pressed="${marked}" title="${side === 'candidate' ? '1' : '2'}">Have not seen</button></div>
+      <div class="buttons"><button class="chip primary better" data-side="${side}" title="${side === 'candidate' ? '←' : '→'}">Better</button><button class="chip unseen" data-side="${side}" title="${side === 'candidate' ? '1' : '2'}">Have not seen</button></div>
       ${poster}
       <div class="title"><button class="title-unseen" data-side="${side}">${esc(d.title)}</button></div>
       <div class="meta">${esc(dirYear)}</div>
@@ -88,8 +88,8 @@
   const renderPair = async () => {
     const s = state.session;
     const [c, a] = await Promise.all([detail(s.pair.candidate.film_id), detail(s.pair.anchor.film_id)]);
-    $('.side.candidate').innerHTML = sideHtml('candidate', c, 'Candidate', state.marked.candidate);
-    $('.side.anchor').innerHTML = sideHtml('anchor', a, `Tier ${s.pair.tier} anchor`, state.marked.anchor);
+    $('.side.candidate').innerHTML = sideHtml('candidate', c, 'Candidate');
+    $('.side.anchor').innerHTML = sideHtml('anchor', a, `Tier ${s.pair.tier} anchor`);
     show('pair');
     main.dataset.state = 'pair';
   };
@@ -104,7 +104,6 @@
 
   const refresh = async () => {
     state.session = await api('GET', '/api/rank/session');
-    state.marked = { candidate: false, anchor: false };
     renderProgress();
     const s = state.session;
     if (!s.session) return renderSetup([1, 2, 3, 4, 5], 'Confirm or swap the five anchors, then start.');
@@ -118,22 +117,22 @@
     await api('POST', '/api/rank/verdict', { film_id: s.pair.candidate.film_id, anchor_tier: s.pair.tier, verdict: side === 'candidate' ? 'better' : 'worse' });
     await refresh();
   };
-  const toggleMark = (side) => {
-    state.marked[side] = !state.marked[side];
-    const b = document.querySelector(`.side.${side} button.unseen`); if (b) b.setAttribute('aria-pressed', String(state.marked[side]));
-  };
-  const pass = async () => {
+  // One request serves both: a plain Pass defers the candidate; "Have not seen" on a side
+  // is that same pass with the side's flag set, sent at once (owner ruling 2026-09-13 —
+  // the spec's D9 mark-then-Pass two-step is gone, so nothing is ever "marked" client-side).
+  const pass = async (unseen = {}) => {
     const s = state.session; if (!s || !s.pair) return;
-    await api('POST', '/api/rank/pass', { film_id: s.pair.candidate.film_id, candidate_unseen: state.marked.candidate, anchor_unseen: state.marked.anchor });
+    await api('POST', '/api/rank/pass', { film_id: s.pair.candidate.film_id, candidate_unseen: unseen.candidate === true, anchor_unseen: unseen.anchor === true });
     await refresh();
   };
+  const unseen = (side) => pass({ [side]: true });
   const undo = async () => { if ($('#undo').disabled) return; await api('POST', '/api/rank/undo'); await refresh(); };
 
   $('#pair').addEventListener('click', (e) => {
     const better = e.target.closest('button.better'); if (better) return enqueue(() => verdict(better.dataset.side));
-    const un = e.target.closest('button.unseen, button.title-unseen'); if (un) return enqueue(() => toggleMark(un.dataset.side));
+    const un = e.target.closest('button.unseen, button.title-unseen'); if (un) return enqueue(() => unseen(un.dataset.side));
   });
-  $('#pass').addEventListener('click', () => enqueue(pass));
+  $('#pass').addEventListener('click', () => enqueue(() => pass()));
   $('#undo').addEventListener('click', () => enqueue(undo));
   $('#save').addEventListener('click', () => enqueue(async () => {
     const r = await api('POST', '/api/rank/save', { name: $('#list-name').value });
@@ -146,9 +145,9 @@
     const k = e.key;
     if (k === 'ArrowLeft') { e.preventDefault(); enqueue(() => verdict('candidate')); }
     else if (k === 'ArrowRight') { e.preventDefault(); enqueue(() => verdict('anchor')); }
-    else if (k === '1') enqueue(() => toggleMark('candidate'));
-    else if (k === '2') enqueue(() => toggleMark('anchor'));
-    else if (k === ' ') { e.preventDefault(); enqueue(pass); }
+    else if (k === '1') enqueue(() => unseen('candidate'));
+    else if (k === '2') enqueue(() => unseen('anchor'));
+    else if (k === ' ') { e.preventDefault(); enqueue(() => pass()); }
     else if (k === 'u' || k === 'U') enqueue(undo);
   });
 

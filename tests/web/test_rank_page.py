@@ -83,21 +83,25 @@ def test_rank_flow(page: Page, rank_server: str):
     expect(page.locator(".side.candidate .title")).to_have_text(first)
     expect(page.locator(".side.anchor .title")).to_have_text("Nine")
     page.keyboard.press("ArrowLeft")
-    # Mark the anchor unseen; the page stays put; Pass empties tier 3 and shows its setup card.
+    # "Have not seen" on the anchor IS the pass (owner ruling 2026-09-13, overriding D9's
+    # mark-then-Pass): one click empties tier 3 and shows its setup card, no Space needed.
     page.click(".side.anchor button.unseen")
-    expect(page.locator(".side.anchor button.unseen")).to_have_attribute("aria-pressed", "true")
-    expect(page.locator('#rank[data-state="pair"]')).to_have_count(1)
-    page.keyboard.press("Space")
     page.wait_for_selector('#rank[data-state="needs_anchor"]')
     expect(page.locator(".anchor-card")).to_have_count(1)
     expect(page.locator(".anchor-card")).to_have_attribute("data-tier", "3")
     page.select_option(".anchor-card select.anchor-swap", label="Dos (1960)")
     page.click("#start")
     page.wait_for_selector('#rank[data-state="pair"]')
-    # Pass also deferred the candidate (nothing was marked on it), so the third unrated film
-    # comes up now, against the tier-3 slot's new anchor.
+    # That pass also deferred the candidate (only the anchor was marked), so the third unrated
+    # film comes up now, against the tier-3 slot's new anchor.
     expect(page.locator(".side.anchor .title")).to_have_text("Dos")
     expect(page.locator("#unseen-count")).to_have_text("1")
+    # "Have not seen" on the candidate is likewise one click: the film joins the unseen bucket
+    # and the next candidate is up, with the plain Pass (a deferral) never touched.
+    # It was the last unplaced film, so the session is done.
+    page.keyboard.press("1")
+    expect(page.locator("#unseen-count")).to_have_text("2")
+    page.wait_for_selector('#rank[data-state="done"]')
     # Save, then the dashboard's picker lists it.
     page.fill("#list-name", "Mine")
     page.click("#save")
