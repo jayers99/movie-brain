@@ -2569,24 +2569,6 @@ class Repository:
             ).fetchall()
             return [SeedFilm(int(r["id"]), int(r["score"]), r["imdb"], str(r["title"]), r["year"]) for r in rows]
 
-    def owned_seed_films(self) -> list[SeedFilm]:
-        """Owned ∩ rated, minus unseen and disposed: the seed placements and anchor pool.
-
-        Retired in Task 4 of the ranking-pool plan (2026-09-13), once its callers in
-        `application/rank.py` move to `pool_seed_films()` and the fixture sweep (Task 3)
-        has landed; kept with its ORIGINAL query in the meantime so the suite stays
-        green at every task boundary rather than bridging through `pool_seed_films()`.
-        """
-        with self._conn() as c:
-            rows = c.execute(
-                "SELECT f.id, f.title, f.year, r.score, o2.imdb FROM owned o "
-                "JOIN films f ON f.id = o.film_id JOIN my_ratings r ON r.film_id = f.id "
-                "LEFT JOIN omdb o2 ON o2.film_id = f.id "
-                "WHERE " + _NOT_DISPOSED + " AND NOT EXISTS (SELECT 1 FROM unseen u WHERE u.film_id = f.id) "
-                "ORDER BY f.id"
-            ).fetchall()
-            return [SeedFilm(int(r["id"]), int(r["score"]), r["imdb"], str(r["title"]), r["year"]) for r in rows]
-
     # tier ranker (spec 2026-09-13 §3) ----------------------------------------
     def film_facts(self, film_ids: Iterable[int]) -> dict[int, tuple[str, int | None, str | None]]:
         ids = list(film_ids)

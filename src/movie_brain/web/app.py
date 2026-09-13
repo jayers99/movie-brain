@@ -218,7 +218,7 @@ def create_app(
 
     @app.get("/api/rank/order")
     def rank_order_state() -> Response:
-        return jsonify(ranker.order_state(repo, RANK_SOURCE, today()))
+        return jsonify(ranker.order_state(repo, RANK_SOURCE, 1, today()))
 
     @app.post("/api/rank/order/verdict")
     def rank_order_verdict() -> Response:
@@ -229,7 +229,7 @@ def create_app(
                 400, 'body must be JSON {"film_id": int, "other_film_id": int, "verdict": "better"|"worse"}'
             )
         return jsonify(
-            ranker.order_verdict(repo, RANK_SOURCE, film_id, other_film_id, str(body.get("verdict")), today())
+            ranker.order_verdict(repo, RANK_SOURCE, 1, film_id, other_film_id, str(body.get("verdict")), today())
         )
 
     @app.post("/api/rank/order/pass")
@@ -238,7 +238,7 @@ def create_app(
         film_id = body.get("film_id")
         if not isinstance(film_id, int):
             raise RankError(400, 'body must be JSON {"film_id": int}')
-        return jsonify(ranker.order_pass(repo, RANK_SOURCE, film_id, today()))
+        return jsonify(ranker.order_pass(repo, RANK_SOURCE, 1, film_id, today()))
 
     @app.put("/api/films/<int:film_id>/unseen")
     def put_unseen(film_id: int) -> tuple[Response, int]:

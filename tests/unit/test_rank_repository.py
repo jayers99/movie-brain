@@ -56,18 +56,6 @@ def _owned_rated(repo, title, year, score, imdb=None):
     return fid
 
 
-def test_owned_seed_films_is_owned_and_rated_minus_unseen(repo):
-    a = _owned_rated(repo, "Alpha", 1950, 10, imdb=8.1)
-    b = _owned_rated(repo, "Bravo", 1960, 8)
-    _film(repo, "Charlie", 1970)  # neither owned nor rated
-    c = _owned_rated(repo, "Delta", 1980, 7)
-    repo.set_unseen(c, True, D)
-    got = {s.film_id: s for s in repo.owned_seed_films()}
-    assert set(got) == {a, b}
-    assert got[a].score == 10 and got[a].imdb == 8.1 and got[a].title == "Alpha" and got[a].year == 1950
-    assert got[b].imdb is None
-
-
 def test_rank_mark_round_trips_and_reports_missing(repo):
     a = _film(repo, "Alpha", 1950)
     assert repo.set_rank_mark(a, True, D) is True
@@ -116,6 +104,7 @@ def test_pool_seed_films_is_pool_and_rated_6_plus(repo):
     got = {s.film_id: s for s in repo.pool_seed_films()}
     assert set(got) == {a, b}
     assert got[a].score == 10 and got[a].imdb == 8.1 and got[b].imdb is None
+    assert got[a].title == "Alpha" and got[a].year == 1950
 
 
 def test_merge_moves_rank_mark_survivor_wins(repo):

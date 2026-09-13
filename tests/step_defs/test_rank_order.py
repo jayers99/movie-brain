@@ -6,7 +6,6 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.rank import (
-    ORDER_TIER,
     RankError,
     order_pass,
     order_state,
@@ -38,8 +37,8 @@ def _sid(ctx):
     return ctx["repo"].open_rank_session(SRC).id
 
 
-def _order(ctx):
-    return order_state(ctx["repo"], SRC, TODAY)
+def _order(ctx, tier=1):
+    return order_state(ctx["repo"], SRC, tier, TODAY)
 
 
 @given(parsers.parse('owned films rated "Alpha" {a:d}, "Beta" {b:d}, "Gamma" {c:d}, "Delta" {d:d}, "Nine" {e:d}, "Eight" {f:d}, "Seven" {g:d}, "Six" {h:d}'))
@@ -84,11 +83,11 @@ def pair_position(ctx, p, k):
     assert (pair["position"], pair["of"]) == (p, k)
 
 
-def _answer_once(ctx, verdict):
-    pair = _order(ctx)["pair"]
+def _answer_once(ctx, verdict, tier=1):
+    pair = _order(ctx, tier)["pair"]
     assert pair is not None, "no order pair to answer"
     ctx["last_candidate"] = pair["candidate"]["film_id"]
-    order_verdict(ctx["repo"], SRC, pair["candidate"]["film_id"], pair["other"]["film_id"], verdict, TODAY)
+    order_verdict(ctx["repo"], SRC, tier, pair["candidate"]["film_id"], pair["other"]["film_id"], verdict, TODAY)
 
 
 @when(parsers.parse("I answer {verdict} in order mode until the candidate is inserted"))
@@ -96,7 +95,7 @@ def answer_until_inserted(ctx, verdict):
     cand = _order(ctx)["pair"]["candidate"]["film_id"]
     for _ in range(10):
         _answer_once(ctx, verdict)
-        if cand in ctx["repo"].rank_order(_sid(ctx), ORDER_TIER):
+        if cand in ctx["repo"].rank_order(_sid(ctx), 1):
             return
     raise AssertionError("ten verdicts and still not inserted")
 
@@ -106,9 +105,44 @@ def answer_once(ctx, verdict):
     _answer_once(ctx, verdict)
 
 
+@when(parsers.parse("I answer {verdict} in tier {tier:d} order mode"))
+def answer_once_tier(ctx, verdict, tier):
+    _answer_once(ctx, verdict, tier)
+
+
+@when(parsers.parse('"{ordered}" is joined in tier {tier:d} by "{title}" rated {score:d}, not owned'))
+def joined_in_tier(ctx, ordered, tier, title, score):
+    """A rated film the owner does not own: the pool holds it, so the next read seeds it (P3)."""
+    fid = ctx["repo"].create_film(Film(title, 1970, "Dir", ""))
+    ctx["repo"].set_rating(fid, score, TODAY)
+    ctx["ids"][title] = fid
+
+
+@then(parsers.parse("the tier {tier:d} order has {n:d} film and {m:d} remaining"))
+@then(parsers.parse("the tier {tier:d} order has {n:d} films and {m:d} remaining"))
+@then(parsers.parse("the tier {tier:d} order still has {n:d} film and {m:d} remaining"))
+@then(parsers.parse("the tier {tier:d} order still has {n:d} films and {m:d} remaining"))
+def tier_order_counts(ctx, tier, n, m):
+    s = _order(ctx, tier)
+    assert (s["tier"], s["ordered"], s["remaining"]) == (tier, n, m)
+
+
+@then(parsers.parse('"{title}" is deferred in tier {tier:d}'))
+def deferred_in_tier(ctx, title, tier):
+    assert _id(ctx, title) in ctx["repo"].order_deferrals(_sid(ctx))
+    assert _id(ctx, title) not in ctx["repo"].rank_order(_sid(ctx), tier)
+
+
+@then(parsers.parse("reading the tier {tier:d} order is refused with {status:d}"))
+def tier_order_refused(ctx, tier, status):
+    with pytest.raises(RankError) as e:
+        _order(ctx, tier)
+    assert e.value.status == status
+
+
 @then(parsers.parse("the last inserted film is at position {p:d}"))
 def inserted_at(ctx, p):
-    order = ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)
+    order = ctx["repo"].rank_order(_sid(ctx), 1)
     assert order.index(ctx["last_candidate"]) + 1 == p
 
 
@@ -133,15 +167,24 @@ def stale_order_verdict(ctx, status):
     pair = _order(ctx)["pair"]
     wrong_other = next(i for i in ctx["ids"].values() if i not in (pair["other"]["film_id"], pair["candidate"]["film_id"]))
     with pytest.raises(RankError) as e:
-        order_verdict(ctx["repo"], SRC, pair["candidate"]["film_id"], wrong_other, "better", TODAY)
+        order_verdict(ctx["repo"], SRC, 1, pair["candidate"]["film_id"], wrong_other, "better", TODAY)
     assert e.value.status == status
+
+
+def _pass_once(ctx, tier=1):
+    pair = _order(ctx, tier)["pair"]
+    ctx["last_candidate"] = pair["candidate"]["film_id"]
+    order_pass(ctx["repo"], SRC, tier, pair["candidate"]["film_id"], TODAY)
 
 
 @when("I pass in order mode")
 def pass_order(ctx):
-    pair = _order(ctx)["pair"]
-    ctx["last_candidate"] = pair["candidate"]["film_id"]
-    order_pass(ctx["repo"], SRC, pair["candidate"]["film_id"], TODAY)
+    _pass_once(ctx)
+
+
+@when(parsers.parse("I pass in tier {tier:d} order mode"))
+def pass_order_tier(ctx, tier):
+    _pass_once(ctx, tier)
 
 
 @then("the deferred film comes last in the order queue")
@@ -155,7 +198,7 @@ def deferred_last(ctx):
         s = _order(ctx)
         if s["pair"]["candidate"]["film_id"] == ctx["last_candidate"]:
             break
-        order_verdict(repo, SRC, s["pair"]["candidate"]["film_id"], s["pair"]["other"]["film_id"], "better", TODAY)
+        order_verdict(repo, SRC, 1, s["pair"]["candidate"]["film_id"], s["pair"]["other"]["film_id"], "better", TODAY)
     assert _order(ctx)["pair"]["candidate"]["film_id"] == ctx["last_candidate"]
     assert _order(ctx)["remaining"] == 1
 
@@ -211,22 +254,22 @@ def tiering_unplaced(ctx):
 
 @then("the order is empty")
 def order_is_empty(ctx):
-    assert ctx["repo"].rank_order(_sid(ctx), ORDER_TIER) == []
+    assert ctx["repo"].rank_order(_sid(ctx), 1) == []
 
 
 @then(parsers.parse('"{title}" is not in the order'))
 def not_in_order(ctx, title):
-    assert _id(ctx, title) not in ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)
+    assert _id(ctx, title) not in ctx["repo"].rank_order(_sid(ctx), 1)
 
 
 @when("the current candidate's order log is made corrupt")
 def make_corrupt(ctx):
     pair = _order(ctx)["pair"]
     cand = pair["candidate"]["film_id"]
-    ordered_film = ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)[0]
+    ordered_film = ctx["repo"].rank_order(_sid(ctx), 1)[0]
     ctx["corrupt_candidate"] = cand
-    ctx["repo"].append_order_comparison(_sid(ctx), ORDER_TIER, cand, ordered_film, "better", TODAY)
-    ctx["repo"].append_order_comparison(_sid(ctx), ORDER_TIER, cand, ordered_film, "worse", TODAY)
+    ctx["repo"].append_order_comparison(_sid(ctx), 1, cand, ordered_film, "better", TODAY)
+    ctx["repo"].append_order_comparison(_sid(ctx), 1, cand, ordered_film, "worse", TODAY)
 
 
 @when("every remaining candidate's order log is made corrupt")
@@ -261,7 +304,7 @@ def order_not_done(ctx):
 
 @when(parsers.parse("the film at position {p:d} is marked unseen from the drawer"))
 def unseen_at_position(ctx, p):
-    fid = ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)[p - 1]
+    fid = ctx["repo"].rank_order(_sid(ctx), 1)[p - 1]
     ctx["repo"].set_unseen(fid, True, TODAY)
 
 
@@ -315,5 +358,5 @@ def finish(ctx):
 @then(parsers.parse("reading the order state is refused with {status:d}"))
 def order_refused(ctx, status):
     with pytest.raises(RankError) as e:
-        order_state(ctx["repo"], SRC, TODAY)
+        order_state(ctx["repo"], SRC, 1, TODAY)
     assert e.value.status == status

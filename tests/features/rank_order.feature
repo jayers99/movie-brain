@@ -1,4 +1,4 @@
-Feature: Order tier 1 — strict order inside the top tier by binary insertion
+Feature: Order a tier — strict order inside tiers 1 and 2 by binary insertion
 
   Background:
     Given owned films rated "Alpha" 10, "Beta" 10, "Gamma" 10, "Delta" 10, "Nine" 9, "Eight" 8, "Seven" 7, "Six" 6
@@ -92,6 +92,29 @@ Feature: Order tier 1 — strict order inside the top tier by binary insertion
     And entry 2 is the last inserted film
     And entries 3 and 4 carry label "=3"
     And entry 5 is "Nine" with no label
+
+  Scenario: Tier 2 has its own order, queue, deferral and undo
+    Then the tier 2 order has 1 film and 0 remaining
+    When "Nine" is joined in tier 2 by "Nine-b" rated 9, not owned
+    Then the tier 2 order has 1 film and 1 remaining
+    When I answer worse in tier 2 order mode
+    Then the tier 2 order has 2 films and 0 remaining
+    And the tier 1 order still has 1 film and 3 remaining
+    When I undo
+    Then the tier 2 order has 1 film and 1 remaining
+    When I pass in tier 2 order mode
+    Then "Nine-b" is deferred in tier 2
+
+  Scenario: An order tier outside 1 and 2 is refused
+    Then reading the tier 3 order is refused with 400
+
+  Scenario: Saving writes both ordered tiers bare
+    When I answer worse in order mode
+    And "Nine" is joined in tier 2 by "Nine-b" rated 9, not owned
+    And I answer worse in tier 2 order mode
+    And I save the list as "Mine"
+    Then entries 1 and 2 carry no label
+    And entries 5 and 6 carry no label
 
   Scenario: Order state needs an open session
     Given the session is finished
