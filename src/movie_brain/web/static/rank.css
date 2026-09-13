@@ -4,6 +4,7 @@ body { margin:0; font: 14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif
 .top { position: sticky; top:0; background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; z-index:2; }
 .top h1 { margin:0 0 4px; font-size:18px; }
 .top h1 a { color:inherit; text-decoration:none; }
+.note { min-height:1.4em; color:var(--muted); font-size:13px; }
 #progress span { margin-right:14px; color:var(--muted); }
 #progress b { color:var(--fg); }
 .tally span { display:inline-block; min-width:22px; text-align:center; border:1px solid var(--line); border-radius:4px; margin-right:2px; color:var(--fg); }

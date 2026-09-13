@@ -50,6 +50,14 @@ def test_rank_flow(page: Page, rank_server: str):
     cards = page.locator(".anchor-card")
     expect(cards).to_have_count(5)
     expect(cards.nth(2).locator(".anchor-title")).to_have_text("Eight")
+    # Clearing a tier's choice and clicking Start surfaces the guard note — visible even
+    # though no session is open yet, so it must live outside the (still-hidden) #progress.
+    tier3_select = cards.nth(2).locator("select.anchor-swap")
+    eight_value = tier3_select.input_value()
+    tier3_select.select_option(value="")
+    page.click("#start")
+    expect(page.locator("#note")).to_contain_text("Choose an anchor")
+    tier3_select.select_option(value=eight_value)
     page.click("#start")
     page.wait_for_selector('#rank[data-state="pair"]')
     expect(page.locator(".side.anchor .title")).to_have_text("Eight")
@@ -87,7 +95,7 @@ def test_rank_flow(page: Page, rank_server: str):
     # Save, then the dashboard's picker lists it.
     page.fill("#list-name", "Mine")
     page.click("#save")
-    expect(page.locator("#save-note")).to_contain_text("saved")
+    expect(page.locator("#note")).to_contain_text("saved")
     page.goto(rank_server + "/")
     page.wait_for_selector("#films tbody[data-count]")
     expect(page.locator("#list-picker option", has_text="Mine (")).to_have_count(1)

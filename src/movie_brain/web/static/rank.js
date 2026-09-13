@@ -19,7 +19,7 @@
     if (!r.ok) { note(json.error || `${method} ${url} failed`); throw new Error(json.error || r.status); }
     return json;
   };
-  const note = (text) => { const n = $('#save-note'); n.textContent = text; setTimeout(() => { if (n.textContent === text) n.textContent = ''; }, 4000); };
+  const note = (text) => { const n = $('#note'); n.textContent = text; setTimeout(() => { if (n.textContent === text) n.textContent = ''; }, 4000); };
 
   const show = (which) => {
     for (const id of ['setup', 'pair', 'done']) $('#' + id).hidden = id !== which;
