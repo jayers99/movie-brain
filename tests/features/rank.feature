@@ -97,3 +97,15 @@ Feature: Tier ranker — place owned films into five tiers against anchors
     When I answer better, better
     And that film is marked unseen from the drawer
     Then the tally is 1, 1, 1, 1, 1
+
+  Scenario: A placement interrupted before it was written is completed on the next read
+    Given a started session
+    When the current candidate's verdicts are logged directly as "better, better"
+    Then the tally is 2, 1, 1, 1, 1
+    And the next candidate is asked against tier 3
+
+  Scenario: An anchor marked unseen from the drawer stops serving pairs until swapped
+    Given a started session
+    When "Eight" is marked unseen from the drawer
+    Then the session needs an anchor for tier 3
+    And there is no pair

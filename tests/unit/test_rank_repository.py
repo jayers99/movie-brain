@@ -103,9 +103,12 @@ def test_one_open_session_per_source(repo):
 
 def test_marking_unseen_drops_placements_in_every_session(repo):
     x = _owned_rated(repo, "X", 2000, 8)
-    sid = repo.create_rank_session("owned", 1, {}, {x: 3}, D)
+    anchor = _owned_rated(repo, "Anchor", 2001, 8)
+    sid = repo.create_rank_session("owned", 1, {3: anchor}, {x: 3}, D)
+    repo.append_comparison(sid, x, anchor, 3, "better", D)
     repo.set_unseen(x, True, D)
     assert repo.rank_placements(sid) == {}
+    assert repo.verdicts_for(sid, x) == []
 
 
 def test_replace_list_entries_rewrites_the_slug_with_links(repo):

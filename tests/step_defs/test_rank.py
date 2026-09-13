@@ -17,7 +17,7 @@ from movie_brain.application.rank import (
     undo,
 )
 from movie_brain.domain.models import Film
-from movie_brain.domain.rank import order_queue
+from movie_brain.domain.rank import Ask, next_step, order_queue
 
 scenarios("../features/rank.feature")
 TODAY = date(2026, 9, 13)
@@ -255,3 +255,27 @@ def reopen(ctx, tier):
 @when("that film is marked unseen from the drawer")
 def drawer_unseen(ctx):
     ctx["repo"].set_unseen(ctx["last_candidate"], True, TODAY)
+
+
+@when(parsers.parse('"{title}" is marked unseen from the drawer'))
+def title_marked_unseen(ctx, title):
+    ctx["repo"].set_unseen(_id(ctx, title), True, TODAY)
+
+
+@when(parsers.parse('the current candidate\'s verdicts are logged directly as "{verdicts}"'))
+def log_verdicts_directly(ctx, verdicts):
+    # Simulates a crash between `append_comparison` and `place_film` (§4.2): the comparison
+    # rows land, but no placement is ever written for them.
+    repo = ctx["repo"]
+    sid = repo.open_rank_session(SRC).id
+    s = _state(ctx)
+    cand = s["pair"]["candidate"]["film_id"]
+    ctx["last_candidate"] = cand
+    anchors = repo.rank_anchors(sid)
+    logged: list[str] = []
+    for v in [x.strip() for x in verdicts.split(",")]:
+        step = next_step(logged)
+        assert isinstance(step, Ask)
+        anchor_id = anchors[step.tier]
+        repo.append_comparison(sid, cand, anchor_id, step.tier, v, TODAY)
+        logged.append(v)

@@ -2493,8 +2493,9 @@ class Repository:
 
     def set_unseen(self, film_id: int, unseen: bool, today: date, note: str | None = None) -> bool | None:
         """Idempotent set/clear. None when the film does not exist. Marking a film unseen also
-        deletes its `rank_placement` rows in EVERY session (§4.6): an unseen film is out of any
-        later save, and unmarking returns it to the queue, never to its old tier."""
+        deletes its `rank_placement` AND `rank_comparison` rows in EVERY session (§4.6): an
+        unseen film's clicks audit nothing, and unmarking returns it to the queue, never to its
+        old tier — a stale verdict trail left behind would make it look mid-search instead."""
         with self._conn() as c:
             if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
                 return None
@@ -2505,6 +2506,7 @@ class Repository:
                     (film_id, today.isoformat(), note),
                 )
                 c.execute("DELETE FROM rank_placement WHERE film_id = ?", (film_id,))
+                c.execute("DELETE FROM rank_comparison WHERE film_id = ?", (film_id,))
                 return True
             c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
             return False

@@ -6,7 +6,6 @@ function takes the repository and the source and returns the state the page rend
 
 from __future__ import annotations
 
-import sqlite3
 from collections.abc import Mapping
 from datetime import date
 from pathlib import Path
@@ -17,7 +16,6 @@ from movie_brain.domain.rank import (
     RANKER_SLUGS,
     TIERS,
     VERDICTS,
-    Ask,
     Place,
     next_step,
     order_queue,
@@ -50,11 +48,12 @@ def proposal(repo: Repository, source: str) -> dict[str, object]:
             {"film_id": f.film_id, "title": f.title, "year": f.year, "score": f.score}
         )
     unseen = repo.unseen_film_ids()
+    disposed = repo.disposed_film_ids()
     fallback: list[dict[str, object]] | None = None
     for t in range(1, TIERS + 1):
         if not choices[t]:
             if fallback is None:
-                facts = repo.film_facts(i for i in repo.owned_film_ids() if i not in unseen)
+                facts = repo.film_facts(i for i in repo.owned_film_ids() if i not in unseen and i not in disposed)
                 fallback = [
                     {"film_id": i, "title": f[0], "year": f[1], "score": None}
                     for i, f in sorted(facts.items(), key=lambda kv: kv[1][0])
@@ -80,12 +79,11 @@ def start_session(repo: Repository, source: str, anchors: Mapping[int, int], tod
     for tier, fid in anchors.items():
         if fid not in owned or fid in unseen:
             raise RankError(400, f"tier {tier} anchor {fid} is not an owned, seen film")
+    if repo.open_rank_session(source) is not None:
+        raise RankError(409, "a session is already open for this source")
     placements = {f.film_id: tier_for_score(f.score) for f in repo.owned_seed_films()}
     seed = int(today.strftime("%Y%m%d"))
-    try:
-        sid = repo.create_rank_session(source, seed, dict(anchors), placements, today)
-    except sqlite3.IntegrityError:
-        raise RankError(409, "a session is already open for this source") from None
+    sid = repo.create_rank_session(source, seed, dict(anchors), placements, today)
     for tier, fid in anchors.items():
         if fid not in placements:
             repo.place_film(sid, fid, tier, "anchor", today)
@@ -126,26 +124,37 @@ def session_state(repo: Repository, source: str, today: date) -> dict[str, objec
     if s is None:
         return {"session": None}
     anchors = repo.rank_anchors(s.id)
+    unseen_ids = repo.unseen_film_ids()
     placed = repo.rank_placements(s.id)
-    tally = {t: sum(1 for tier, _ in placed.values() if tier == t) for t in range(1, TIERS + 1)}
     queue = _queue(repo, s)
-    needs = [t for t in range(1, TIERS + 1) if anchors[t] is None]
+    # An anchor marked unseen from the drawer still occupies a NULL-or-not slot; treat it as
+    # missing too (§4.6) so the tier stops serving pairs against a film that is out of the pool.
+    needs = [t for t in range(1, TIERS + 1) if anchors[t] is None or anchors[t] in unseen_ids]
     pair: dict[str, object] | None = None
-    if queue and not needs:
+    while queue and not needs:
         cand = queue[0]
         verdicts = repo.verdicts_for(s.id, cand)
         step = next_step(verdicts)
-        assert isinstance(step, Ask)  # a Place is applied the moment its verdict lands
+        if isinstance(step, Place):
+            # Self-healing (§4.2): a crash between `append_comparison` and `place_film`, or a
+            # placed film returned to the queue by an unmark, can leave a candidate whose
+            # verdicts already resolve to a tier. Finish the write rather than wedge on it.
+            repo.place_film(s.id, cand, step.tier, "compared", today)
+            placed = repo.rank_placements(s.id)
+            queue = queue[1:]
+            continue
         anchor_id = anchors[step.tier]
         assert anchor_id is not None
         pair = {"candidate": _film(repo, cand), "anchor": _film(repo, anchor_id), "tier": step.tier, "asked": verdicts}
+        break
+    tally = {t: sum(1 for tier, _ in placed.values() if tier == t) for t in range(1, TIERS + 1)}
     return {
         "session": {"id": s.id, "source": s.source, "started_on": s.started_on, "list_slug": s.list_slug},
         "anchors": {t: (None if fid is None else _film(repo, fid)) for t, fid in anchors.items()},
         "tally": tally,
         "placed": len(placed),
         "remaining": len(queue),
-        "unseen": len(repo.unseen_film_ids() & repo.owned_film_ids()),
+        "unseen": len(unseen_ids & repo.owned_film_ids()),
         "pair": pair,
         "needs_anchor": needs,
         "done": not queue and not needs,
@@ -238,7 +247,7 @@ def swap_anchor(repo: Repository, source: str, tier: int, film_id: int, today: d
     s = _session(repo, source)
     if tier not in range(1, TIERS + 1):
         raise RankError(400, "tier must be 1–5")
-    if film_id not in repo.owned_film_ids():
+    if film_id not in repo.owned_film_ids() or film_id in repo.disposed_film_ids():
         raise RankError(400, "anchor must be an owned film")
     if film_id in repo.unseen_film_ids():
         raise RankError(409, "an unseen film cannot anchor a tier")
