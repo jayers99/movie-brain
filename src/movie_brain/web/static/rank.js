@@ -174,21 +174,14 @@
   $('#save').addEventListener('click', () => enqueue(async () => {
     const r = await api('POST', '/api/rank/save', { name: $('#list-name').value });
     note(`saved ${r.entries} films as “${r.name}”`);
-    // The save name is one list per source, replaced whole on every call: a later save from
-    // the other tab with the field left blank would otherwise fall through to the server's
-    // generic default and silently rename the list the owner already named. Remembering the
-    // last-used name across a reload (localStorage survives one; a module-level var wouldn't)
-    // keeps a same-session resave under the name already in play.
-    try { localStorage.setItem('rank-list-name', r.name); } catch { /* private mode, etc. */ }
   }));
-  try { const savedName = localStorage.getItem('rank-list-name'); if (savedName) $('#list-name').value = savedName; } catch { /* ditto */ }
 
   for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => setMode(t.dataset.mode));
   window.addEventListener('hashchange', () => enqueue(refresh));
 
   document.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return; // Cmd/Ctrl+Left is browser back on some platforms, not a verdict
-    if (e.target.matches('input, select, textarea') || !['pair', 'order', 'order_done'].includes(main.dataset.state)) return;
+    if (e.target.matches('input, select, textarea') || !['pair', 'order', 'done', 'order_done'].includes(main.dataset.state)) return;
     const k = e.key;
     if (k === 'ArrowLeft') { e.preventDefault(); enqueue(() => verdict('candidate')); }
     else if (k === 'ArrowRight') { e.preventDefault(); enqueue(() => verdict('anchor')); }

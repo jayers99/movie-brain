@@ -134,6 +134,7 @@ def test_rank_flow(page: Page, rank_server: str):
     page.wait_for_selector('#rank[data-state="order_done"]')
     page.reload()
     page.wait_for_selector('#rank[data-state="order_done"]')   # the hash keeps the mode
+    page.fill("#list-name", "Mine")   # a reload clears the field; keep the same list name
     page.click("#save")
     expect(page.locator("#note")).to_contain_text("saved")
     page.goto(rank_server + "/")
