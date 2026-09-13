@@ -19,6 +19,14 @@ from movie_brain.infrastructure.embeddings import Embedder, VectorIndex
 from movie_brain.infrastructure.listfile import LISTS_DIR
 
 
+def _json_object() -> dict[str, object]:
+    """The request body as a JSON object, or a 400 RankError — the shape check every rank route shares."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        raise RankError(400, "body must be a JSON object")
+    return body
+
+
 def create_app(
     repo: Repository,
     today: Callable[[], date] = date.today,
@@ -158,38 +166,36 @@ def create_app(
 
     @app.post("/api/rank/session")
     def rank_start() -> tuple[Response, int]:
-        body = request.get_json(silent=True)
-        anchors = body.get("anchors") if isinstance(body, dict) else None
+        body = _json_object()
+        anchors = body.get("anchors")
         if not isinstance(anchors, dict):
-            return jsonify({"error": 'body must be JSON {"anchors": {"1": film_id, …, "5": film_id}}'}), 400
+            raise RankError(400, 'body must be JSON {"anchors": {"1": film_id, …, "5": film_id}}')
         try:
             parsed = {int(k): int(v) for k, v in anchors.items()}
         except (TypeError, ValueError):
-            return jsonify({"error": "anchors must map tier → film_id"}), 400
+            raise RankError(400, "anchors must map tier → film_id") from None
         sid = ranker.start_session(repo, RANK_SOURCE, parsed, today())
         return jsonify({"session_id": sid, **ranker.session_state(repo, RANK_SOURCE, today())}), 201
 
     @app.post("/api/rank/verdict")
     def rank_verdict() -> Response:
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body.get("film_id"), int) or not isinstance(body.get("anchor_tier"), int):
+        body = _json_object()
+        film_id, anchor_tier = body.get("film_id"), body.get("anchor_tier")
+        if not isinstance(film_id, int) or not isinstance(anchor_tier, int):
             raise RankError(400, 'body must be JSON {"film_id": int, "anchor_tier": int, "verdict": "better"|"worse"}')
         return jsonify(
-            ranker.record_verdict(
-                repo, RANK_SOURCE, body["film_id"], body["anchor_tier"], str(body.get("verdict")), today()
-            )
+            ranker.record_verdict(repo, RANK_SOURCE, film_id, anchor_tier, str(body.get("verdict")), today())
         )
 
     @app.post("/api/rank/pass")
     def rank_pass() -> Response:
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body.get("film_id"), int):
+        body = _json_object()
+        film_id = body.get("film_id")
+        if not isinstance(film_id, int):
             raise RankError(400, 'body must be JSON {"film_id": int, "candidate_unseen": bool, "anchor_unseen": bool}')
         candidate_unseen = bool(body.get("candidate_unseen"))
         anchor_unseen = bool(body.get("anchor_unseen"))
-        return jsonify(
-            ranker.pass_film(repo, RANK_SOURCE, body["film_id"], candidate_unseen, anchor_unseen, today())
-        )
+        return jsonify(ranker.pass_film(repo, RANK_SOURCE, film_id, candidate_unseen, anchor_unseen, today()))
 
     @app.post("/api/rank/undo")
     def rank_undo() -> Response:
@@ -197,15 +203,17 @@ def create_app(
 
     @app.put("/api/rank/anchor")
     def rank_anchor() -> Response:
-        body = request.get_json(silent=True) or {}
-        if not isinstance(body.get("tier"), int) or not isinstance(body.get("film_id"), int):
+        body = _json_object()
+        tier, film_id = body.get("tier"), body.get("film_id")
+        if not isinstance(tier, int) or not isinstance(film_id, int):
             raise RankError(400, 'body must be JSON {"tier": int, "film_id": int}')
-        return jsonify(ranker.swap_anchor(repo, RANK_SOURCE, body["tier"], body["film_id"], today()))
+        return jsonify(ranker.swap_anchor(repo, RANK_SOURCE, tier, film_id, today()))
 
     @app.post("/api/rank/save")
     def rank_save() -> Response:
-        body = request.get_json(silent=True) or {}
-        name = body.get("name") if isinstance(body.get("name"), str) else None
+        body = _json_object()
+        raw_name = body.get("name")
+        name = raw_name if isinstance(raw_name, str) else None
         return jsonify(ranker.save_list(repo, RANK_SOURCE, name, today(), lists_dir))
 
     @app.put("/api/films/<int:film_id>/unseen")

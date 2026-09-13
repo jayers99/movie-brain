@@ -496,3 +496,19 @@ def test_unseen_toggle_route(client, repo):
     assert client.put(f"/api/films/{trio}/unseen", json={"unseen": False}).get_json() == {"unseen": False}
     assert client.put(f"/api/films/{trio}/unseen", json={}).status_code == 400
     assert client.put("/api/films/999/unseen", json={"unseen": True}).status_code == 404
+
+
+@pytest.mark.parametrize(
+    "method,url",
+    [
+        ("post", "/api/rank/session"),
+        ("post", "/api/rank/verdict"),
+        ("post", "/api/rank/pass"),
+        ("put", "/api/rank/anchor"),
+        ("post", "/api/rank/save"),
+    ],
+)
+def test_rank_routes_reject_a_non_object_body(rank_client, method, url):
+    client, _ = rank_client
+    r = getattr(client, method)(url, json=[1, 2, 3])
+    assert r.status_code == 400 and "JSON object" in r.get_json()["error"]
