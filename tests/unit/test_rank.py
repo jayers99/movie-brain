@@ -7,9 +7,12 @@ from movie_brain.domain.rank import (
     RANKER_LIST_SLUGS,
     TIERS,
     Ask,
+    Insert,
     Place,
+    Probe,
     next_step,
     order_queue,
+    order_step,
     propose_anchors,
     queue_key,
     tier_for_score,
@@ -121,3 +124,67 @@ def test_tiered_entries_label_ties_and_leave_singletons_bare():
 
 def test_ranker_owns_the_owned_slug():
     assert "my-owned-tiers" in RANKER_LIST_SLUGS
+
+
+def test_order_step_inserts_the_first_film_without_a_click():
+    assert order_step([], []) == Insert(0)
+
+
+def test_order_step_probes_the_only_film_then_inserts_either_side():
+    assert order_step([10], []) == Probe(10)
+    assert order_step([10], [(10, "better")]) == Insert(0)
+    assert order_step([10], [(10, "worse")]) == Insert(1)
+
+
+def test_order_step_halves_the_slot_range_each_verdict():
+    order = [1, 2, 3, 4, 5]                       # slots 0..5
+    assert order_step(order, []) == Probe(3)      # (0+5)//2 = 2 → film 3
+    assert order_step(order, [(3, "worse")]) == Probe(5)            # lo=3, hi=5 → index 4
+    assert order_step(order, [(3, "worse"), (5, "better")]) == Probe(4)   # lo=3, hi=4 → index 3
+    assert order_step(order, [(3, "worse"), (5, "better"), (4, "worse")]) == Insert(4)
+    assert order_step(order, [(3, "better")]) == Probe(2)           # lo=0, hi=2 → index 1
+    assert order_step(order, [(3, "better"), (2, "better"), (1, "better")]) == Insert(0)
+
+
+def test_order_step_ignores_a_verdict_against_a_film_no_longer_in_the_order():
+    assert order_step([1, 2], [(99, "better")]) == Probe(2)
+
+
+def test_order_step_raises_on_crossed_bounds_or_an_unknown_verdict():
+    assert order_step([1, 2, 3], [(3, "better"), (1, "worse")]) == Probe(2)   # hi=2, lo=1: not crossed
+    with pytest.raises(ValueError):
+        order_step([1, 2, 3], [(1, "better"), (3, "worse")])   # hi=0, lo=3: crossed
+    with pytest.raises(ValueError):
+        order_step([1], [(1, "same")])
+
+
+def test_tiered_entries_with_an_order_ranks_tier_1_bare_then_ties_the_rest():
+    placed = [
+        Placed(11, 1, "Zulu", "Z"),
+        Placed(12, 1, "Alpha", "A"),
+        Placed(13, 1, "Mike", "M"),
+        Placed(14, 1, "Bravo", "B"),
+        Placed(20, 2, "Two", None),
+        Placed(50, 5, "Solo", None),
+    ]
+    got = tiered_entries(placed, {13: 1, 11: 2})
+    assert [(e.rank, e.film_id, e.rank_label) for e in got] == [
+        (1, 13, None),      # ordered: Mike at position 1
+        (2, 11, None),      # ordered: Zulu at position 2
+        (3, 12, "=3"),      # unordered tier 1, by title, tied at the first unordered line
+        (4, 14, "=3"),
+        (5, 20, None),
+        (6, 50, None),
+    ]
+
+
+def test_tiered_entries_with_a_lone_unordered_film_leaves_it_bare():
+    placed = [Placed(11, 1, "Zulu", None), Placed(12, 1, "Alpha", None)]
+    got = tiered_entries(placed, {11: 1})
+    assert [(e.rank, e.film_id, e.rank_label) for e in got] == [(1, 11, None), (2, 12, None)]
+
+
+def test_tiered_entries_without_an_order_is_unchanged():
+    placed = [Placed(11, 1, "Zulu", None), Placed(12, 1, "Alpha", None)]
+    assert tiered_entries(placed) == tiered_entries(placed, {})
+    assert [e.rank_label for e in tiered_entries(placed)] == ["=1", "=1"]

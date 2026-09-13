@@ -67,6 +67,48 @@ def next_step(verdicts: Sequence[str]) -> Ask | Place:
         raise ValueError(f"illegal verdict sequence {list(verdicts)!r}") from None
 
 
+@dataclass(frozen=True)
+class Probe:
+    """Show the candidate against this ordered film (order spec §4.1)."""
+
+    film_id: int
+
+
+@dataclass(frozen=True)
+class Insert:
+    """The candidate's slot is pinned: 0-based gap in the order (0 = before everything)."""
+
+    slot: int
+
+
+def order_step(order: Sequence[int], verdicts: Iterable[tuple[int, str]]) -> Probe | Insert:
+    """Binary insertion with bounds derived from the log (order spec §4.1, O5).
+
+    `order` is the tier's film ids by position; `verdicts` the candidate's logged
+    (other_film_id, verdict) pairs. `better` caps the slot at that film's index, `worse`
+    floors it at index + 1. A verdict against a film no longer in the order is ignored
+    (§4.3 says why one can only exist transiently). Crossed bounds cannot arise by
+    construction; if they do, the log is corrupt and this raises like `next_step`.
+    """
+    index = {fid: i for i, fid in enumerate(order)}
+    lo, hi = 0, len(order)
+    for other, verdict in verdicts:
+        i = index.get(other)
+        if i is None:
+            continue
+        if verdict == "better":
+            hi = min(hi, i)
+        elif verdict == "worse":
+            lo = max(lo, i + 1)
+        else:
+            raise ValueError(f"illegal order verdict {verdict!r}")
+    if lo > hi:
+        raise ValueError(f"crossed order bounds lo={lo} hi={hi}")
+    if lo == hi:
+        return Insert(lo)
+    return Probe(order[(lo + hi) // 2])
+
+
 def propose_anchors(seeded: Iterable[SeedFilm]) -> dict[int, SeedFilm | None]:
     """One proposed anchor per tier (D4): the seeded film whose score is nearest the tier's
     middle, ties broken by IMDb rating desc then title. None for a tier with no seeded film."""
@@ -98,17 +140,28 @@ def order_queue(seed: int, film_ids: Iterable[int], deferred: Mapping[int, str])
     return fresh + later
 
 
-def tiered_entries(placed: Iterable[Placed]) -> list[TieredEntry]:
-    """The saved list's lines (spec §7): tier asc then title; `=<first line>` labels a tier of
-    two or more, a tier of one stays bare."""
-    ordered = sorted(placed, key=lambda p: (p.tier, p.title.casefold(), p.film_id))
-    sizes: dict[int, int] = {}
-    for p in ordered:
-        sizes[p.tier] = sizes.get(p.tier, 0) + 1
+def tiered_entries(placed: Iterable[Placed], order: Mapping[int, int] | None = None) -> list[TieredEntry]:
+    """The saved list's lines (tier spec §7, order spec §4.5): tier asc; inside a tier the
+    ordered films first by position with bare labels, then the rest by title tied at the
+    first unordered line (`=N`) when two or more, bare when one. With no order this is
+    byte-for-byte the tiering's own output."""
+    positions = dict(order or {})
+    by_tier: dict[int, list[Placed]] = {}
+    for p in placed:
+        by_tier.setdefault(p.tier, []).append(p)
     out: list[TieredEntry] = []
-    first_line: dict[int, int] = {}
-    for line, p in enumerate(ordered, start=1):
-        first_line.setdefault(p.tier, line)
-        label = f"={first_line[p.tier]}" if sizes[p.tier] > 1 else None
-        out.append(TieredEntry(line, p.film_id, p.title, p.director, label))
+    line = 0
+    for tier in sorted(by_tier):
+        members = by_tier[tier]
+        ordered = sorted((p for p in members if p.film_id in positions), key=lambda p: positions[p.film_id])
+        rest = sorted(
+            (p for p in members if p.film_id not in positions), key=lambda p: (p.title.casefold(), p.film_id)
+        )
+        for p in ordered:
+            line += 1
+            out.append(TieredEntry(line, p.film_id, p.title, p.director, None))
+        first_rest = line + 1
+        for p in rest:
+            line += 1
+            out.append(TieredEntry(line, p.film_id, p.title, p.director, f"={first_rest}" if len(rest) > 1 else None))
     return out
