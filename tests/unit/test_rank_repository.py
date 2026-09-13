@@ -62,7 +62,7 @@ def test_owned_seed_films_is_owned_and_rated_minus_unseen(repo):
     _film(repo, "Charlie", 1970)  # neither owned nor rated
     c = _owned_rated(repo, "Delta", 1980, 7)
     repo.set_unseen(c, True, D)
-    got = {s.film_id: s for s in repo.pool_seed_films()}
+    got = {s.film_id: s for s in repo.owned_seed_films()}
     assert set(got) == {a, b}
     assert got[a].score == 10 and got[a].imdb == 8.1 and got[a].title == "Alpha" and got[a].year == 1950
     assert got[b].imdb is None
