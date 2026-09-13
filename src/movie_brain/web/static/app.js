@@ -571,7 +571,8 @@
     }
     const credited = d.credits && d.credits.director;
     const director = d.director ? personLink('director', d.director, !!credited, credited || d.director) : '—';
-    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button></h2>
+    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
+      <div class="unseen-row"><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button></div>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       <div class="meta">${fmt(d.year)} · ${director}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${summary ? `<p>${poster}${esc(summary)}</p>` : poster}

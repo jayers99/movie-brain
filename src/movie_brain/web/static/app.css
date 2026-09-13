@@ -74,6 +74,7 @@ tbody tr.departed td { color:var(--muted); }
 .svc-more > summary:hover { text-decoration:underline; }
 .watch-toggle { background: none; border: none; font-size: 1.1em; cursor: pointer; vertical-align: middle; }
 .revisit-toggle { background: none; border: none; font-size: 1.1em; cursor: pointer; vertical-align: middle; }
+.unseen-row { margin: 2px 0 6px; }
 .unseen-toggle { margin-left:6px; font-size:12px; }
 .unseen-toggle[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
 input.revisit-note { display:block; width:100%; max-width:320px; font:inherit; padding:2px 6px; margin:0 0 8px; border:1px solid var(--line); border-radius:4px; }

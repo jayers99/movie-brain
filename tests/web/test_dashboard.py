@@ -1156,7 +1156,12 @@ def test_drawer_unseen_toggle_round_trips(dash: Page):
     expect(toggle).to_have_attribute("aria-pressed", "true")
     dash.reload()
     dash.wait_for_selector("#films tbody[data-count]")
-    body = _open(dash, "Charlie")
+    # The reload lands on the same `?film=<id>` URL toggle.click() above pushed (openDrawer's
+    # own syncUrl), so boot() reopens the drawer on Charlie by itself — a row click here would
+    # be intercepted by that already-open drawer (it's fixed-position and the row spans the
+    # full viewport width under it), so read the reopened drawer directly instead.
+    body = dash.locator("#drawer-body")
+    expect(body).to_contain_text("Charlie")
     expect(body.locator("button.unseen-toggle")).to_have_attribute("aria-pressed", "true")
     body.locator("button.unseen-toggle").click()
     expect(body.locator("button.unseen-toggle")).to_have_attribute("aria-pressed", "false")
