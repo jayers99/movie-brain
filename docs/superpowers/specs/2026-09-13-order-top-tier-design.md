@@ -1,6 +1,6 @@
 # Order the top tier — strict order inside tier 1 by binary insertion
 
-**Date:** 2026-09-13 · **Status:** approved design, awaiting plan · **Extends:** the tier ranker (`2026-09-13-tier-ranker-design.md`, D6's deferral and backlog item 16). **Opens:** a second mode on `/rank`, three tables, and bare ranks inside the ranker's list.
+**Date:** 2026-09-13 · **Status:** implemented 2026-09-13 (plan docs/superpowers/plans/2026-09-13-order-top-tier.md) · **Extends:** the tier ranker (`2026-09-13-tier-ranker-design.md`, D6's deferral and backlog item 16). **Opens:** a second mode on `/rank`, three tables, and bare ranks inside the ranker's list.
 
 ## 1. Goal
 
@@ -86,9 +86,9 @@ The one transient case is a pair served, then X removed from the drawer, then th
 ### 4.4 Removal, undo and the tiering
 
 - **Unseen from the drawer** (`set_unseen`): in addition to today's deletion of the film's `rank_placement` and `rank_comparison` rows in every session, delete its `rank_order` row (compacting positions), every `rank_order_comparison` row naming it as candidate OR other, and its `rank_order_deferral` row. An unseen film's clicks, and clicks against it, must audit nothing.
-- **Undo** (O8): `last_action` gains `mode: "tiers" | "order"`. Order-mode kinds: `order_verdict` (deletes the comparison row; if that verdict completed an insertion, `inserted: true` and the `rank_order` row is deleted with positions compacted, the film leading the queue again at once) and `order_defer` (deletes the deferral). Tiering kinds are unchanged. Because there is one slot, a tier 1 placement cannot be undone once any order click has followed it — so an ordered film never loses its placement through undo.
+- **Undo** (O8): `last_action` gains `mode: "tiers" | "order"`. Order-mode kinds: `order_verdict` (deletes the comparison row; if that verdict completed an insertion, `inserted: true` and the `rank_order` row is deleted with positions compacted, the film leading the queue again at once) and `order_defer` (deletes the deferral). Tiering kinds are unchanged. Because there is one slot, a tier 1 placement cannot be undone once any order click has followed it — so an ordered film never loses its placement through undo. Undoing a tier 1 placement in tiers mode also removes the film from `rank_order` — a film free-inserted on read has no order verdicts and, undo being one level, nothing can have been probed against it.
 - **A film placed into tier 1 later** joins the queue on the next order request (O2). Nothing to do.
-- **`merge_film`** moves the three tables survivor-wins. If both loser and survivor hold a `rank_order` row in one session, the loser's is dropped and the survivor's position stands; positions are compacted after the move. The loser's order comparisons move to the survivor's id on both columns; a row that would then compare the survivor with itself is deleted.
+- **`merge_film`** moves the three tables survivor-wins. If both loser and survivor hold a `rank_order` row in one session, the loser's is dropped and the survivor's position stands; positions are compacted after the move. The loser's order comparisons follow survivor-wins per (session, candidate) on BOTH columns: as candidate, the loser's rows are dropped when the survivor already holds any in that session, else moved; as the other film, a loser-naming row is dropped when that same candidate already holds a row naming the survivor, else re-pointed; a row that would then compare the survivor with itself is deleted. (Implementation ruling 2026-09-13: an unconditional re-point on the other column let a candidate judged against both merge participants end up with contradictory verdicts against the survivor — crossed bounds.)
 - **Tombstone** deletes nothing (collectors never delete); the disposed guard keeps the film out of the queue and out of the served order.
 
 ### 4.5 The saved list (`tiered_entries`)
@@ -110,7 +110,7 @@ The page keeps its one promise queue: every click and keydown in either mode is 
 
 | Route | Does |
 |---|---|
-| `GET /api/rank/order` | The order state for the open `owned` session: `tier: 1`, `ordered`, `remaining`, `can_undo`, and either `pair: {candidate, other, position, of, asked}` or `done: true`. 409 with no open session. |
+| `GET /api/rank/order` | The order state for the open `owned` session: `tier: 1`, `ordered`, `remaining`, `can_undo`, and either `pair: {candidate, other, position, of, asked}` or `done: true`. 404 with no open session, through the same helper every other rank route uses. |
 | `POST /api/rank/order/verdict` | `{film_id, other_film_id, verdict}`. Appends the log row; inserts when §4.1 says the slot is pinned. 409 if the pair is not the current one (stale page, or the other film removed since it was served). |
 | `POST /api/rank/order/pass` | `{film_id}`. Defers the candidate. 409 if it is not the current candidate. |
 | `POST /api/rank/undo` | Unchanged route; reverses the last action in either mode (§4.4). |
