@@ -42,9 +42,9 @@ def _state(ctx):
     return ctx["state"]
 
 
-@given(parsers.parse('owned films rated "Ten" {a:d}, "Nine" {b:d}, "Eight" {c:d}, "Seven" {d:d}, "Four" {e:d}'))
+@given(parsers.parse('owned films rated "Ten" {a:d}, "Nine" {b:d}, "Eight" {c:d}, "Seven" {d:d}, "Six" {e:d}'))
 def rated(ctx, a, b, c, d, e):
-    for title, score in (("Ten", a), ("Nine", b), ("Eight", c), ("Seven", d), ("Four", e)):
+    for title, score in (("Ten", a), ("Nine", b), ("Eight", c), ("Seven", d), ("Six", e)):
         fid = ctx["repo"].create_film(Film(title, 1950, "Dir", ""))
         ctx["repo"].mark_owned(fid, TODAY)
         ctx["repo"].set_rating(fid, score, TODAY)
@@ -270,7 +270,7 @@ def tier1_label(ctx, label):
 @then("its tier 5 entry carries no label")
 def tier5_bare(ctx):
     rows = ctx["repo"].list_entries("my-owned-tiers")
-    assert rows[-1].film_id == _id(ctx, "Four") and rows[-1].rank_label is None
+    assert rows[-1].film_id == _id(ctx, "Six") and rows[-1].rank_label is None
 
 
 @given(parsers.parse('a list file "{name}" exists'))

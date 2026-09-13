@@ -1,7 +1,7 @@
 Feature: Order tier 1 — strict order inside the top tier by binary insertion
 
   Background:
-    Given owned films rated "Alpha" 10, "Beta" 10, "Gamma" 10, "Delta" 10, "Nine" 9, "Eight" 8, "Seven" 7, "Four" 4
+    Given owned films rated "Alpha" 10, "Beta" 10, "Gamma" 10, "Delta" 10, "Nine" 9, "Eight" 8, "Seven" 7, "Six" 6
     And an owned unrated film "Uno"
     And a started tiering session
 

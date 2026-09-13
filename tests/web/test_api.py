@@ -402,7 +402,7 @@ def test_search_without_an_embedder_offers_the_install_hint_on_an_empty_freeform
 @pytest.fixture
 def rank_client(repo, tmp_path):
     ids = {}
-    for title, score in (("Ten", 10), ("Nine", 9), ("Eight", 8), ("Seven", 7), ("Four", 4)):
+    for title, score in (("Ten", 10), ("Nine", 9), ("Eight", 8), ("Seven", 7), ("Six", 6)):
         fid = repo.create_film(Film(title, 1950, "Dir", ""))
         repo.mark_owned(fid, D)
         repo.set_rating(fid, score, D)

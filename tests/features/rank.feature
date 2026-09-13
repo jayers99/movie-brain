@@ -1,11 +1,11 @@
 Feature: Tier ranker — place owned films into five tiers against anchors
 
   Background:
-    Given owned films rated "Ten" 10, "Nine" 9, "Eight" 8, "Seven" 7, "Four" 4
+    Given owned films rated "Ten" 10, "Nine" 9, "Eight" 8, "Seven" 7, "Six" 6
     And owned unrated films "Uno", "Dos", "Tres"
 
   Scenario: The proposal names one seeded anchor per tier
-    Then the proposal is Ten, Nine, Eight, Seven, Four
+    Then the proposal is Ten, Nine, Eight, Seven, Six
 
   Scenario: An emptied seed tier's fallback offers only the unrated films
     Given "Seven" is re-rated 8

@@ -42,9 +42,9 @@ def _order(ctx):
     return order_state(ctx["repo"], SRC, TODAY)
 
 
-@given(parsers.parse('owned films rated "Alpha" {a:d}, "Beta" {b:d}, "Gamma" {c:d}, "Delta" {d:d}, "Nine" {e:d}, "Eight" {f:d}, "Seven" {g:d}, "Four" {h:d}'))
+@given(parsers.parse('owned films rated "Alpha" {a:d}, "Beta" {b:d}, "Gamma" {c:d}, "Delta" {d:d}, "Nine" {e:d}, "Eight" {f:d}, "Seven" {g:d}, "Six" {h:d}'))
 def rated(ctx, a, b, c, d, e, f, g, h):
-    for title, score in (("Alpha", a), ("Beta", b), ("Gamma", c), ("Delta", d), ("Nine", e), ("Eight", f), ("Seven", g), ("Four", h)):
+    for title, score in (("Alpha", a), ("Beta", b), ("Gamma", c), ("Delta", d), ("Nine", e), ("Eight", f), ("Seven", g), ("Six", h)):
         fid = ctx["repo"].create_film(Film(title, 1950, "Dir", ""))
         ctx["repo"].mark_owned(fid, TODAY)
         ctx["repo"].set_rating(fid, score, TODAY)

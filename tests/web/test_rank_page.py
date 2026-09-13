@@ -19,7 +19,7 @@ POSTER = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAA
 
 def seed(repo: Repository) -> None:
     # Five rated owned films, one per tier, plus three unrated: the queue has three candidates.
-    for title, score in (("Ten", 10), ("Nine", 9), ("Eight", 8), ("Seven", 7), ("Four", 4)):
+    for title, score in (("Ten", 10), ("Nine", 9), ("Eight", 8), ("Seven", 7), ("Six", 6)):
         fid = repo.create_film(Film(title, 1950, "Dir", ""))
         repo.mark_owned(fid, TODAY)
         repo.set_rating(fid, score, TODAY)

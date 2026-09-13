@@ -54,13 +54,13 @@ def test_propose_anchors_picks_nearest_middle_then_imdb_then_title():
         SeedFilm(1, 10, 8.0, "Zed", 1950),
         SeedFilm(2, 10, 9.0, "Alpha", 1951),  # tier 1: both score 10, imdb breaks the tie
         SeedFilm(3, 6, 7.0, "Six", 1960),
-        SeedFilm(4, 4, 7.0, "Four", 1961),  # tier 5: middle is 5, both distance 1, imdb ties, title breaks it
+        SeedFilm(4, 6, 7.0, "Zix", 1961),  # tier 5: both score 6, imdb ties, title breaks it
         SeedFilm(5, 8, None, "Eight", 1970),
     ]
     got = propose_anchors(seeded)
     assert got[1].film_id == 2
     assert got[3].film_id == 5
-    assert got[5].film_id == 4
+    assert got[5].film_id == 3
     assert got[2] is None and got[4] is None
     assert set(got) == set(range(1, TIERS + 1))
 
