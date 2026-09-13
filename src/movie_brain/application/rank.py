@@ -16,9 +16,11 @@ from movie_brain.domain.rank import (
     RANKER_SLUGS,
     TIERS,
     VERDICTS,
+    Insert,
     Place,
     next_step,
     order_queue,
+    order_step,
     propose_anchors,
     tier_for_score,
     tiered_entries,
@@ -31,6 +33,9 @@ class RankError(Exception):
         super().__init__(message)
         self.status = status
         self.message = message
+
+
+ORDER_TIER = 1  # the one tier the order mode exposes (order spec O9)
 
 
 def _film(repo: Repository, film_id: int) -> dict[str, object]:
@@ -189,6 +194,107 @@ def session_state(repo: Repository, source: str, today: date) -> dict[str, objec
     }
 
 
+def _order_queue(repo: Repository, s: RankSession) -> list[int]:
+    """Order spec §4.2: the session's tier 1 placements not yet ordered, mid-insertion films
+    first, then the seeded shuffle, order-mode deferrals last. Derived per request."""
+    placed = repo.rank_placements(s.id)
+    ordered = set(repo.rank_order(s.id, ORDER_TIER))
+    unseen = repo.unseen_film_ids()
+    disposed = repo.disposed_film_ids()
+    ids = [
+        fid
+        for fid, (tier, _) in placed.items()
+        if tier == ORDER_TIER and fid not in ordered and fid not in unseen and fid not in disposed
+    ]
+    deferred = repo.order_deferrals(s.id)
+    queue = order_queue(s.seed, ids, deferred)
+    in_progress = repo.films_with_order_verdicts(s.id)
+    lead = [i for i in queue if i in in_progress and i not in deferred]
+    return lead + [i for i in queue if i not in lead]
+
+
+def order_state(repo: Repository, source: str, today: date) -> dict[str, object]:
+    s = _session(repo, source)
+    order = repo.rank_order(s.id, ORDER_TIER)
+    queue = _order_queue(repo, s)
+    pair: dict[str, object] | None = None
+    corrupt: list[int] = []
+    while queue:
+        cand = queue[0]
+        verdicts = repo.order_verdicts_for(s.id, cand)
+        try:
+            step = order_step(order, verdicts)
+        except ValueError:
+            corrupt.append(cand)  # never a 500: skipped, nothing written (order spec §4.1)
+            queue = queue[1:]
+            continue
+        if isinstance(step, Insert):
+            # O7 (an empty order takes its first film with no click) and the self-heal for a
+            # crash between the last append and the insert both land here.
+            repo.insert_ordered(s.id, ORDER_TIER, cand, step.slot, today)
+            order = repo.rank_order(s.id, ORDER_TIER)
+            queue = queue[1:]
+            continue
+        pair = {
+            "candidate": _film(repo, cand),
+            "other": _film(repo, step.film_id),
+            "position": order.index(step.film_id) + 1,
+            "of": len(order),
+            "asked": [[other, v] for other, v in verdicts],
+        }
+        break
+    return {
+        "tier": ORDER_TIER,
+        "ordered": len(order),
+        "remaining": len(queue),
+        "pair": pair,
+        "done": not queue,
+        "can_undo": s.last_action is not None,
+        "corrupt": corrupt,
+    }
+
+
+def _current_order_pair(repo: Repository, source: str, today: date) -> tuple[RankSession, dict[str, object]]:
+    s = _session(repo, source)
+    pair = order_state(repo, source, today)["pair"]
+    if not isinstance(pair, dict):
+        raise RankError(409, "no current pair")
+    return s, pair
+
+
+def order_verdict(
+    repo: Repository, source: str, film_id: int, other_film_id: int, verdict: str, today: date
+) -> dict[str, object]:
+    if verdict not in VERDICTS:
+        raise RankError(400, f"verdict must be one of {', '.join(VERDICTS)}")
+    s, pair = _current_order_pair(repo, source, today)
+    cand, other = pair["candidate"], pair["other"]
+    assert isinstance(cand, dict) and isinstance(other, dict)
+    if cand["film_id"] != film_id or other["film_id"] != other_film_id:
+        raise RankError(409, "that pair is no longer current")
+    cid = repo.append_order_comparison(s.id, ORDER_TIER, film_id, other_film_id, verdict, today)
+    step = order_step(repo.rank_order(s.id, ORDER_TIER), repo.order_verdicts_for(s.id, film_id))
+    inserted = isinstance(step, Insert)
+    if isinstance(step, Insert):
+        repo.insert_ordered(s.id, ORDER_TIER, film_id, step.slot, today)
+    repo.set_last_action(
+        s.id,
+        {"mode": "order", "kind": "order_verdict", "film_id": film_id, "comparison_id": cid, "inserted": inserted},
+    )
+    return order_state(repo, source, today)
+
+
+def order_pass(repo: Repository, source: str, film_id: int, today: date) -> dict[str, object]:
+    s, pair = _current_order_pair(repo, source, today)
+    cand = pair["candidate"]
+    assert isinstance(cand, dict)
+    if cand["film_id"] != film_id:
+        raise RankError(409, "that candidate is no longer current")
+    repo.defer_order_film(s.id, film_id, today.isoformat())
+    repo.set_last_action(s.id, {"mode": "order", "kind": "order_defer", "film_id": film_id})
+    return order_state(repo, source, today)
+
+
 def _current_pair(repo: Repository, source: str, today: date) -> tuple[RankSession, dict[str, object]]:
     s = _session(repo, source)
     state = session_state(repo, source, today)
@@ -216,7 +322,8 @@ def record_verdict(
         repo.place_film(s.id, film_id, step.tier, "compared", today)
         placed_tier = step.tier
     repo.set_last_action(
-        s.id, {"kind": "verdict", "film_id": film_id, "comparison_id": cid, "placed_tier": placed_tier}
+        s.id,
+        {"mode": "tiers", "kind": "verdict", "film_id": film_id, "comparison_id": cid, "placed_tier": placed_tier},
     )
     return session_state(repo, source, today)
 
@@ -238,10 +345,14 @@ def pass_film(
         repo.set_rank_anchor(s.id, tier, None, today)
     if candidate_unseen:
         repo.set_unseen(film_id, True, today)
-        repo.set_last_action(s.id, {"kind": "unseen", "film_id": film_id} if not anchor_unseen else None)
+        repo.set_last_action(
+            s.id, {"mode": "tiers", "kind": "unseen", "film_id": film_id} if not anchor_unseen else None
+        )
     else:
         repo.defer_film(s.id, film_id, today.isoformat())
-        repo.set_last_action(s.id, {"kind": "defer", "film_id": film_id} if not anchor_unseen else None)
+        repo.set_last_action(
+            s.id, {"mode": "tiers", "kind": "defer", "film_id": film_id} if not anchor_unseen else None
+        )
     return session_state(repo, source, today)
 
 
@@ -266,7 +377,17 @@ def undo(repo: Repository, source: str, today: date) -> dict[str, object]:
         repo.undefer_film(s.id, fid)
     elif kind == "unseen":
         repo.set_unseen(fid, False, today)
+    elif kind == "order_verdict":
+        comparison_id = action["comparison_id"]
+        assert isinstance(comparison_id, int)
+        repo.delete_order_comparison(comparison_id)
+        if action.get("inserted"):
+            repo.remove_ordered(fid, s.id)  # the film leads the order queue again with one verdict fewer
+    elif kind == "order_defer":
+        repo.undefer_order_film(s.id, fid)
     repo.set_last_action(s.id, None)
+    if action.get("mode") == "order":
+        return order_state(repo, source, today)
     return session_state(repo, source, today)
 
 
@@ -294,8 +415,10 @@ def save_list(repo: Repository, source: str, name: str | None, today: date, list
         raise RankError(409, f"lists/{slug}.tsv exists — that slug belongs to a checked-in list")
     placed = repo.rank_placements(s.id)
     facts = repo.film_facts(placed)
+    order = {fid: pos for pos, fid in enumerate(repo.rank_order(s.id, ORDER_TIER), start=1)}
     entries = tiered_entries(
-        Placed(fid, tier, facts[fid][0], facts[fid][2]) for fid, (tier, _) in placed.items() if fid in facts
+        (Placed(fid, tier, facts[fid][0], facts[fid][2]) for fid, (tier, _) in placed.items() if fid in facts),
+        order,
     )
     list_name = (name or "").strip() or DEFAULT_LIST_NAME[source]
     repo.upsert_film_list(ListMeta(slug, list_name, "me", today.year, None, True), today)

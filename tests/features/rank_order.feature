@@ -1,0 +1,77 @@
+Feature: Order tier 1 — strict order inside the top tier by binary insertion
+
+  Background:
+    Given owned films rated "Alpha" 10, "Beta" 10, "Gamma" 10, "Delta" 10, "Nine" 9, "Eight" 8, "Seven" 7, "Four" 4
+    And an owned unrated film "Uno"
+    And a started tiering session
+
+  Scenario: The first tier 1 film is ordered without a click and the second is asked against it
+    Then 1 film is ordered and 3 remain to order
+    And the order pair shows position 1 of 1
+
+  Scenario: Answering better every time puts each film at the top
+    When I answer better in order mode until the candidate is inserted
+    Then the last inserted film is at position 1
+    When I answer better in order mode until the candidate is inserted
+    Then the last inserted film is at position 1
+    And 3 films are ordered
+
+  Scenario: Answering worse every time appends each film
+    When I answer worse in order mode until the candidate is inserted
+    Then the last inserted film is at position 2
+    When I answer worse in order mode until the candidate is inserted
+    Then the last inserted film is at position 3
+
+  Scenario: Every film ordered means done, and a later tier 1 placement reopens the queue
+    When I answer better in order mode until the candidate is inserted
+    And I answer better in order mode until the candidate is inserted
+    And I answer better in order mode until the candidate is inserted
+    Then the order is done with 4 films ordered
+    When "Uno" is tiered into tier 1
+    Then 4 films are ordered and 1 remains to order
+
+  Scenario: A stale order verdict is refused
+    Then answering better against a film that is not the shown one is refused with 409
+
+  Scenario: Pass in order mode defers the candidate to the back
+    When I pass in order mode
+    Then the deferred film comes last in the order queue
+
+  Scenario: Undo reverts an order verdict, an insertion and a deferral, one level deep
+    When I answer worse in order mode
+    Then 2 films are ordered
+    When I undo
+    Then 1 film is ordered and the same candidate is asked with 0 verdicts
+    When I pass in order mode
+    And I undo
+    Then nothing is deferred in order mode
+    And undoing again is refused with 409
+
+  Scenario: One undo slot serves both modes
+    When I answer worse in order mode
+    And I answer better, better in tiering mode
+    And I undo
+    Then the tiering candidate is unplaced again
+    And 2 films are ordered
+    And undoing again is refused with 409
+
+  Scenario: Marking an ordered film unseen from the drawer removes it and every verdict naming it
+    When I answer worse in order mode
+    And I answer worse in order mode until the candidate is inserted
+    Then 3 films are ordered
+    When I answer better in order mode
+    And the film at position 2 is marked unseen from the drawer
+    Then 2 films are ordered
+    And the current candidate has 0 verdicts
+
+  Scenario: Saving writes tier 1's order bare, the rest of tier 1 tied, and the other tiers as before
+    When I answer worse in order mode
+    And I save the list as "Mine"
+    Then the list "my-owned-tiers" has 8 entries
+    And entries 1 and 2 carry no label
+    And entries 3 and 4 carry label "=3"
+    And entry 5 is "Nine" with no label
+
+  Scenario: Order state needs an open session
+    Given the session is finished
+    Then reading the order state is refused with 404

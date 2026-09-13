@@ -1,0 +1,251 @@
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+from pytest_bdd import given, parsers, scenarios, then, when
+
+from movie_brain.application.rank import (
+    ORDER_TIER,
+    RankError,
+    order_pass,
+    order_state,
+    order_verdict,
+    proposal,
+    record_verdict,
+    save_list,
+    session_state,
+    start_session,
+    undo,
+)
+from movie_brain.domain.models import Film
+
+scenarios("../features/rank_order.feature")
+TODAY = date(2026, 9, 13)
+SRC = "owned"
+
+
+@pytest.fixture
+def ctx(repo, tmp_path):
+    return {"repo": repo, "ids": {}, "lists_dir": tmp_path / "lists"}
+
+
+def _id(ctx, title):
+    return ctx["ids"][title]
+
+
+def _sid(ctx):
+    return ctx["repo"].open_rank_session(SRC).id
+
+
+def _order(ctx):
+    return order_state(ctx["repo"], SRC, TODAY)
+
+
+@given(parsers.parse('owned films rated "Alpha" {a:d}, "Beta" {b:d}, "Gamma" {c:d}, "Delta" {d:d}, "Nine" {e:d}, "Eight" {f:d}, "Seven" {g:d}, "Four" {h:d}'))
+def rated(ctx, a, b, c, d, e, f, g, h):
+    for title, score in (("Alpha", a), ("Beta", b), ("Gamma", c), ("Delta", d), ("Nine", e), ("Eight", f), ("Seven", g), ("Four", h)):
+        fid = ctx["repo"].create_film(Film(title, 1950, "Dir", ""))
+        ctx["repo"].mark_owned(fid, TODAY)
+        ctx["repo"].set_rating(fid, score, TODAY)
+        ctx["ids"][title] = fid
+
+
+@given(parsers.parse('an owned unrated film "{title}"'))
+def unrated(ctx, title):
+    fid = ctx["repo"].create_film(Film(title, 1960, "Dir", ""))
+    ctx["repo"].mark_owned(fid, TODAY)
+    ctx["ids"][title] = fid
+
+
+@given("a started tiering session")
+def start(ctx):
+    p = proposal(ctx["repo"], SRC)["proposal"]
+    start_session(ctx["repo"], SRC, {t: p[t]["film_id"] for t in range(1, 6)}, TODAY)
+
+
+@then(parsers.parse("{n:d} film is ordered and {m:d} remain to order"))
+@then(parsers.parse("{n:d} films are ordered and {m:d} remain to order"))
+@then(parsers.parse("{n:d} films are ordered and {m:d} remains to order"))
+def ordered_and_remaining(ctx, n, m):
+    s = _order(ctx)
+    assert (s["ordered"], s["remaining"]) == (n, m)
+
+
+@then(parsers.parse("{n:d} films are ordered"))
+@then(parsers.parse("{n:d} film is ordered"))
+def ordered_count(ctx, n):
+    assert _order(ctx)["ordered"] == n
+
+
+@then(parsers.parse("the order pair shows position {p:d} of {k:d}"))
+def pair_position(ctx, p, k):
+    pair = _order(ctx)["pair"]
+    assert (pair["position"], pair["of"]) == (p, k)
+
+
+def _answer_once(ctx, verdict):
+    pair = _order(ctx)["pair"]
+    assert pair is not None, "no order pair to answer"
+    ctx["last_candidate"] = pair["candidate"]["film_id"]
+    order_verdict(ctx["repo"], SRC, pair["candidate"]["film_id"], pair["other"]["film_id"], verdict, TODAY)
+
+
+@when(parsers.parse("I answer {verdict} in order mode until the candidate is inserted"))
+def answer_until_inserted(ctx, verdict):
+    cand = _order(ctx)["pair"]["candidate"]["film_id"]
+    for _ in range(10):
+        _answer_once(ctx, verdict)
+        if cand in ctx["repo"].rank_order(_sid(ctx), ORDER_TIER):
+            return
+    raise AssertionError("ten verdicts and still not inserted")
+
+
+@when(parsers.parse("I answer {verdict} in order mode"))
+def answer_once(ctx, verdict):
+    _answer_once(ctx, verdict)
+
+
+@then(parsers.parse("the last inserted film is at position {p:d}"))
+def inserted_at(ctx, p):
+    order = ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)
+    assert order.index(ctx["last_candidate"]) + 1 == p
+
+
+@then(parsers.parse("the order is done with {n:d} films ordered"))
+def order_done(ctx, n):
+    s = _order(ctx)
+    assert s["done"] is True and s["ordered"] == n and s["pair"] is None
+
+
+@when(parsers.parse('"{title}" is tiered into tier 1'))
+def tier_into_1(ctx, title):
+    # The tiering's own path: better than tier 3's anchor, better than tier 2's → tier 1.
+    for _ in range(2):
+        s = session_state(ctx["repo"], SRC, TODAY)
+        assert s["pair"]["candidate"]["film_id"] == _id(ctx, title)
+        record_verdict(ctx["repo"], SRC, _id(ctx, title), s["pair"]["tier"], "better", TODAY)
+    assert ctx["repo"].rank_placements(_sid(ctx))[_id(ctx, title)][0] == 1
+
+
+@then(parsers.parse("answering better against a film that is not the shown one is refused with {status:d}"))
+def stale_order_verdict(ctx, status):
+    pair = _order(ctx)["pair"]
+    wrong_other = next(i for i in ctx["ids"].values() if i not in (pair["other"]["film_id"], pair["candidate"]["film_id"]))
+    with pytest.raises(RankError) as e:
+        order_verdict(ctx["repo"], SRC, pair["candidate"]["film_id"], wrong_other, "better", TODAY)
+    assert e.value.status == status
+
+
+@when("I pass in order mode")
+def pass_order(ctx):
+    pair = _order(ctx)["pair"]
+    ctx["last_candidate"] = pair["candidate"]["film_id"]
+    order_pass(ctx["repo"], SRC, pair["candidate"]["film_id"], TODAY)
+
+
+@then("the deferred film comes last in the order queue")
+def deferred_last(ctx):
+    repo = ctx["repo"]
+    assert ctx["last_candidate"] in repo.order_deferrals(_sid(ctx))
+    s = _order(ctx)
+    assert s["pair"]["candidate"]["film_id"] != ctx["last_candidate"]
+    # Insert everything else with one click each; the deferred film is the last candidate.
+    for _ in range(10):
+        s = _order(ctx)
+        if s["pair"]["candidate"]["film_id"] == ctx["last_candidate"]:
+            break
+        order_verdict(repo, SRC, s["pair"]["candidate"]["film_id"], s["pair"]["other"]["film_id"], "better", TODAY)
+    assert _order(ctx)["pair"]["candidate"]["film_id"] == ctx["last_candidate"]
+    assert _order(ctx)["remaining"] == 1
+
+
+@when("I undo")
+def do_undo(ctx):
+    undo(ctx["repo"], SRC, TODAY)
+
+
+@then(parsers.parse("{n:d} film is ordered and the same candidate is asked with {v:d} verdicts"))
+def same_candidate(ctx, n, v):
+    s = _order(ctx)
+    assert s["ordered"] == n and s["pair"]["candidate"]["film_id"] == ctx["last_candidate"]
+    assert len(s["pair"]["asked"]) == v
+
+
+@then("nothing is deferred in order mode")
+def nothing_deferred(ctx):
+    assert ctx["repo"].order_deferrals(_sid(ctx)) == {}
+
+
+@then(parsers.parse("undoing again is refused with {status:d}"))
+def undo_refused(ctx, status):
+    with pytest.raises(RankError) as e:
+        undo(ctx["repo"], SRC, TODAY)
+    assert e.value.status == status
+
+
+@when(parsers.parse("I answer {verdicts} in tiering mode"))
+def answer_tiering(ctx, verdicts):
+    for v in [x.strip() for x in verdicts.split(",")]:
+        s = session_state(ctx["repo"], SRC, TODAY)
+        ctx["tiering_candidate"] = s["pair"]["candidate"]["film_id"]
+        record_verdict(ctx["repo"], SRC, s["pair"]["candidate"]["film_id"], s["pair"]["tier"], v, TODAY)
+
+
+@then("the tiering candidate is unplaced again")
+def tiering_unplaced(ctx):
+    assert ctx["tiering_candidate"] not in ctx["repo"].rank_placements(_sid(ctx))
+
+
+@when(parsers.parse("the film at position {p:d} is marked unseen from the drawer"))
+def unseen_at_position(ctx, p):
+    fid = ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)[p - 1]
+    ctx["repo"].set_unseen(fid, True, TODAY)
+
+
+@then(parsers.parse("the current candidate has {n:d} verdicts"))
+def candidate_verdicts(ctx, n):
+    s = _order(ctx)
+    assert len(s["pair"]["asked"]) == n
+
+
+@when(parsers.parse('I save the list as "{name}"'))
+def save(ctx, name):
+    ctx["lists_dir"].mkdir(exist_ok=True)
+    save_list(ctx["repo"], SRC, name, TODAY, ctx["lists_dir"])
+
+
+@then(parsers.parse('the list "{slug}" has {n:d} entries'))
+def list_has(ctx, slug, n):
+    assert len(ctx["repo"].list_entries(slug)) == n
+
+
+@then(parsers.parse("entries {a:d} and {b:d} carry no label"))
+def entries_bare(ctx, a, b):
+    rows = ctx["repo"].list_entries("my-owned-tiers")
+    assert rows[a - 1].rank_label is None and rows[b - 1].rank_label is None
+
+
+@then(parsers.parse('entries {a:d} and {b:d} carry label "{label}"'))
+def entries_tied(ctx, a, b, label):
+    rows = ctx["repo"].list_entries("my-owned-tiers")
+    assert rows[a - 1].rank_label == label and rows[b - 1].rank_label == label
+
+
+@then(parsers.parse('entry {n:d} is "{title}" with no label'))
+def entry_is(ctx, n, title):
+    row = ctx["repo"].list_entries("my-owned-tiers")[n - 1]
+    assert row.film_id == _id(ctx, title) and row.rank_label is None
+
+
+@given("the session is finished")
+def finish(ctx):
+    with ctx["repo"]._conn() as c:
+        c.execute("UPDATE rank_session SET finished_on = ? WHERE id = ?", (TODAY.isoformat(), _sid(ctx)))
+
+
+@then(parsers.parse("reading the order state is refused with {status:d}"))
+def order_refused(ctx, status):
+    with pytest.raises(RankError) as e:
+        order_state(ctx["repo"], SRC, TODAY)
+    assert e.value.status == status
