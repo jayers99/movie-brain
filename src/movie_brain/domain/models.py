@@ -343,3 +343,46 @@ class FilmView:
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class SeedFilm:
+    """An owned film carrying a rating: the ranker's seed (spec D2) and anchor pool (D4)."""
+
+    film_id: int
+    score: int
+    imdb: float | None
+    title: str
+    year: int | None
+
+
+@dataclass(frozen=True)
+class Placed:
+    """One placement, as the save reads it (spec §7)."""
+
+    film_id: int
+    tier: int
+    title: str
+    director: str | None
+
+
+@dataclass(frozen=True)
+class TieredEntry:
+    """One line of the saved list: `rank` is line order, `rank_label` the tie marker or None."""
+
+    rank: int
+    film_id: int
+    title: str
+    director: str | None
+    rank_label: str | None
+
+
+@dataclass(frozen=True)
+class RankSession:
+    id: int
+    source: str
+    seed: int
+    started_on: str
+    finished_on: str | None
+    list_slug: str | None
+    last_action: dict[str, object] | None  # the one-level undo record (spec §4.4)
