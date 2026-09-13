@@ -62,6 +62,25 @@ def test_propose_anchors_picks_nearest_middle_then_imdb_then_title():
     assert set(got) == set(range(1, TIERS + 1))
 
 
+def test_propose_anchors_prefers_any_real_imdb_over_none():
+    # Same score, same tier: imdb=0.0 with later title vs imdb=None with earlier title.
+    # IMDb tiebreak should win over title.
+    seeded = [
+        SeedFilm(1, 7, 0.0, "Zebra", 1950),  # tier 4, imdb=0.0, later title
+        SeedFilm(2, 7, None, "Alpha", 1951),  # tier 4, imdb=None, earlier title
+    ]
+    got = propose_anchors(seeded)
+    assert got[4].film_id == 1  # 0.0 rating wins despite "Zebra" > "Alpha"
+
+    # Same score, same tier, both imdb=None: title tiebreak decides.
+    seeded_both_none = [
+        SeedFilm(3, 7, None, "Bravo", 1952),
+        SeedFilm(4, 7, None, "Alpha", 1953),
+    ]
+    got_none = propose_anchors(seeded_both_none)
+    assert got_none[4].film_id == 4  # "Alpha" < "Bravo" on title
+
+
 def test_queue_key_is_stable_per_seed_and_film():
     assert queue_key(7, 10) == queue_key(7, 10)
     assert queue_key(7, 10) != queue_key(8, 10)
