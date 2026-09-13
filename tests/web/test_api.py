@@ -468,7 +468,7 @@ def test_rank_pass_anchor_unseen_then_swap_then_save(rank_client, repo):
     r = client.put("/api/rank/anchor", json={"tier": 3, "film_id": ids["Dos"]})
     assert r.status_code == 200 and r.get_json()["anchors"]["3"]["film_id"] == ids["Dos"]
     r = client.post("/api/rank/save", json={"name": ""})
-    assert r.status_code == 200 and r.get_json() == {"slug": "my-owned-tiers", "name": "My owned films, tiered", "entries": 5}
+    assert r.status_code == 200 and r.get_json() == {"slug": "my-owned-tiers", "name": "My films, tiered", "entries": 5}
     films = {f["title"]: f for f in client.get("/api/films").get_json()}
     assert films["Ten"]["lists"][0]["slug"] == "my-owned-tiers" and films["Ten"]["lists"][0]["rank_label"] is None
 

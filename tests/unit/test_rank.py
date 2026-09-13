@@ -4,6 +4,8 @@ import pytest
 
 from movie_brain.domain.models import Placed, SeedFilm
 from movie_brain.domain.rank import (
+    DEFAULT_LIST_NAME,
+    ORDER_TIERS,
     RANKER_LIST_SLUGS,
     TIERS,
     Ask,
@@ -20,9 +22,20 @@ from movie_brain.domain.rank import (
 )
 
 
-@pytest.mark.parametrize("score,tier", [(10, 1), (9, 2), (8, 3), (7, 4), (6, 5), (4, 5), (0, 5)])
+@pytest.mark.parametrize("score,tier", [(10, 1), (9, 2), (8, 3), (7, 4), (6, 5)])
 def test_seed_mapping(score, tier):
     assert tier_for_score(score) == tier
+
+
+@pytest.mark.parametrize("score", [5, 4, 0])
+def test_scores_below_six_do_not_seed(score):
+    with pytest.raises(ValueError):
+        tier_for_score(score)
+
+
+def test_order_tiers_and_default_name():
+    assert ORDER_TIERS == (1, 2)
+    assert DEFAULT_LIST_NAME["owned"] == "My films, tiered"
 
 
 @pytest.mark.parametrize(

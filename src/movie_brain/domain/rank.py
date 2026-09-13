@@ -20,11 +20,12 @@ VERDICTS = ("better", "worse")  # the CANDIDATE is better/worse than the anchor 
 # The ranker's own lists: not backed by lists/<slug>.tsv, refused by `lists import` (§7).
 RANKER_SLUGS: dict[str, str] = {"owned": "my-owned-tiers"}
 RANKER_LIST_SLUGS: frozenset[str] = frozenset(RANKER_SLUGS.values())
-DEFAULT_LIST_NAME: dict[str, str] = {"owned": "My owned films, tiered"}
+DEFAULT_LIST_NAME: dict[str, str] = {"owned": "My films, tiered"}
 
 
 def tier_for_score(score: int) -> int:
-    """Seed mapping (spec §3): 10→1, 9→2, 8→3, 7→4, everything 6 and below→5."""
+    """Seed mapping (ranking-pool spec P4): 10→1, 9→2, 8→3, 7→4, 6→5. A score below 6 is not a
+    ranker film at all (5 = watched, indifferent; 1–4 disliked; 0 not interested) and raises."""
     if score >= 10:
         return 1
     if score == 9:
@@ -33,7 +34,12 @@ def tier_for_score(score: int) -> int:
         return 3
     if score == 7:
         return 4
-    return 5
+    if score == 6:
+        return 5
+    raise ValueError(f"a score of {score} does not seed a tier")
+
+
+ORDER_TIERS: tuple[int, ...] = (1, 2)  # the tiers the order mode exposes (ranking-pool spec P5)
 
 
 @dataclass(frozen=True)
