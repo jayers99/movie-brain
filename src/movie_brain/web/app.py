@@ -218,28 +218,35 @@ def create_app(
 
     @app.get("/api/rank/order")
     def rank_order_state() -> Response:
-        # tier is wired through by Task 5 of the ranking-pool plan; 1 keeps today's page working until then
-        return jsonify(ranker.order_state(repo, RANK_SOURCE, 1, today()))
+        raw_tier = request.args.get("tier")
+        if raw_tier is None:
+            raise RankError(400, "tier query parameter must be 1 or 2")
+        try:
+            tier = int(raw_tier)
+        except ValueError:
+            raise RankError(400, "tier query parameter must be 1 or 2") from None
+        return jsonify(ranker.order_state(repo, RANK_SOURCE, tier, today()))
 
     @app.post("/api/rank/order/verdict")
     def rank_order_verdict() -> Response:
         body = _json_object()
-        film_id, other_film_id = body.get("film_id"), body.get("other_film_id")
-        if not isinstance(film_id, int) or not isinstance(other_film_id, int):
+        tier, film_id, other_film_id = body.get("tier"), body.get("film_id"), body.get("other_film_id")
+        if not isinstance(tier, int) or not isinstance(film_id, int) or not isinstance(other_film_id, int):
             raise RankError(
-                400, 'body must be JSON {"film_id": int, "other_film_id": int, "verdict": "better"|"worse"}'
+                400,
+                'body must be JSON {"tier": int, "film_id": int, "other_film_id": int, "verdict": "better"|"worse"}',
             )
         return jsonify(
-            ranker.order_verdict(repo, RANK_SOURCE, 1, film_id, other_film_id, str(body.get("verdict")), today())
+            ranker.order_verdict(repo, RANK_SOURCE, tier, film_id, other_film_id, str(body.get("verdict")), today())
         )
 
     @app.post("/api/rank/order/pass")
     def rank_order_pass() -> Response:
         body = _json_object()
-        film_id = body.get("film_id")
-        if not isinstance(film_id, int):
-            raise RankError(400, 'body must be JSON {"film_id": int}')
-        return jsonify(ranker.order_pass(repo, RANK_SOURCE, 1, film_id, today()))
+        tier, film_id = body.get("tier"), body.get("film_id")
+        if not isinstance(tier, int) or not isinstance(film_id, int):
+            raise RankError(400, 'body must be JSON {"tier": int, "film_id": int}')
+        return jsonify(ranker.order_pass(repo, RANK_SOURCE, tier, film_id, today()))
 
     @app.put("/api/films/<int:film_id>/unseen")
     def put_unseen(film_id: int) -> tuple[Response, int]:
@@ -251,5 +258,15 @@ def create_app(
         if result is None:
             return jsonify({"error": "not found"}), 404
         return jsonify({"unseen": result}), 200
+
+    @app.put("/api/films/<int:film_id>/rank-mark")
+    def put_rank_mark(film_id: int) -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not isinstance(body.get("marked"), bool):
+            return jsonify({"error": 'body must be JSON {"marked": bool}'}), 400
+        result = repo.set_rank_mark(film_id, body["marked"], today())
+        if result is None:
+            return jsonify({"error": "not found"}), 404
+        return jsonify({"marked": result}), 200
 
     return app

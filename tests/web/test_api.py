@@ -516,17 +516,19 @@ def test_rank_routes_reject_a_non_object_body(rank_client, method, url):
 
 def test_rank_order_needs_a_session_then_serves_the_first_pair_after_a_tier_1_placement(rank_client):
     client, ids = rank_client
-    assert client.get("/api/rank/order").status_code == 404
+    assert client.get("/api/rank/order?tier=1").status_code == 404
     state = _start(client)
     # Seeds put one film (Ten) in tier 1: ordered free at position 1, nothing to ask.
-    o = client.get("/api/rank/order").get_json()
+    o = client.get("/api/rank/order?tier=1").get_json()
     assert (o["tier"], o["ordered"], o["remaining"], o["done"], o["pair"]) == (1, 1, 0, True, None)
     cand = state["pair"]["candidate"]["film_id"]
     client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 3, "verdict": "better"})
     client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 2, "verdict": "better"})
-    o = client.get("/api/rank/order").get_json()
+    o = client.get("/api/rank/order?tier=1").get_json()
     assert o["pair"]["candidate"]["film_id"] == cand and o["pair"]["other"]["film_id"] == ids["Ten"]
     assert (o["pair"]["position"], o["pair"]["of"], o["remaining"]) == (1, 1, 1)
+    assert client.get("/api/rank/order?tier=3").status_code == 400
+    assert client.get("/api/rank/order").status_code == 400
 
 
 def test_rank_order_verdict_inserts_refuses_stale_and_undo_returns_order_state(rank_client):
@@ -535,13 +537,19 @@ def test_rank_order_verdict_inserts_refuses_stale_and_undo_returns_order_state(r
     cand = state["pair"]["candidate"]["film_id"]
     client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 3, "verdict": "better"})
     client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 2, "verdict": "better"})
-    r = client.post("/api/rank/order/verdict", json={"film_id": cand, "other_film_id": ids["Nine"], "verdict": "better"})
+    r = client.post(
+        "/api/rank/order/verdict", json={"tier": 1, "film_id": cand, "other_film_id": ids["Nine"], "verdict": "better"}
+    )
     assert r.status_code == 409
-    r = client.post("/api/rank/order/verdict", json={"film_id": cand, "other_film_id": ids["Ten"], "verdict": "same"})
+    r = client.post(
+        "/api/rank/order/verdict", json={"tier": 1, "film_id": cand, "other_film_id": ids["Ten"], "verdict": "same"}
+    )
     assert r.status_code == 400
     r = client.post("/api/rank/order/verdict", json={"film_id": "x"})
     assert r.status_code == 400
-    r = client.post("/api/rank/order/verdict", json={"film_id": cand, "other_film_id": ids["Ten"], "verdict": "better"})
+    r = client.post(
+        "/api/rank/order/verdict", json={"tier": 1, "film_id": cand, "other_film_id": ids["Ten"], "verdict": "better"}
+    )
     body = r.get_json()
     assert r.status_code == 200 and body["ordered"] == 2 and body["done"] is True and body["can_undo"] is True
     r = client.post("/api/rank/undo")
@@ -556,8 +564,18 @@ def test_rank_order_pass_defers_and_checks_its_shape(rank_client):
     client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 3, "verdict": "better"})
     client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 2, "verdict": "better"})
     assert client.post("/api/rank/order/pass", json={"nope": 1}).status_code == 400
-    assert client.post("/api/rank/order/pass", json={"film_id": ids["Ten"]}).status_code == 409
-    r = client.post("/api/rank/order/pass", json={"film_id": cand})
+    assert client.post("/api/rank/order/pass", json={"tier": 1, "film_id": ids["Ten"]}).status_code == 409
+    r = client.post("/api/rank/order/pass", json={"tier": 1, "film_id": cand})
     # The deferred film is the only one left, so it comes straight back — but it IS deferred.
     assert r.status_code == 200 and r.get_json()["pair"]["candidate"]["film_id"] == cand
     assert r.get_json()["can_undo"] is True
+
+
+def test_rank_mark_toggle_route(client, repo):
+    trio = repo.film_id_by_key("trio (1950)")
+    r = client.put(f"/api/films/{trio}/rank-mark", json={"marked": True})
+    assert r.status_code == 200 and r.get_json() == {"marked": True}
+    assert client.get(f"/api/films/{trio}").get_json()["rank_marked"] is True
+    assert client.put(f"/api/films/{trio}/rank-mark", json={"marked": False}).get_json() == {"marked": False}
+    assert client.put(f"/api/films/{trio}/rank-mark", json={}).status_code == 400
+    assert client.put("/api/films/999/rank-mark", json={"marked": True}).status_code == 404
