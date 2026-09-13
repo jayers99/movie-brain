@@ -397,3 +397,102 @@ def test_search_contract_is_unchanged_when_meaning_supplies_the_result(semantic_
 def test_search_without_an_embedder_offers_the_install_hint_on_an_empty_freeform_result(client):
     body = client.get("/api/search?q=gumshoe%20sleuth").get_json()
     assert body["ids"] == [] and "semantic search is not installed — uv sync --extra semantic" in body["hints"]
+
+
+@pytest.fixture
+def rank_client(repo, tmp_path):
+    ids = {}
+    for title, score in (("Ten", 10), ("Nine", 9), ("Eight", 8), ("Seven", 7), ("Four", 4)):
+        fid = repo.create_film(Film(title, 1950, "Dir", ""))
+        repo.mark_owned(fid, D)
+        repo.set_rating(fid, score, D)
+        ids[title] = fid
+    for title in ("Uno", "Dos"):
+        fid = repo.create_film(Film(title, 1960, "Dir", ""))
+        repo.mark_owned(fid, D)
+        ids[title] = fid
+    app = create_app(repo, today=lambda: D, lists_dir=tmp_path / "lists")
+    app.testing = True
+    return app.test_client(), ids
+
+
+def _start(client):
+    p = client.get("/api/rank/proposal").get_json()["proposal"]
+    r = client.post("/api/rank/session", json={"anchors": {t: p[str(t)]["film_id"] for t in range(1, 6)}})
+    assert r.status_code == 201, r.get_json()
+    return client.get("/api/rank/session").get_json()
+
+
+def test_rank_page_serves_html(rank_client):
+    client, _ = rank_client
+    r = client.get("/rank")
+    assert r.status_code == 200 and b"rank.js" in r.data
+
+
+def test_rank_session_is_null_before_start_and_409_on_a_second_start(rank_client):
+    client, _ = rank_client
+    assert client.get("/api/rank/session").get_json() == {"session": None}
+    state = _start(client)
+    assert state["pair"]["tier"] == 3 and state["remaining"] == 2 and state["tally"] == {str(t): 1 for t in range(1, 6)}
+    p = client.get("/api/rank/proposal").get_json()["proposal"]
+    r = client.post("/api/rank/session", json={"anchors": {t: p[str(t)]["film_id"] for t in range(1, 6)}})
+    assert r.status_code == 409
+
+
+def test_rank_verdict_places_and_refuses_stale(rank_client):
+    client, _ = rank_client
+    state = _start(client)
+    cand = state["pair"]["candidate"]["film_id"]
+    r = client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 3, "verdict": "better"})
+    assert r.status_code == 200 and r.get_json()["pair"]["tier"] == 2
+    r = client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 3, "verdict": "better"})
+    assert r.status_code == 409
+    r = client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 2, "verdict": "same"})
+    assert r.status_code == 400
+    r = client.post("/api/rank/verdict", json={"film_id": cand, "anchor_tier": 2, "verdict": "better"})
+    assert r.get_json()["tally"]["1"] == 2 and r.get_json()["can_undo"] is True
+    r = client.post("/api/rank/undo")
+    assert r.status_code == 200 and r.get_json()["tally"]["1"] == 1 and r.get_json()["pair"]["candidate"]["film_id"] == cand
+
+
+def test_rank_pass_anchor_unseen_then_swap_then_save(rank_client, repo):
+    client, ids = rank_client
+    state = _start(client)
+    cand = state["pair"]["candidate"]["film_id"]
+    r = client.post("/api/rank/pass", json={"film_id": cand, "candidate_unseen": False, "anchor_unseen": True})
+    body = r.get_json()
+    assert r.status_code == 200 and body["needs_anchor"] == [3] and body["pair"] is None
+    assert ids["Eight"] in repo.unseen_film_ids()
+    r = client.put("/api/rank/anchor", json={"tier": 3, "film_id": ids["Ten"]})
+    assert r.status_code == 409
+    r = client.put("/api/rank/anchor", json={"tier": 3, "film_id": ids["Dos"]})
+    assert r.status_code == 200 and r.get_json()["anchors"]["3"]["film_id"] == ids["Dos"]
+    r = client.post("/api/rank/save", json={"name": ""})
+    assert r.status_code == 200 and r.get_json() == {"slug": "my-owned-tiers", "name": "My owned films, tiered", "entries": 5}
+    films = {f["title"]: f for f in client.get("/api/films").get_json()}
+    assert films["Ten"]["lists"][0]["slug"] == "my-owned-tiers" and films["Ten"]["lists"][0]["rank_label"] is None
+
+
+def test_rank_save_refuses_a_file_backed_slug(rank_client, tmp_path):
+    client, _ = rank_client
+    _start(client)
+    (tmp_path / "lists").mkdir()
+    (tmp_path / "lists" / "my-owned-tiers.tsv").write_text("# slug: my-owned-tiers\n")
+    assert client.post("/api/rank/save", json={}).status_code == 409
+
+
+def test_rank_routes_404_without_a_session(rank_client):
+    client, _ = rank_client
+    assert client.post("/api/rank/verdict", json={"film_id": 1, "anchor_tier": 3, "verdict": "better"}).status_code == 404
+    assert client.post("/api/rank/undo").status_code == 404
+    assert client.post("/api/rank/save", json={}).status_code == 404
+
+
+def test_unseen_toggle_route(client, repo):
+    trio = repo.film_id_by_key("trio (1950)")
+    r = client.put(f"/api/films/{trio}/unseen", json={"unseen": True})
+    assert r.status_code == 200 and r.get_json() == {"unseen": True}
+    assert client.get(f"/api/films/{trio}").get_json()["unseen"] is True
+    assert client.put(f"/api/films/{trio}/unseen", json={"unseen": False}).get_json() == {"unseen": False}
+    assert client.put(f"/api/films/{trio}/unseen", json={}).status_code == 400
+    assert client.put("/api/films/999/unseen", json={"unseen": True}).status_code == 404

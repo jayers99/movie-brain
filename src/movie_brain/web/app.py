@@ -3,9 +3,12 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import date
+from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request
 
+from movie_brain.application import rank as ranker
+from movie_brain.application.rank import RankError
 from movie_brain.application.ratings import rate_film
 from movie_brain.application.search import run_search
 from movie_brain.application.sync import SOURCE
@@ -13,9 +16,15 @@ from movie_brain.domain.audit import VERDICTS
 from movie_brain.domain.filters import CHIPS, thresholds
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.embeddings import Embedder, VectorIndex
+from movie_brain.infrastructure.listfile import LISTS_DIR
 
 
-def create_app(repo: Repository, today: Callable[[], date] = date.today, embedder: Embedder | None = None) -> Flask:
+def create_app(
+    repo: Repository,
+    today: Callable[[], date] = date.today,
+    embedder: Embedder | None = None,
+    lists_dir: Path = LISTS_DIR,
+) -> Flask:
     app = Flask(__name__)
     # Stage 4 of the bar (Plan C). The index is built lazily on the first semantic query and
     # refreshed when `film_embedding` changes; with no embedder the bar is exactly Phase 1.
@@ -128,5 +137,86 @@ def create_app(repo: Repository, today: Callable[[], date] = date.today, embedde
             return jsonify({"error": "q is required"}), 400
         result = run_search(repo, q, index=vector_index)
         return jsonify({"q": q, **result.to_dict()}), 200
+
+    RANK_SOURCE = "owned"  # v1 (spec D7)
+
+    @app.errorhandler(RankError)
+    def rank_error(exc: RankError) -> tuple[Response, int]:
+        return jsonify({"error": exc.message}), exc.status
+
+    @app.get("/rank")
+    def rank_page() -> str:
+        return render_template("rank.html")
+
+    @app.get("/api/rank/proposal")
+    def rank_proposal() -> Response:
+        return jsonify(ranker.proposal(repo, RANK_SOURCE))
+
+    @app.get("/api/rank/session")
+    def rank_session() -> Response:
+        return jsonify(ranker.session_state(repo, RANK_SOURCE, today()))
+
+    @app.post("/api/rank/session")
+    def rank_start() -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        anchors = body.get("anchors") if isinstance(body, dict) else None
+        if not isinstance(anchors, dict):
+            return jsonify({"error": 'body must be JSON {"anchors": {"1": film_id, …, "5": film_id}}'}), 400
+        try:
+            parsed = {int(k): int(v) for k, v in anchors.items()}
+        except (TypeError, ValueError):
+            return jsonify({"error": "anchors must map tier → film_id"}), 400
+        sid = ranker.start_session(repo, RANK_SOURCE, parsed, today())
+        return jsonify({"session_id": sid, **ranker.session_state(repo, RANK_SOURCE, today())}), 201
+
+    @app.post("/api/rank/verdict")
+    def rank_verdict() -> Response:
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body.get("film_id"), int) or not isinstance(body.get("anchor_tier"), int):
+            raise RankError(400, 'body must be JSON {"film_id": int, "anchor_tier": int, "verdict": "better"|"worse"}')
+        return jsonify(
+            ranker.record_verdict(
+                repo, RANK_SOURCE, body["film_id"], body["anchor_tier"], str(body.get("verdict")), today()
+            )
+        )
+
+    @app.post("/api/rank/pass")
+    def rank_pass() -> Response:
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body.get("film_id"), int):
+            raise RankError(400, 'body must be JSON {"film_id": int, "candidate_unseen": bool, "anchor_unseen": bool}')
+        candidate_unseen = bool(body.get("candidate_unseen"))
+        anchor_unseen = bool(body.get("anchor_unseen"))
+        return jsonify(
+            ranker.pass_film(repo, RANK_SOURCE, body["film_id"], candidate_unseen, anchor_unseen, today())
+        )
+
+    @app.post("/api/rank/undo")
+    def rank_undo() -> Response:
+        return jsonify(ranker.undo(repo, RANK_SOURCE, today()))
+
+    @app.put("/api/rank/anchor")
+    def rank_anchor() -> Response:
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body.get("tier"), int) or not isinstance(body.get("film_id"), int):
+            raise RankError(400, 'body must be JSON {"tier": int, "film_id": int}')
+        return jsonify(ranker.swap_anchor(repo, RANK_SOURCE, body["tier"], body["film_id"], today()))
+
+    @app.post("/api/rank/save")
+    def rank_save() -> Response:
+        body = request.get_json(silent=True) or {}
+        name = body.get("name") if isinstance(body.get("name"), str) else None
+        return jsonify(ranker.save_list(repo, RANK_SOURCE, name, today(), lists_dir))
+
+    @app.put("/api/films/<int:film_id>/unseen")
+    def put_unseen(film_id: int) -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        if not isinstance(body, dict) or not isinstance(body.get("unseen"), bool):
+            return jsonify({"error": 'body must be JSON {"unseen": bool, "note"?: str}'}), 400
+        note = body.get("note") if isinstance(body.get("note"), str) else None
+        result = repo.set_unseen(film_id, body["unseen"], today(), note=note)
+        if result is None:
+            return jsonify({"error": "not found"}), 404
+        return jsonify({"unseen": result}), 200
 
     return app
