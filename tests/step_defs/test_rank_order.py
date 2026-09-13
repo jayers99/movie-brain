@@ -162,7 +162,19 @@ def deferred_last(ctx):
 
 @when("I undo")
 def do_undo(ctx):
-    undo(ctx["repo"], SRC, TODAY)
+    ctx["undo_result"] = undo(ctx["repo"], SRC, TODAY)
+
+
+@then("the undo returned the order state")
+def undo_returned_order(ctx):
+    result = ctx["undo_result"]
+    assert "ordered" in result and "tally" not in result
+
+
+@then("the undo returned the tiering state")
+def undo_returned_tiering(ctx):
+    result = ctx["undo_result"]
+    assert "tally" in result and "ordered" not in result
 
 
 @then(parsers.parse("{n:d} film is ordered and the same candidate is asked with {v:d} verdicts"))
@@ -197,6 +209,34 @@ def tiering_unplaced(ctx):
     assert ctx["tiering_candidate"] not in ctx["repo"].rank_placements(_sid(ctx))
 
 
+@then("the order is empty")
+def order_is_empty(ctx):
+    assert ctx["repo"].rank_order(_sid(ctx), ORDER_TIER) == []
+
+
+@then(parsers.parse('"{title}" is not in the order'))
+def not_in_order(ctx, title):
+    assert _id(ctx, title) not in ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)
+
+
+@when("the current candidate's order log is made corrupt")
+def make_corrupt(ctx):
+    pair = _order(ctx)["pair"]
+    cand = pair["candidate"]["film_id"]
+    ordered_film = ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)[0]
+    ctx["corrupt_candidate"] = cand
+    ctx["repo"].append_order_comparison(_sid(ctx), ORDER_TIER, cand, ordered_film, "better", TODAY)
+    ctx["repo"].append_order_comparison(_sid(ctx), ORDER_TIER, cand, ordered_film, "worse", TODAY)
+
+
+@then("the corrupt film is skipped and the pair asks a different candidate")
+def corrupt_skipped(ctx):
+    s = _order(ctx)
+    assert ctx["corrupt_candidate"] in s["corrupt"]
+    if s["pair"] is not None:
+        assert s["pair"]["candidate"]["film_id"] != ctx["corrupt_candidate"]
+
+
 @when(parsers.parse("the film at position {p:d} is marked unseen from the drawer"))
 def unseen_at_position(ctx, p):
     fid = ctx["repo"].rank_order(_sid(ctx), ORDER_TIER)[p - 1]
@@ -224,6 +264,12 @@ def list_has(ctx, slug, n):
 def entries_bare(ctx, a, b):
     rows = ctx["repo"].list_entries("my-owned-tiers")
     assert rows[a - 1].rank_label is None and rows[b - 1].rank_label is None
+
+
+@then("entry 2 is the last inserted film")
+def entry_2_is_last_inserted(ctx):
+    row = ctx["repo"].list_entries("my-owned-tiers")[1]
+    assert row.film_id == ctx["last_candidate"]
 
 
 @then(parsers.parse('entries {a:d} and {b:d} carry label "{label}"'))

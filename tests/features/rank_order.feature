@@ -42,6 +42,7 @@ Feature: Order tier 1 — strict order inside the top tier by binary insertion
     Then 2 films are ordered
     When I undo
     Then 1 film is ordered and the same candidate is asked with 0 verdicts
+    And the undo returned the order state
     When I pass in order mode
     And I undo
     Then nothing is deferred in order mode
@@ -53,7 +54,21 @@ Feature: Order tier 1 — strict order inside the top tier by binary insertion
     And I undo
     Then the tiering candidate is unplaced again
     And 2 films are ordered
+    And the undo returned the tiering state
     And undoing again is refused with 409
+
+  Scenario: Undoing a tier 1 placement also drops the film from the order
+    Then the order is empty
+    When "Uno" is tiered into tier 1
+    Then 1 film is ordered
+    When I undo
+    Then 1 film is ordered
+    And "Uno" is not in the order
+
+  Scenario: A corrupt order log is skipped, not fatal
+    Then 1 film is ordered and 3 remain to order
+    When the current candidate's order log is made corrupt
+    Then the corrupt film is skipped and the pair asks a different candidate
 
   Scenario: Marking an ordered film unseen from the drawer removes it and every verdict naming it
     When I answer worse in order mode
@@ -69,6 +84,7 @@ Feature: Order tier 1 — strict order inside the top tier by binary insertion
     And I save the list as "Mine"
     Then the list "my-owned-tiers" has 8 entries
     And entries 1 and 2 carry no label
+    And entry 2 is the last inserted film
     And entries 3 and 4 carry label "=3"
     And entry 5 is "Nine" with no label
 

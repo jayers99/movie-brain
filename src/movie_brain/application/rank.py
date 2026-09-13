@@ -373,6 +373,12 @@ def undo(repo: Repository, source: str, today: date) -> dict[str, object]:
         repo.delete_comparison(comparison_id)
         if action.get("placed_tier") is not None:
             repo.unplace_film(s.id, fid)
+            # A tier 1 placement can have been free-inserted into the order by an order_state
+            # read since (O7) with no last_action of its own; unplace_film never touches
+            # rank_order, so purge it here. No order-comparison cleanup is needed: it had none
+            # as a candidate (free-inserted, never probed), and undo is one level deep, so no
+            # other candidate can have been probed against it since this placement.
+            repo.remove_ordered(fid, s.id)
     elif kind == "defer":
         repo.undefer_film(s.id, fid)
     elif kind == "unseen":
