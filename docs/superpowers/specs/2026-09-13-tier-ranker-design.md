@@ -27,7 +27,7 @@ The brainstorm's first finding shaped everything below: a strict full order of N
 
 ## 3. Data model (migration 022)
 
-All five tables are film-scoped through `film_id`; `merge_film` moves every one of them survivor-wins, exactly as it moves `watchlist`, `owned` and `film_list_entry`. Only the ranker's use case writes the first four; only the ranker and the drawer's toggle write `unseen`.
+Six tables. All but `rank_session` are film-scoped through `film_id`; `merge_film` moves every one of them survivor-wins, exactly as it moves `watchlist`, `owned` and `film_list_entry`. Only the ranker's use case writes the first five; only the ranker and the drawer's toggle write `unseen`.
 
 ```sql
 CREATE TABLE rank_session (
@@ -67,6 +67,13 @@ CREATE TABLE rank_comparison (              -- append-only click log (§4.2); un
     decided_on      TEXT    NOT NULL
 );
 CREATE INDEX rank_comparison_film ON rank_comparison(session_id, film_id, id);
+
+CREATE TABLE rank_deferral (                 -- a Pass with nothing marked (§4.3): "not now", queued last
+    session_id  INTEGER NOT NULL REFERENCES rank_session(id),
+    film_id     INTEGER NOT NULL REFERENCES films(id),
+    deferred_on TEXT    NOT NULL,
+    PRIMARY KEY (session_id, film_id)
+);
 
 CREATE TABLE unseen (                        -- the durable pass bucket (D5), watchlist pattern
     film_id   INTEGER PRIMARY KEY REFERENCES films(id),
@@ -115,7 +122,7 @@ The server stores clicks; the domain derives the state. `GET /api/rank/session` 
 
 ### 4.3 The queue
 
-The queue is **derived at request time, never stored**: owned films, minus placed, minus unseen, minus the current anchors, in an order fixed by the session's `seed` (a seeded shuffle of film ids). Random rather than alphabetical so consecutive pairs do not walk through one director's box set. A film bought after the session started joins the queue on the next request. A `Pass` with nothing marked defers the candidate: it moves behind every other unplaced film for this session (implemented as a `rank_comparison`-free `deferred_on` stamp on a small `rank_deferral(session_id, film_id, deferred_on)` table, part of migration 022, so the deferral survives a refresh; the queue orders deferred films last, by `deferred_on`).
+The queue is **derived at request time, never stored**: owned films, minus placed, minus unseen, minus the current anchors, in an order fixed by the session's `seed` (a seeded shuffle of film ids). Random rather than alphabetical so consecutive pairs do not walk through one director's box set. A film bought after the session started joins the queue on the next request. A `Pass` with nothing marked defers the candidate: it moves behind every other unplaced film for this session (a `rank_deferral` row, so the deferral survives a refresh; the queue orders deferred films last, by `deferred_on`).
 
 ### 4.4 Undo
 
