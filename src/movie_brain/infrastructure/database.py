@@ -5,7 +5,7 @@ import re
 import sqlite3
 import sys
 import uuid
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -27,12 +27,16 @@ from movie_brain.domain.models import (
     ListMeta,
     McTitle,
     OmdbRating,
+    RankSession,
     ReviewEntry,
+    SeedFilm,
     ServiceMeta,
+    TieredEntry,
     TmdbCredits,
     YearBackfillTarget,
     film_key,
 )
+from movie_brain.domain.rank import TIERS
 from movie_brain.domain.search import (
     CANDIDATE_LIMIT,
     EMBED_MODEL,
@@ -2505,6 +2509,158 @@ class Repository:
             c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
             return False
 
+    # tier ranker (spec 2026-09-13 §3) ----------------------------------------
+    def owned_seed_films(self) -> list[SeedFilm]:
+        """Owned ∩ rated, minus unseen and disposed: the seed placements and anchor pool."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT f.id, f.title, f.year, r.score, o2.imdb FROM owned o "
+                "JOIN films f ON f.id = o.film_id JOIN my_ratings r ON r.film_id = f.id "
+                "LEFT JOIN omdb o2 ON o2.film_id = f.id "
+                "WHERE " + _NOT_DISPOSED + " AND NOT EXISTS (SELECT 1 FROM unseen u WHERE u.film_id = f.id) "
+                "ORDER BY f.id"
+            ).fetchall()
+            return [SeedFilm(int(r["id"]), int(r["score"]), r["imdb"], str(r["title"]), r["year"]) for r in rows]
+
+    def film_facts(self, film_ids: Iterable[int]) -> dict[int, tuple[str, int | None, str | None]]:
+        ids = list(film_ids)
+        if not ids:
+            return {}
+        with self._conn() as c:
+            marks = ",".join("?" * len(ids))
+            rows = c.execute(f"SELECT id, title, year, director FROM films WHERE id IN ({marks})", ids).fetchall()
+            return {int(r["id"]): (str(r["title"]), r["year"], r["director"]) for r in rows}
+
+    def open_rank_session(self, source: str) -> RankSession | None:
+        with self._conn() as c:
+            row = c.execute("SELECT * FROM rank_session WHERE source = ? AND finished_on IS NULL", (source,)).fetchone()
+            if row is None:
+                return None
+            action = json.loads(row["last_action"]) if row["last_action"] else None
+            return RankSession(
+                int(row["id"]), str(row["source"]), int(row["seed"]), str(row["started_on"]),
+                row["finished_on"], row["list_slug"], action,
+            )
+
+    def create_rank_session(
+        self, source: str, seed: int, anchors: Mapping[int, int], placements: Mapping[int, int], today: date
+    ) -> int:
+        """Raises sqlite3.IntegrityError when a session for `source` is already open."""
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO rank_session (source, seed, started_on) VALUES (?, ?, ?)",
+                (source, seed, today.isoformat()),
+            )
+            assert cur.lastrowid is not None
+            sid = int(cur.lastrowid)
+            for tier in range(1, TIERS + 1):
+                c.execute(
+                    "INSERT INTO rank_anchor (session_id, tier, film_id, set_on) VALUES (?, ?, ?, ?)",
+                    (sid, tier, anchors.get(tier), today.isoformat()),
+                )
+            c.executemany(
+                "INSERT INTO rank_placement (session_id, film_id, tier, how, placed_on) VALUES (?, ?, ?, 'seed', ?)",
+                [(sid, fid, tier, today.isoformat()) for fid, tier in placements.items()],
+            )
+            return sid
+
+    def rank_anchors(self, session_id: int) -> dict[int, int | None]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT tier, film_id FROM rank_anchor WHERE session_id = ?", (session_id,)
+            ).fetchall()
+            return {int(r["tier"]): (None if r["film_id"] is None else int(r["film_id"])) for r in rows}
+
+    def set_rank_anchor(self, session_id: int, tier: int, film_id: int | None, today: date) -> None:
+        with self._conn() as c:
+            c.execute(
+                "UPDATE rank_anchor SET film_id = ?, set_on = ? WHERE session_id = ? AND tier = ?",
+                (film_id, today.isoformat(), session_id, tier),
+            )
+
+    def rank_placements(self, session_id: int) -> dict[int, tuple[int, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, tier, how FROM rank_placement WHERE session_id = ?", (session_id,)
+            ).fetchall()
+            return {int(r["film_id"]): (int(r["tier"]), str(r["how"])) for r in rows}
+
+    def place_film(self, session_id: int, film_id: int, tier: int, how: str, today: date) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT OR REPLACE INTO rank_placement (session_id, film_id, tier, how, placed_on) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (session_id, film_id, tier, how, today.isoformat()),
+            )
+
+    def unplace_film(self, session_id: int, film_id: int) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM rank_placement WHERE session_id = ? AND film_id = ?", (session_id, film_id))
+
+    def append_comparison(
+        self, session_id: int, film_id: int, anchor_film_id: int, anchor_tier: int, verdict: str, today: date
+    ) -> int:
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO rank_comparison (session_id, film_id, anchor_film_id, anchor_tier, verdict, decided_on) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (session_id, film_id, anchor_film_id, anchor_tier, verdict, today.isoformat()),
+            )
+            assert cur.lastrowid is not None
+            return int(cur.lastrowid)
+
+    def verdicts_for(self, session_id: int, film_id: int) -> list[str]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT verdict FROM rank_comparison WHERE session_id = ? AND film_id = ? ORDER BY id",
+                (session_id, film_id),
+            ).fetchall()
+            return [str(r["verdict"]) for r in rows]
+
+    def delete_comparison(self, comparison_id: int) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM rank_comparison WHERE id = ?", (comparison_id,))
+
+    def defer_film(self, session_id: int, film_id: int, stamp: str) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT OR REPLACE INTO rank_deferral (session_id, film_id, deferred_on) VALUES (?, ?, ?)",
+                (session_id, film_id, stamp),
+            )
+
+    def undefer_film(self, session_id: int, film_id: int) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM rank_deferral WHERE session_id = ? AND film_id = ?", (session_id, film_id))
+
+    def rank_deferrals(self, session_id: int) -> dict[int, str]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, deferred_on FROM rank_deferral WHERE session_id = ?", (session_id,)
+            ).fetchall()
+            return {int(r["film_id"]): str(r["deferred_on"]) for r in rows}
+
+    def set_last_action(self, session_id: int, action: dict[str, object] | None) -> None:
+        with self._conn() as c:
+            c.execute(
+                "UPDATE rank_session SET last_action = ? WHERE id = ?",
+                (None if action is None else json.dumps(action), session_id),
+            )
+
+    def set_rank_session_list(self, session_id: int, slug: str) -> None:
+        with self._conn() as c:
+            c.execute("UPDATE rank_session SET list_slug = ? WHERE id = ?", (slug, session_id))
+
+    def replace_list_entries(self, slug: str, entries: Iterable[TieredEntry]) -> None:
+        """The ranker's save (spec §7): the slug's entries are rewritten whole, linked at write
+        time. Never used by `lists import`, whose entries are append-only and link separately."""
+        with self._conn() as c:
+            c.execute("DELETE FROM film_list_entry WHERE list_slug = ?", (slug,))
+            c.executemany(
+                "INSERT INTO film_list_entry (list_slug, rank, film_id, title_listed, director_listed, rank_label) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [(slug, e.rank, e.film_id, e.title, e.director, e.rank_label) for e in entries],
+            )
+
     def _assert_repairable(self, c: sqlite3.Connection, film_id: int) -> None:
         if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
             raise ValueError(f"unknown film {film_id}")
@@ -2593,6 +2749,33 @@ class Repository:
             ).rowcount
             if n_list_entries:
                 moved["film_list_entry"] = n_list_entries
+            # Ranker rows (spec §3): per-session one-row tables survivor-wins; the log re-points.
+            for table in ("rank_placement", "rank_deferral"):
+                for row in c.execute(f"SELECT session_id FROM {table} WHERE film_id = ?", (loser_id,)).fetchall():
+                    sid = int(row["session_id"])
+                    twin = c.execute(
+                        f"SELECT 1 FROM {table} WHERE session_id = ? AND film_id = ?", (sid, survivor_id)
+                    ).fetchone()
+                    if twin:
+                        c.execute(f"DELETE FROM {table} WHERE session_id = ? AND film_id = ?", (sid, loser_id))
+                        dropped[table] = dropped.get(table, 0) + 1
+                    else:
+                        c.execute(
+                            f"UPDATE {table} SET film_id = ? WHERE session_id = ? AND film_id = ?",
+                            (survivor_id, sid, loser_id),
+                        )
+                        moved[table] = moved.get(table, 0) + 1
+            n = c.execute("UPDATE rank_anchor SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)).rowcount
+            if n:
+                moved["rank_anchor"] = n
+            n = c.execute(
+                "UPDATE rank_comparison SET film_id = CASE WHEN film_id = ? THEN ? ELSE film_id END, "
+                "anchor_film_id = CASE WHEN anchor_film_id = ? THEN ? ELSE anchor_film_id END "
+                "WHERE film_id = ? OR anchor_film_id = ?",
+                (loser_id, survivor_id, loser_id, survivor_id, loser_id, loser_id),
+            ).rowcount
+            if n:
+                moved["rank_comparison"] = n
             # Credits follow the survivor-wins rule the one-row tables use: a survivor that
             # already carries credits keeps them and the loser's are dropped; otherwise the
             # loser's rows move. `film_text` moves through DELETE+INSERT rather than UPDATE

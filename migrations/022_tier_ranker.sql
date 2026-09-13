@@ -38,7 +38,7 @@ CREATE TABLE rank_comparison (
     session_id      INTEGER NOT NULL REFERENCES rank_session(id),
     film_id         INTEGER NOT NULL REFERENCES films(id),
     anchor_film_id  INTEGER NOT NULL REFERENCES films(id),
-    anchor_tier     INTEGER NOT NULL,
+    anchor_tier     INTEGER NOT NULL CHECK (anchor_tier BETWEEN 1 AND 5),
     verdict         TEXT    NOT NULL CHECK (verdict IN ('better', 'worse')),
     decided_on      TEXT    NOT NULL
 );

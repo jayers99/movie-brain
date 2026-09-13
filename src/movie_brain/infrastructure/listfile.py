@@ -15,6 +15,9 @@ from pathlib import Path
 
 from movie_brain.domain.models import ListEntry, ListMeta
 
+LISTS_DIR = Path(__file__).resolve().parents[3] / "lists"
+# the checked-in list files; the ranker's save guard reads it (spec §7)
+
 _TRUE = {"true", "1", "yes"}
 _FALSE = {"false", "0", "no"}
 _TT_RE = re.compile(r"^tt\d+$")
