@@ -1,4 +1,38 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>movie-brain · rank</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='rank.css') }}"></head>
-<body><main id="rank"></main><script src="{{ url_for('static', filename='rank.js') }}"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>movie-brain · rank</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='rank.css') }}">
+</head>
+<body>
+  <header class="top">
+    <h1><a href="/">movie-brain</a> · rank</h1>
+    <div id="progress" hidden>
+      <span><b id="placed">–</b> placed</span>
+      <span><b id="remaining">–</b> remaining</span>
+      <span><b id="unseen-count">–</b> unseen</span>
+      <span class="tally"><span data-tier="1">–</span><span data-tier="2">–</span><span data-tier="3">–</span><span data-tier="4">–</span><span data-tier="5">–</span></span>
+      <button id="undo" class="chip" title="Undo the last click (U)">Undo</button>
+      <span class="save-row"><input id="list-name" placeholder="My owned films, tiered"><button id="save" class="chip">Save as list</button><span id="save-note"></span></span>
+    </div>
+  </header>
+  <main id="rank" data-state="">
+    <section id="setup" hidden>
+      <p id="setup-lead"></p>
+      <div id="anchor-cards"></div>
+      <button id="start" class="chip primary">Start</button>
+    </section>
+    <section id="pair" hidden>
+      <div class="pass-row"><button id="pass" class="chip primary" title="Next matchup (space)">Pass</button></div>
+      <div class="sides">
+        <div class="side candidate" data-side="candidate"></div>
+        <div class="side anchor" data-side="anchor"></div>
+      </div>
+    </section>
+    <section id="done" hidden><p>Every owned film is placed. Save the list above.</p></section>
+  </main>
+  <script src="{{ url_for('static', filename='rank.js') }}"></script>
+</body>
+</html>
