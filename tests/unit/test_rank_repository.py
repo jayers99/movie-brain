@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from movie_brain.domain.models import Film, ListMeta, OmdbRating, TieredEntry
+from movie_brain.domain.rank import Insert, order_step
 
 D = date(2026, 9, 13)
 
@@ -296,6 +297,22 @@ def test_merge_drops_losers_order_verdicts_when_survivor_is_also_mid_insertion(r
     repo.merge_film(b, a, D)
     assert repo.order_verdicts_for(sid, a) == [(x, "better")]   # its OWN log, untouched
     assert repo.order_verdicts_for(sid, b) == []
+
+
+def test_merge_repoints_a_third_partys_verdict_without_leaving_contradictory_bounds(repo):
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    x = _film(repo, "Xi", 1970)
+    sid = repo.create_rank_session("owned", 1, {1: a}, {a: 1, b: 1, x: 1}, D)
+    repo.insert_ordered(sid, 1, a, 0, D)
+    repo.insert_ordered(sid, 1, b, 1, D)          # [a, b]
+    repo.append_order_comparison(sid, 1, x, a, "worse", D)    # x already judged against the survivor
+    repo.append_order_comparison(sid, 1, x, b, "better", D)   # x also judged against the loser
+    repo.merge_film(b, a, D)
+    # x must keep only its verdict against the survivor, or `order_step` sees x as both worse
+    # than a and better than a on the same collapsed order and raises on crossed bounds.
+    assert repo.order_verdicts_for(sid, x) == [(a, "worse")]
+    assert repo.rank_order(sid, 1) == [a]
+    assert order_step(repo.rank_order(sid, 1), repo.order_verdicts_for(sid, x)) == Insert(1)
 
 
 def test_merge_onto_an_unseen_survivor_purges_the_losers_order_rows(repo):
