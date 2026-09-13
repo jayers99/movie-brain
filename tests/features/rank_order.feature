@@ -69,6 +69,11 @@ Feature: Order tier 1 — strict order inside the top tier by binary insertion
     Then 1 film is ordered and 3 remain to order
     When the current candidate's order log is made corrupt
     Then the corrupt film is skipped and the pair asks a different candidate
+    And 1 film is corrupt and 2 remain to order
+    And the order is not done
+    When every remaining candidate's order log is made corrupt
+    Then 3 films are corrupt and 0 remain to order
+    And the order is not done
 
   Scenario: Marking an ordered film unseen from the drawer removes it and every verdict naming it
     When I answer worse in order mode

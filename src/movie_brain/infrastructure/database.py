@@ -2936,13 +2936,15 @@ class Repository:
             if n:
                 moved["rank_comparison"] = moved.get("rank_comparison", 0) + n
             # rank_order_comparison: candidate side survivor-wins per session (a concatenated
-            # log could cross the derived bounds). The OTHER side is ALSO survivor-wins, per
-            # (session, candidate) rather than unconditional repointing: a candidate judged
-            # against both merge participants (e.g. worse than the loser, better than the
-            # survivor) must keep only its verdict against the survivor, or repointing the
-            # loser-naming row would hand that candidate two verdicts against the SAME film and
-            # `order_step` would see crossed bounds and raise. A row that would then compare the
-            # survivor with itself audits nothing and is deleted.
+            # log could cross the derived bounds). On the OTHER side a merged-away loser is
+            # treated exactly like a removed film — every row naming it is DELETED, in every
+            # session — because a re-point changes the verdict's INDEX whenever the two films
+            # sat at different positions: order [S, D, E, L] and a candidate worse than D and
+            # better than L re-points to better-than-S at index 0, crossing its own bounds, and
+            # `order_step` raises on it forever. Each affected candidate pays at most log₂ k
+            # re-probes on a rare merge and never gets a wrong order. A row MOVED by the
+            # candidate loop above can still name the survivor on both sides (the loser's own
+            # log held a verdict against the survivor); that audits nothing and is deleted.
             for row in c.execute(
                 "SELECT DISTINCT session_id FROM rank_order_comparison WHERE film_id = ?", (loser_id,)
             ).fetchall():
@@ -2963,18 +2965,10 @@ class Repository:
                     ).rowcount
                     moved["rank_order_comparison"] = moved.get("rank_order_comparison", 0) + n
             n = c.execute(
-                "DELETE FROM rank_order_comparison WHERE other_film_id = ? AND EXISTS ("
-                "SELECT 1 FROM rank_order_comparison r2 WHERE r2.session_id = rank_order_comparison.session_id "
-                "AND r2.film_id = rank_order_comparison.film_id AND r2.other_film_id = ?)",
-                (loser_id, survivor_id),
+                "DELETE FROM rank_order_comparison WHERE other_film_id = ?", (loser_id,)
             ).rowcount
             if n:
                 dropped["rank_order_comparison"] = dropped.get("rank_order_comparison", 0) + n
-            n = c.execute(
-                "UPDATE rank_order_comparison SET other_film_id = ? WHERE other_film_id = ?", (survivor_id, loser_id)
-            ).rowcount
-            if n:
-                moved["rank_order_comparison"] = moved.get("rank_order_comparison", 0) + n
             n = c.execute(
                 "DELETE FROM rank_order_comparison WHERE film_id = ? AND other_film_id = ?",
                 (survivor_id, survivor_id),

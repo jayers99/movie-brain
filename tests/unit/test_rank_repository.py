@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from movie_brain.domain.models import Film, ListMeta, OmdbRating, TieredEntry
-from movie_brain.domain.rank import Insert, order_step
+from movie_brain.domain.rank import Insert, Probe, order_step
 
 D = date(2026, 9, 13)
 
@@ -272,20 +272,24 @@ def test_merge_moves_the_order_survivor_wins_and_compacts(repo):
     assert repo.rank_order(other, 1) == [d]       # loser's row moves when the survivor has none
 
 
-def test_merge_repoints_order_verdicts_and_drops_self_comparisons(repo):
+def test_merge_drops_verdicts_naming_the_loser_and_moves_the_losers_own_log_survivor_wins(repo):
     a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
     c, x = _film(repo, "Gamma", 1960), _film(repo, "Xi", 1970)
     sid = repo.create_rank_session("owned", 1, {1: a}, {a: 1, b: 1, c: 1, x: 1}, D)
-    repo.append_order_comparison(sid, 1, c, b, "better", D)   # c judged against the loser → re-points to a
-    repo.append_order_comparison(sid, 1, b, x, "worse", D)    # loser mid-search → moves (survivor has none)
-    repo.append_order_comparison(sid, 1, a, b, "worse", D)    # survivor judged against loser → would be a vs a
+    repo.append_order_comparison(sid, 1, c, b, "better", D)   # c judged against the loser → deleted
+    repo.append_order_comparison(sid, 1, b, x, "worse", D)    # loser mid-search → survivor-wins on the candidate side
+    repo.append_order_comparison(sid, 1, a, b, "worse", D)    # survivor judged against the loser → deleted
     report = repo.merge_film(b, a, D)
-    assert repo.order_verdicts_for(sid, c) == [(a, "better")]
-    # a already had a candidate row (a-vs-b), so b's own row is DROPPED, not moved (survivor
-    # wins per session); the a-vs-b row re-points to a-vs-a and is then deleted. Two drops.
+    # Three drops, in the order the code applies them: the candidate loop runs first and a
+    # already holds a candidate row (a-vs-b), so b's own row (b-vs-x) is DROPPED, not moved
+    # (survivor wins per session) — 1. Then every row naming b on the OTHER side goes, which
+    # is c-vs-b and a-vs-b — 3. Nothing survives to compare a with itself, so the self-delete
+    # adds none.
+    assert repo.order_verdicts_for(sid, c) == []
     assert repo.order_verdicts_for(sid, a) == []
     assert repo.order_verdicts_for(sid, b) == []
-    assert report.dropped.get("rank_order_comparison") == 2
+    assert report.dropped.get("rank_order_comparison") == 3
+    assert report.moved.get("rank_order_comparison") is None
 
 
 def test_merge_drops_losers_order_verdicts_when_survivor_is_also_mid_insertion(repo):
@@ -299,20 +303,41 @@ def test_merge_drops_losers_order_verdicts_when_survivor_is_also_mid_insertion(r
     assert repo.order_verdicts_for(sid, b) == []
 
 
-def test_merge_repoints_a_third_partys_verdict_without_leaving_contradictory_bounds(repo):
+def test_merge_drops_a_third_partys_verdict_against_the_loser_leaving_no_contradiction(repo):
     a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
     x = _film(repo, "Xi", 1970)
     sid = repo.create_rank_session("owned", 1, {1: a}, {a: 1, b: 1, x: 1}, D)
     repo.insert_ordered(sid, 1, a, 0, D)
     repo.insert_ordered(sid, 1, b, 1, D)          # [a, b]
     repo.append_order_comparison(sid, 1, x, a, "worse", D)    # x already judged against the survivor
-    repo.append_order_comparison(sid, 1, x, b, "better", D)   # x also judged against the loser
+    repo.append_order_comparison(sid, 1, x, b, "better", D)   # x also judged against the loser → deleted
     repo.merge_film(b, a, D)
-    # x must keep only its verdict against the survivor, or `order_step` sees x as both worse
-    # than a and better than a on the same collapsed order and raises on crossed bounds.
+    # Unchanged arithmetic under the delete-everything rule: x's b-row goes either way (before,
+    # because x already held an a-row; now, because it names the loser at all), so x keeps only
+    # its verdict against the survivor. Re-pointing it would have made x both worse than a and
+    # better than a on the collapsed order [a] — crossed bounds, and `order_step` would raise.
     assert repo.order_verdicts_for(sid, x) == [(a, "worse")]
     assert repo.rank_order(sid, 1) == [a]
     assert order_step(repo.rank_order(sid, 1), repo.order_verdicts_for(sid, x)) == Insert(1)
+
+
+def test_merge_deletes_verdicts_against_the_loser_so_a_bystanders_bounds_cannot_cross(repo):
+    s, d = _film(repo, "Sigma", 1950), _film(repo, "Delta", 1951)
+    e, lam = _film(repo, "Epsilon", 1952), _film(repo, "Lambda", 1953)
+    x = _film(repo, "Xi", 1970)
+    sid = repo.create_rank_session("owned", 1, {1: s}, {s: 1, d: 1, e: 1, lam: 1, x: 1}, D)
+    for pos, fid in enumerate((s, d, e, lam)):
+        repo.insert_ordered(sid, 1, fid, pos, D)               # [s, d, e, lam]
+    repo.append_order_comparison(sid, 1, x, d, "worse", D)     # lo = index(d) + 1 = 2
+    repo.append_order_comparison(sid, 1, x, lam, "better", D)    # hi = index(lam) = 3 → Probe(e)
+    repo.merge_film(lam, s, D)
+    # lam leaves the order (s already holds a row, so the loser's is dropped and the gap closed).
+    # Re-pointing x's lam-row onto s would move the verdict from index 3 to index 0: x would be
+    # worse than d (lo 2) and better than s (hi 0), crossed bounds, and x would be corrupt
+    # forever. Deleting it instead costs x one re-probe and keeps the bounds derivable.
+    assert repo.rank_order(sid, 1) == [s, d, e]
+    assert repo.order_verdicts_for(sid, x) == [(d, "worse")]
+    assert order_step(repo.rank_order(sid, 1), repo.order_verdicts_for(sid, x)) == Probe(e)
 
 
 def test_merge_onto_an_unseen_survivor_purges_the_losers_order_rows(repo):

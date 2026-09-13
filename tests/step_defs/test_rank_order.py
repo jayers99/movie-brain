@@ -229,12 +229,34 @@ def make_corrupt(ctx):
     ctx["repo"].append_order_comparison(_sid(ctx), ORDER_TIER, cand, ordered_film, "worse", TODAY)
 
 
+@when("every remaining candidate's order log is made corrupt")
+def corrupt_the_rest(ctx):
+    for _ in range(20):   # bounded: the queue is four films long
+        pair = _order(ctx)["pair"]
+        if pair is None:
+            return
+        make_corrupt(ctx)
+    raise AssertionError("the order queue never drained")
+
+
 @then("the corrupt film is skipped and the pair asks a different candidate")
 def corrupt_skipped(ctx):
     s = _order(ctx)
     assert ctx["corrupt_candidate"] in s["corrupt"]
     if s["pair"] is not None:
         assert s["pair"]["candidate"]["film_id"] != ctx["corrupt_candidate"]
+
+
+@then(parsers.parse("{n:d} film is corrupt and {m:d} remain to order"))
+@then(parsers.parse("{n:d} films are corrupt and {m:d} remain to order"))
+def corrupt_and_remaining(ctx, n, m):
+    s = _order(ctx)
+    assert (len(s["corrupt"]), s["remaining"]) == (n, m)
+
+
+@then("the order is not done")
+def order_not_done(ctx):
+    assert _order(ctx)["done"] is False
 
 
 @when(parsers.parse("the film at position {p:d} is marked unseen from the drawer"))

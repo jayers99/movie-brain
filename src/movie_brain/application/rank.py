@@ -248,7 +248,10 @@ def order_state(repo: Repository, source: str, today: date) -> dict[str, object]
         "ordered": len(order),
         "remaining": len(queue),
         "pair": pair,
-        "done": not queue,
+        # A skipped corrupt log is unfinished work, not finished work: `done` stays false while
+        # any film was passed over unreadable, or the page would claim tier 1 is ordered while
+        # films it could not read sit outside the order.
+        "done": not queue and not corrupt,
         "can_undo": s.last_action is not None,
         "corrupt": corrupt,
     }
