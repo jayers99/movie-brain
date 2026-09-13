@@ -49,11 +49,16 @@ def proposal(repo: Repository, source: str) -> dict[str, object]:
         )
     unseen = repo.unseen_film_ids()
     disposed = repo.disposed_film_ids()
+    seeded_ids = {f.film_id for f in seeded}
     fallback: list[dict[str, object]] | None = None
     for t in range(1, TIERS + 1):
         if not choices[t]:
             if fallback is None:
-                facts = repo.film_facts(i for i in repo.owned_film_ids() if i not in unseen and i not in disposed)
+                facts = repo.film_facts(
+                    i
+                    for i in repo.owned_film_ids()
+                    if i not in unseen and i not in disposed and i not in seeded_ids
+                )
                 fallback = [
                     {"film_id": i, "title": f[0], "year": f[1], "score": None}
                     for i, f in sorted(facts.items(), key=lambda kv: kv[1][0])
@@ -79,9 +84,20 @@ def start_session(repo: Repository, source: str, anchors: Mapping[int, int], tod
     for tier, fid in anchors.items():
         if fid not in owned or fid in unseen:
             raise RankError(400, f"tier {tier} anchor {fid} is not an owned, seen film")
+    # swap_anchor already refuses a disposed or already-elsewhere-placed anchor (§ finding 2);
+    # start_session must refuse the same shapes before a session is ever created, not after.
+    disposed = repo.disposed_film_ids()
+    seed_tier = {f.film_id: tier_for_score(f.score) for f in repo.owned_seed_films()}
+    for tier, fid in anchors.items():
+        if fid in disposed:
+            raise RankError(400, f"tier {tier} anchor {fid} is disposed")
+        if fid in seed_tier and seed_tier[fid] != tier:
+            raise RankError(400, f"tier {tier} anchor {fid} is a seeded film for tier {seed_tier[fid]}")
+    if len(set(anchors.values())) != len(anchors):
+        raise RankError(400, "the five anchors must be distinct")
     if repo.open_rank_session(source) is not None:
         raise RankError(409, "a session is already open for this source")
-    placements = {f.film_id: tier_for_score(f.score) for f in repo.owned_seed_films()}
+    placements = seed_tier
     seed = int(today.strftime("%Y%m%d"))
     sid = repo.create_rank_session(source, seed, dict(anchors), placements, today)
     for tier, fid in anchors.items():
@@ -131,10 +147,20 @@ def session_state(repo: Repository, source: str, today: date) -> dict[str, objec
     # missing too (§4.6) so the tier stops serving pairs against a film that is out of the pool.
     needs = [t for t in range(1, TIERS + 1) if anchors[t] is None or anchors[t] in unseen_ids]
     pair: dict[str, object] | None = None
+    corrupt: list[int] = []
     while queue and not needs:
         cand = queue[0]
         verdicts = repo.verdicts_for(s.id, cand)
-        step = next_step(verdicts)
+        try:
+            step = next_step(verdicts)
+        except ValueError:
+            # A ValueError here must never escape to the route (finding 1b): a log made
+            # illegal by a merge-comparison bug, a hand-edited row, or any future write-path
+            # defect is skipped — not placed, nothing written — rather than 500ing every
+            # `/api/rank/*` call for the rest of the session.
+            corrupt.append(cand)
+            queue = queue[1:]
+            continue
         if isinstance(step, Place):
             # Self-healing (§4.2): a crash between `append_comparison` and `place_film`, or a
             # placed film returned to the queue by an unmark, can leave a candidate whose
@@ -159,6 +185,7 @@ def session_state(repo: Repository, source: str, today: date) -> dict[str, objec
         "needs_anchor": needs,
         "done": not queue and not needs,
         "can_undo": s.last_action is not None,
+        "corrupt": corrupt,
     }
 
 

@@ -65,6 +65,46 @@ def proposal_is(ctx, names):
     assert [got[t]["title"] for t in range(1, 6)] == [n.strip() for n in names.split(",")]
 
 
+@given(parsers.parse('"{title}" is re-rated {score:d}'))
+def re_rate(ctx, title, score):
+    ctx["repo"].set_rating(_id(ctx, title), score, TODAY)
+
+
+@then(parsers.parse("tier {tier:d}'s choices are only the unrated films"))
+def tier_choices_unrated_only(ctx, tier):
+    got = proposal(ctx["repo"], SRC)["choices"][tier]
+    assert {c["title"] for c in got} == {"Uno", "Dos", "Tres"}
+    assert all(c["score"] is None for c in got)
+
+
+@when(parsers.parse('I start a session anchoring tier {tier:d} with "{title}"'))
+def start_override(ctx, tier, title):
+    p = proposal(ctx["repo"], SRC)["proposal"]
+    anchors = {t: p[t]["film_id"] for t in range(1, 6)}
+    anchors[tier] = _id(ctx, title)
+    try:
+        start_session(ctx["repo"], SRC, anchors, TODAY)
+    except RankError as e:
+        ctx["error"] = e
+
+
+@when(parsers.parse('I start a session anchoring tiers {t1:d} and {t2:d} both with "{title}"'))
+def start_override_dup(ctx, t1, t2, title):
+    p = proposal(ctx["repo"], SRC)["proposal"]
+    anchors = {t: p[t]["film_id"] for t in range(1, 6)}
+    anchors[t1] = _id(ctx, title)
+    anchors[t2] = _id(ctx, title)
+    try:
+        start_session(ctx["repo"], SRC, anchors, TODAY)
+    except RankError as e:
+        ctx["error"] = e
+
+
+@then(parsers.parse("starting is refused with {status:d}"))
+def start_refused(ctx, status):
+    assert ctx.get("error") is not None and ctx["error"].status == status
+
+
 @when("I start a session with the proposed anchors")
 @given("a started session")
 def start(ctx):
@@ -279,3 +319,28 @@ def log_verdicts_directly(ctx, verdicts):
         anchor_id = anchors[step.tier]
         repo.append_comparison(sid, cand, anchor_id, step.tier, v, TODAY)
         logged.append(v)
+
+
+@when(parsers.parse('the current candidate\'s log is forced illegal with four "{v}" verdicts'))
+def force_illegal_log(ctx, v):
+    # Bypasses next_step's legality check entirely — a sequence no ordinary click can produce
+    # (finding 1b), e.g. a hand-edited DB row or a future bug elsewhere in the write path.
+    repo = ctx["repo"]
+    sid = repo.open_rank_session(SRC).id
+    s = _state(ctx)
+    cand = s["pair"]["candidate"]["film_id"]
+    ctx["last_candidate"] = cand
+    anchor_id = s["pair"]["anchor"]["film_id"]
+    tier = s["pair"]["tier"]
+    for _ in range(4):
+        repo.append_comparison(sid, cand, anchor_id, tier, v, TODAY)
+
+
+@then("the state lists that film as corrupt")
+def corrupt_listed(ctx):
+    assert _state(ctx)["corrupt"] == [ctx["last_candidate"]]
+
+
+@then("undo is no longer available")
+def undo_unavailable(ctx):
+    assert _state(ctx)["can_undo"] is False

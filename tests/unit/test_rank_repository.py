@@ -27,9 +27,16 @@ def test_set_unseen_marks_unmarks_and_reports_missing(repo):
 def test_merge_moves_unseen_survivor_wins(repo):
     a = _film(repo, "Alpha", 1950)
     b = _film(repo, "Alpha", 1951)
+    anchor = _film(repo, "Anchor", 1960)
+    sid = repo.create_rank_session("owned", 1, {3: anchor}, {a: 2}, D)
+    repo.append_comparison(sid, a, anchor, 3, "worse", D)
     repo.set_unseen(b, True, D)
     repo.merge_film(b, a, D)
     assert repo.unseen_film_ids() == {a}
+    # The survivor was placed and mid-search before the merge; inheriting the loser's unseen
+    # mark must purge both, exactly as `set_unseen` itself does (finding 3).
+    assert repo.rank_placements(sid) == {}
+    assert repo.verdicts_for(sid, a) == []
     c = _film(repo, "Beta", 1960)
     d = _film(repo, "Beta", 1961)
     repo.set_unseen(c, True, D, note="keep")
@@ -135,3 +142,24 @@ def test_merge_moves_rank_rows_survivor_wins(repo):
     with repo._conn() as c:
         row = c.execute("SELECT film_id, anchor_film_id FROM rank_comparison WHERE session_id = ?", (sid,)).fetchone()
     assert (row["film_id"], row["anchor_film_id"]) == (a, a)
+
+
+def test_merge_drops_losers_verdicts_when_survivor_is_also_mid_search(repo):
+    """Finding 1a: loser and survivor both mid-search (unplaced, with verdicts) in the same
+    open session. A concatenated log would make the survivor's next `next_step` call raise."""
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    anchor = _film(repo, "Anchor", 1960)
+    third = _film(repo, "Gamma", 1970)
+    sid = repo.create_rank_session("owned", 1, {3: anchor}, {}, D)
+    repo.append_comparison(sid, a, anchor, 3, "better", D)
+    repo.append_comparison(sid, b, anchor, 3, "worse", D)
+    repo.append_comparison(sid, third, b, 3, "worse", D)  # b was also serving as an anchor
+    report = repo.merge_film(b, a, D)
+    assert repo.verdicts_for(sid, a) == ["better"]  # unchanged, ITS OWN list
+    assert repo.verdicts_for(sid, b) == []  # loser's rows gone
+    with repo._conn() as c:
+        row = c.execute(
+            "SELECT anchor_film_id FROM rank_comparison WHERE session_id = ? AND film_id = ?", (sid, third)
+        ).fetchone()
+    assert row["anchor_film_id"] == a  # anchor_film_id re-points unconditionally
+    assert report.dropped.get("rank_comparison") == 1

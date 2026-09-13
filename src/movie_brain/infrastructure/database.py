@@ -2724,6 +2724,14 @@ class Repository:
                         kept[table] = {"film_id": loser_id}
                     elif table == "unseen":
                         kept[table] = {"marked_on": loser_row["marked_on"], "note": loser_row["note"]}
+            # Finding 3: whichever side's `unseen` row the survivor now holds (its own, kept
+            # over the loser's; or the loser's, moved over because the survivor held none),
+            # the survivor's placement and verdict log must be purged too — mirroring
+            # `set_unseen` itself, so an unseen film can never come out of a merge still
+            # holding a placement a later `session_state` would save into the tiered list.
+            if c.execute("SELECT 1 FROM unseen WHERE film_id = ?", (survivor_id,)).fetchone() is not None:
+                c.execute("DELETE FROM rank_placement WHERE film_id = ?", (survivor_id,))
+                c.execute("DELETE FROM rank_comparison WHERE film_id = ?", (survivor_id,))
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -2770,14 +2778,38 @@ class Repository:
             n = c.execute("UPDATE rank_anchor SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)).rowcount
             if n:
                 moved["rank_anchor"] = n
+            # rank_comparison as `film_id` (the candidate side of a verdict log) gets the SAME
+            # per-session survivor-wins rule as the sibling one-row tables above (finding 1a):
+            # a verdict log is scoped to one session, so if loser and survivor are BOTH
+            # mid-search in the same session, concatenating their rows would hand the survivor
+            # an illegal sequence and `next_step` would raise. As `anchor_film_id` (the side
+            # being compared against) there is no such log to protect — a comparison against a
+            # merged-away anchor is still a comparison against that work — so it re-points
+            # unconditionally, in every row, independent of the film_id resolution above.
+            for row in c.execute(
+                "SELECT DISTINCT session_id FROM rank_comparison WHERE film_id = ?", (loser_id,)
+            ).fetchall():
+                sid = int(row["session_id"])
+                twin = c.execute(
+                    "SELECT 1 FROM rank_comparison WHERE session_id = ? AND film_id = ? LIMIT 1",
+                    (sid, survivor_id),
+                ).fetchone()
+                if twin is not None:
+                    n = c.execute(
+                        "DELETE FROM rank_comparison WHERE session_id = ? AND film_id = ?", (sid, loser_id)
+                    ).rowcount
+                    dropped["rank_comparison"] = dropped.get("rank_comparison", 0) + n
+                else:
+                    n = c.execute(
+                        "UPDATE rank_comparison SET film_id = ? WHERE session_id = ? AND film_id = ?",
+                        (survivor_id, sid, loser_id),
+                    ).rowcount
+                    moved["rank_comparison"] = moved.get("rank_comparison", 0) + n
             n = c.execute(
-                "UPDATE rank_comparison SET film_id = CASE WHEN film_id = ? THEN ? ELSE film_id END, "
-                "anchor_film_id = CASE WHEN anchor_film_id = ? THEN ? ELSE anchor_film_id END "
-                "WHERE film_id = ? OR anchor_film_id = ?",
-                (loser_id, survivor_id, loser_id, survivor_id, loser_id, loser_id),
+                "UPDATE rank_comparison SET anchor_film_id = ? WHERE anchor_film_id = ?", (survivor_id, loser_id)
             ).rowcount
             if n:
-                moved["rank_comparison"] = n
+                moved["rank_comparison"] = moved.get("rank_comparison", 0) + n
             # Credits follow the survivor-wins rule the one-row tables use: a survivor that
             # already carries credits keeps them and the loser's are dropped; otherwise the
             # loser's rows move. `film_text` moves through DELETE+INSERT rather than UPDATE

@@ -141,6 +141,7 @@
   }));
 
   document.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return; // Cmd/Ctrl+Left is browser back on some platforms, not a verdict
     if (e.target.matches('input, select, textarea') || main.dataset.state !== 'pair') return;
     const k = e.key;
     if (k === 'ArrowLeft') { e.preventDefault(); enqueue(() => verdict('candidate')); }

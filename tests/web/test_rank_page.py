@@ -65,6 +65,12 @@ def test_rank_flow(page: Page, rank_server: str):
     expect(page.locator(".side.anchor img.poster")).to_have_count(1)
     expect(page.locator(".side.candidate .poster.placeholder")).to_have_count(1)  # unrated seeds have no OMDb row
     first = page.locator(".side.candidate .title").inner_text()
+    # Cmd/Ctrl+ArrowLeft is browser back on macOS/Linux, not a verdict — it must be a no-op.
+    tally1_before = page.locator('#progress .tally span[data-tier="1"]').inner_text()
+    page.keyboard.press("Meta+ArrowLeft")
+    page.keyboard.press("Control+ArrowLeft")
+    expect(page.locator(".side.candidate .title")).to_have_text(first)
+    expect(page.locator('#progress .tally span[data-tier="1"]')).to_have_text(tally1_before)
     # ← ← : better than tier 3, better than tier 2 → tier 1.
     page.keyboard.press("ArrowLeft")
     expect(page.locator(".side.anchor .title")).to_have_text("Nine")

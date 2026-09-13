@@ -7,6 +7,18 @@ Feature: Tier ranker — place owned films into five tiers against anchors
   Scenario: The proposal names one seeded anchor per tier
     Then the proposal is Ten, Nine, Eight, Seven, Four
 
+  Scenario: An emptied seed tier's fallback offers only the unrated films
+    Given "Seven" is re-rated 8
+    Then tier 4's choices are only the unrated films
+
+  Scenario: A seeded film may only anchor its own tier
+    When I start a session anchoring tier 4 with "Ten"
+    Then starting is refused with 400
+
+  Scenario: Two tiers cannot share the same anchor
+    When I start a session anchoring tiers 4 and 5 both with "Uno"
+    Then starting is refused with 400
+
   Scenario: Starting seeds the rated films and asks the first candidate against tier 3
     When I start a session with the proposed anchors
     Then the tally is 1, 1, 1, 1, 1
@@ -109,3 +121,17 @@ Feature: Tier ranker — place owned films into five tiers against anchors
     When "Eight" is marked unseen from the drawer
     Then the session needs an anchor for tier 3
     And there is no pair
+
+  Scenario: A corrupt verdict log is skipped, not fatal
+    Given a started session
+    When the current candidate's log is forced illegal with four "worse" verdicts
+    Then the state lists that film as corrupt
+    And the next candidate is asked against tier 3
+
+  Scenario: Undo after a drawer unmark purged the comparison is a harmless no-op
+    Given a started session
+    When I answer better
+    And that film is marked unseen from the drawer
+    And I undo
+    Then that film is unseen
+    And undo is no longer available
