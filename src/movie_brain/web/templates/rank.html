@@ -11,7 +11,8 @@
     <h1><a href="/">movie-brain</a> · rank</h1>
     <nav class="tabs" aria-label="Mode">
       <button class="tab" data-mode="tiers">Tiers</button>
-      <button class="tab" data-mode="order">Order tier 1</button>
+      <button class="tab" data-mode="order-1">Order tier 1</button>
+      <button class="tab" data-mode="order-2">Order tier 2</button>
     </nav>
     <div id="note" class="note" aria-live="polite"></div>
     <div id="progress" hidden>
@@ -19,10 +20,10 @@
       <span class="tiers-only"><b id="remaining">–</b> remaining</span>
       <span class="tiers-only"><b id="unseen-count">–</b> unseen</span>
       <span class="tally tiers-only"><span data-tier="1">–</span><span data-tier="2">–</span><span data-tier="3">–</span><span data-tier="4">–</span><span data-tier="5">–</span></span>
-      <span class="order-only"><b id="ordered">–</b> ordered</span>
+      <span class="order-only"><b id="ordered">–</b> ordered in tier <b id="order-tier">–</b></span>
       <span class="order-only"><b id="order-remaining">–</b> remaining</span>
       <button id="undo" class="chip" title="Undo the last click (U)">Undo</button>
-      <span class="save-row"><input id="list-name" placeholder="My owned films, tiered"><button id="save" class="chip">Save as list</button></span>
+      <span class="save-row"><input id="list-name" placeholder="My films, tiered"><button id="save" class="chip">Save as list</button></span>
     </div>
   </header>
   <main id="rank" data-state="">
@@ -40,7 +41,7 @@
     </section>
     <section id="done" hidden><p>Every owned film is placed. Save the list above.</p></section>
     <section id="order-empty" hidden><p>Start a tiering session first — the order lives inside it.</p></section>
-    <section id="order-done" hidden><p>Every tier 1 film is ordered. Save the list above.</p></section>
+    <section id="order-done" hidden><p>Every film in this tier is ordered. Save the list above.</p></section>
   </main>
   <script src="{{ url_for('static', filename='rank.js') }}"></script>
 </body>

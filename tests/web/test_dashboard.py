@@ -1165,3 +1165,18 @@ def test_drawer_unseen_toggle_round_trips(dash: Page):
     expect(body.locator("button.unseen-toggle")).to_have_attribute("aria-pressed", "true")
     body.locator("button.unseen-toggle").click()
     expect(body.locator("button.unseen-toggle")).to_have_attribute("aria-pressed", "false")
+
+
+def test_drawer_rank_this_toggle_round_trips(dash: Page):
+    body = _open(dash, "Charlie")
+    toggle = body.locator("button.rank-toggle")
+    expect(toggle).to_have_attribute("aria-pressed", "false")
+    toggle.click()
+    expect(toggle).to_have_attribute("aria-pressed", "true")
+    dash.reload()
+    dash.wait_for_selector("#films tbody[data-count]")
+    body = dash.locator("#drawer-body")
+    expect(body).to_contain_text("Charlie")
+    expect(body.locator("button.rank-toggle")).to_have_attribute("aria-pressed", "true")
+    body.locator("button.rank-toggle").click()
+    expect(body.locator("button.rank-toggle")).to_have_attribute("aria-pressed", "false")

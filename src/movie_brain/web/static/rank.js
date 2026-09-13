@@ -3,9 +3,13 @@
   const $ = (sel) => document.querySelector(sel);
   const main = $('#rank');
   const state = { session: null, order: null, details: {} };
-  // Two modes on one page (order spec O3): the hash carries the mode so a reload stays put.
-  const mode = () => (location.hash === '#order' ? 'order' : 'tiers');
-  const setMode = (m) => { if (mode() !== m) location.hash = m === 'order' ? '#order' : ''; };
+  // Three modes on one page (order spec O3, ranking-pool spec P5): the hash carries the mode
+  // so a reload stays put. Modes: 'tiers', 'order-1', 'order-2'. '#order' (pre-phase-A
+  // bookmarks) reads as tier 1.
+  const mode = () => { const h = location.hash; if (h === '#order' || h === '#order-1') return 'order-1'; if (h === '#order-2') return 'order-2'; return 'tiers'; };
+  const isOrder = () => mode().startsWith('order-');
+  const orderTier = () => Number(mode().slice(6)) || 1;
+  const setMode = (m) => { if (mode() !== m) location.hash = m === 'tiers' ? '' : `#${m}`; };
 
   // Every user action (click or key) that touches the session must run strictly after the
   // previous one's request-and-re-render has finished, or a fast second action reads
@@ -28,7 +32,7 @@
     for (const id of ['setup', 'pair', 'done', 'order-empty', 'order-done']) $('#' + id).hidden = id !== which;
     $('#progress').hidden = !state.session || !state.session.session;
     for (const el of document.querySelectorAll('.tiers-only')) el.hidden = mode() !== 'tiers';
-    for (const el of document.querySelectorAll('.order-only')) el.hidden = mode() !== 'order';
+    for (const el of document.querySelectorAll('.order-only')) el.hidden = !isOrder();
     for (const t of document.querySelectorAll('.tab')) t.setAttribute('aria-current', String(t.dataset.mode === mode()));
   };
 
@@ -116,17 +120,17 @@
     if (!s || !s.session) return;
     $('#placed').textContent = s.placed; $('#remaining').textContent = s.remaining; $('#unseen-count').textContent = s.unseen;
     for (const [t, n] of Object.entries(s.tally)) $(`#progress .tally span[data-tier="${t}"]`).textContent = n;
-    if (state.order) { $('#ordered').textContent = state.order.ordered; $('#order-remaining').textContent = state.order.remaining; }
-    $('#undo').disabled = !(mode() === 'order' && state.order ? state.order.can_undo : s.can_undo);
+    if (state.order) { $('#ordered').textContent = state.order.ordered; $('#order-tier').textContent = orderTier(); $('#order-remaining').textContent = state.order.remaining; }
+    $('#undo').disabled = !(isOrder() && state.order ? state.order.can_undo : s.can_undo);
   };
 
   const refresh = async () => {
     state.session = await api('GET', '/api/rank/session');
     state.order = null;
     const s = state.session;
-    if (mode() === 'order') {
+    if (isOrder()) {
       if (!s.session) { show('order-empty'); main.dataset.state = 'order_nosession'; return; }
-      state.order = await api('GET', '/api/rank/order');
+      state.order = await api('GET', `/api/rank/order?tier=${orderTier()}`);
       if (state.order.corrupt.length) note(`${state.order.corrupt.length} film(s) have an unreadable order log and were skipped`);
       renderProgress();
       if (state.order.done) { show('order-done'); main.dataset.state = 'order_done'; return; }
@@ -140,9 +144,9 @@
   };
 
   const verdict = async (side) => {
-    if (mode() === 'order') {
+    if (isOrder()) {
       const o = state.order; if (!o || !o.pair) return;
-      await api('POST', '/api/rank/order/verdict', { film_id: o.pair.candidate.film_id, other_film_id: o.pair.other.film_id, verdict: side === 'candidate' ? 'better' : 'worse' });
+      await api('POST', '/api/rank/order/verdict', { tier: orderTier(), film_id: o.pair.candidate.film_id, other_film_id: o.pair.other.film_id, verdict: side === 'candidate' ? 'better' : 'worse' });
       return refresh();
     }
     const s = state.session; if (!s || !s.pair) return;
@@ -153,16 +157,16 @@
   // is that same pass with the side's flag set, sent at once (owner ruling 2026-09-13 —
   // the spec's D9 mark-then-Pass two-step is gone, so nothing is ever "marked" client-side).
   const pass = async (unseen = {}) => {
-    if (mode() === 'order') {
+    if (isOrder()) {
       const o = state.order; if (!o || !o.pair) return;
-      await api('POST', '/api/rank/order/pass', { film_id: o.pair.candidate.film_id });
+      await api('POST', '/api/rank/order/pass', { tier: orderTier(), film_id: o.pair.candidate.film_id });
       return refresh();
     }
     const s = state.session; if (!s || !s.pair) return;
     await api('POST', '/api/rank/pass', { film_id: s.pair.candidate.film_id, candidate_unseen: unseen.candidate === true, anchor_unseen: unseen.anchor === true });
     await refresh();
   };
-  const unseen = (side) => (mode() === 'order' ? Promise.resolve() : pass({ [side]: true }));   // O6: inert in order mode
+  const unseen = (side) => (isOrder() ? Promise.resolve() : pass({ [side]: true }));   // O6: inert in order mode
   const undo = async () => { if ($('#undo').disabled) return; await api('POST', '/api/rank/undo'); await refresh(); };
 
   $('#pair').addEventListener('click', (e) => {

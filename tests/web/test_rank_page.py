@@ -114,9 +114,9 @@ def test_rank_flow(page: Page, rank_server: str):
     # Tier 1 holds Ten (seed) and `first` (placed above). Switching tabs orders the queue's
     # head for free (O7) and asks the other film against it: "Position 1 of 1".
     page.goto(rank_server + "/rank")
-    page.click('.tab[data-mode="order"]')
+    page.click('.tab[data-mode="order-1"]')
     page.wait_for_selector('#rank[data-state="order"]')
-    assert page.url.endswith("#order")
+    assert page.url.endswith("#order-1")
     expect(page.locator(".side.anchor .heading")).to_have_text("Position 1 of 1")
     expect(page.locator("#ordered")).to_have_text("1")
     expect(page.locator("#order-remaining")).to_have_text("1")
@@ -142,3 +142,15 @@ def test_rank_flow(page: Page, rank_server: str):
     value = page.locator("#list-picker option", has_text="Mine (").get_attribute("value")
     page.select_option("#list-picker", value)
     expect(page.locator("#films tbody tr[data-id]").first).to_contain_text(top)   # bare rank 1 sorts first
+
+    # --- Order tier 2 -------------------------------------------------------------------
+    # Nine is alone in tier 2: switching tabs free-inserts it (O7) and there is nothing left
+    # to ask, landing straight on order_done.
+    page.goto(rank_server + "/rank")
+    page.click('.tab[data-mode="order-2"]')
+    page.wait_for_selector('#rank[data-state="order"], #rank[data-state="order_done"]')
+    expect(page.locator("#ordered")).to_have_text("1")
+
+    # A legacy `#order` bookmark reads as tier 1.
+    page.goto(rank_server + "/rank#order")
+    expect(page.locator('.tab[data-mode="order-1"]')).to_have_attribute("aria-current", "true")

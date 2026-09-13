@@ -572,7 +572,7 @@
     const credited = d.credits && d.credits.director;
     const director = d.director ? personLink('director', d.director, !!credited, credited || d.director) : '—';
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
-      <div class="unseen-row"><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button></div>
+      <div class="unseen-row"><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" data-id="${d.id}" aria-pressed="${d.rank_marked ? 'true' : 'false'}" title="Rank this film (puts it in the ranker's pool)">Rank this</button></div>
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       <div class="meta">${fmt(d.year)} · ${director}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${summary ? `<p>${poster}${esc(summary)}</p>` : poster}
@@ -699,6 +699,16 @@
     b.setAttribute('aria-pressed', String(unseen));
     const film = state.films.find((f) => f.id === Number(b.dataset.id));
     if (film) film.unseen = unseen;
+  });
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.rank-toggle'); if (!b) return;
+    const next = b.getAttribute('aria-pressed') !== 'true';
+    const r = await fetch(`/api/films/${b.dataset.id}/rank-mark`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marked: next }) });
+    if (!r.ok) { toast('Could not update rank mark'); return; }
+    const { marked } = await r.json();
+    b.setAttribute('aria-pressed', String(marked));
+    const film = state.films.find((f) => f.id === Number(b.dataset.id));
+    if (film) film.rank_marked = marked;
   });
   async function commitRevisitNote(input) {
     if (input.dataset.busy) return;
