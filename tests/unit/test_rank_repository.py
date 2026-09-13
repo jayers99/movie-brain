@@ -179,3 +179,75 @@ def test_merge_onto_an_already_unseen_survivor_purges_the_losers_rank_rows(repo)
     assert repo.unseen_film_ids() == {a}
     assert repo.rank_placements(sid) == {}
     assert repo.verdicts_for(sid, a) == []
+
+
+def _order_session(repo, n=4):
+    """A session whose tier 1 holds n seeded films; returns (sid, [film ids])."""
+    ids = [_film(repo, f"T{i}", 1950 + i) for i in range(n)]
+    sid = repo.create_rank_session("owned", 1, {1: ids[0]}, {i: 1 for i in ids}, D)
+    return sid, ids
+
+
+def test_insert_ordered_keeps_positions_dense_and_shifts_later_rows(repo):
+    sid, (a, b, c, d) = _order_session(repo)
+    repo.insert_ordered(sid, 1, a, 0, D)          # [a]
+    repo.insert_ordered(sid, 1, b, 1, D)          # [a, b]  (append)
+    repo.insert_ordered(sid, 1, c, 0, D)          # [c, a, b]
+    repo.insert_ordered(sid, 1, d, 2, D)          # [c, a, d, b]
+    assert repo.rank_order(sid, 1) == [c, a, d, b]
+    with repo._conn() as conn:
+        rows = conn.execute(
+            "SELECT position FROM rank_order WHERE session_id = ? ORDER BY position", (sid,)
+        ).fetchall()
+    assert [r["position"] for r in rows] == [1, 2, 3, 4]
+    assert repo.rank_order(sid, 2) == []
+
+
+def test_remove_ordered_compacts_and_scopes_to_a_session(repo):
+    sid, (a, b, c, _) = _order_session(repo)
+    other = repo.create_rank_session("list", 2, {1: a}, {a: 1, b: 1}, D)   # a second source: "owned" allows one open session
+    for s in (sid, other):
+        repo.insert_ordered(s, 1, a, 0, D)
+        repo.insert_ordered(s, 1, b, 1, D)
+    repo.insert_ordered(sid, 1, c, 2, D)
+    assert repo.remove_ordered(a, sid) == 1
+    assert repo.rank_order(sid, 1) == [b, c] and repo.rank_order(other, 1) == [a, b]
+    assert repo.remove_ordered(b) == 2   # every session
+    assert repo.rank_order(sid, 1) == [c] and repo.rank_order(other, 1) == [a]
+    assert repo.remove_ordered(999) == 0
+
+
+def test_order_comparisons_log_in_order_and_delete_by_id(repo):
+    sid, (a, b, c, _) = _order_session(repo)
+    i1 = repo.append_order_comparison(sid, 1, c, a, "better", D)
+    i2 = repo.append_order_comparison(sid, 1, c, b, "worse", D)
+    assert repo.order_verdicts_for(sid, c) == [(a, "better"), (b, "worse")]
+    assert repo.films_with_order_verdicts(sid) == {c}
+    repo.delete_order_comparison(i2)
+    assert repo.order_verdicts_for(sid, c) == [(a, "better")]
+    assert i1 < i2
+
+
+def test_order_deferrals_round_trip(repo):
+    sid, (a, b, _, _) = _order_session(repo)
+    repo.defer_order_film(sid, a, "2026-09-13")
+    repo.defer_order_film(sid, b, "2026-09-14")
+    assert repo.order_deferrals(sid) == {a: "2026-09-13", b: "2026-09-14"}
+    repo.undefer_order_film(sid, a)
+    assert repo.order_deferrals(sid) == {b: "2026-09-14"}
+    assert repo.rank_deferrals(sid) == {}   # the tiering's own table is untouched
+
+
+def test_marking_unseen_removes_the_film_from_the_order_and_every_verdict_naming_it(repo):
+    sid, (a, b, c, d) = _order_session(repo)
+    repo.insert_ordered(sid, 1, a, 0, D)
+    repo.insert_ordered(sid, 1, b, 1, D)
+    repo.insert_ordered(sid, 1, c, 2, D)
+    repo.append_order_comparison(sid, 1, d, b, "better", D)   # d mid-search, against b
+    repo.append_order_comparison(sid, 1, b, a, "worse", D)    # b's own old verdict
+    repo.defer_order_film(sid, b, "2026-09-13")
+    repo.set_unseen(b, True, D)
+    assert repo.rank_order(sid, 1) == [a, c]
+    assert repo.order_verdicts_for(sid, d) == []   # the verdict AGAINST b is gone too
+    assert repo.order_verdicts_for(sid, b) == []
+    assert repo.order_deferrals(sid) == {}

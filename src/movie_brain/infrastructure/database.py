@@ -2495,7 +2495,9 @@ class Repository:
         """Idempotent set/clear. None when the film does not exist. Marking a film unseen also
         deletes its `rank_placement` AND `rank_comparison` rows in EVERY session (§4.6): an
         unseen film's clicks audit nothing, and unmarking returns it to the queue, never to its
-        old tier — a stale verdict trail left behind would make it look mid-search instead."""
+        old tier — a stale verdict trail left behind would make it look mid-search instead.
+        And, since migration 023, drops it from every tier order together with every order
+        verdict naming it on either side (order spec §4.4)."""
         with self._conn() as c:
             if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
                 return None
@@ -2507,6 +2509,7 @@ class Repository:
                 )
                 c.execute("DELETE FROM rank_placement WHERE film_id = ?", (film_id,))
                 c.execute("DELETE FROM rank_comparison WHERE film_id = ?", (film_id,))
+                self._purge_order_rows(c, film_id)
                 return True
             c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
             return False
@@ -2640,6 +2643,120 @@ class Repository:
                 "SELECT film_id, deferred_on FROM rank_deferral WHERE session_id = ?", (session_id,)
             ).fetchall()
             return {int(r["film_id"]): str(r["deferred_on"]) for r in rows}
+
+    # order inside a tier (spec 2026-09-13-order-top-tier §3) ------------------
+    def rank_order(self, session_id: int, tier: int) -> list[int]:
+        """The tier's film ids by position, 1..k dense."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id FROM rank_order WHERE session_id = ? AND tier = ? ORDER BY position",
+                (session_id, tier),
+            ).fetchall()
+            return [int(r["film_id"]) for r in rows]
+
+    def insert_ordered(self, session_id: int, tier: int, film_id: int, slot: int, today: date) -> None:
+        """Insert at a 0-based slot (position slot+1); every row at or after it moves up one.
+        The UNIQUE on position means the shift must run highest-first, one row at a time —
+        a single `SET position = position + 1` collides row by row under SQLite."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, position FROM rank_order WHERE session_id = ? AND tier = ? AND position > ? "
+                "ORDER BY position DESC",
+                (session_id, tier, slot),
+            ).fetchall()
+            for r in rows:
+                c.execute(
+                    "UPDATE rank_order SET position = ? WHERE session_id = ? AND film_id = ?",
+                    (int(r["position"]) + 1, session_id, int(r["film_id"])),
+                )
+            c.execute(
+                "INSERT INTO rank_order (session_id, tier, film_id, position, ordered_on) VALUES (?, ?, ?, ?, ?)",
+                (session_id, tier, film_id, slot + 1, today.isoformat()),
+            )
+
+    @staticmethod
+    def _remove_ordered(c: sqlite3.Connection, film_id: int, session_id: int | None = None) -> int:
+        """Delete the film's order row(s) and close each gap, lowest-first so no UNIQUE collides."""
+        where, args = ("WHERE film_id = ?", [film_id]) if session_id is None else (
+            "WHERE film_id = ? AND session_id = ?", [film_id, session_id]
+        )
+        rows = c.execute(f"SELECT session_id, tier, position FROM rank_order {where}", args).fetchall()
+        for r in rows:
+            sid, tier, pos = int(r["session_id"]), int(r["tier"]), int(r["position"])
+            c.execute("DELETE FROM rank_order WHERE session_id = ? AND film_id = ?", (sid, film_id))
+            later = c.execute(
+                "SELECT film_id, position FROM rank_order WHERE session_id = ? AND tier = ? AND position > ? "
+                "ORDER BY position",
+                (sid, tier, pos),
+            ).fetchall()
+            for r2 in later:
+                c.execute(
+                    "UPDATE rank_order SET position = ? WHERE session_id = ? AND film_id = ?",
+                    (int(r2["position"]) - 1, sid, int(r2["film_id"])),
+                )
+        return len(rows)
+
+    def remove_ordered(self, film_id: int, session_id: int | None = None) -> int:
+        with self._conn() as c:
+            return self._remove_ordered(c, film_id, session_id)
+
+    def append_order_comparison(
+        self, session_id: int, tier: int, film_id: int, other_film_id: int, verdict: str, today: date
+    ) -> int:
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO rank_order_comparison (session_id, tier, film_id, other_film_id, verdict, decided_on) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (session_id, tier, film_id, other_film_id, verdict, today.isoformat()),
+            )
+            assert cur.lastrowid is not None
+            return int(cur.lastrowid)
+
+    def order_verdicts_for(self, session_id: int, film_id: int) -> list[tuple[int, str]]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT other_film_id, verdict FROM rank_order_comparison "
+                "WHERE session_id = ? AND film_id = ? ORDER BY id",
+                (session_id, film_id),
+            ).fetchall()
+            return [(int(r["other_film_id"]), str(r["verdict"])) for r in rows]
+
+    def films_with_order_verdicts(self, session_id: int) -> set[int]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT film_id FROM rank_order_comparison WHERE session_id = ?", (session_id,)
+            ).fetchall()
+            return {int(r["film_id"]) for r in rows}
+
+    def delete_order_comparison(self, comparison_id: int) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM rank_order_comparison WHERE id = ?", (comparison_id,))
+
+    def defer_order_film(self, session_id: int, film_id: int, stamp: str) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT OR REPLACE INTO rank_order_deferral (session_id, film_id, deferred_on) VALUES (?, ?, ?)",
+                (session_id, film_id, stamp),
+            )
+
+    def undefer_order_film(self, session_id: int, film_id: int) -> None:
+        with self._conn() as c:
+            c.execute("DELETE FROM rank_order_deferral WHERE session_id = ? AND film_id = ?", (session_id, film_id))
+
+    def order_deferrals(self, session_id: int) -> dict[int, str]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, deferred_on FROM rank_order_deferral WHERE session_id = ?", (session_id,)
+            ).fetchall()
+            return {int(r["film_id"]): str(r["deferred_on"]) for r in rows}
+
+    @staticmethod
+    def _purge_order_rows(c: sqlite3.Connection, film_id: int) -> None:
+        """Everything the order knows about a film that has left it (spec §4.4): its row in
+        every session (gaps closed), every verdict naming it on EITHER side, its deferrals."""
+        Repository._remove_ordered(c, film_id)
+        c.execute("DELETE FROM rank_order_comparison WHERE film_id = ? OR other_film_id = ?", (film_id, film_id))
+        c.execute("DELETE FROM rank_order_deferral WHERE film_id = ?", (film_id,))
 
     def set_last_action(self, session_id: int, action: dict[str, object] | None) -> None:
         with self._conn() as c:
