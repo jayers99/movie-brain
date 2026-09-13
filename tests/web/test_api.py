@@ -517,6 +517,7 @@ def test_rank_routes_reject_a_non_object_body(rank_client, method, url):
 def test_rank_order_needs_a_session_then_serves_the_first_pair_after_a_tier_1_placement(rank_client):
     client, ids = rank_client
     assert client.get("/api/rank/order?tier=1").status_code == 404
+    assert client.get("/api/rank/order?tier=3").status_code == 400
     state = _start(client)
     # Seeds put one film (Ten) in tier 1: ordered free at position 1, nothing to ask.
     o = client.get("/api/rank/order?tier=1").get_json()

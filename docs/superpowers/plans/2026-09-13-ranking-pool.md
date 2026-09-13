@@ -437,5 +437,5 @@ JOIN my_ratings r ON r.film_id = f.id WHERE p.session_id = 1 AND p.how = 'seed' 
 ```
 
 Expect exactly: Bill & Ted's Excellent Adventure 0, Dr. No 0, Goldfinger 0, Sullivan's Travels 0, Wings of Desire 0, West Side Story 4, Inglourious Basterds 4. Confirm with the owner ONCE, then `DELETE FROM rank_placement WHERE session_id = 1 AND film_id IN (…)`. Also confirm none of them holds a `rank_order` or `rank_order_comparison` row (they are tier 5; expect none).
-- [ ] Restart the dashboard; smoke: `GET /api/rank/session` → `placed` = 716 − 7 + 76 = 785, `remaining` 0; `GET /api/rank/order?tier=1` → the two non-owned tens now in the queue (remaining grew by 2); `?tier=2` → one free insertion, `1 ordered`; the drawer of a non-owned film shows "Rank this".
+- [ ] Restart the dashboard; smoke: `GET /api/rank/session` → `placed` = 716 − 7 + 48 = 757 (tally 95 / 264 / 86 / 184 / 128), `remaining` 0; `GET /api/rank/order?tier=1` → the two non-owned tens now in the queue (remaining grew by 2); `?tier=2` → one free insertion, `1 ordered`, `remaining` 263; the drawer of a non-owned film shows "Rank this".
 - [ ] Merge to main, push if the owner says so, update memory (`tier-ranker-done`): 024 applied, never re-run; Phase B next.

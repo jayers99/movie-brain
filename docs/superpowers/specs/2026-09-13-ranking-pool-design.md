@@ -4,9 +4,9 @@
 
 ## 1. Goal
 
-The owner ruled tonight that ranking is the better instrument, so ranking comes first and the rating will be derived from the tier (Phase B). That inverts today's dependency, where ratings seed tiers and are the only way a non-owned film reaches the ranker. Phase A makes the ranker's pool a defined thing independent of ratings, admits the 76 rated-not-owned films for free, removes the seven films that seeded on a score that means "not for the ranker", and lets the owner strict-order tier 2 the way tier 1 is ordered today. Nothing here writes `my_ratings`; tiering spec D2 still holds until Phase B reverses it deliberately.
+The owner ruled tonight that ranking is the better instrument, so ranking comes first and the rating will be derived from the tier (Phase B). That inverts today's dependency, where ratings seed tiers and are the only way a non-owned film reaches the ranker. Phase A makes the ranker's pool a defined thing independent of ratings, admits the 48 rated-not-owned films for free, removes the seven films that seeded on a score that means "not for the ranker", and lets the owner strict-order tier 2 the way tier 1 is ordered today. Nothing here writes `my_ratings`; tiering spec D2 still holds until Phase B reverses it deliberately.
 
-Numbers on 2026-09-13: 858 owned, 716 placed (tier tally 93 / 257 / 71 / 171 / 124), 142 unseen, 0 remaining; 335 ratings (16 zeros); 87 rated-not-owned of which 76 score 6–10; two owned films score 4; five owned score 0.
+Numbers on 2026-09-13: 858 owned, 716 placed (tier tally 93 / 257 / 71 / 171 / 124), 142 unseen, 0 remaining; 337 ratings (16 zeros); 87 rated-not-owned of which 48 score 6–10, 28 score 1–5 and 11 score 0; two owned films score 4; five owned score 0.
 
 ## 2. Decisions (owner rulings, 2026-09-13)
 
@@ -14,7 +14,7 @@ Numbers on 2026-09-13: 858 owned, 716 placed (tier tally 93 / 257 / 71 / 171 / 1
 |---|---|---|
 | P1 | **The pool** is owned ∪ marked "Rank this" ∪ rated 6–10, minus disposed and unseen. Films rated 0–5 are out, owned or not. | A 0 means "not interested, won't watch" (owner's definition); 1–4 is disliked; 5 is watched-and-indifferent. None of those belongs in a ranking of films the owner likes, and the ranker has no "worse than everything" exit — its bottom outcome is tier 5. Cost if wrong: seven films leave the ranking (§4.5) and are one mark away from returning. |
 | P2 | **"Rank this"** is an explicit per-film mark on the watchlist pattern: its own table, the drawer toggle its only UI writer, never touched by sync or importers. | Once ratings are derived (Phase B) a rating cannot also be the entry ticket without circularity. Owned films need no mark. |
-| P3 | **Seed on read.** A pool film holding a rating 6–10 and no placement is seeded into its tier on the next read, in either mode. | This is what makes the 76 films free, and it closes a latent gap: a film rated after the session started is asked today instead of seeded. |
+| P3 | **Seed on read.** A pool film holding a rating 6–10 and no placement is seeded into its tier on the next read, in either mode. | This is what makes the 48 films free, and it closes a latent gap: a film rated after the session started is asked today instead of seeded. |
 | P4 | **The seed map's bottom changes**: 10→1, 9→2, 8→3, 7→4, 6→5; 5 and below seed nothing. | Follows from P1. The tiers project to 10/9/8/7/6 in Phase B, with 5 as the hand-set floor outside the ranker. |
 | P5 | **Order mode takes a tier**, 1 or 2, as two tabs. Rating (Phase B) stays the tier regardless of position; the order lives in the saved list only. | The owner chose to strict-order tiers 1 and 2 (~2,700 clicks) knowing the tier-2 order changes no rating. The `tier` column in the order tables was built for this; no schema change. |
 | P6 | The session's source key stays `owned`; the list slug stays `my-owned-tiers`; the default list name becomes "My films, tiered". | No migration for a rename; URL state and the picker keep working. The docs say what the key now means. |
@@ -60,7 +60,7 @@ Seven `rank_placement` rows in the live session have `how = 'seed'` and a score 
 
 ### 4.6 Edges
 
-- A film rated 0–5 from the drawer after being placed or ordered: it leaves the pool on the next read, so it is no longer served or saved, but its placement and order rows stay until it is also marked unseen. Deferred: cascading a rating change into ranker tables would make ratings a writer of them, which the tiering spec avoided. Documented, not built.
+- A film rated 0–5 from the drawer after being placed or ordered, or a marked film unmarked after placement: it leaves the POOL on the next read, which today changes only the tiering queue (it is never asked again). Its placement, its order position, any anchor seat it holds and its line in the saved list all STAY until it is marked unseen — `_order_queue`, `save_list` and `needs_anchor` read placements, not the pool. Deferred to Phase B: whether leaving the pool should cascade like unseen does; cascading a rating change into ranker tables would make ratings a writer of them, which the tiering spec avoided.
 - A pool film later disposed: excluded by the existing disposed guard everywhere; its rows stay as with any tombstone.
 - The proposal (before a session exists) reads the pool, so a first session on a fresh DB with marks and no owned films still gets anchors.
 - `undo` falls back to tier 1 when a stored `last_action` carries no `tier` (rows written before this phase, when order mode had only tier 1).
@@ -82,7 +82,7 @@ Seven `rank_placement` rows in the live session have `how = 'seed'` and a score 
 - Unit: `tier_for_score` for 6 → 5 and raising below 6; `rank_pool_film_ids` on a fixture with owned, marked, rated-6, rated-5, rated-0-owned, unseen-marked and disposed films; `set_rank_mark` idempotent and 404-shaped; `merge_film` moves `rank_mark` survivor-wins.
 - Feature (`rank.feature` / `rank_order.feature` extended, or a new `rank_pool.feature`): a rated-8 non-owned film seeds into tier 3 on the first read and is never asked; a 0-rated and a 4-rated owned film are not in the queue; a film rated 9 after the session started seeds on the next read; a marked unrated film is asked; unmarking it removes it from the queue; a marked film rated 4 is not in the pool; the proposal's fallback offers a marked film; order tier 2 has its own queue, verdicts and deferrals, independent of tier 1's; undo in tier 2 removes from tier 2's order only; save writes both ordered tiers bare and their remainders tied.
 - Web: the rank-mark route (shape, 404, round trip); the drawer toggle round-trips (Playwright, pattern of `test_drawer_unseen_toggle_round_trips`); the Order tier 2 tab serves a pair and `#order` maps to tier 1.
-- Live (plan's apply task): after `migrate --apply` (024) and the seven deletions, `rank_placement` count = 716 − 7 + 76; tier 1's order queue holds the two tens; tiering `remaining` stays 0.
+- Live (plan's apply task): after `migrate --apply` (024) and the seven deletions, `rank_placement` count = 716 − 7 + 48 = 757; tier 1's order queue holds the two tens; tiering `remaining` stays 0.
 
 ## 7. Out of scope
 

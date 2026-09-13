@@ -226,9 +226,9 @@ def _order_queue(repo: Repository, s: RankSession, tier: int) -> list[int]:
 
 
 def order_state(repo: Repository, source: str, tier: int, today: date) -> dict[str, object]:
-    s = _session(repo, source)
     if tier not in ORDER_TIERS:
         raise RankError(400, "tier must be 1 or 2")
+    s = _session(repo, source)
     _seed_new(repo, s, today)
     order = repo.rank_order(s.id, tier)
     queue = _order_queue(repo, s, tier)
