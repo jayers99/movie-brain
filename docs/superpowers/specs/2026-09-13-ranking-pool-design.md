@@ -1,6 +1,6 @@
 # Ranking pool — Phase A of "ranking before rating"
 
-**Date:** 2026-09-13 (late) · **Status:** approved design, awaiting plan · **Extends:** the tier ranker (`2026-09-13-tier-ranker-design.md`) and the order mode (`2026-09-13-order-top-tier-design.md`). **Opens:** the ranker's pool as a fact of its own, a "Rank this" mark, and a second ordered tier. **Phase B** (ratings follow the ranking, the Unseen chip) is a separate spec once the backlog is ordered.
+**Date:** 2026-09-13 (late) · **Status:** implemented 2026-09-13 (plan docs/superpowers/plans/2026-09-13-ranking-pool.md) · **Extends:** the tier ranker (`2026-09-13-tier-ranker-design.md`) and the order mode (`2026-09-13-order-top-tier-design.md`). **Opens:** the ranker's pool as a fact of its own, a "Rank this" mark, and a second ordered tier. **Phase B** (ratings follow the ranking, the Unseen chip) is a separate spec once the backlog is ordered.
 
 ## 1. Goal
 
@@ -63,6 +63,8 @@ Seven `rank_placement` rows in the live session have `how = 'seed'` and a score 
 - A film rated 0–5 from the drawer after being placed or ordered: it leaves the pool on the next read, so it is no longer served or saved, but its placement and order rows stay until it is also marked unseen. Deferred: cascading a rating change into ranker tables would make ratings a writer of them, which the tiering spec avoided. Documented, not built.
 - A pool film later disposed: excluded by the existing disposed guard everywhere; its rows stay as with any tombstone.
 - The proposal (before a session exists) reads the pool, so a first session on a fresh DB with marks and no owned films still gets anchors.
+- `undo` falls back to tier 1 when a stored `last_action` carries no `tier` (rows written before this phase, when order mode had only tier 1).
+- `start_session` and `swap_anchor` accept any pool film as an anchor, not only an owned one — an anchor is just a pool film the owner has seen.
 
 ## 5. API
 
