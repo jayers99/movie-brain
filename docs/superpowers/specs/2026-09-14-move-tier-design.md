@@ -4,7 +4,7 @@
 
 ## 1. Goal
 
-The ranker places a film once — seeded from `my_ratings` or binary-searched against the anchors — and nothing ever moved it across a tier line afterwards. With tiers 1 (95) and 2 (264) both fully ordered in the live session, the seam between them is visibly wrong: a 10 seeded tier 1 and a 9 seeded tier 2, and no comparison ever crossed that line, so the saved "My Ranked" list has Star Trek V (tier 1, #95) above The Shining (tier 2, #96). The owner marked the films that should move with "Rank this", which is inert on a film already in the pool, so nothing happened.
+The ranker places a film once — seeded from `my_ratings` or binary-searched against the anchors — and nothing ever moved it across a tier line afterwards. With tiers 1 (95) and 2 (264) both fully ordered in the live session, the seam between them is visibly wrong: a 10 seeded tier 1 and a 9 seeded tier 2, and no comparison ever crossed that line, so the saved "My Ranking" list has Star Trek V (tier 1, #95) above The Shining (tier 2, #96). The owner marked the films that should move with "Rank this", which is inert on a film already in the pool, so nothing happened.
 
 This spec adds a **move verb**: the owner sets a placed film's tier by hand from the drawer, the film leaves its old tier's order entirely, and it waits unordered in the new tier until the Order tab binary-inserts it. The seam merge that was brainstormed first (auto-promote across the 1/2 seam by binary insertion) is parked; this verb is the primitive it would need.
 

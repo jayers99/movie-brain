@@ -45,8 +45,8 @@ def move_server(tmp_path_factory: pytest.TempPathFactory) -> Generator[tuple[str
         p = c.get("/api/rank/proposal").get_json()["proposal"]
         assert c.post("/api/rank/session", json={"anchors": {t: p[str(t)]["film_id"] for t in range(1, 6)}}).status_code == 201
         assert p["1"]["film_id"] == ids["Ten"] and p["2"]["film_id"] == ids["Nine"]
-        assert c.post("/api/rank/save", json={}).status_code == 200   # "My Ranked" (curator "me") exists in the picker
-    # A curated list that would lead the picker on BOTH trust and name, so "My Ranked" leading proves the rule.
+        assert c.post("/api/rank/save", json={}).status_code == 200   # "My Ranking" (curator "me") exists in the picker
+    # A curated list that would lead the picker on BOTH trust and name, so "My Ranking" leading proves the rule.
     canon = ListMeta("aaa-canon", "AAA Canon", "Someone", 2020, None, True)
     repo.upsert_film_list(canon, TODAY)
     repo.set_list_trust("aaa-canon", 9)
@@ -124,4 +124,4 @@ def test_list_picker_leads_with_the_owners_own_list(page: Page, move_server):
     page.goto(url + "/")
     page.wait_for_selector("#films tbody[data-count]")
     labels = page.locator("#list-picker option").all_inner_texts()
-    assert labels[:3] == ["— all films —", "My Ranked (8)", "AAA Canon (1)"]
+    assert labels[:3] == ["— all films —", "My Ranking (8)", "AAA Canon (1)"]
