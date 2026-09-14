@@ -48,3 +48,28 @@ Feature: Move a film to another tier — a hand-set tier from the drawer, ordere
     And rank status for "Nine" is tier 2 "seed" and awaiting order
     When the tier 2 order is read
     Then rank status for "Nine" is tier 2 "seed" and not awaiting order
+
+  Scenario: Re-ranking a placed film unplaces it, sets the mark, and the Tiers tab asks it again instead of re-seeding
+    When I answer worse in order mode until the candidate is inserted
+    And the film at position 2 is re-ranked from the drawer
+    Then the re-ranked film is not placed and is marked
+    And the re-rank reported from tier 1
+    And undo is not available
+    And the next reads do not re-seed the re-ranked film
+    And the re-ranked film is in the tiering queue
+
+  Scenario: The mark comes off once the re-ranked film is placed and ordered
+    When "Nine" is joined in tier 2 by "Nine-b" rated 9, not owned
+    And "Nine-b" is re-ranked from the drawer
+    And "Nine-b" is answered worse than every anchor
+    Then "Nine-b" is placed in tier 5 and its mark is gone
+    When "Uno" is tiered into tier 1
+    And "Uno" is re-ranked from the drawer
+    And "Uno" is tiered into tier 1
+    Then "Uno" is placed in tier 1 and still marked
+    When "Uno" is inserted into the tier 1 order
+    Then "Uno" is placed in tier 1 and its mark is gone
+
+  Scenario: A re-rank refuses an unplaced film and an anchor
+    Then re-ranking "Uno" is refused with 409 "not placed"
+    And re-ranking "Nine" is refused with 409 "swap the anchor first"

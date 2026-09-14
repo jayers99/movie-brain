@@ -487,6 +487,7 @@ def test_rank_routes_404_without_a_session(rank_client):
     assert client.post("/api/rank/undo").status_code == 404
     assert client.post("/api/rank/save", json={}).status_code == 404
     assert client.post("/api/rank/move", json={"film_id": 1, "tier": 2}).status_code == 404
+    assert client.post("/api/rank/rerank", json={"film_id": 1}).status_code == 404
 
 
 def test_unseen_toggle_route(client, repo):
@@ -508,6 +509,7 @@ def test_unseen_toggle_route(client, repo):
         ("put", "/api/rank/anchor"),
         ("post", "/api/rank/save"),
         ("post", "/api/rank/move"),
+        ("post", "/api/rank/rerank"),
     ],
 )
 def test_rank_routes_reject_a_non_object_body(rank_client, method, url):
@@ -631,3 +633,27 @@ def test_film_detail_rank_keys_are_null_without_a_session(client, repo):
     trio = repo.film_id_by_key("trio (1950)")
     d = client.get(f"/api/films/{trio}").get_json()
     assert (d["rank_tier"], d["rank_how"], d["awaiting_order"]) == (None, None, False)
+
+
+def test_rank_rerank_route_unplaces_marks_and_the_mark_clears_once_served(rank_client):
+    client, ids = rank_client
+    _start(client)
+    uno = ids["Uno"]
+    _tier_into_1(client, uno)
+    assert client.post("/api/rank/rerank", json={"film_id": "x"}).status_code == 400
+    r = client.post("/api/rank/rerank", json={"film_id": uno})
+    assert r.status_code == 200 and r.get_json() == {"film_id": uno, "from_tier": 1, "marked": True}
+    d = client.get(f"/api/films/{uno}").get_json()
+    assert (d["rank_tier"], d["rank_marked"]) == (None, True)
+    assert client.get("/api/rank/session").get_json()["can_undo"] is False
+    assert client.post("/api/rank/rerank", json={"film_id": uno}).status_code == 409           # not placed now
+    assert client.post("/api/rank/rerank", json={"film_id": ids["Ten"]}).status_code == 409    # tier 1's anchor
+    # Asked again from scratch, never re-seeded; the mark stays until placed AND ordered.
+    _tier_into_1(client, uno)
+    d = client.get(f"/api/films/{uno}").get_json()
+    assert (d["rank_tier"], d["rank_how"], d["awaiting_order"], d["rank_marked"]) == (1, "compared", True, True)
+    pair = client.get("/api/rank/order?tier=1").get_json()["pair"]
+    body = {"tier": 1, "film_id": pair["candidate"]["film_id"], "other_film_id": pair["other"]["film_id"], "verdict": "worse"}
+    assert client.post("/api/rank/order/verdict", json=body).status_code == 200
+    d = client.get(f"/api/films/{uno}").get_json()
+    assert (d["awaiting_order"], d["rank_marked"]) == (False, False)

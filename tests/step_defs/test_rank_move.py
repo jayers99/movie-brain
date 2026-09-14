@@ -10,9 +10,11 @@ from movie_brain.application.rank import (
     move_film,
     order_state,
     order_verdict,
+    pass_film,
     proposal,
     rank_status,
     record_verdict,
+    rerank_film,
     session_state,
     start_session,
     undo,
@@ -216,3 +218,100 @@ def old_pair_refused(ctx, status):
     with pytest.raises(RankError) as e:
         order_verdict(ctx["repo"], SRC, 1, old["candidate"]["film_id"], old["other"]["film_id"], "better", TODAY)
     assert e.value.status == status
+
+
+def _rerank(ctx, fid):
+    ctx["moved"] = fid
+    ctx["result"] = rerank_film(ctx["repo"], SRC, fid, TODAY)
+
+
+@when(parsers.parse("the film at position {p:d} is re-ranked from the drawer"))
+def rerank_at_position(ctx, p):
+    _rerank(ctx, ctx["repo"].rank_order(_sid(ctx), 1)[p - 1])
+
+
+@when(parsers.parse('"{title}" is re-ranked from the drawer'))
+def rerank_title(ctx, title):
+    _rerank(ctx, _id(ctx, title))
+
+
+@when(parsers.parse('"{title}" is answered worse than every anchor'))
+def worse_than_every_anchor(ctx, title):
+    fid = _id(ctx, title)
+    for _ in range(8):
+        s = session_state(ctx["repo"], SRC, TODAY)
+        if fid in ctx["repo"].rank_placements(_sid(ctx)):
+            return
+        cand = s["pair"]["candidate"]["film_id"]
+        if cand != fid:   # another unplaced pool film (Uno) leads the shuffle: defer it, keep it unplaced
+            pass_film(ctx["repo"], SRC, cand, False, False, TODAY)
+            continue
+        record_verdict(ctx["repo"], SRC, fid, s["pair"]["tier"], "worse", TODAY)
+    assert fid in ctx["repo"].rank_placements(_sid(ctx))
+
+
+@when(parsers.parse('"{title}" is inserted into the tier 1 order'))
+def insert_into_order(ctx, title):
+    fid = _id(ctx, title)
+    for _ in range(10):
+        pair = _order(ctx)["pair"]   # an empty order free-inserts the first film with no click (O7)
+        if fid in ctx["repo"].rank_order(_sid(ctx), 1):
+            return
+        assert pair is not None and pair["candidate"]["film_id"] == fid
+        order_verdict(ctx["repo"], SRC, 1, fid, pair["other"]["film_id"], "worse", TODAY)
+    raise AssertionError("ten verdicts and still not inserted")
+
+
+@then("the re-ranked film is not placed and is marked")
+def reranked_state(ctx):
+    assert ctx["moved"] not in ctx["repo"].rank_placements(_sid(ctx))
+    assert ctx["moved"] in ctx["repo"].rank_mark_film_ids()
+
+
+@then(parsers.parse("the re-rank reported from tier {t:d}"))
+def rerank_reported(ctx, t):
+    assert ctx["result"] == {"film_id": ctx["moved"], "from_tier": t, "marked": True}
+
+
+@then("the next reads do not re-seed the re-ranked film")
+def not_reseeded_after_rerank(ctx):
+    session_state(ctx["repo"], SRC, TODAY)
+    _order(ctx, 1)
+    assert ctx["moved"] not in ctx["repo"].rank_placements(_sid(ctx))
+    assert ctx["moved"] in ctx["repo"].rank_mark_film_ids()
+
+
+@then("the re-ranked film is in the tiering queue")
+def in_tiering_queue(ctx):
+    s = session_state(ctx["repo"], SRC, TODAY)
+    assert s["remaining"] >= 1 and s["pair"] is not None
+    # Uno is the other unplaced pool film; answer whichever leads until the re-ranked film is asked.
+    for _ in range(6):
+        s = session_state(ctx["repo"], SRC, TODAY)
+        if s["pair"]["candidate"]["film_id"] == ctx["moved"]:
+            return
+        record_verdict(ctx["repo"], SRC, s["pair"]["candidate"]["film_id"], s["pair"]["tier"], "worse", TODAY)
+    raise AssertionError("the re-ranked film was never asked")
+
+
+@then(parsers.parse('"{title}" is placed in tier {tier:d} and its mark is gone'))
+def placed_mark_gone(ctx, title, tier):
+    fid = _id(ctx, title)
+    session_state(ctx["repo"], SRC, TODAY)   # the sweep runs on read
+    assert ctx["repo"].rank_placements(_sid(ctx))[fid][0] == tier
+    assert fid not in ctx["repo"].rank_mark_film_ids()
+
+
+@then(parsers.parse('"{title}" is placed in tier {tier:d} and still marked'))
+def placed_still_marked(ctx, title, tier):
+    fid = _id(ctx, title)
+    session_state(ctx["repo"], SRC, TODAY)
+    assert ctx["repo"].rank_placements(_sid(ctx))[fid][0] == tier
+    assert fid in ctx["repo"].rank_mark_film_ids()
+
+
+@then(parsers.parse('re-ranking "{title}" is refused with {status:d} "{fragment}"'))
+def rerank_refused(ctx, title, status, fragment):
+    with pytest.raises(RankError) as e:
+        rerank_film(ctx["repo"], SRC, _id(ctx, title), TODAY)
+    assert e.value.status == status and fragment in e.value.message

@@ -459,3 +459,35 @@ def test_a_moved_placement_dies_on_unseen_and_survives_a_merge(repo):
     loser = _film(repo, "T2", 1953)               # same title, no rank rows of its own
     repo.merge_film(loser, c, D)
     assert repo.rank_placements(sid)[c] == (2, "moved")
+
+
+def test_rerank_placement_unplaces_purges_the_sessions_rows_and_sets_the_mark(repo):
+    sid, (a, b, c, d) = _order_session(repo)
+    repo.insert_ordered(sid, 1, a, 0, D)
+    repo.insert_ordered(sid, 1, b, 1, D)
+    repo.append_order_comparison(sid, 1, d, b, "better", D)
+    repo.append_comparison(sid, b, a, 1, "better", D)
+    repo.append_comparison(sid, c, b, 1, "worse", D)     # names b as an ANCHOR: the log keeps it
+    repo.defer_film(sid, b, "2026-09-13")
+    other = repo.create_rank_session("list", 2, {1: a}, {a: 1, b: 1}, D)
+    repo.insert_ordered(other, 1, b, 0, D)
+    repo.rerank_placement(sid, b, D)
+    assert b not in repo.rank_placements(sid)
+    assert repo.verdicts_for(sid, b) == [] and repo.verdicts_for(sid, c) == ["worse"]
+    assert repo.rank_deferrals(sid) == {}
+    assert repo.rank_order(sid, 1) == [a] and repo.order_verdicts_for(sid, d) == []
+    assert repo.rank_mark_film_ids() == {b}
+    assert repo.rank_placements(other)[b] == (1, "seed") and repo.rank_order(other, 1) == [b]
+
+
+def test_clear_served_marks_keeps_pending_requests_and_drops_served_ones(repo):
+    sid, (a, b, c, d) = _order_session(repo)          # all four placed in tier 1
+    e = _film(repo, "E", 1970)
+    for f in (a, b, c, d, e):
+        repo.set_rank_mark(f, True, D)
+    repo.insert_ordered(sid, 1, a, 0, D)               # a: placed + ordered → served
+    repo.move_placement(sid, c, 3, D)                  # c: tier 3 is not ordered → served on placement
+    repo.rerank_placement(sid, d, D)                   # d: unplaced, pending
+    assert repo.clear_served_marks(sid, (1, 2)) == 2
+    assert repo.rank_mark_film_ids() == {b, d, e}      # b awaits its order, d awaits the Tiers tab, e is a plain pool ticket
+    assert repo.clear_served_marks(sid, (1, 2)) == 0

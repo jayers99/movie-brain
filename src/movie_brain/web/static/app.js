@@ -420,14 +420,26 @@
   // "Rank this" is the drawer's one signal that the ranker still owes the film a pass (move-tier
   // spec M4): lit for a pool mark OR while an ordered tier has yet to insert a moved film, and
   // disabled in the second case so a click cannot un-press what should stay lit.
+  // Four states, one button (M12, owner ruling 2026-09-14: the mark means "this ranking is
+  // wrong, ask me again", and it comes off once served): unplaced + unmarked = pool ticket;
+  // unplaced + marked = lit, click un-marks; placed + awaiting order = lit + disabled; placed +
+  // ordered = unlit, click RE-RANKS (the Tiers tab asks it again from scratch).
+  function rankToggleState(marked, awaiting, tier) {
+    const placed = tier != null;
+    const pressed = (marked && !placed) || awaiting;
+    const title = awaiting ? `Waiting for Order tier ${tier}` : placed ? 'Re-rank this film (the ranker asks you again)' : "Rank this film (puts it in the ranker's pool)";
+    return { pressed, disabled: !!awaiting, placed, title };
+  }
   function rankToggleAttrs(marked, awaiting, tier) {
-    const pressed = marked || awaiting ? 'true' : 'false';
-    return awaiting ? ` aria-pressed="${pressed}" disabled title="Waiting for Order tier ${tier}"` : ` aria-pressed="${pressed}" title="Rank this film (puts it in the ranker's pool)"`;
+    const st = rankToggleState(marked, awaiting, tier);
+    return ` aria-pressed="${st.pressed ? 'true' : 'false'}" data-placed="${st.placed ? '1' : ''}"${st.disabled ? ' disabled' : ''} title="${st.title}"`;
   }
   function paintRankToggle(btn, marked, awaiting, tier) {
-    btn.setAttribute('aria-pressed', marked || awaiting ? 'true' : 'false');
-    btn.disabled = !!awaiting;
-    btn.title = awaiting ? `Waiting for Order tier ${tier}` : "Rank this film (puts it in the ranker's pool)";
+    const st = rankToggleState(marked, awaiting, tier);
+    btn.setAttribute('aria-pressed', st.pressed ? 'true' : 'false');
+    btn.dataset.placed = st.placed ? '1' : '';
+    btn.disabled = st.disabled;
+    btn.title = st.title;
   }
   let toastTimer;
   function toast(msg) {
@@ -732,12 +744,21 @@
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.rank-toggle'); if (!b) return;
+    const film = state.films.find((f) => f.id === Number(b.dataset.id));
+    if (b.dataset.placed === '1') {   // placed and ordered: the click is a re-rank, not a mark
+      const r = await fetch('/api/rank/rerank', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ film_id: Number(b.dataset.id) }) });
+      const json = await r.json().catch(() => ({}));
+      if (!r.ok) { toast(json.error || 'Could not re-rank the film'); return; }
+      const row = body.querySelector('.tier-row'); if (row) row.remove();   // unplaced now: no tier to move
+      paintRankToggle(b, true, false, null);
+      if (film) film.rank_marked = true;
+      return;
+    }
     const next = b.getAttribute('aria-pressed') !== 'true';
     const r = await fetch(`/api/films/${b.dataset.id}/rank-mark`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ marked: next }) });
     if (!r.ok) { toast('Could not update rank mark'); return; }
     const { marked } = await r.json();
-    b.setAttribute('aria-pressed', String(marked));
-    const film = state.films.find((f) => f.id === Number(b.dataset.id));
+    paintRankToggle(b, marked, false, null);
     if (film) film.rank_marked = marked;
   });
   async function commitRevisitNote(input) {

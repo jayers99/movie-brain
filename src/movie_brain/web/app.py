@@ -223,6 +223,14 @@ def create_app(
             raise RankError(400, 'body must be JSON {"film_id": int, "tier": int}')
         return jsonify(ranker.move_film(repo, RANK_SOURCE, film_id, tier, today()))
 
+    @app.post("/api/rank/rerank")
+    def rank_rerank() -> Response:
+        body = _json_object()
+        film_id = body.get("film_id")
+        if not isinstance(film_id, int):
+            raise RankError(400, 'body must be JSON {"film_id": int}')
+        return jsonify(ranker.rerank_film(repo, RANK_SOURCE, film_id, today()))
+
     @app.post("/api/rank/save")
     def rank_save() -> Response:
         body = _json_object()

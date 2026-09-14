@@ -125,3 +125,26 @@ def test_list_picker_leads_with_the_owners_own_list(page: Page, move_server):
     page.wait_for_selector("#films tbody[data-count]")
     labels = page.locator("#list-picker option").all_inner_texts()
     assert labels[:3] == ["— all films —", "My Ranking (8)", "AAA Canon (1)"]
+
+
+def test_drawer_rank_this_on_a_placed_film_re_ranks_it(page: Page, move_server):
+    url, ids = move_server
+    # Order tier 1's current candidate through the API so a placed AND ordered non-anchor exists.
+    pair = page.request.get(url + "/api/rank/order?tier=1").json()["pair"]
+    fid = pair["candidate"]["film_id"]
+    body = {"tier": 1, "film_id": fid, "other_film_id": pair["other"]["film_id"], "verdict": "worse"}
+    assert page.request.post(url + "/api/rank/order/verdict", data=body).ok
+    order = page.request.get(url + "/api/rank/order?tier=1").json()
+    assert not page.request.get(f"{url}/api/films/{fid}").json()["awaiting_order"]
+    page.goto(f"{url}/?film={fid}")
+    body = page.locator("#drawer-body")
+    rank = body.locator("button.rank-toggle")
+    expect(rank).to_have_attribute("aria-pressed", "false")
+    expect(rank).to_have_attribute("title", "Re-rank this film (the ranker asks you again)")
+    expect(body.locator(".tier-row")).to_have_count(1)
+    rank.click()
+    expect(rank).to_have_attribute("aria-pressed", "true")
+    expect(body.locator(".tier-row")).to_have_count(0)
+    d = page.request.get(f"{url}/api/films/{fid}").json()
+    assert d["rank_tier"] is None and d["rank_marked"] is True
+    assert order["ordered"] - 1 == page.request.get(url + "/api/rank/order?tier=1").json()["ordered"]
