@@ -143,15 +143,17 @@
     return renderPair();
   };
 
+  // Every action re-reads the state even when the request fails: the pair on screen can be
+  // stale — its candidate moved to another tier from the dashboard drawer (move-tier spec
+  // M10) — and the server's 409 must be followed by a fresh pair, not the same dead one.
+  const act = async (fn) => { try { await fn(); } finally { await refresh(); } };
   const verdict = async (side) => {
     if (isOrder()) {
       const o = state.order; if (!o || !o.pair) return;
-      await api('POST', '/api/rank/order/verdict', { tier: orderTier(), film_id: o.pair.candidate.film_id, other_film_id: o.pair.other.film_id, verdict: side === 'candidate' ? 'better' : 'worse' });
-      return refresh();
+      return act(() => api('POST', '/api/rank/order/verdict', { tier: orderTier(), film_id: o.pair.candidate.film_id, other_film_id: o.pair.other.film_id, verdict: side === 'candidate' ? 'better' : 'worse' }));
     }
     const s = state.session; if (!s || !s.pair) return;
-    await api('POST', '/api/rank/verdict', { film_id: s.pair.candidate.film_id, anchor_tier: s.pair.tier, verdict: side === 'candidate' ? 'better' : 'worse' });
-    await refresh();
+    return act(() => api('POST', '/api/rank/verdict', { film_id: s.pair.candidate.film_id, anchor_tier: s.pair.tier, verdict: side === 'candidate' ? 'better' : 'worse' }));
   };
   // One request serves both: a plain Pass defers the candidate; "Have not seen" on a side
   // is that same pass with the side's flag set, sent at once (owner ruling 2026-09-13 —
@@ -159,15 +161,13 @@
   const pass = async (unseen = {}) => {
     if (isOrder()) {
       const o = state.order; if (!o || !o.pair) return;
-      await api('POST', '/api/rank/order/pass', { tier: orderTier(), film_id: o.pair.candidate.film_id });
-      return refresh();
+      return act(() => api('POST', '/api/rank/order/pass', { tier: orderTier(), film_id: o.pair.candidate.film_id }));
     }
     const s = state.session; if (!s || !s.pair) return;
-    await api('POST', '/api/rank/pass', { film_id: s.pair.candidate.film_id, candidate_unseen: unseen.candidate === true, anchor_unseen: unseen.anchor === true });
-    await refresh();
+    return act(() => api('POST', '/api/rank/pass', { film_id: s.pair.candidate.film_id, candidate_unseen: unseen.candidate === true, anchor_unseen: unseen.anchor === true }));
   };
   const unseen = (side) => (isOrder() ? Promise.resolve() : pass({ [side]: true }));   // O6: inert in order mode
-  const undo = async () => { if ($('#undo').disabled) return; await api('POST', '/api/rank/undo'); await refresh(); };
+  const undo = async () => { if ($('#undo').disabled) return; return act(() => api('POST', '/api/rank/undo')); };
 
   $('#pair').addEventListener('click', (e) => {
     const better = e.target.closest('button.better'); if (better) return enqueue(() => verdict(better.dataset.side));

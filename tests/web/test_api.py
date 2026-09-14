@@ -486,6 +486,7 @@ def test_rank_routes_404_without_a_session(rank_client):
     assert client.post("/api/rank/verdict", json={"film_id": 1, "anchor_tier": 3, "verdict": "better"}).status_code == 404
     assert client.post("/api/rank/undo").status_code == 404
     assert client.post("/api/rank/save", json={}).status_code == 404
+    assert client.post("/api/rank/move", json={"film_id": 1, "tier": 2}).status_code == 404
 
 
 def test_unseen_toggle_route(client, repo):
@@ -506,6 +507,7 @@ def test_unseen_toggle_route(client, repo):
         ("post", "/api/rank/pass"),
         ("put", "/api/rank/anchor"),
         ("post", "/api/rank/save"),
+        ("post", "/api/rank/move"),
     ],
 )
 def test_rank_routes_reject_a_non_object_body(rank_client, method, url):
@@ -580,3 +582,52 @@ def test_rank_mark_toggle_route(client, repo):
     assert client.put(f"/api/films/{trio}/rank-mark", json={"marked": False}).get_json() == {"marked": False}
     assert client.put(f"/api/films/{trio}/rank-mark", json={}).status_code == 400
     assert client.put("/api/films/999/rank-mark", json={"marked": True}).status_code == 404
+
+
+def _tier_into_1(client, fid):
+    for _ in range(2):
+        s = client.get("/api/rank/session").get_json()
+        assert s["pair"]["candidate"]["film_id"] == fid
+        client.post("/api/rank/verdict", json={"film_id": fid, "anchor_tier": s["pair"]["tier"], "verdict": "better"})
+
+
+def test_rank_move_route_moves_and_the_detail_route_reports_it(rank_client):
+    client, ids = rank_client
+    _start(client)
+    uno = ids["Uno"]
+    _tier_into_1(client, uno)
+    assert client.get(f"/api/films/{uno}").get_json()["rank_tier"] == 1
+    r = client.post("/api/rank/move", json={"film_id": uno, "tier": 2})
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json() == {"film_id": uno, "tier": 2, "from_tier": 1, "awaiting_order": True}
+    detail = client.get(f"/api/films/{uno}").get_json()
+    assert (detail["rank_tier"], detail["rank_how"], detail["awaiting_order"]) == (2, "moved", True)
+    assert client.get("/api/rank/session").get_json()["can_undo"] is False   # M6
+    # Detail-only (M7): the list payload never carries the three keys.
+    row = next(f for f in client.get("/api/films").get_json() if f["id"] == uno)
+    assert not {"rank_tier", "rank_how", "awaiting_order"} & row.keys()
+    # Tier 2's order was empty, so the first read inserts one of its two films with no click
+    # (O7) and asks the other against it; one verdict orders both, and awaiting clears.
+    pair = client.get("/api/rank/order?tier=2").get_json()["pair"]
+    assert uno in {pair["candidate"]["film_id"], pair["other"]["film_id"]}
+    body = {"tier": 2, "film_id": pair["candidate"]["film_id"], "other_film_id": pair["other"]["film_id"], "verdict": "better"}
+    assert client.post("/api/rank/order/verdict", json=body).status_code == 200
+    assert client.get(f"/api/films/{uno}").get_json()["awaiting_order"] is False
+
+
+def test_rank_move_route_shape_and_refusals(rank_client):
+    client, ids = rank_client
+    _start(client)
+    r = client.post("/api/rank/move", json={"film_id": "x", "tier": 2})
+    assert r.status_code == 400 and '"film_id": int, "tier": int' in r.get_json()["error"]
+    assert client.post("/api/rank/move", json={"film_id": ids["Ten"], "tier": 6}).status_code == 400
+    r = client.post("/api/rank/move", json={"film_id": 999, "tier": 2})
+    assert r.status_code == 409 and "not placed" in r.get_json()["error"]
+    r = client.post("/api/rank/move", json={"film_id": ids["Ten"], "tier": 2})   # tier 1's anchor
+    assert r.status_code == 409 and "swap the anchor first" in r.get_json()["error"]
+
+
+def test_film_detail_rank_keys_are_null_without_a_session(client, repo):
+    trio = repo.film_id_by_key("trio (1950)")
+    d = client.get(f"/api/films/{trio}").get_json()
+    assert (d["rank_tier"], d["rank_how"], d["awaiting_order"]) == (None, None, False)

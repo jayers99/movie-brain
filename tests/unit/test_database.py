@@ -2406,3 +2406,34 @@ def test_film_credits_and_overview_are_none_for_an_unenriched_film(repo):
     fid = repo.create_film(Film("Bare", 2000, None, ""))
     assert repo.film_credits(fid) is None
     assert repo.overview_for(fid) is None
+
+
+def test_migration_025_rebuilds_rank_placement_keeping_rows_keys_and_check(tmp_path):
+    """025 widens `rank_placement.how` to admit 'moved' (move-tier spec M9). SQLite cannot ALTER
+    a CHECK, so it is a table rebuild: every row, the composite PK and both FKs must survive."""
+    p = tmp_path / "old.db"
+    conn = sqlite3.connect(p)
+    for mig in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if int(mig.name[:3]) <= 24:
+            conn.executescript(mig.read_text())
+    conn.execute("INSERT INTO films (id, title, year, key, guid) VALUES (1, 'Trio', 1950, 'trio (1950)', 'g1')")
+    conn.execute("INSERT INTO films (id, title, year, key, guid) VALUES (2, 'Quartet', 1948, 'quartet (1948)', 'g2')")
+    conn.execute("INSERT INTO films (id, title, year, key, guid) VALUES (3, 'Duet', 1947, 'duet (1947)', 'g3')")
+    conn.execute("INSERT INTO rank_session (id, source, seed, started_on) VALUES (7, 'owned', 1, '2026-09-13')")
+    rows = [(7, 1, 1, "seed", "2026-09-13"), (7, 2, 2, "compared", "2026-09-13"), (7, 3, 3, "anchor", "2026-09-13")]
+    conn.executemany("INSERT INTO rank_placement VALUES (?, ?, ?, ?, ?)", rows)
+    conn.commit()
+    conn.close()
+    init_db(p, apply=True)
+    conn = sqlite3.connect(p)
+    assert conn.execute("SELECT * FROM rank_placement ORDER BY film_id").fetchall() == rows
+    conn.execute("INSERT OR REPLACE INTO rank_placement VALUES (7, 1, 2, 'moved', '2026-09-14')")  # place_film's shape
+    assert conn.execute("SELECT tier, how FROM rank_placement WHERE film_id = 1").fetchone() == (2, "moved")
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO rank_placement VALUES (7, 2, 1, 'bogus', '2026-09-14')")
+    with pytest.raises(sqlite3.IntegrityError):   # the composite PK survived the rebuild
+        conn.execute("INSERT INTO rank_placement VALUES (7, 2, 1, 'seed', '2026-09-14')")
+    fks = {r[2] for r in conn.execute("PRAGMA foreign_key_list(rank_placement)")}
+    assert fks == {"rank_session", "films"}
+    assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 25
+    conn.close()

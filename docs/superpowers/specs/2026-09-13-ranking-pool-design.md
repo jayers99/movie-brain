@@ -62,6 +62,7 @@ Seven `rank_placement` rows in the live session have `how = 'seed'` and a score 
 
 - A film rated 0–5 from the drawer after being placed or ordered, or a marked film unmarked after placement: it leaves the POOL on the next read, which today changes only the tiering queue (it is never asked again). Its placement, its order position, any anchor seat it holds and its line in the saved list all STAY until it is marked unseen — `_order_queue`, `save_list` and `needs_anchor` read placements, not the pool. Deferred to Phase B: whether leaving the pool should cascade like unseen does; cascading a rating change into ranker tables would make ratings a writer of them, which the tiering spec avoided.
 - A pool film later disposed: excluded by the existing disposed guard everywhere; its rows stay as with any tombstone.
+- A placed film in the wrong tier (the 1/2 seam, where a 10 seeded tier 1 and a 9 seeded tier 2 with no comparison between them): moved by hand from the drawer since 2026-09-14 — `2026-09-14-move-tier-design.md`, which leaves the old order entirely and waits unordered in the new tier.
 - The proposal (before a session exists) reads the pool, so a first session on a fresh DB with marks and no owned films still gets anchors.
 - `undo` falls back to tier 1 when a stored `last_action` carries no `tier` (rows written before this phase, when order mode had only tier 1).
 - `start_session` and `swap_anchor` accept any pool film as an anchor, not only an owned one — an anchor is just a pool film the owner has seen.
