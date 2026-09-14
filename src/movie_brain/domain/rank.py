@@ -20,7 +20,7 @@ VERDICTS = ("better", "worse")  # the CANDIDATE is better/worse than the anchor 
 # The ranker's own lists: not backed by lists/<slug>.tsv, refused by `lists import` (§7).
 RANKER_SLUGS: dict[str, str] = {"owned": "my-owned-tiers"}
 RANKER_LIST_SLUGS: frozenset[str] = frozenset(RANKER_SLUGS.values())
-DEFAULT_LIST_NAME: dict[str, str] = {"owned": "My films, tiered"}
+DEFAULT_LIST_NAME: dict[str, str] = {"owned": "My Ranked"}
 
 
 def tier_for_score(score: int) -> int:
