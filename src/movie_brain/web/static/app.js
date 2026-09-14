@@ -290,8 +290,11 @@
   function populateLists() {
     const by = new Map();
     state.films.forEach((f) => (f.lists || []).forEach((l) => { if (!by.has(l.slug)) by.set(l.slug, l); }));
+    // The owner's own lists first (the ranker saves with curator "me"; 2026-09-14 ruling — "My
+    // Ranked" is the list opened most and trust is a canon weight, not a shelf position), then
     // trust desc then name — the order `movie-brain lists trust` prints and the drawer uses.
-    state.listCatalog = [...by.values()].sort((a, b) => b.trust - a.trust || a.name.localeCompare(b.name));
+    const mine = (l) => (l.curator === 'me' ? 1 : 0);
+    state.listCatalog = [...by.values()].sort((a, b) => mine(b) - mine(a) || b.trust - a.trust || a.name.localeCompare(b.name));
     // The label is the list's NAME, which the owner writes in the file header to read well here
     // ("BFI: 100 Film Noir") and which is unique by construction — the earlier "curator published"
     // form ("Cahiers du Cinéma 2008") collided on the two 1992 Sight & Sound polls and had to
