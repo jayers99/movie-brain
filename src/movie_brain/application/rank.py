@@ -444,6 +444,45 @@ def swap_anchor(repo: Repository, source: str, tier: int, film_id: int, today: d
     return session_state(repo, source, today)
 
 
+def move_film(repo: Repository, source: str, film_id: int, tier: int, today: date) -> dict[str, object]:
+    """Move-tier spec M1–M6: set a placed film's tier by hand from the drawer. The film leaves
+    its old tier's order entirely and waits unordered in the new one for the Order tab; the
+    rank page's one-level undo is cleared rather than joined (a stale undo of a `verdict`
+    carrying `placed_tier` would unplace the film and `_seed_new` would re-seed it)."""
+    if tier not in range(1, TIERS + 1):
+        raise RankError(400, "tier must be 1–5")
+    s = _session(repo, source)
+    placed = repo.rank_placement_for(s.id, film_id)
+    if placed is None:
+        raise RankError(409, "that film is not placed — the ranker has not tiered it")
+    from_tier = placed[0]
+    if repo.rank_anchors(s.id).get(from_tier) == film_id:
+        raise RankError(409, f"that film anchors tier {from_tier} — swap the anchor first")
+    if from_tier == tier:
+        raise RankError(409, f"that film is already in tier {tier}")
+    repo.move_placement(s.id, film_id, tier, today)
+    repo.set_last_action(s.id, None)
+    return {"film_id": film_id, "tier": tier, "from_tier": from_tier, "awaiting_order": tier in ORDER_TIERS}
+
+
+def rank_status(repo: Repository, source: str, film_id: int) -> dict[str, object]:
+    """The drawer's view of one film in the open session (move-tier spec M4/M7): its tier and
+    how it got there, and whether an ordered tier still owes it an insertion — derived from
+    `rank_order` on every read, never stored. A READ: it never seeds or inserts, so a film
+    rated since the last rank-page load reports no tier until `/rank` is next opened."""
+    _check_source(source)
+    none: dict[str, object] = {"tier": None, "how": None, "awaiting_order": False}
+    s = repo.open_rank_session(source)
+    if s is None:
+        return none
+    placed = repo.rank_placement_for(s.id, film_id)
+    if placed is None:
+        return none
+    tier, how = placed
+    awaiting = tier in ORDER_TIERS and film_id not in repo.rank_order(s.id, tier)
+    return {"tier": tier, "how": how, "awaiting_order": awaiting}
+
+
 def save_list(repo: Repository, source: str, name: str | None, today: date, lists_dir: Path) -> dict[str, object]:
     s = _session(repo, source)
     slug = RANKER_SLUGS[source]

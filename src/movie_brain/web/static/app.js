@@ -414,6 +414,18 @@
   document.addEventListener('click', closeLangPanel);
 
   // ---- toast ----
+  // "Rank this" is the drawer's one signal that the ranker still owes the film a pass (move-tier
+  // spec M4): lit for a pool mark OR while an ordered tier has yet to insert a moved film, and
+  // disabled in the second case so a click cannot un-press what should stay lit.
+  function rankToggleAttrs(marked, awaiting, tier) {
+    const pressed = marked || awaiting ? 'true' : 'false';
+    return awaiting ? ` aria-pressed="${pressed}" disabled title="Waiting for Order tier ${tier}"` : ` aria-pressed="${pressed}" title="Rank this film (puts it in the ranker's pool)"`;
+  }
+  function paintRankToggle(btn, marked, awaiting, tier) {
+    btn.setAttribute('aria-pressed', marked || awaiting ? 'true' : 'false');
+    btn.disabled = !!awaiting;
+    btn.title = awaiting ? `Waiting for Order tier ${tier}` : "Rank this film (puts it in the ranker's pool)";
+  }
   let toastTimer;
   function toast(msg) {
     const t = $('#toast'); t.textContent = msg; t.hidden = false;
@@ -571,8 +583,12 @@
     }
     const credited = d.credits && d.credits.director;
     const director = d.director ? personLink('director', d.director, !!credited, credited || d.director) : '—';
+    // Move-tier spec M4/M7: the tier row exists only for a film the open session has placed
+    // (`rank_tier` is detail-only); a click hands the film to the Order tab, never to a slot.
+    const tierRow = d.rank_tier == null ? '' : `<div class="tier-row"><span class="tier-label">Tier</span>${[1, 2, 3, 4, 5].map((t) => `<button class="tier-pick" data-id="${d.id}" data-tier="${t}"${t === d.rank_tier ? ' aria-current="true"' : ''} title="Move to tier ${t}">${t}</button>`).join('')}</div>`;
     return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
-      <div class="unseen-row"><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" data-id="${d.id}" aria-pressed="${d.rank_marked ? 'true' : 'false'}" title="Rank this film (puts it in the ranker's pool)">Rank this</button></div>
+      <div class="unseen-row"><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" data-id="${d.id}"${rankToggleAttrs(d.rank_marked, d.awaiting_order, d.rank_tier)}>Rank this</button></div>
+      ${tierRow}
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
       <div class="meta">${fmt(d.year)} · ${director}${d.departed ? ' · <b>Gone from Criterion</b>' : ''}</div>
       ${summary ? `<p>${poster}${esc(summary)}</p>` : poster}
@@ -699,6 +715,17 @@
     b.setAttribute('aria-pressed', String(unseen));
     const film = state.films.find((f) => f.id === Number(b.dataset.id));
     if (film) film.unseen = unseen;
+  });
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.tier-pick'); if (!b || b.getAttribute('aria-current') === 'true') return;
+    const r = await fetch('/api/rank/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ film_id: Number(b.dataset.id), tier: Number(b.dataset.tier) }) });
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) { toast(json.error || 'Could not move the film'); return; }
+    // Patch in place, as the toggles do: re-opening the drawer would desync closeDrawer()'s history bookkeeping.
+    for (const p of body.querySelectorAll('.tier-pick')) { if (Number(p.dataset.tier) === json.tier) p.setAttribute('aria-current', 'true'); else p.removeAttribute('aria-current'); }
+    const film = state.films.find((f) => f.id === json.film_id);
+    const rank = body.querySelector('.rank-toggle');
+    if (rank) paintRankToggle(rank, !!(film && film.rank_marked), json.awaiting_order, json.tier);
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.rank-toggle'); if (!b) return;

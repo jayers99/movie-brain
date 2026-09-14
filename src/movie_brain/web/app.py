@@ -39,6 +39,7 @@ def create_app(
     # Named `vector_index`, not `index`, to avoid shadowing the `/` route handler below (same
     # function scope; a closure over `index` would otherwise resolve to that view function).
     vector_index = VectorIndex(repo, embedder) if embedder is not None else None
+    RANK_SOURCE = "owned"  # v1 (tier-ranker spec D7); read by the rank routes AND the film detail
 
     @app.get("/")
     def index() -> str:
@@ -69,7 +70,14 @@ def create_app(
             "credits": credits.to_dict() if credits is not None else None,
             "overview": repo.overview_for(film_id),
             "tmdb_url": f"https://www.themoviedb.org/movie/{ids['tmdb']}" if "tmdb" in ids else None,
+            # Detail-only too (move-tier spec M7): the drawer's tier row and its "Rank this"
+            # awaiting state, derived per read from the open session; a READ, never a seed.
+            **_rank_keys(film_id),
         }), 200
+
+    def _rank_keys(film_id: int) -> dict[str, object]:
+        status = ranker.rank_status(repo, RANK_SOURCE, film_id)
+        return {"rank_tier": status["tier"], "rank_how": status["how"], "awaiting_order": status["awaiting_order"]}
 
     @app.post("/api/films/<int:film_id>/watchlist")
     def toggle_watchlist(film_id: int) -> tuple[Response, int]:
@@ -146,8 +154,6 @@ def create_app(
         result = run_search(repo, q, index=vector_index)
         return jsonify({"q": q, **result.to_dict()}), 200
 
-    RANK_SOURCE = "owned"  # v1 (spec D7)
-
     @app.errorhandler(RankError)
     def rank_error(exc: RankError) -> tuple[Response, int]:
         return jsonify({"error": exc.message}), exc.status
@@ -208,6 +214,14 @@ def create_app(
         if not isinstance(tier, int) or not isinstance(film_id, int):
             raise RankError(400, 'body must be JSON {"tier": int, "film_id": int}')
         return jsonify(ranker.swap_anchor(repo, RANK_SOURCE, tier, film_id, today()))
+
+    @app.post("/api/rank/move")
+    def rank_move() -> Response:
+        body = _json_object()
+        film_id, tier = body.get("film_id"), body.get("tier")
+        if not isinstance(film_id, int) or not isinstance(tier, int):
+            raise RankError(400, 'body must be JSON {"film_id": int, "tier": int}')
+        return jsonify(ranker.move_film(repo, RANK_SOURCE, film_id, tier, today()))
 
     @app.post("/api/rank/save")
     def rank_save() -> Response:

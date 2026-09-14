@@ -402,3 +402,60 @@ def test_merge_onto_an_unseen_survivor_purges_the_losers_order_rows(repo):
     repo.merge_film(b, a, D)
     assert repo.rank_order(sid, 1) == [x]
     assert repo.order_verdicts_for(sid, a) == [] and repo.order_verdicts_for(sid, b) == []
+
+
+# move a film to another tier (spec 2026-09-14-move-tier-design.md M1/M2) ------------------------
+def test_move_placement_keeps_the_row_as_moved_and_purges_the_sessions_order_rows(repo):
+    sid, (a, b, c, d) = _order_session(repo)
+    repo.insert_ordered(sid, 1, a, 0, D)
+    repo.insert_ordered(sid, 1, b, 1, D)
+    repo.insert_ordered(sid, 1, c, 2, D)                         # [a, b, c]
+    repo.append_order_comparison(sid, 1, d, b, "better", D)      # d mid-search, against b
+    repo.append_order_comparison(sid, 1, b, a, "worse", D)       # b's own old verdict
+    repo.defer_order_film(sid, b, "2026-09-13")
+    repo.append_comparison(sid, b, a, 1, "better", D)            # the tiering log is NOT order state
+    repo.move_placement(sid, b, 2, D)
+    assert repo.rank_placements(sid)[b] == (2, "moved")          # replaced in place — never absent, so _seed_new cannot re-seed it
+    assert repo.rank_order(sid, 1) == [a, c] and repo.rank_order(sid, 2) == []
+    with repo._conn() as conn:
+        positions = [r["position"] for r in conn.execute("SELECT position FROM rank_order WHERE session_id = ? ORDER BY position", (sid,))]
+    assert positions == [1, 2]
+    assert repo.order_verdicts_for(sid, d) == []                 # the verdict AGAINST b is gone too
+    assert repo.order_verdicts_for(sid, b) == []
+    assert repo.order_deferrals(sid) == {}
+    assert repo.verdicts_for(sid, b) == ["better"]               # M8: tiering verdicts untouched
+
+
+def test_move_placement_leaves_other_sessions_untouched(repo):
+    sid, (a, b, c, _) = _order_session(repo)
+    other = repo.create_rank_session("list", 2, {1: a}, {a: 1, b: 1, c: 1}, D)   # a second source
+    for s in (sid, other):
+        repo.insert_ordered(s, 1, a, 0, D)
+        repo.insert_ordered(s, 1, b, 1, D)
+        repo.append_order_comparison(s, 1, c, b, "worse", D)
+        repo.defer_order_film(s, b, "2026-09-13")
+    repo.move_placement(sid, b, 3, D)
+    assert repo.rank_order(other, 1) == [a, b]
+    assert repo.order_verdicts_for(other, c) == [(b, "worse")]
+    assert repo.order_deferrals(other) == {b: "2026-09-13"}
+    assert repo.rank_placements(other)[b] == (1, "seed")
+
+
+def test_rank_placement_for_reads_tier_and_how_or_none(repo):
+    sid, (a, b, _, _) = _order_session(repo)
+    assert repo.rank_placement_for(sid, a) == (1, "seed")
+    repo.move_placement(sid, b, 4, D)
+    assert repo.rank_placement_for(sid, b) == (4, "moved")
+    assert repo.rank_placement_for(sid, 999) is None
+    assert repo.rank_placement_for(sid + 1, a) is None
+
+
+def test_a_moved_placement_dies_on_unseen_and_survives_a_merge(repo):
+    sid, (a, b, c, _) = _order_session(repo)
+    repo.move_placement(sid, b, 2, D)
+    repo.set_unseen(b, True, D)
+    assert b not in repo.rank_placements(sid)
+    repo.move_placement(sid, c, 2, D)
+    loser = _film(repo, "T2", 1953)               # same title, no rank rows of its own
+    repo.merge_film(loser, c, D)
+    assert repo.rank_placements(sid)[c] == (2, "moved")

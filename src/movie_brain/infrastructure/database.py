@@ -2794,12 +2794,41 @@ class Repository:
             return {int(r["film_id"]): str(r["deferred_on"]) for r in rows}
 
     @staticmethod
-    def _purge_order_rows(c: sqlite3.Connection, film_id: int) -> None:
-        """Everything the order knows about a film that has left it (spec §4.4): its row in
-        every session (gaps closed), every verdict naming it on EITHER side, its deferrals."""
-        Repository._remove_ordered(c, film_id)
-        c.execute("DELETE FROM rank_order_comparison WHERE film_id = ? OR other_film_id = ?", (film_id, film_id))
-        c.execute("DELETE FROM rank_order_deferral WHERE film_id = ?", (film_id,))
+    def _purge_order_rows(c: sqlite3.Connection, film_id: int, session_id: int | None = None) -> None:
+        """Everything the order knows about a film that has left it (spec §4.4): its row (gaps
+        closed), every verdict naming it on EITHER side, its deferrals — in every session by
+        default (unseen), or in ONE when a move changes that session's placement alone
+        (move-tier spec M2: finished sessions' logs stay intact)."""
+        Repository._remove_ordered(c, film_id, session_id)
+        scope = "" if session_id is None else " AND session_id = ?"
+        args: tuple[int, ...] = (film_id, film_id) if session_id is None else (film_id, film_id, session_id)
+        c.execute(f"DELETE FROM rank_order_comparison WHERE (film_id = ? OR other_film_id = ?){scope}", args)
+        c.execute(
+            f"DELETE FROM rank_order_deferral WHERE film_id = ?{scope}",
+            (film_id,) if session_id is None else (film_id, session_id),
+        )
+
+    def move_placement(self, session_id: int, film_id: int, tier: int, today: date) -> None:
+        """Move-tier spec M1/M2, one transaction: the placement row is REPLACED (never absent,
+        so `_seed_new` cannot re-seed the film back to its rating's tier between two reads)
+        with `how = 'moved'`, and the film leaves this session's order entirely — the candidate
+        log has no tier filter and deferrals no tier column, so a film moved 1→2 would otherwise
+        arrive in tier 2 mid-insertion and deferred-last. The tiering log is not order state
+        and is left alone (M8)."""
+        with self._conn() as c:
+            c.execute(
+                "INSERT OR REPLACE INTO rank_placement (session_id, film_id, tier, how, placed_on) "
+                "VALUES (?, ?, ?, 'moved', ?)",
+                (session_id, film_id, tier, today.isoformat()),
+            )
+            self._purge_order_rows(c, film_id, session_id)
+
+    def rank_placement_for(self, session_id: int, film_id: int) -> tuple[int, str] | None:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT tier, how FROM rank_placement WHERE session_id = ? AND film_id = ?", (session_id, film_id)
+            ).fetchone()
+            return None if row is None else (int(row["tier"]), str(row["how"]))
 
     def set_last_action(self, session_id: int, action: dict[str, object] | None) -> None:
         with self._conn() as c:

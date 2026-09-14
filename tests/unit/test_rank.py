@@ -201,3 +201,14 @@ def test_tiered_entries_without_an_order_is_unchanged():
     placed = [Placed(11, 1, "Zulu", None), Placed(12, 1, "Alpha", None)]
     assert tiered_entries(placed) == tiered_entries(placed, {})
     assert [e.rank_label for e in tiered_entries(placed)] == ["=1", "=1"]
+
+
+def test_tiered_entries_ties_a_moved_unordered_film_at_the_first_unordered_line():
+    """Move-tier spec M3: a film moved into an ordered tier has no position yet, so Save ties
+    it with that tier's other unordered films — `tiered_entries` needs no notion of `how`."""
+    placed = [Placed(11, 1, "Zulu", "Z"), Placed(12, 1, "Alpha", "A"), Placed(96, 1, "The Shining", "K")]
+    got = tiered_entries(placed, {11: 1, 12: 2})
+    assert [(e.rank, e.film_id, e.rank_label) for e in got] == [(1, 11, None), (2, 12, None), (3, 96, None)]
+    placed.append(Placed(97, 1, "Also Moved", "M"))
+    got = tiered_entries(placed, {11: 1, 12: 2})
+    assert [(e.rank, e.film_id, e.rank_label) for e in got][2:] == [(3, 97, "=3"), (4, 96, "=3")]
