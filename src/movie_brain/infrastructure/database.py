@@ -2823,6 +2823,38 @@ class Repository:
             )
             self._purge_order_rows(c, film_id, session_id)
 
+    def rerank_placement(self, session_id: int, film_id: int, today: date) -> None:
+        """Re-rank (move-tier spec M12): the owner says this film's ranking is wrong. One
+        transaction: its placement, its own tiering verdicts and its tiering deferral in this
+        session go, so the Tiers tab asks it from scratch; it leaves the order the way a move
+        does (M2); and the mark is SET — the mark is the pending request, it holds a film the
+        owner neither owns nor rated in the pool through the round trip, and it is what stops
+        `_seed_new` seeding a rated film straight back into its old tier."""
+        with self._conn() as c:
+            c.execute("DELETE FROM rank_placement WHERE session_id = ? AND film_id = ?", (session_id, film_id))
+            c.execute("DELETE FROM rank_comparison WHERE session_id = ? AND film_id = ?", (session_id, film_id))
+            c.execute("DELETE FROM rank_deferral WHERE session_id = ? AND film_id = ?", (session_id, film_id))
+            self._purge_order_rows(c, film_id, session_id)
+            c.execute(
+                "INSERT OR IGNORE INTO rank_mark (film_id, marked_on) VALUES (?, ?)", (film_id, today.isoformat())
+            )
+
+    def clear_served_marks(self, session_id: int, order_tiers: Sequence[int]) -> int:
+        """Move-tier spec M13: a mark is a pending request, cleared once the ranker has served
+        it — the film is placed in this session and, for an ordered tier, inserted into its
+        order. Returns the number cleared."""
+        with self._conn() as c:
+            tiers = ", ".join("?" * len(order_tiers)) or "NULL"
+            cur = c.execute(
+                "DELETE FROM rank_mark WHERE film_id IN ("
+                "  SELECT p.film_id FROM rank_placement p WHERE p.session_id = ? AND ("
+                f"    p.tier NOT IN ({tiers}) OR EXISTS ("
+                "      SELECT 1 FROM rank_order o"
+                "      WHERE o.session_id = p.session_id AND o.tier = p.tier AND o.film_id = p.film_id)))",
+                (session_id, *order_tiers),
+            )
+            return int(cur.rowcount)
+
     def rank_placement_for(self, session_id: int, film_id: int) -> tuple[int, str] | None:
         with self._conn() as c:
             row = c.execute(

@@ -142,11 +142,13 @@ def _seed_new(repo: Repository, s: RankSession, today: date) -> int:
     this session is placed in its tier as a seed. A film rated after the session started, or
     admitted by a widened pool, is never asked."""
     placed = repo.rank_placements(s.id)
+    marked = repo.rank_mark_film_ids()   # a mark is a pending "ask me" (M12): never seed one past the Tiers tab
     n = 0
     for f in repo.pool_seed_films():
-        if f.film_id not in placed:
+        if f.film_id not in placed and f.film_id not in marked:
             repo.place_film(s.id, f.film_id, tier_for_score(f.score), "seed", today)
             n += 1
+    repo.clear_served_marks(s.id, ORDER_TIERS)   # M13: served requests drop their mark on the next read
     return n
 
 
@@ -463,6 +465,24 @@ def move_film(repo: Repository, source: str, film_id: int, tier: int, today: dat
     repo.move_placement(s.id, film_id, tier, today)
     repo.set_last_action(s.id, None)
     return {"film_id": film_id, "tier": tier, "from_tier": from_tier, "awaiting_order": tier in ORDER_TIERS}
+
+
+def rerank_film(repo: Repository, source: str, film_id: int, today: date) -> dict[str, object]:
+    """Move-tier spec M12: the owner says a placed film's ranking is wrong. It is unplaced, its
+    tiering verdicts and order rows dropped, and the mark set, so the Tiers tab asks it again
+    by comparison (never re-seeded: `_seed_new` skips marked films) and the Order tab inserts
+    it afterwards; the mark clears itself once both have happened (M13). An anchor is refused
+    like a move; the rank page's undo is cleared like a move."""
+    s = _session(repo, source)
+    placed = repo.rank_placement_for(s.id, film_id)
+    if placed is None:
+        raise RankError(409, "that film is not placed — the ranker has not tiered it")
+    from_tier = placed[0]
+    if repo.rank_anchors(s.id).get(from_tier) == film_id:
+        raise RankError(409, f"that film anchors tier {from_tier} — swap the anchor first")
+    repo.rerank_placement(s.id, film_id, today)
+    repo.set_last_action(s.id, None)
+    return {"film_id": film_id, "from_tier": from_tier, "marked": True}
 
 
 def rank_status(repo: Repository, source: str, film_id: int) -> dict[str, object]:
