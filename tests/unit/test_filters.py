@@ -53,6 +53,7 @@ def test_chip_names_are_stable():
         "owned",
         "not_owned",
         "multi_list",
+        "rewatch",
     )
 
 

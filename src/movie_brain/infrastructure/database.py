@@ -26,6 +26,7 @@ from movie_brain.domain.models import (
     ListEntry,
     ListMeta,
     McTitle,
+    OldRating,
     OmdbRating,
     RankSession,
     ReviewEntry,
@@ -431,6 +432,18 @@ def service_slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
+def _old_rating_by_film(c: sqlite3.Connection) -> dict[int, dict[str, object]]:
+    """Old ratings for the WHOLE view in one query (old-ratings spec §4.4). A film may hold two
+    rows (the source can list one film twice): the latest rental wins, ties to the higher line."""
+    out: dict[int, dict[str, object]] = {}
+    for r in c.execute(
+        "SELECT film_id, stars, rented_on FROM old_rating WHERE film_id IS NOT NULL "
+        "ORDER BY film_id, COALESCE(rented_on, ''), line"
+    ):
+        out[int(r["film_id"])] = {"stars": int(r["stars"]), "rented_on": r["rented_on"]}
+    return out
+
+
 def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
     out: dict[int, list[dict[str, object]]] = {}
     for r in c.execute(_LISTS_SQL):
@@ -534,6 +547,7 @@ def _row_to_view(
     owned: bool = False,
     unseen: bool = False,
     rank_marked: bool = False,
+    old_rating: dict[str, object] | None = None,
     revisit: tuple[bool, str | None] = (False, None),
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
@@ -566,6 +580,7 @@ def _row_to_view(
         owned=owned,
         unseen=unseen,
         rank_marked=rank_marked,
+        old_rating=old_rating,
         needs_revisit=revisit[0],
         revisit_note=revisit[1],
         audit=audit[0],
@@ -2974,6 +2989,12 @@ class Repository:
             ).rowcount
             if n_list_entries:
                 moved["film_list_entry"] = n_list_entries
+            # Not a one-row table (a source may list one film twice), so a plain re-point.
+            n_old = c.execute(
+                "UPDATE old_rating SET film_id = ? WHERE film_id = ?", (survivor_id, loser_id)
+            ).rowcount
+            if n_old:
+                moved["old_rating"] = n_old
             # Ranker rows (spec §3): per-session one-row tables survivor-wins; the log re-points.
             for table in ("rank_placement", "rank_deferral", "rank_order_deferral"):
                 for row in c.execute(f"SELECT session_id FROM {table} WHERE film_id = ?", (loser_id,)).fetchall():
@@ -3309,6 +3330,42 @@ class Repository:
             return None if row is None else int(row["rank"])
 
     # views ------------------------------------------------------------
+    def upsert_old_rating(self, source: str, row: OldRating) -> None:
+        """ON CONFLICT(source, line) refreshes title/year/stars/rented_on only — never clears or
+        re-points a link (old-ratings spec §4.1)."""
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO old_rating (source, line, title, year, stars, rented_on) VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(source, line) DO UPDATE SET title=excluded.title, year=excluded.year, "
+                "stars=excluded.stars, rented_on=excluded.rented_on",
+                (source, row.line, row.title, row.year, row.stars, row.rented_on),
+            )
+
+    def old_ratings(self, source: str) -> list[OldRating]:
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT line, title, year, stars, rented_on, film_id, linked_by FROM old_rating "
+                "WHERE source = ? ORDER BY line",
+                (source,),
+            ).fetchall()
+            return [OldRating(*r) for r in rows]
+
+    def link_old_rating(self, source: str, line: int, film_id: int | None, linked_by: str | None, today: date) -> bool:
+        """Set (or, with `film_id=None`, clear) one row's link. False when the row is unknown.
+        The `oldratings` verbs are the only callers; the FK and the CHECK do the rest."""
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE old_rating SET film_id = ?, linked_by = ?, linked_on = ? WHERE source = ? AND line = ?",
+                (film_id, linked_by, today.isoformat() if film_id is not None else None, source, line),
+            )
+            return cur.rowcount > 0
+
+    def old_rating_summary(self) -> tuple[int, int]:
+        """(linked, total) — `status` shows the gap rather than hiding it (spec O3)."""
+        with self._conn() as c:
+            r = c.execute("SELECT COUNT(film_id), COUNT(*) FROM old_rating").fetchone()
+            return int(r[0]), int(r[1])
+
     def list_views(self, source: str, today: date | None = None) -> list[FilmView]:
         cutoff = ((today or date.today()) - timedelta(days=NEW_ARRIVAL_DAYS)).isoformat()
         with self._conn() as c:
@@ -3328,6 +3385,7 @@ class Repository:
             ow = _owned_ids(c)
             un = _unseen_ids(c)
             rm = _rank_mark_ids(c)
+            old = _old_rating_by_film(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
             criterion_option = _service_option(c, 'criterion')
@@ -3342,6 +3400,7 @@ class Repository:
                     owned=r["id"] in ow,
                     unseen=r["id"] in un,
                     rank_marked=r["id"] in rm,
+                    old_rating=old.get(r["id"]),
                     revisit=(r["id"] in rv, rv.get(r["id"])),
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
@@ -3367,6 +3426,7 @@ class Repository:
                 owned=row["id"] in _owned_ids(c),
                 unseen=row["id"] in _unseen_ids(c),
                 rank_marked=row["id"] in _rank_mark_ids(c),
+                old_rating=_old_rating_by_film(c).get(row["id"]),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
                 audit=au.get(row["id"], (None, None)),
                 criterion_option=_service_option(c, 'criterion'),
@@ -3394,4 +3454,6 @@ class Repository:
             "credits": self.credits_summary()["films_with_credits"],
             "embeddings": self.embedding_summary(EMBED_MODEL)[0],
             "prose": self.prose_count(),
+            "old_ratings_linked": self.old_rating_summary()[0],
+            "old_ratings": self.old_rating_summary()[1],
         }

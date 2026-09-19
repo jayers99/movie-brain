@@ -88,6 +88,17 @@ def seed(repo: Repository) -> None:
     # Bravo's best source is Apple TV+ (name tiebreak); its template makes the drawer's watch link
     # a real title search. `criterion` deliberately gets none, so Charlie proves the listing-URL fallback.
     repo.set_service_search_url("apple-tv-plus", "https://tv.apple.com/search?term={title}")
+    # Old ratings (2004-08 stars, invented): Bravo 5★ and unrated — the one Rewatch film; Alpha 5★
+    # but rated 9 today, so its request is served; Charlie 1★ — the avoid badge; Echo 3★ — drawer only.
+    from movie_brain.domain.models import OldRating
+
+    for line, (key, stars, rented) in enumerate(
+        [("bravo (1960)", 5, "2005-03-02"), ("alpha (1950)", 5, None), ("charlie (1970)", 1, "2004-06-01"),
+         ("echo (1990)", 3, "2006-01-10")],
+        start=1,
+    ):
+        repo.upsert_old_rating("ntc", OldRating(line, key, None, stars, rented))
+        repo.link_old_rating("ntc", line, ids[key], "resolver", TODAY)
     # Bravo is the one seeded watchlist film (Charlie stays free for the toggle test).
     repo.toggle_watchlist(ids["bravo (1960)"], TODAY)
     # Two seeded audit suspects for the Suspect chip + drawer verdict + score-sort tests. Bravo

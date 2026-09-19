@@ -1,6 +1,6 @@
 # Old ratings — a private record of what I thought in 2004–08
 
-**Date:** 2026-09-19 · **Status:** design approved 2026-09-19 (O1–O9 all ruled), NOT built · **Extends:** the thumbprint resolver and the curated-list pipeline's resolve → gate → create functions (`application/lists.py`), the watchlist pattern for user-response data. **Opens:** a private `old_rating` table with a real foreign key to `films`, an importer that links through the resolver, a second verb that mints the missing 4★/5★ films, a drawer line, a row badge and a Rewatch chip.
+**Date:** 2026-09-19 · **Status:** implemented 2026-09-19 on `feature/STORY-21-old-ratings` (O1–O9 all ruled); rehearsed end to end against a copy of the live DB · **Extends:** the thumbprint resolver and the curated-list pipeline's resolve → gate → create functions (`application/lists.py`), the watchlist pattern for user-response data. **Opens:** a private `old_rating` table with a real foreign key to `films`, an importer that links through the resolver, a second verb that mints the missing 4★/5★ films, a drawer line, a row badge and a Rewatch chip.
 
 ## 1. Goal
 
@@ -81,3 +81,7 @@ A hide-1★ filter (O8); review rows (O6); writing `my_ratings` or seeding the r
 ## 7. Documentation
 
 `CLAUDE.md`: the three `oldratings` verbs in Commands; one Rules bullet (single writer, nullable enforced FK and what NULL means, import never creates, create re-gates, Rewatch is a pending request, nothing from the source in the repo). `docs/backlog.md` item 20.
+
+## 8. As built (2026-09-19)
+
+Two departures from §4, both in the refusing direction. A gate 2b failure is an `error` row, not `blocked` (the list verbs' own rule: the holder is unknown, not disproved). No `claim` rows are written — `old_rating` keeps the typed title itself. Rehearsal on a copy of the live DB: import 99 linked · 23 would-create · 57 absent · 23 unresolved · 1 blocked · 0 errors of 203; create 22 minted, all born keyed, 1 linked to a film the same run minted. Every one of the eight links whose catalog title differs from the typed one was checked by hand and is right — including three no title join could have made (an English title onto its original-language film, a short title onto its full one, a retitled release). The unresolved rows are the owner's typos the search APIs cannot find, wrong typed years, and genuine ambiguities: the hand-link worklist, as designed.
