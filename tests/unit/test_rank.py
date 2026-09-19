@@ -34,7 +34,7 @@ def test_scores_below_six_do_not_seed(score):
 
 
 def test_order_tiers_and_default_name():
-    assert ORDER_TIERS == (1, 2)
+    assert ORDER_TIERS == (1, 2, 3, 4, 5)
     assert DEFAULT_LIST_NAME["owned"] == "My Ranking"
 
 

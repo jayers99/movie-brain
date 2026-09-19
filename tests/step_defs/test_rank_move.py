@@ -116,9 +116,15 @@ def joined_in_tier(ctx, ordered, tier, title, score):
     assert ctx["repo"].rank_placements(_sid(ctx))[fid][0] == tier
 
 
-@when("the tier 2 order is read")
-def read_tier_2(ctx):
-    _order(ctx, 2)
+@when(parsers.parse("the tier {tier:d} order is read"))
+def read_tier(ctx, tier):
+    _order(ctx, tier)
+
+
+@when(parsers.parse("I answer {verdict} in tier {tier:d} order mode"))
+def answer_once_tier(ctx, verdict, tier):
+    pair = _order(ctx, tier)["pair"]
+    order_verdict(ctx["repo"], SRC, tier, pair["candidate"]["film_id"], pair["other"]["film_id"], verdict, TODAY)
 
 
 @then(parsers.parse('the moved film is placed in tier {tier:d} as "{how}"'))

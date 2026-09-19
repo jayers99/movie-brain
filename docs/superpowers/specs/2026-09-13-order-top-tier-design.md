@@ -20,7 +20,7 @@ Nothing here touches keying, matching, sync, `my_ratings`, or the tiering's own 
 | O6 | **`Pass` defers; there is no `Have not seen` in order mode.** | A tier 1 film is one the owner has already judged. The drawer's Unseen toggle remains the way to retract that judgement, and §4.4 says what it does to the order. |
 | O7 | **The first film into an empty order takes position 1 with no click.** | There is nothing to compare it with. |
 | O8 | **One undo slot for the page.** `rank_session.last_action` gains a `mode` key; Undo reverses whichever click was last in either mode. | Two slots would let a tiering undo run after an order click had already assumed the placement (§4.4). |
-| O9 | **The `tier` column is stored but the UI exposes tier 1 only.** | Costs nothing now and spares a migration if tier 2 is ever ordered. Not a feature: no route or tab takes a tier. Tier 2 exposed 2026-09-13, ranking-pool spec P5. |
+| O9 | **The `tier` column is stored but the UI exposes tier 1 only.** | Costs nothing now and spares a migration if tier 2 is ever ordered. Not a feature: no route or tab takes a tier. Tier 2 exposed 2026-09-13, ranking-pool spec P5; every tier (1–5) exposed 2026-09-15 by widening `ORDER_TIERS` alone. |
 
 ## 3. Data model (migration 023)
 

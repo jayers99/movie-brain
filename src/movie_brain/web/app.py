@@ -242,11 +242,11 @@ def create_app(
     def rank_order_state() -> Response:
         raw_tier = request.args.get("tier")
         if raw_tier is None:
-            raise RankError(400, "tier query parameter must be 1 or 2")
+            raise RankError(400, "tier query parameter must be 1 to 5")
         try:
             tier = int(raw_tier)
         except ValueError:
-            raise RankError(400, "tier query parameter must be 1 or 2") from None
+            raise RankError(400, "tier query parameter must be 1 to 5") from None
         return jsonify(ranker.order_state(repo, RANK_SOURCE, tier, today()))
 
     @app.post("/api/rank/order/verdict")
