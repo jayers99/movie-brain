@@ -3,10 +3,16 @@
   const $ = (sel) => document.querySelector(sel);
   const main = $('#rank');
   const state = { session: null, order: null, details: {} };
-  // Three modes on one page (order spec O3, ranking-pool spec P5): the hash carries the mode
-  // so a reload stays put. Modes: 'tiers', 'order-1', 'order-2'. '#order' (pre-phase-A
-  // bookmarks) reads as tier 1.
-  const mode = () => { const h = location.hash; if (h === '#order' || h === '#order-1') return 'order-1'; if (h === '#order-2') return 'order-2'; return 'tiers'; };
+  // Six modes on one page (order spec O3, ranking-pool spec P5, every tier since 2026-09-15):
+  // the hash carries the mode so a reload stays put. Modes: 'tiers', 'order-1' … 'order-5'
+  // (ORDER_TIERS mirrors domain/rank.py). '#order' (pre-phase-A bookmarks) reads as tier 1.
+  const ORDER_TIERS = [1, 2, 3, 4, 5];
+  const mode = () => {
+    const h = location.hash;
+    if (h === '#order') return 'order-1';
+    const m = /^#order-(\d)$/.exec(h);
+    return m && ORDER_TIERS.includes(Number(m[1])) ? `order-${m[1]}` : 'tiers';
+  };
   const isOrder = () => mode().startsWith('order-');
   const orderTier = () => Number(mode().slice(6)) || 1;
   const setMode = (m) => { if (mode() !== m) location.hash = m === 'tiers' ? '' : `#${m}`; };

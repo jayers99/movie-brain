@@ -16,11 +16,14 @@ Feature: Move a film to another tier — a hand-set tier from the drawer, ordere
     And the moved film is the tier 2 order candidate
     And the next reads do not re-seed the moved film
 
-  Scenario: Moving into a tier that is not ordered is not awaiting order
+  Scenario: Moving into tier 3 awaits its order like every other tier
     When "Nine" is joined in tier 2 by "Nine-b" rated 9, not owned
     And "Nine-b" is moved to tier 3 from the drawer
-    Then the move reported from tier 2 and not awaiting order
-    And rank status for "Nine-b" is tier 3 "moved" and not awaiting order
+    Then the move reported from tier 2 and awaiting order
+    And rank status for "Nine-b" is tier 3 "moved" and awaiting order
+    When the tier 3 order is read
+    And I answer worse in tier 3 order mode
+    Then rank status for "Nine-b" is tier 3 "moved" and not awaiting order
 
   Scenario: A move invalidates the one-level undo
     When "Uno" is tiered into tier 1
@@ -62,6 +65,9 @@ Feature: Move a film to another tier — a hand-set tier from the drawer, ordere
     When "Nine" is joined in tier 2 by "Nine-b" rated 9, not owned
     And "Nine-b" is re-ranked from the drawer
     And "Nine-b" is answered worse than every anchor
+    Then "Nine-b" is placed in tier 5 and still marked
+    When the tier 5 order is read
+    And I answer worse in tier 5 order mode
     Then "Nine-b" is placed in tier 5 and its mark is gone
     When "Uno" is tiered into tier 1
     And "Uno" is re-ranked from the drawer

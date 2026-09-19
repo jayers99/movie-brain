@@ -151,6 +151,15 @@ def test_rank_flow(page: Page, rank_server: str):
     page.wait_for_selector('#rank[data-state="order"], #rank[data-state="order_done"]')
     expect(page.locator("#ordered")).to_have_text("1")
 
+    # --- Order tier 5 -------------------------------------------------------------------
+    # Every tier is orderable (2026-09-15): Six is alone in tier 5, free-inserted like Nine.
+    page.click('.tab[data-mode="order-5"]')
+    page.wait_for_selector('#rank[data-state="order"], #rank[data-state="order_done"]')
+    assert page.url.endswith("#order-5")
+    expect(page.locator('.tab[data-mode="order-5"]')).to_have_attribute("aria-current", "true")
+    expect(page.locator("#order-tier")).to_have_text("5")
+    expect(page.locator("#ordered")).to_have_text("1")
+
     # A legacy `#order` bookmark reads as tier 1.
     page.goto(rank_server + "/rank#order")
     expect(page.locator('.tab[data-mode="order-1"]')).to_have_attribute("aria-current", "true")

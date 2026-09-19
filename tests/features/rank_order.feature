@@ -1,4 +1,4 @@
-Feature: Order a tier — strict order inside tiers 1 and 2 by binary insertion
+Feature: Order a tier — strict order inside any of the five tiers by binary insertion
 
   Background:
     Given owned films rated "Alpha" 10, "Beta" 10, "Gamma" 10, "Delta" 10, "Nine" 9, "Eight" 8, "Seven" 7, "Six" 6
@@ -113,8 +113,18 @@ Feature: Order a tier — strict order inside tiers 1 and 2 by binary insertion
     Then the undo returned the tier 1 order state
     And 1 film is ordered and the same candidate is asked with 0 verdicts
 
-  Scenario: An order tier outside 1 and 2 is refused
-    Then reading the tier 3 order is refused with 400
+  Scenario: An order tier outside 1 to 5 is refused
+    Then reading the tier 6 order is refused with 400
+    And reading the tier 0 order is refused with 400
+
+  Scenario: Tier 5 has its own order, independent of tiers 1 and 2
+    Then the tier 5 order has 1 film and 0 remaining
+    When "Six" is joined in tier 5 by "Six-b" rated 6, not owned
+    Then the tier 5 order has 1 film and 1 remaining
+    When I answer worse in tier 5 order mode
+    Then the tier 5 order has 2 films and 0 remaining
+    And the tier 1 order still has 1 film and 3 remaining
+    And the tier 2 order still has 1 film and 0 remaining
 
   Scenario: Saving writes both ordered tiers bare
     When I answer worse in order mode

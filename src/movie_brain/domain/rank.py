@@ -39,7 +39,8 @@ def tier_for_score(score: int) -> int:
     raise ValueError(f"a score of {score} does not seed a tier")
 
 
-ORDER_TIERS: tuple[int, ...] = (1, 2)  # the tiers the order mode exposes (ranking-pool spec P5)
+# The tiers the order mode exposes: every tier since 2026-09-15 (ranking-pool spec P5 opened 1 and 2).
+ORDER_TIERS: tuple[int, ...] = (1, 2, 3, 4, 5)
 
 
 @dataclass(frozen=True)
