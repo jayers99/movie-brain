@@ -1,6 +1,6 @@
 # Old ratings — a private record of what I thought in 2004–08
 
-**Date:** 2026-09-19 · **Status:** design approved 2026-09-19 (O1–O9 all ruled), NOT built · **Extends:** the thumbprint resolver and the curated-list pipeline's resolve → gate → create functions (`application/lists.py`), the watchlist pattern for user-response data. **Opens:** a private `old_rating` table with a real foreign key to `films`, an importer that links through the resolver, a second verb that mints the missing 4★/5★ films, a drawer line, a row badge and a Rewatch chip.
+**Date:** 2026-09-19 · **Status:** implemented 2026-09-19 on `feature/STORY-21-old-ratings` (O1–O9 all ruled); rehearsed end to end against a copy of the live DB · **Extends:** the thumbprint resolver and the curated-list pipeline's resolve → gate → create functions (`application/lists.py`), the watchlist pattern for user-response data. **Opens:** a private `old_rating` table with a real foreign key to `films`, an importer that links through the resolver, a second verb that mints the missing 4★/5★ films, a drawer line, a row badge and a Rewatch chip.
 
 ## 1. Goal
 
@@ -20,7 +20,7 @@ A read-only comparison on 2026-09-19 (title + year ±1, then a fuzzy pass) found
 | O6 | **No `match_review` rows.** A row the resolver refuses, a row whose gates block, and a row whose typed year is simply wrong all stay `film_id NULL` and are printed on the scorecard's worklist; `oldratings link` is the hand path. | 203 rows, once. Review rows would need a new authority and a new set of per-authority `review resolve` actions for a worklist of perhaps fifteen. If a second old-ratings source ever appears, revisit. |
 | O7 | **Rewatch is a pending request, not a label:** the chip shows old 5★ AND not rated today. Rating the film today serves the request. | The same ruling as the "Rank this" mark (move-tier M13). 6 of the 33 in-catalogue 5★ films are already re-rated, so 27 qualify on day one. |
 | O8 | **No "hide old 1★" filter in v1.** The red badge on the row is the avoid signal. | Seven films of 5,134 today. Revisit when the 1★ count in the catalogue makes a filter worth a chip slot. |
-| O9 | **Nothing from the source file enters this repo.** Tests use invented rows; the spec and docs name no (title, rating) pair; the importer takes a PATH and archives the raw file under `<config_dir>/oldratings/` before parsing, as `owned import` does. | The repo is public (see `tutor-cartridge`'s scrub rule for the same concern). |
+| O9 | *(Relaxed by the owner 2026-09-19, after the build: "there's nothing private about it." The table stays where it is — it was never only about privacy, see O1 — and the tests keep their invented rows, but naming a title from the file in docs or tests is no longer a leak.)* **Nothing from the source file enters this repo.** Tests use invented rows; the spec and docs name no (title, rating) pair; the importer takes a PATH and archives the raw file under `<config_dir>/oldratings/` before parsing, as `owned import` does. | The repo is public (see `tutor-cartridge`'s scrub rule for the same concern). |
 
 ## 3. Data model (migration 026)
 
@@ -81,3 +81,7 @@ A hide-1★ filter (O8); review rows (O6); writing `my_ratings` or seeding the r
 ## 7. Documentation
 
 `CLAUDE.md`: the three `oldratings` verbs in Commands; one Rules bullet (single writer, nullable enforced FK and what NULL means, import never creates, create re-gates, Rewatch is a pending request, nothing from the source in the repo). `docs/backlog.md` item 20.
+
+## 8. As built (2026-09-19)
+
+Two departures from §4, both in the refusing direction. A gate 2b failure is an `error` row, not `blocked` (the list verbs' own rule: the holder is unknown, not disproved). No `claim` rows are written — `old_rating` keeps the typed title itself. Rehearsal on a copy of the live DB: import 99 linked · 23 would-create · 57 absent · 23 unresolved · 1 blocked · 0 errors of 203; create 22 minted, all born keyed, 1 linked to a film the same run minted. Every one of the eight links whose catalog title differs from the typed one was checked by hand and is right — including three no title join could have made (an English title onto its original-language film, a short title onto its full one, a retitled release). The unresolved rows are the owner's typos the search APIs cannot find, wrong typed years, and genuine ambiguities: the hand-link worklist, as designed.

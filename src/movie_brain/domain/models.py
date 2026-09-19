@@ -199,6 +199,22 @@ class ListEntry:
 
 
 @dataclass(frozen=True)
+class OldRating:
+    """One row of the owner's 2004-08 ratings file (old-ratings spec §3); title verbatim, typos kept.
+
+    `line` is the 1-based data-row number in the source file — the addressable key. A watching
+    signal, never a rating: nothing reads this into `my_ratings` or the ranker (O1)."""
+
+    line: int
+    title: str
+    year: int | None  # as typed at the time; may be wrong
+    stars: int  # 1-5
+    rented_on: str | None = None
+    film_id: int | None = None  # None = the resolver has not placed this row yet (O3)
+    linked_by: str | None = None  # 'resolver' | 'created' | 'hand'
+
+
+@dataclass(frozen=True)
 class ServiceMeta:
     """One row of the service registry. `quality` and `has_apple_app` are owner-set constants
     written only by `movie-brain services` — see the canon-best-source design §5."""
@@ -332,6 +348,10 @@ class FilmView:
     revisit_note: str | None = None
     unseen: bool = False  # the ranker's durable pass bucket (spec D5); drawer toggle + /rank page are the only writers
     rank_marked: bool = False  # "Rank this" (ranking-pool spec P2); drawer toggle + set_rank_mark are the only writers
+    # {stars, rented_on} from the owner's 2004-08 ratings (old-ratings spec §4.4), or None. A watching
+    # signal, not a rating; the `oldratings` verbs are the only writers. Fetched for the whole view in
+    # one query; when a film holds two rows the latest rental wins.
+    old_rating: dict[str, object] | None = None
     audit: dict[str, object] | None = None  # {score, reasons:[{code, detail}]} from audit_flags; None = not a suspect
     verdict: dict[str, object] | None = None  # latest audit_verdict row; the dashboard endpoint is its only writer
     # verdict["reasons"] is a comma-joined sorted string (asymmetric with audit["reasons"] above, a list of dicts)

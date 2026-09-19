@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 from datetime import date
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 from rich.console import Console
@@ -52,6 +52,9 @@ from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, a
 from movie_brain.infrastructure.notify import notify
 from movie_brain.infrastructure.tmdb import TmdbClient
 
+if TYPE_CHECKING:
+    from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
+
 app = typer.Typer(
     name="movie-brain", help="Personal film brain: Criterion listings, OMDb ratings, my ratings.", no_args_is_help=True
 )
@@ -63,6 +66,10 @@ owned_app = typer.Typer(help="Apple TV owned films: import the library, mark own
 app.add_typer(owned_app, name="owned")
 lists_app = typer.Typer(help="Curated top-N lists: import a checked-in list file, create its missing films.")
 app.add_typer(lists_app, name="lists")
+oldratings_app = typer.Typer(
+    help="My 2004-08 ratings as a watching signal: import, create the missing 4-5★ films, hand-link."
+)
+app.add_typer(oldratings_app, name="oldratings")
 repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong TMDB links, fix years.")
 app.add_typer(repair_app, name="repair")
 cheapcharts_app = typer.Typer(help="CheapCharts: resolve each film's direct product page.")
@@ -376,6 +383,123 @@ def lists_create_cmd(
     # break the two-line-per-entry block the owner scans.
     console.print(scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(report.exit_code)
+
+
+def _resolver_clients() -> tuple[CandidateFetcher, CandidateCache | None, TmdbClient]:
+    """(fetcher, cache, tmdb) for a verb that needs BOTH an OMDb key and a TMDB token; exits 2
+    before any prompt when either is missing — a run that cannot happen must not ask first."""
+    from movie_brain.infrastructure.omdb import OmdbClient
+    from movie_brain.infrastructure.thumbprint_fetch import session_fetcher
+
+    cfg = load_config()
+    token, key = load_tmdb_token(cfg), load_api_key(cfg)
+    tmdb = TmdbClient(token) if token else None
+    fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
+    if fetcher is None or tmdb is None:
+        err.print(
+            f"no OMDb key and/or TMDB token: set OMDB_API_KEY/{cfg.key_file} and "
+            f"MOVIE_BRAIN_TMDB_TOKEN/{cfg.tmdb_token_file}"
+        )
+        raise typer.Exit(2)
+    return fetcher, cache, tmdb
+
+
+_SOURCE_OPT = typer.Option("--source", help="Which old-ratings source the rows belong to.")
+
+
+@oldratings_app.command("import")
+def oldratings_import_cmd(
+    path: Annotated[Path, typer.Argument(help="The ratings CSV (rented,rating,title,year) — kept OUTSIDE this repo.")],
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Store the rows and write the links (default: dry-run).")
+    ] = False,
+    source: Annotated[str, _SOURCE_OPT] = "ntc",
+) -> None:
+    """Store every old rating and link it to the film the resolver says it is. Never creates a film."""
+    from movie_brain.application import old_ratings
+    from movie_brain.infrastructure.oldratings import OldRatingsFileError, read_old_ratings
+
+    try:
+        rows = read_old_ratings(path)
+    except (OldRatingsFileError, OSError) as exc:
+        err.print(str(exc))
+        raise typer.Exit(2) from exc
+    repo = _repo()
+    fetcher, cache, tmdb = _resolver_clients()
+    if apply:
+        # Archived before anything is written, as `owned import` does: the source lives outside
+        # this repo, and the archive is what a later session replays.
+        archive = load_config().config_dir / "oldratings" / f"{source}-{date.today().isoformat()}.csv"
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        archive.write_bytes(path.read_bytes())
+    try:
+        report = old_ratings.import_old_ratings(
+            repo, source, rows, date.today(), fetcher=fetcher, tmdb=tmdb, apply=apply, log=_plain
+        )
+    finally:
+        if cache is not None:
+            cache.save()
+    console.print(old_ratings.scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
+    raise typer.Exit(report.exit_code)
+
+
+@oldratings_app.command("create")
+def oldratings_create_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Create, link and key the films (default: dry-run).")] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="With --apply: skip the confirmation prompt.")] = False,
+    source: Annotated[str, _SOURCE_OPT] = "ntc",
+) -> None:
+    """Create the films my old 4-5★ ratings name that the catalog lacks; re-resolves and re-gates every row."""
+    from movie_brain.application import old_ratings
+
+    repo = _repo()
+    fetcher, cache, tmdb = _resolver_clients()
+    if apply and not yes and not typer.confirm(f"create the missing 4-5★ films for {source!r}?", default=False):
+        raise typer.Exit(0)
+    try:
+        report = old_ratings.create_films(
+            repo, source, date.today(), fetcher=fetcher, tmdb=tmdb, apply=apply, log=_plain
+        )
+    finally:
+        if cache is not None:
+            cache.save()
+    console.print(old_ratings.scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
+    raise typer.Exit(report.exit_code)
+
+
+@oldratings_app.command("link")
+def oldratings_link_cmd(
+    line: Annotated[int, typer.Argument(help="The row's line number (see `oldratings list`).")],
+    film: Annotated[int | None, typer.Option("--film", help="Film id to point the row at.")] = None,
+    none: Annotated[bool, typer.Option("--none", help="Clear a wrong link.")] = False,
+    source: Annotated[str, _SOURCE_OPT] = "ntc",
+) -> None:
+    """The hand path: point one old rating at a film, or clear its link."""
+    from movie_brain.application import old_ratings
+
+    if (film is None) == (not none):
+        err.print("give exactly one of --film ID or --none")
+        raise typer.Exit(2)
+    try:
+        target = old_ratings.link_row(_repo(), source, line, film, date.today())
+    except old_ratings.LinkError as exc:
+        err.print(str(exc))
+        raise typer.Exit(2) from exc
+    console.print(f"{source}#{line} → " + (f"film #{target}" if target is not None else "unlinked"))
+
+
+@oldratings_app.command("list")
+def oldratings_list_cmd(
+    unlinked: Annotated[bool, typer.Option("--unlinked", help="Only rows with no film yet.")] = False,
+    source: Annotated[str, _SOURCE_OPT] = "ntc",
+) -> None:
+    """Every stored old rating: line, stars, title, and the film it points at."""
+    for r in _repo().old_ratings(source):
+        if unlinked and r.film_id is not None:
+            continue
+        year = f" ({r.year})" if r.year is not None else ""
+        where = f"#{r.film_id} [{r.linked_by}]" if r.film_id is not None else "—"
+        console.print(f"{r.line:>4}  {'★' * r.stars:<5}  {r.title}{year}  →  {where}", markup=False, highlight=False)
 
 
 @lists_app.command("trust")

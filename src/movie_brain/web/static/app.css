@@ -65,6 +65,9 @@ button.info { border:0; background:none; cursor:pointer; font-size:16px; }
 tbody tr.departed td { color:var(--muted); }
 .badge-gone { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
 .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+.badge-old-loved { background:#e6f4ea; color:#137333; border:1px solid #137333; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+.badge-old-avoid { background:#fce8e6; color:#b3261e; border:1px solid #b3261e; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+.old-stars { letter-spacing:1px; }
 .badge-lists { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
 .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
 .svc-more { display:inline; }

@@ -137,6 +137,8 @@ def test_init_db_is_idempotent(tmp_path):
         "credits": 0,
         "embeddings": 0,
         "prose": 0,
+        "old_ratings_linked": 0,
+        "old_ratings": 0,
     }
 
 
@@ -268,6 +270,8 @@ def test_views_and_summary(repo):
         "credits": 0,
         "embeddings": 0,
         "prose": 0,
+        "old_ratings_linked": 0,
+        "old_ratings": 0,
     }
 
 

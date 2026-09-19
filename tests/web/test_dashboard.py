@@ -161,7 +161,7 @@ def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Pa
 def test_chip_labels_and_order(dash: Page):
     # Everything off by default: every cycle chip shows its off label.
     labels = [t.strip() for t in dash.locator("#chips .chip").all_inner_texts()]
-    assert labels == ["Reachable", "Rated", "Criterion", "Watchlist", "Owned", "On a list", "Clear"]
+    assert labels == ["Reachable", "Rated", "Criterion", "Watchlist", "Owned", "On a list", "Rewatch", "Clear"]
 
 
 def test_cycle_chip_walks_off_a_b_off_and_encodes_one_key(dash: Page):
@@ -1180,3 +1180,32 @@ def test_drawer_rank_this_toggle_round_trips(dash: Page):
     expect(body.locator("button.rank-toggle")).to_have_attribute("aria-pressed", "true")
     body.locator("button.rank-toggle").click()
     expect(body.locator("button.rank-toggle")).to_have_attribute("aria-pressed", "false")
+
+
+def test_rewatch_chip_is_an_old_five_star_not_rated_since(dash: Page):
+    clear_lang(dash)  # Bravo is French
+    dash.click('button[data-chip="rewatch"]')
+    dash.wait_for_selector('#films tbody[data-count="1"]')  # Alpha is 5★ too, but rated today: served
+    assert dash.locator("#films tbody tr").first.inner_text().startswith("Bravo")
+    assert "chips=rewatch" in dash.url
+    dash.reload()
+    dash.wait_for_selector('#films tbody[data-count="1"]')
+    expect(dash.locator('button[data-chip="rewatch"]')).to_have_class(re.compile(r"\bactive\b"))
+
+
+def test_old_rating_badges_mark_only_the_two_ends(dash: Page):
+    clear_lang(dash)
+    expect(dash.locator("tr[data-id]", has_text="Bravo").locator(".badge-old-loved")).to_have_text("5★ then")
+    expect(dash.locator("tr[data-id]", has_text="Charlie").locator(".badge-old-avoid")).to_have_text("1★ then")
+    echo = dash.locator("tr[data-id]", has_text="Echo")
+    assert echo.locator(".badge-old-loved, .badge-old-avoid").count() == 0  # 3★ is drawer-only
+
+
+def test_drawer_shows_the_old_rating_under_my_rating(dash: Page):
+    clear_lang(dash)
+    dash.locator("tr[data-id]", has_text="Bravo").locator("button.info").click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    line = dash.locator("#drawer-body .ratings .old-rating")
+    expect(line).to_have_text("Me, 2004–08: ★★★★★ · rented 2005-03-02")
+    ratings = dash.locator("#drawer-body .ratings").inner_text()
+    assert ratings.index("My rating") < ratings.index("Me, 2004–08")

@@ -117,6 +117,8 @@ def test_summary_and_config(client):
         "credits": 0,
         "embeddings": 0,
         "prose": 0,
+        "old_ratings_linked": 0,
+        "old_ratings": 0,
     }
     cfg = client.get("/api/config").get_json()
     assert cfg["canned_thresholds"] == {
@@ -657,3 +659,15 @@ def test_rank_rerank_route_unplaces_marks_and_the_mark_clears_once_served(rank_c
     assert client.post("/api/rank/order/verdict", json=body).status_code == 200
     d = client.get(f"/api/films/{uno}").get_json()
     assert (d["awaiting_order"], d["rank_marked"]) == (False, False)
+
+
+def test_films_payload_carries_the_old_rating(client, repo):
+    from movie_brain.domain.models import OldRating
+
+    trio = repo.film_id_by_key("trio (1950)")
+    repo.upsert_old_rating("ntc", OldRating(1, "Trio", 1950, 5, "2005-03-02"))
+    repo.link_old_rating("ntc", 1, trio, "resolver", D)
+    films = {f["title"]: f for f in client.get("/api/films").get_json()}
+    assert films["Trio"]["old_rating"] == {"stars": 5, "rented_on": "2005-03-02"}
+    assert films["Quartet"]["old_rating"] is None
+    assert client.get(f"/api/films/{trio}").get_json()["old_rating"]["stars"] == 5

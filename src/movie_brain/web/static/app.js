@@ -58,6 +58,8 @@
     owned: (f) => f.owned,
     not_owned: (f) => !f.owned,
     multi_list: (f) => (f.lists || []).length >= state.cfg.canned_thresholds.multi_list,
+    // Loved then, not judged since (old-ratings spec O7): a pending request a rating today serves.
+    rewatch: (f) => f.old_rating != null && f.old_rating.stars === 5 && f.my_rating == null,
   };
 
   // ---- filtering / sorting ----
@@ -131,6 +133,15 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const fmt = (v, suffix = '') => (v == null ? '—' : `${v}${suffix}`);
+  // My 2004-08 rating as a watching signal (old-ratings spec §4.4): only the two ends earn a badge —
+  // 5★ says rewatch, 1★ says avoid. 2-4★ show in the drawer alone.
+  const OLD_SPAN = '2004–08';
+  function oldBadge(f) {
+    const s = f.old_rating && f.old_rating.stars;
+    if (s !== 5 && s !== 1) return '';
+    const cls = s === 5 ? 'badge-old-loved' : 'badge-old-avoid';
+    return ` <span class="${cls}" title="I rated this ${s}★ in ${OLD_SPAN}">${s}★ then</span>`;
+  }
   function rowHtml(f) {
     const link = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
     const listCount = (f.lists || []).length;
@@ -142,7 +153,7 @@
     const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '')
       + (listCount > 0 ? ` <span class="badge-lists" title="on ${listCount} curated list${listCount === 1 ? '' : 's'}">${listCount} list${listCount === 1 ? '' : 's'}</span>` : '')
       + (f.owned ? ' <span class="badge-owned" title="Owned on Apple TV">owned</span>' : '')
-      + watchBadge;
+      + oldBadge(f) + watchBadge;
     return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
@@ -579,6 +590,8 @@
     const criticsLine = critics ? `<div class="row critics">${critics}</div>`
       : d.pending ? '<div class="row note">OMDb lookup pending.</div>'
       : d.found === false ? '<div class="row note">No OMDb match.</div>' : '';
+    const old = d.old_rating;
+    const oldLine = old ? `<div class="row old-rating">Me, ${OLD_SPAN}: <span class="old-stars" aria-label="${old.stars} of 5 stars">${'★'.repeat(old.stars)}${'☆'.repeat(5 - old.stars)}</span>${old.rented_on ? ` · rented ${esc(old.rented_on)}` : ''}</div>` : '';
     const listsLine = lists ? `<div class="row on-lists">On lists: ${lists} <span class="canon-score">· canon score ${canonScore(d).toFixed(1)}</span></div>` : '';
     // The one watch link (spec D6/D7). Possession short-circuits the ranking in domain/watch.py.
     // An owned film opens straight in the Apple TV desktop app via d.apple_tv_url (the app's own
@@ -610,7 +623,7 @@
       <dl>${fields}</dl>
       <div class="ratings">
         <div class="row">My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></div>
-        ${criticsLine}${listsLine}
+        ${oldLine}${criticsLine}${listsLine}
       </div>
       ${watchLine}
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}

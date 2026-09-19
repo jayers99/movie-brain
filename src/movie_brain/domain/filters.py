@@ -28,6 +28,17 @@ def reachable(v: FilmView) -> bool:
     return (v.criterion and not v.departed) or bool(v.services) or v.owned or v.cheapcharts_url is not None
 
 
+OLD_LOVED = 5  # the old 1-5★ scale's top mark: what the Rewatch chip asks about
+OLD_AVOID = 1  # and its bottom: the row's red badge
+
+
+def rewatch(v: FilmView) -> bool:
+    """Loved then, not judged since (old-ratings spec O7): an old 5★ with no rating today. A
+    PENDING REQUEST, not a label — rating the film today serves it, exactly as the "Rank this"
+    mark comes off once served. Mirrored by `rewatch` in app.js."""
+    return v.old_rating is not None and v.old_rating["stars"] == OLD_LOVED and v.my_rating is None
+
+
 def _criterion_new(v: FilmView, today: date) -> bool:
     cutoff = today - timedelta(days=NEW_ARRIVAL_DAYS)
     return any(
@@ -76,7 +87,8 @@ def is_canon(view: FilmView) -> bool:
     return bool(view.lists)
 
 
-# The chip bar (2026-09-07 redesign): four three-way groups plus two plain chips, everything off
+# The chip bar (2026-09-07 redesign): four three-way groups plus plain chips (a third, `rewatch`,
+# since 2026-09-19), everything off
 # by default. A group's keys are mutually exclusive in the UI (the chip cycles off → A → B → off),
 # but each key is an ordinary predicate here so `matches` and the URL's `chips=` list need no
 # group logic. Keys already encoded in saved URLs (`unrated`, `mine`, `leaving`, `watchlist`,
@@ -96,6 +108,7 @@ _PREDICATES: dict[str, Predicate] = {
     "owned": lambda v, _: v.owned,
     "not_owned": lambda v, _: not v.owned,
     "multi_list": lambda v, _: len(v.lists) >= MIN_LISTS,
+    "rewatch": lambda v, _: rewatch(v),
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)
