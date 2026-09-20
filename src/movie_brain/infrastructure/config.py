@@ -26,6 +26,10 @@ class Config:
     def tmdb_token_file(self) -> Path:
         return self.config_dir / "tmdb-read-token.txt"
 
+    @property
+    def credentials_file(self) -> Path:
+        return self.config_dir / "credentials.toml"
+
 
 def load_config() -> Config:
     env = os.environ.get(CONFIG_DIR_ENV)

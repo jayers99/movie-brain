@@ -11,6 +11,7 @@ answer is confirmed on title and year before anyone believes it.
 
 from __future__ import annotations
 
+import hashlib
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -26,6 +27,8 @@ SEARCH_URL = API_BASE + "Search.php"
 # The website's own API (one level above the GPT API). DetailData is public — only a Referer.
 ACCOUNT_API = "https://buster.cheapcharts.de/v1/"
 DETAIL_URL = ACCOUNT_API + "DetailData.php"
+ACCOUNT_URL = ACCOUNT_API + "Account.php"
+WISHLIST_URL = ACCOUNT_API + "Wishlist.php"
 TIMEOUT_S = 30
 REFERER = "https://www.cheapcharts.com/"
 COUNTRY = "us"
@@ -39,6 +42,15 @@ REMOVED_MARKER = "[❌Removed from iTunes]"  # the only signal — the product p
 class RateLimited(Exception):
     """CheapCharts refused for rate reasons. A caller should stop, not retry the next film —
     the resolver is self-checkpointing, so stopping costs nothing but the run."""
+
+
+class CheapChartsError(Exception):
+    """The account API failed. The message is OUR wording only — never the API's text or a
+    response body: the login answer carries the account's email and customer id."""
+
+
+class CheapChartsRefused(CheapChartsError):
+    """The API answered `status: error` for a reason other than the session token."""
 
 
 class Pacer:
@@ -214,6 +226,97 @@ class CheapChartsClient:
             raise RateLimited(url)
         resp.raise_for_status()
         data: dict[str, Any] = resp.json()
+        return data
+
+
+class CheapChartsAccount:
+    """The owner's CheapCharts account over the website's own API — plain form POSTs, proven
+    end to end on 2026-09-19 (brief 2026-09-19-price-watch). The session token lives in memory
+    only; a missing or refused one triggers exactly one fresh login. Every answer is HTTP 200
+    with `status: success|error`."""
+
+    def __init__(
+        self,
+        username: str,
+        password: str,
+        session: requests.Session | None = None,
+        *,
+        pacer: Pacer | None = None,
+    ) -> None:
+        self._username = username
+        self._password = password
+        self.session = session or requests.Session()
+        self._pacer = pacer or Pacer()
+        self._token: str | None = None
+
+    def wishlist_ids(self) -> list[str]:
+        """The iTunes ids of every film on the wishlist, in CheapCharts' order."""
+        data = self._wishlist("getShortItemList_v2")
+        movies = (data.get("results") or {}).get("movies") or []
+        return [str(m["idInStore"]) for m in movies if isinstance(m, dict) and m.get("idInStore")]
+
+    def add_item(self, itunes_id: str) -> bool:
+        """False when the API refused — most likely the film is already there, but its wording
+        for that was never observed, so the caller sets the target anyway and trusts the read-back."""
+        try:
+            self._wishlist("addItem", itemType="buymovies", idInStore=itunes_id)
+        except CheapChartsRefused:
+            return False
+        return True
+
+    def set_target(self, itunes_id: str, target: Decimal) -> None:
+        """Both the SD and the HD target, the same value — what the proving add did."""
+        price = f"{target:.2f}"
+        self._wishlist(
+            "changeInitPrice", itemType="buymovies", idInStore=itunes_id, customPrice=price, customPriceHd=price
+        )
+
+    def _wishlist(self, action: str, **extra: str) -> dict[str, Any]:
+        params = {"country": COUNTRY, "store": STORE, "action": action, **extra}
+        for attempt in (1, 2):
+            token = self._token or self._login()
+            data = self._post(WISHLIST_URL, params, {"sessionToken": token})
+            if data.get("status") == "success":
+                return data
+            if "sessiontoken" not in str(data.get("message") or "").lower():
+                raise CheapChartsRefused(action)
+            self._token = None  # expired: one fresh login, then one retry
+            if attempt == 2:
+                break
+        raise CheapChartsError(f"{action}: session token refused after a fresh login")
+
+    def _login(self) -> str:
+        data = self._post(
+            ACCOUNT_URL,
+            {},
+            {
+                "country": COUNTRY,
+                "action": "login",
+                "email": self._username,
+                # The website never sends the plain password: its login form sends the SHA-256 hex digest.
+                "password": hashlib.sha256(self._password.encode()).hexdigest(),
+                "origin": "website",
+                "appEntity": "cc_main_website",
+            },
+        )
+        token = (data.get("additionalInfo") or {}).get("sessionToken") if data.get("status") == "success" else None
+        if not isinstance(token, str) or not token:
+            raise CheapChartsError("login refused")
+        self._token = token
+        return token
+
+    def _post(self, url: str, params: dict[str, str], body: dict[str, str]) -> dict[str, Any]:
+        self._pacer.wait()
+        resp = self.session.post(url, params=params, data=body, headers={"Referer": REFERER}, timeout=TIMEOUT_S)
+        if resp.status_code == 429:
+            raise RateLimited(url)
+        resp.raise_for_status()
+        try:
+            data = resp.json()
+        except ValueError:
+            raise CheapChartsError("answer was not JSON") from None
+        if not isinstance(data, dict):
+            raise CheapChartsError("answer was not a JSON object")
         return data
 
 
