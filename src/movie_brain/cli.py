@@ -571,12 +571,32 @@ def oldratings_create_cmd(
     apply: Annotated[bool, typer.Option("--apply", help="Create, link and key the films (default: dry-run).")] = False,
     yes: Annotated[bool, typer.Option("--yes", help="With --apply: skip the confirmation prompt.")] = False,
     source: Annotated[str, _SOURCE_OPT] = "ntc",
+    line: Annotated[int | None, typer.Option("--line", help="With --tt: the ONE row to create by hand.")] = None,
+    tt: Annotated[str | None, typer.Option("--tt", help="With --line: the IMDb id that row names.")] = None,
 ) -> None:
-    """Create the films my old 4-5★ ratings name that the catalog lacks; re-resolves and re-gates every row."""
+    """Create the films my old 4-5★ ratings name that the catalog lacks; re-resolves and re-gates every row.
+
+    `--line N --tt ttNNN` is the hand path for a row the resolver cannot read: the id says which
+    work it is, the gates still decide whether the catalog already holds it."""
     from movie_brain.application import old_ratings
 
+    if (line is None) != (tt is None):
+        err.print("--line and --tt go together")
+        raise typer.Exit(2)
     repo = _repo()
     fetcher, cache, tmdb = _resolver_clients()
+    if line is not None and tt is not None:
+        try:
+            outcome = old_ratings.create_by_hand(
+                repo, source, line, tt, date.today(), tmdb=tmdb, apply=apply, log=_plain
+            )
+        except old_ratings.LinkError as exc:
+            err.print(str(exc))
+            raise typer.Exit(2) from exc
+        console.print(old_ratings.scorecard([outcome]), markup=False, highlight=False, soft_wrap=True)
+        if apply:
+            _enrich_after_add(repo, int(outcome.kind == "created"))
+        raise typer.Exit(1 if outcome.kind == "error" else 0)
     if apply and not yes and not typer.confirm(f"create the missing 4-5★ films for {source!r}?", default=False):
         raise typer.Exit(0)
     try:

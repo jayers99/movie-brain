@@ -14,12 +14,14 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.old_ratings import (
     LinkError,
+    create_by_hand,
     create_films,
     import_old_ratings,
     link_row,
     scorecard,
 )
 from movie_brain.domain.models import Film, OldRating
+from movie_brain.infrastructure.tmdb import TmdbFacts
 
 scenarios("../features/old_ratings.feature")
 
@@ -127,6 +129,39 @@ def create_dry(ctx):
 @when("I create the missing films with apply")
 def create_apply(ctx):
     _create(ctx, True)
+
+
+@given(parsers.parse('TMDB knows "{tt}" as film {tmdb_id:d} "{title}" ({year:d})'))
+def tmdb_knows(ctx, tt, tmdb_id, title, year):
+    ctx["tmdb"].by_imdb[tt] = tmdb_id
+    ctx["tmdb"].years[tmdb_id] = year
+    ctx["tmdb"].facts[tmdb_id] = TmdbFacts(tt, title, title, (), year, 90)
+
+
+def _hand_create(ctx, line, tt, apply):
+    ctx["hand"] = create_by_hand(ctx["repo"], SRC, line, tt, TODAY, tmdb=ctx["tmdb"], apply=apply, log=ctx["log"].append)
+
+
+@when(parsers.parse('I hand-create row {line:d} as "{tt}"'))
+def hand_create_dry(ctx, line, tt):
+    _hand_create(ctx, line, tt, False)
+
+
+@when(parsers.parse('I hand-create row {line:d} as "{tt}" with apply'))
+def hand_create_apply(ctx, line, tt):
+    _hand_create(ctx, line, tt, True)
+
+
+@then(parsers.parse('the hand create says "{kind}"'))
+def hand_create_says(ctx, kind):
+    assert ctx["hand"].kind == kind, ctx["hand"]
+
+
+@then(parsers.parse('hand-creating row {line:d} as "{tt}" is refused'))
+def hand_create_refused(ctx, line, tt):
+    with pytest.raises(LinkError):
+        _hand_create(ctx, line, tt, True)
+    assert _stored(ctx, line)[0] is None
 
 
 @when(parsers.parse('I hand-link row {line:d} to "{title}"'))
