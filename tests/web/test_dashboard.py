@@ -162,7 +162,7 @@ def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Pa
 def test_chip_labels_and_order(dash: Page):
     # Everything off by default: every cycle chip shows its off label.
     labels = [t.strip() for t in dash.locator("#chips .chip").all_inner_texts()]
-    assert labels == ["Reachable", "Rated", "Criterion", "Watchlist", "Owned", "On a list", "Rewatch", "Clear"]
+    assert labels == ["Reachable", "Rated", "Criterion", "Watchlist", "Owned", "On a list", "Rewatch", "Shop", "Clear"]
 
 
 def test_cycle_chip_walks_off_a_b_off_and_encodes_one_key(dash: Page):

@@ -39,6 +39,21 @@ def rewatch(v: FilmView) -> bool:
     return v.old_rating is not None and v.old_rating["stars"] == OLD_LOVED and v.my_rating is None
 
 
+def shop(v: FilmView) -> bool:
+    """A film worth buying (brief 2026-09-20-shop-chip): not owned, not rated today (0 is a
+    rating; the 2004-08 stars are not), on no streaming service I have, for sale on Apple, and
+    not already on my CheapCharts wishlist — a wishlisted film is DECIDED (owner's choice, variant
+    B), so it leaves the list the moment it is wishlisted.
+
+    "For sale on Apple" is the `itunes` store id (`cheapcharts_url`), never TMDB's store listing:
+    it is exactly what the drawer's Wishlist-it button needs, so the list and the button cannot
+    disagree. "A service I have" is read from the RAW fields, never from `best_source`: the Apple
+    store row is itself `subscribed`, so the `svod` check is load-bearing, and `best_source` is
+    what an owned film answers with. Mirrored by `shop` in app.js."""
+    on_mine = (v.criterion and not v.departed) or any(s["kind"] == "svod" and s["subscribed"] for s in v.services)
+    return not v.owned and v.my_rating is None and not on_mine and v.cheapcharts_url is not None and not v.wishlisted
+
+
 def _criterion_new(v: FilmView, today: date) -> bool:
     cutoff = today - timedelta(days=NEW_ARRIVAL_DAYS)
     return any(
@@ -88,7 +103,7 @@ def is_canon(view: FilmView) -> bool:
 
 
 # The chip bar (2026-09-07 redesign): four three-way groups plus plain chips (a third, `rewatch`,
-# since 2026-09-19), everything off
+# since 2026-09-19; a fourth, `shop`, since 2026-09-20), everything off
 # by default. A group's keys are mutually exclusive in the UI (the chip cycles off → A → B → off),
 # but each key is an ordinary predicate here so `matches` and the URL's `chips=` list need no
 # group logic. Keys already encoded in saved URLs (`unrated`, `mine`, `leaving`, `watchlist`,
@@ -109,6 +124,7 @@ _PREDICATES: dict[str, Predicate] = {
     "not_owned": lambda v, _: not v.owned,
     "multi_list": lambda v, _: len(v.lists) >= MIN_LISTS,
     "rewatch": lambda v, _: rewatch(v),
+    "shop": lambda v, _: shop(v),
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)
