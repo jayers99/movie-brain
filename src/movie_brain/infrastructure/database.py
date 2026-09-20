@@ -2580,6 +2580,26 @@ class Repository:
             )
             return True
 
+    def replace_wishlist(self, itunes_ids: Iterable[str], today: date) -> int:
+        """The wishlist read's write: the local hearts become exactly the films holding one of
+        these store ids — a film bought or removed on CheapCharts loses its heart, one added there
+        by hand gains it, one that stays keeps its date. Ids no film holds are simply not ours.
+        Returns how many films are hearted now."""
+        wanted = set(itunes_ids)
+        with self._conn() as c:
+            film_ids = {
+                int(r["film_id"])
+                for r in c.execute("SELECT film_id, value FROM external_ids WHERE authority = 'itunes'")
+                if str(r["value"]) in wanted
+            }
+            current = _wishlisted_ids(c)
+            c.executemany("DELETE FROM cheapcharts_wishlist WHERE film_id = ?", [(f,) for f in current - film_ids])
+            c.executemany(
+                "INSERT INTO cheapcharts_wishlist (film_id, added_on) VALUES (?, ?)",
+                [(f, today.isoformat()) for f in sorted(film_ids - current)],
+            )
+            return len(film_ids)
+
     def itunes_id_for(self, film_id: int) -> str | None:
         """The store id behind this film's CheapCharts link. `itunes` is a claim authority and
         may repeat; this is the same scalar pick `_VIEW_SQL` makes, so the wishlisted product is
