@@ -5,15 +5,48 @@ import threading
 import time
 from collections.abc import Generator
 from datetime import date
+from decimal import Decimal
 
 import pytest
 from playwright.sync_api import Page
 
+from movie_brain.application.wishlist import WishlistError, WishlistGateway
 from movie_brain.domain.models import CastRow, CrewRow, Film, ListEntry, ListMeta, McTitle, OmdbRating, TmdbCredits
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
 
 TODAY = date(2026, 8, 19)
+
+# "Wishlist it": the live server is driven by fakes — no test run can reach a real account.
+CHARLIE_ITUNES, DELTA_ITUNES, ECHO_ITUNES = "273058482", "366474905", "495816081"
+
+
+class FakePrices:
+    def lowest_price(self, itunes_id: str) -> Decimal | None:
+        return Decimal("2.99")
+
+
+class FakeAccount:
+    """Delta's product always fails, so the failure line has a film of its own and the two
+    click tests never depend on each other's order."""
+
+    def __init__(self) -> None:
+        self.targets: dict[str, Decimal] = {ECHO_ITUNES: Decimal("5.99")}
+
+    def add_item(self, itunes_id: str) -> bool:
+        time.sleep(0.4)  # long enough for "Reaching CheapCharts…" to be seen
+        if itunes_id == DELTA_ITUNES:
+            raise WishlistError("down")
+        return True
+
+    def set_target(self, itunes_id: str, target: Decimal) -> None:
+        self.targets[itunes_id] = target
+
+    def wishlist_ids(self) -> list[str]:
+        return list(self.targets)
+
+
+FAKE_ACCOUNT = FakeAccount()
 
 
 # The seed exercises the default sort hierarchy (mc desc → rt desc → imdb desc → title):
@@ -217,6 +250,14 @@ def seed(repo: Repository) -> None:
     hid = repo.create_film(Film("Hotel", 2021, None, ""))
     repo.upsert_omdb(hid, OmdbRating(None, None, True, "Hungarian", '{"Title":"Hotel"}'), TODAY)
     repo.record_listing_with_transition(hid, "apple-tv-store", "https://tmdb/w/2", TODAY)
+    # "Wishlist it": Charlie is for sale and not wishlisted (the click film); Delta is for sale
+    # and its add always fails (the failure line); Echo is already wishlisted and also carries a
+    # list badge (the heart-comes-last film). All three hold a current Criterion listing, so the
+    # store id changes nobody's reachability. Alpha stays owned + unwishlisted: no heart, no button.
+    repo.set_external_id(ids["charlie (1970)"], "itunes", CHARLIE_ITUNES, TODAY)
+    repo.set_external_id(ids["delta (1980)"], "itunes", DELTA_ITUNES, TODAY)
+    repo.set_external_id(ids["echo (1990)"], "itunes", ECHO_ITUNES, TODAY)
+    repo.mark_wishlisted(ids["echo (1990)"], TODAY)
 
 
 @pytest.fixture(scope="session")
@@ -233,7 +274,7 @@ def server(seeded_repo: Repository) -> Generator[str, None, None]:
     sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
     sock.close()
-    app = create_app(seeded_repo, today=lambda: TODAY)
+    app = create_app(seeded_repo, today=lambda: TODAY, wishlist=WishlistGateway(FakePrices(), FAKE_ACCOUNT))
     threading.Thread(target=lambda: app.run(host="127.0.0.1", port=port, use_reloader=False), daemon=True).start()
     time.sleep(0.5)
     yield f"http://127.0.0.1:{port}"

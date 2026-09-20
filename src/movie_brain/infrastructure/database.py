@@ -195,6 +195,7 @@ _ONE_ROW_TABLES = (
     "film_embedding",
     "unseen",
     "rank_mark",
+    "cheapcharts_wishlist",
 )  # film_id PRIMARY KEY tables
 
 
@@ -502,6 +503,10 @@ def _rank_mark_ids(c: sqlite3.Connection) -> set[int]:
     return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM rank_mark")}
 
 
+def _wishlisted_ids(c: sqlite3.Connection) -> set[int]:
+    return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM cheapcharts_wishlist")}
+
+
 def _revisit_by_film(c: sqlite3.Connection) -> dict[int, str | None]:
     return {int(r["film_id"]): r["note"] for r in c.execute("SELECT film_id, note FROM needs_revisit")}
 
@@ -548,6 +553,7 @@ def _row_to_view(
     unseen: bool = False,
     rank_marked: bool = False,
     old_rating: dict[str, object] | None = None,
+    wishlisted: bool = False,
     revisit: tuple[bool, str | None] = (False, None),
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
@@ -581,6 +587,7 @@ def _row_to_view(
         unseen=unseen,
         rank_marked=rank_marked,
         old_rating=old_rating,
+        wishlisted=wishlisted,
         needs_revisit=revisit[0],
         revisit_note=revisit[1],
         audit=audit[0],
@@ -2556,6 +2563,33 @@ class Repository:
             c.execute("DELETE FROM rank_mark WHERE film_id = ?", (film_id,))
             return False
 
+    # cheapcharts_wishlist ("Wishlist it", brief 2026-09-19-price-watch) ----------
+    def wishlisted_film_ids(self) -> set[int]:
+        with self._conn() as c:
+            return _wishlisted_ids(c)
+
+    def mark_wishlisted(self, film_id: int, today: date) -> bool | None:
+        """The button's write: idempotent, None when the film does not exist. There is no
+        un-mark — a heart only comes off when a wishlist read no longer holds the film."""
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                return None
+            c.execute(
+                "INSERT OR IGNORE INTO cheapcharts_wishlist (film_id, added_on) VALUES (?, ?)",
+                (film_id, today.isoformat()),
+            )
+            return True
+
+    def itunes_id_for(self, film_id: int) -> str | None:
+        """The store id behind this film's CheapCharts link. `itunes` is a claim authority and
+        may repeat; this is the same scalar pick `_VIEW_SQL` makes, so the wishlisted product is
+        the one the drawer links to."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT value FROM external_ids WHERE film_id = ? AND authority = 'itunes'", (film_id,)
+            ).fetchone()
+            return None if row is None else str(row["value"])
+
     # the pool (ranking-pool spec §4.1, P1) ---------------------------------------
     _POOL_SQL = (
         "SELECT f.id FROM films f "
@@ -2962,6 +2996,8 @@ class Repository:
                         kept[table] = {"marked_on": loser_row["marked_on"], "note": loser_row["note"]}
                     elif table == "rank_mark":
                         kept[table] = {"marked_on": loser_row["marked_on"]}
+                    elif table == "cheapcharts_wishlist":
+                        kept[table] = {"added_on": loser_row["added_on"]}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -3385,6 +3421,7 @@ class Repository:
             ow = _owned_ids(c)
             un = _unseen_ids(c)
             rm = _rank_mark_ids(c)
+            wi = _wishlisted_ids(c)
             old = _old_rating_by_film(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
@@ -3401,6 +3438,7 @@ class Repository:
                     unseen=r["id"] in un,
                     rank_marked=r["id"] in rm,
                     old_rating=old.get(r["id"]),
+                    wishlisted=r["id"] in wi,
                     revisit=(r["id"] in rv, rv.get(r["id"])),
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
@@ -3427,6 +3465,7 @@ class Repository:
                 unseen=row["id"] in _unseen_ids(c),
                 rank_marked=row["id"] in _rank_mark_ids(c),
                 old_rating=_old_rating_by_film(c).get(row["id"]),
+                wishlisted=row["id"] in _wishlisted_ids(c),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
                 audit=au.get(row["id"], (None, None)),
                 criterion_option=_service_option(c, 'criterion'),

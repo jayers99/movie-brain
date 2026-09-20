@@ -153,7 +153,9 @@
     const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '')
       + (listCount > 0 ? ` <span class="badge-lists" title="on ${listCount} curated list${listCount === 1 ? '' : 's'}">${listCount} list${listCount === 1 ? '' : 's'}</span>` : '')
       + (f.owned ? ' <span class="badge-owned" title="Owned on Apple TV">owned</span>' : '')
-      + oldBadge(f) + watchBadge;
+      + oldBadge(f) + watchBadge
+      // On my CheapCharts wishlist — always the last mark on the row, and never a price.
+      + (f.wishlisted ? ' <span class="icon-wish" title="On your CheapCharts wishlist">♥</span>' : '');
     return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
@@ -551,6 +553,15 @@
     }
     return '';
   }
+  // "Wishlist it" (brief 2026-09-19-price-watch). One slot in the links row, after the CheapCharts
+  // link: the done mark, or the button — shown only for a film the Apple store sells (it holds a
+  // store id, hence a direct CheapCharts page) that I do not own. Anything else: nothing, no message.
+  const WISH_BUTTON = '♡ Wishlist it';
+  function wishHtml(d) {
+    if (d.wishlisted) return ' <span class="wish" data-id="' + d.id + '"><span class="wish-done">♥ Wishlisted</span></span>';
+    if (!d.cheapcharts_url || d.owned) return '';
+    return ` <span class="wish" data-id="${d.id}"><button class="wish-button">${WISH_BUTTON}</button></span>`;
+  }
   function detailHtml(d) {
     const p = d.payload || {};
     const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '';
@@ -633,7 +644,7 @@
         ${d.tmdb_url ? ` <a class="criterion tmdb-link" href="${esc(d.tmdb_url)}" target="_blank" rel="noopener">TMDB ↗</a>` : ''}
         ${d.cheapcharts_url
           ? ` <a class="criterion cheapcharts-link" href="${esc(d.cheapcharts_url)}" target="_blank" rel="noopener">CheapCharts ↗</a>`
-          : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}</p>
+          : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}${wishHtml(d)}</p>
       ${renderAudit(d)}
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
@@ -743,6 +754,18 @@
     b.setAttribute('aria-pressed', String(unseen));
     const film = state.films.find((f) => f.id === Number(b.dataset.id));
     if (film) film.unseen = unseen;
+  });
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.wish-button'); if (!b || b.disabled) return;
+    const slot = b.closest('.wish'); const id = Number(slot.dataset.id);
+    // Four or five paced calls to CheapCharts: 5-10 s. The button says so and cannot be clicked twice.
+    b.disabled = true; b.textContent = 'Reaching CheapCharts…';
+    const r = await fetch(`/api/films/${id}/wishlist`, { method: 'POST' }).catch(() => null);
+    if (!r || !r.ok) { b.disabled = false; b.textContent = WISH_BUTTON; return; }
+    // Patch in place, as the toggles do: re-opening the drawer would desync closeDrawer()'s history bookkeeping.
+    slot.innerHTML = '<span class="wish-done">♥ Wishlisted</span>';
+    const film = state.films.find((f) => f.id === id);
+    if (film) { film.wishlisted = true; applyFilters(); }
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.tier-pick'); if (!b || b.getAttribute('aria-current') === 'true') return;
