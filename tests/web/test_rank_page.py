@@ -163,3 +163,25 @@ def test_rank_flow(page: Page, rank_server: str):
     # A legacy `#order` bookmark reads as tier 1.
     page.goto(rank_server + "/rank#order")
     expect(page.locator('.tab[data-mode="order-1"]')).to_have_attribute("aria-current", "true")
+
+
+def test_order_tab_with_only_unreadable_logs_left_says_so_instead_of_breaking(page: Page, rank_server: str):
+    """When every film still waiting in a tier has a corrupt order log the server answers
+    `pair: null, done: false` — unfinished work with nothing to ask. The page must say that,
+    not throw on the missing pair and sit on whatever was drawn before."""
+    session = {
+        "session": {"id": 1}, "placed": 5, "remaining": 0, "unseen": 0, "can_undo": False,
+        "tally": {"1": 1, "2": 1, "3": 1, "4": 1, "5": 1}, "needs_anchor": [], "done": True, "pair": None,
+    }
+    order = {"pair": None, "done": False, "corrupt": [7], "ordered": 3, "remaining": 1, "can_undo": False}
+    page.route("**/api/rank/session", lambda r: r.fulfill(json=session))
+    page.route("**/api/rank/order?*", lambda r: r.fulfill(json=order))
+    errors: list[str] = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto(rank_server + "/rank#order-1")
+    page.wait_for_selector('#rank[data-state="order_stuck"]')
+    expect(page.locator("#order-stuck")).to_be_visible()
+    expect(page.locator("#order-stuck")).to_contain_text("1 film")
+    expect(page.locator("#order-stuck a")).to_have_attribute("href", "/?film=7")
+    expect(page.locator("#pair")).to_be_hidden()
+    assert errors == []

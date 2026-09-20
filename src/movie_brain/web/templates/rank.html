@@ -47,6 +47,7 @@
     <section id="done" hidden><p>Every film in the pool is placed. Save the list above.</p></section>
     <section id="order-empty" hidden><p>Start a tiering session first — the order lives inside it.</p></section>
     <section id="order-done" hidden><p>Every film in this tier is ordered. Save the list above.</p></section>
+    <section id="order-stuck" hidden><p>Nothing left to ask in this tier, but <span id="order-stuck-count"></span> could not be ordered, because the order log is unreadable: <span id="order-stuck-films"></span>. Moving the film to another tier and back (the Tier row in its drawer) clears the log.</p></section>
   </main>
   <script src="{{ url_for('static', filename='rank.js') }}"></script>
 </body>
