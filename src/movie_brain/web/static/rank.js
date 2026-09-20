@@ -35,7 +35,7 @@
   const note = (text) => { const n = $('#note'); n.textContent = text; setTimeout(() => { if (n.textContent === text) n.textContent = ''; }, 4000); };
 
   const show = (which) => {
-    for (const id of ['setup', 'pair', 'done', 'order-empty', 'order-done']) $('#' + id).hidden = id !== which;
+    for (const id of ['setup', 'pair', 'done', 'order-empty', 'order-done', 'order-stuck']) $('#' + id).hidden = id !== which;
     $('#progress').hidden = !state.session || !state.session.session;
     for (const el of document.querySelectorAll('.tiers-only')) el.hidden = mode() !== 'tiers';
     for (const el of document.querySelectorAll('.order-only')) el.hidden = !isOrder();
@@ -140,6 +140,13 @@
       if (state.order.corrupt.length) note(`${state.order.corrupt.length} film(s) have an unreadable order log and were skipped`);
       renderProgress();
       if (state.order.done) { show('order-done'); main.dataset.state = 'order_done'; return; }
+      // Not done and nothing to ask: every film still waiting has an unreadable order log.
+      if (!state.order.pair) {
+        const ids = state.order.corrupt;
+        $('#order-stuck-count').textContent = `${ids.length} film${ids.length === 1 ? '' : 's'}`;
+        $('#order-stuck-films').innerHTML = ids.map((id) => `<a href="/?film=${Number(id)}">film #${Number(id)}</a>`).join(' · ');
+        show('order-stuck'); main.dataset.state = 'order_stuck'; return;
+      }
       return renderOrderPair();
     }
     renderProgress();
