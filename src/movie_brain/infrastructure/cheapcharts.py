@@ -236,11 +236,17 @@ class CheapChartsClient:
         return data
 
 
+@dataclass(frozen=True)
+class WishlistItem:
+    itunes_id: str
+    custom_target: bool  # a target price was set for it — by hand on CheapCharts, or by us
+
+
 class CheapChartsAccount:
     """The owner's CheapCharts account over the website's own API — plain form POSTs, proven
     end to end on 2026-09-19 (brief 2026-09-19-price-watch). The session token lives in memory
-    only; a missing or refused one triggers exactly one fresh login. Every answer is HTTP 200
-    with `status: success|error`."""
+    only; a missing or refused one triggers exactly one fresh login. Every answer is HTTP 200;
+    the WRITE calls carry `status: success|error`, the read carries no `status` at all."""
 
     def __init__(
         self,
@@ -256,23 +262,28 @@ class CheapChartsAccount:
         self._pacer = pacer or Pacer()
         self._token: str | None = None
 
-    def wishlist_ids(self) -> list[str]:
-        """The iTunes ids of every film on the wishlist, in CheapCharts' order. `results` not an
-        object, or a missing/non-list `movies` inside it, is a shape the API has never been
-        observed to send — refused rather than read as an empty wishlist, which
-        `replace_wishlist`'s wholesale replace would turn into erasing every real heart."""
-        data = self._wishlist("getShortItemList_v2")
+    def wishlist_items(self) -> list[WishlistItem]:
+        """Every film on the wishlist, in CheapCharts' order. The read is the one call whose
+        answer carries NO `status` key on success (seen on the real account 2026-09-19) — its
+        shape is the validation: `results` must be an object holding a `movies` list, anything
+        else is refused rather than read as an empty wishlist (a wholesale replace would erase
+        every heart). `customPrice` is simply absent on an item with no target."""
+        data = self._wishlist("getShortItemList_v2", needs_status=False)
         results = data.get("results")
         if not isinstance(results, dict):
             raise CheapChartsError("unexpected answer shape")
         movies = results.get("movies")
         if not isinstance(movies, list):
             raise CheapChartsError("unexpected answer shape")
-        return [str(m["idInStore"]) for m in movies if isinstance(m, dict) and m.get("idInStore")]
+        return [
+            WishlistItem(str(m["idInStore"]), custom_target=m.get("customPrice") is True)
+            for m in movies
+            if isinstance(m, dict) and m.get("idInStore")
+        ]
 
     def add_item(self, itunes_id: str) -> bool:
         """False when the API refused — most likely the film is already there, but its wording
-        for that was never observed, so the caller sets the target anyway and trusts the read-back."""
+        for that was never observed, so the refusal is reported and the caller decides."""
         try:
             self._wishlist("addItem", itemType="buymovies", idInStore=itunes_id)
         except CheapChartsRefused:
@@ -288,21 +299,25 @@ class CheapChartsAccount:
 
     def remove_item(self, itunes_id: str) -> bool:
         """False when the API refused — most likely the film is already gone. Seen in the site's
-        own code, first exercised by the owner's hands-on test; the caller trusts the read-back."""
+        own code, first exercised by the owner's hands-on test; the caller decides."""
         try:
             self._wishlist("removeItem", itemType="buymovies", idInStore=itunes_id)
         except CheapChartsRefused:
             return False
         return True
 
-    def _wishlist(self, action: str, **extra: str) -> dict[str, Any]:
+    def _wishlist(self, action: str, *, needs_status: bool = True, **extra: str) -> dict[str, Any]:
+        """`needs_status` says which kind of call this is: every WRITE answers `status:
+        success|error`, while the read answers with no `status` at all, so a write that loses
+        its `status` is still refused and only the read may be believed without one."""
         params = {"country": COUNTRY, "store": STORE, "action": action, **extra}
         for attempt in (1, 2):
             token = self._token or self._login()
             data = self._post(WISHLIST_URL, params, {"sessionToken": token})
-            if data.get("status") == "success":
+            status = data.get("status")
+            if status == "success" or (status is None and not needs_status):
                 return data
-            if "sessiontoken" not in str(data.get("message") or "").lower():
+            if status != "error" or "sessiontoken" not in str(data.get("message") or "").lower():
                 raise CheapChartsRefused(action)
             self._token = None  # expired: one fresh login, then one retry
             if attempt == 2:

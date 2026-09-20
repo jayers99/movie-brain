@@ -18,7 +18,13 @@ from movie_brain.application.wishlist import (
 )
 from movie_brain.domain.models import Film
 from movie_brain.domain.wishlist import target_price
-from movie_brain.infrastructure.cheapcharts import DETAIL_URL, CheapChartsClient, CheapChartsError, RateLimited
+from movie_brain.infrastructure.cheapcharts import (
+    DETAIL_URL,
+    CheapChartsClient,
+    CheapChartsError,
+    RateLimited,
+    WishlistItem,
+)
 
 D = date(2026, 9, 19)
 
@@ -40,9 +46,13 @@ class FakePrices:
 
 
 class FakeAccount:
-    def __init__(self, listed=()):
+    """`listed` is what CheapCharts holds; `targeted` is which of those carry a custom price —
+    the two things the real read reports, and the two the click now decides on."""
+
+    def __init__(self, listed=(), targeted=()):
         self.calls = []
         self.listed = list(listed)
+        self.targeted = set(targeted)
 
     def add_item(self, itunes_id):
         self.calls.append(("add", itunes_id))
@@ -52,15 +62,17 @@ class FakeAccount:
 
     def set_target(self, itunes_id, target):
         self.calls.append(("target", itunes_id, target))
+        self.targeted.add(itunes_id)
 
-    def wishlist_ids(self):
+    def wishlist_items(self):
         self.calls.append(("read",))
-        return list(self.listed)
+        return [WishlistItem(i, custom_target=i in self.targeted) for i in self.listed]
 
     def remove_item(self, itunes_id):
         self.calls.append(("remove", itunes_id))
         if itunes_id in self.listed:
             self.listed.remove(itunes_id)
+        self.targeted.discard(itunes_id)
         return True
 
 
@@ -101,8 +113,7 @@ def test_a_click_adds_the_film_at_lowest_plus_one_and_marks_it(repo):
     dtrt = _film(repo, "Do the Right Thing", 1989, "282538466")
     account = FakeAccount()
     wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), account), dtrt, D)
-    assert ("add", "282538466") in account.calls
-    assert ("target", "282538466", Decimal("3.99")) in account.calls
+    assert account.calls == [("read",), ("add", "282538466"), ("target", "282538466", Decimal("3.99"))]
     assert repo.wishlisted_film_ids() == {dtrt}
 
 
@@ -125,7 +136,7 @@ def test_no_price_history_at_all_fails_and_marks_nothing(repo):
     account = FakeAccount()
     with pytest.raises(WishlistError):
         wishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
-    assert account.calls == [] and repo.wishlisted_film_ids() == set()
+    assert account.calls == [("read",)] and repo.wishlisted_film_ids() == set()
 
 
 @responses.activate
@@ -138,7 +149,7 @@ def test_a_reshaped_detaildata_answer_ends_as_wishlist_error_not_a_crash(repo):
     account = FakeAccount()
     with pytest.raises(WishlistError):
         wishlist_film(repo, WishlistGateway(CheapChartsClient(delay_s=0), account), fid, D)
-    assert account.calls == [] and repo.wishlisted_film_ids() == set()
+    assert account.calls == [("read",)] and repo.wishlisted_film_ids() == set()
 
 
 def test_an_already_wishlisted_film_is_left_alone(repo):
@@ -187,7 +198,7 @@ def test_a_failed_refresh_keeps_the_last_known_hearts(repo):
     repo.mark_wishlisted(fid, D)
 
     class Down(FakeAccount):
-        def wishlist_ids(self):
+        def wishlist_items(self):
             raise requests.ConnectionError("offline")
 
     with pytest.raises(WishlistError):
@@ -195,60 +206,83 @@ def test_a_failed_refresh_keeps_the_last_known_hearts(repo):
     assert repo.wishlisted_film_ids() == {fid}
 
 
-def test_a_click_reads_the_wishlist_back_and_replaces_every_heart(repo):
+def test_a_click_reads_the_wishlist_first_and_replaces_every_heart(repo):
     dtrt = _film(repo, "Do the Right Thing", 1989, "282538466")
     stale = _film(repo, "Bought Since", 1990, "777")
     leopard = _film(repo, "The Leopard", 1963, "273058482")
     repo.mark_wishlisted(stale, D)
     account = FakeAccount(listed=["273058482"])
     wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), account), dtrt, D)
-    assert [c[0] for c in account.calls] == ["add", "target", "read"]
+    assert [c[0] for c in account.calls] == ["read", "add", "target"]
     assert repo.wishlisted_film_ids() == {dtrt, leopard}
 
 
-def test_a_refused_add_still_sets_the_target_and_the_read_back_decides(repo):
-    """A half-finished earlier click (added, target never set) is repaired by Try again."""
+def test_a_failed_read_writes_nothing_to_cheapcharts_or_locally(repo):
+    """Amendment 1.3's rule: the read is the first thing every click does, and a click that
+    cannot read the wishlist writes nowhere — no add, no target, no heart."""
+    fid = _film(repo, "Do the Right Thing", 1989, "282538466")
+    other = _film(repo, "Bought Since", 1990, "777")
+    repo.mark_wishlisted(other, D)
+
+    class NoRead(FakeAccount):
+        def wishlist_items(self):
+            self.calls.append(("read",))
+            raise CheapChartsError("unexpected answer shape")
+
+    account = NoRead()
+    with pytest.raises(WishlistError):
+        wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), account), fid, D)
+    assert account.calls == [("read",)]
+    assert repo.wishlisted_film_ids() == {other}  # the stale heart is kept, not replaced
+
+
+def test_a_film_already_on_the_wishlist_with_a_hand_set_target_keeps_it_untouched(repo):
+    """The invariant 1.0 promised and only the pre-read can enforce: the local hearts may be
+    stale, so "already there" is decided by what CheapCharts says at the moment of the click."""
+    fid = _film(repo, "The Leopard", 1963, "273058482")
+    account = FakeAccount(listed=["273058482"], targeted=["273058482"])
+    wishlist_film(repo, WishlistGateway(FakePrices({"273058482": Decimal("4.99")}), account), fid, D)
+    assert account.calls == [("read",)]  # no add, and above all no target
+    assert repo.wishlisted_film_ids() == {fid}  # it still gets its heart
+
+
+def test_a_film_on_the_wishlist_without_a_target_gets_the_target_and_nothing_else(repo):
+    """A half-finished earlier click (added, target never set) is repaired by clicking again."""
+    fid = _film(repo, "Do the Right Thing", 1989, "282538466")
+    account = FakeAccount(listed=["282538466"])
+    wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), account), fid, D)
+    assert account.calls == [("read",), ("target", "282538466", Decimal("3.99"))]
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+def test_a_refused_add_is_a_failure_and_marks_nothing(repo):
+    """No fallback believes a write without proof: the API said no, so the click failed."""
     fid = _film(repo, "Do the Right Thing", 1989, "282538466")
 
-    class AlreadyThere(FakeAccount):
+    class Refusing(FakeAccount):
         def add_item(self, itunes_id):
             self.calls.append(("add", itunes_id))
             return False
 
-    there = AlreadyThere(listed=["282538466"])
-    wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), there), fid, D)
-    assert ("target", "282538466", Decimal("3.99")) in there.calls and repo.wishlisted_film_ids() == {fid}
-
-    other = _film(repo, "Mulholland Dr.", 2001, "1753833311")
-    absent = AlreadyThere(listed=[])  # refused for some other reason: the read-back does not hold it
-    with pytest.raises(WishlistError):
-        wishlist_film(repo, WishlistGateway(FakePrices({"1753833311": Decimal("7.99")}), absent), other, D)
-    assert other not in repo.wishlisted_film_ids()
+    account = Refusing()
+    with pytest.raises(WishlistError, match="add refused"):
+        wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), account), fid, D)
+    assert [c[0] for c in account.calls] == ["read", "add"]  # the target is never set
+    assert repo.wishlisted_film_ids() == set()
 
 
-def test_when_the_read_back_fails_an_accepted_add_is_believed_and_a_refused_one_is_not(repo):
-    fid = _film(repo, "Do the Right Thing", 1989, "282538466")
-    prices = FakePrices({"282538466": Decimal("2.99")})
-
-    class NoRead(FakeAccount):
-        def wishlist_ids(self):
-            raise CheapChartsError("read")
-
-    wishlist_film(repo, WishlistGateway(prices, NoRead()), fid, D)
-    assert repo.wishlisted_film_ids() == {fid}
-
-    class RefusedNoRead(NoRead):
-        def add_item(self, itunes_id):
-            return False
-
-    other = _film(repo, "Mulholland Dr.", 2001, "1753833311")
-    with pytest.raises(WishlistError):
-        wishlist_film(repo, WishlistGateway(FakePrices({"1753833311": Decimal("7.99")}), RefusedNoRead()), other, D)
-    assert other not in repo.wishlisted_film_ids()
-
-
-@pytest.mark.parametrize("boom", [requests.ConnectionError("x"), RateLimited("x"), CheapChartsError("x")])
-def test_every_remote_failure_becomes_the_one_wishlist_error_and_marks_nothing(repo, boom):
+@pytest.mark.parametrize(
+    ("boom", "reason"),
+    [
+        (requests.ConnectionError("https://secret"), "ConnectionError"),
+        (RateLimited("https://secret"), "rate limited"),
+        (CheapChartsError("unexpected answer shape"), "unexpected answer shape"),
+    ],
+)
+def test_every_remote_failure_becomes_the_one_wishlist_error_and_marks_nothing(repo, boom, reason):
+    """The reason is NAMED (amendment 1.3) so a failure is diagnosable off-screen, but only in
+    OUR words: a CheapChartsError's message is our own wording by construction, while anything
+    from `requests` is named by its class, because its text carries the URL."""
     fid = _film(repo, "Do the Right Thing", 1989, "282538466")
 
     class Failing(FakeAccount):
@@ -258,7 +292,7 @@ def test_every_remote_failure_becomes_the_one_wishlist_error_and_marks_nothing(r
     with pytest.raises(WishlistError) as exc:
         wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), Failing()), fid, D)
     assert repo.wishlisted_film_ids() == set()
-    assert str(exc.value) == type(boom).__name__  # the class name only — never a message that could carry a secret
+    assert str(exc.value) == reason and "secret" not in str(exc.value)
 
 
 def test_merge_moves_the_heart_survivor_wins(repo):
@@ -281,7 +315,7 @@ def test_unmark_wishlisted_is_idempotent(repo):
     assert repo.wishlisted_film_ids() == set() and repo.get_view(fid, D).wishlisted is False
 
 
-def test_un_wishlisting_removes_the_film_and_the_read_back_replaces_every_heart(repo):
+def test_un_wishlisting_reads_the_wishlist_first_and_replaces_every_heart(repo):
     nashville = _film(repo, "Nashville", 1975, "366474905")
     leopard = _film(repo, "The Leopard", 1963, "273058482")
     stale = _film(repo, "Bought Since", 1990, "777")
@@ -289,7 +323,7 @@ def test_un_wishlisting_removes_the_film_and_the_read_back_replaces_every_heart(
         repo.mark_wishlisted(fid, D)
     account = FakeAccount(listed=["366474905", "273058482"])
     unwishlist_film(repo, WishlistGateway(FakePrices({}), account), nashville, D)
-    assert [c[0] for c in account.calls] == ["remove", "read"]
+    assert [c[0] for c in account.calls] == ["read", "remove"]
     assert repo.wishlisted_film_ids() == {leopard}
 
 
@@ -310,37 +344,43 @@ def test_un_wishlisting_a_film_that_is_not_wishlisted_asks_cheapcharts_nothing(r
         unwishlist_film(repo, WishlistGateway(FakePrices({}), account), 999, D)
 
 
-def test_a_remove_the_read_back_still_holds_is_a_failure_and_the_heart_stays(repo):
+def test_un_wishlisting_a_film_cheapcharts_no_longer_holds_removes_nothing_and_drops_the_heart(repo):
+    """The local heart was stale — somebody took it off on CheapCharts. The pre-read says so,
+    the heart goes, and no removal is sent for a film that is already gone."""
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+    account = FakeAccount(listed=[])
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
+    assert account.calls == [("read",)] and repo.wishlisted_film_ids() == set()
+
+
+def test_a_refused_remove_is_a_failure_and_the_heart_stays(repo):
     fid = _film(repo, "Nashville", 1975, "366474905")
     repo.mark_wishlisted(fid, D)
 
     class Sticky(FakeAccount):
         def remove_item(self, itunes_id):
             self.calls.append(("remove", itunes_id))
-            return False  # refused, and the film is still listed
+            return False
 
-    with pytest.raises(WishlistError):
+    with pytest.raises(WishlistError, match="remove refused"):
         unwishlist_film(repo, WishlistGateway(FakePrices({}), Sticky(listed=["366474905"])), fid, D)
     assert repo.wishlisted_film_ids() == {fid}
 
 
-def test_when_the_read_back_fails_an_accepted_remove_is_believed_and_a_refused_one_is_not(repo):
+def test_a_failed_read_sends_no_removal_and_keeps_the_heart(repo):
     fid = _film(repo, "Nashville", 1975, "366474905")
     repo.mark_wishlisted(fid, D)
 
     class NoRead(FakeAccount):
-        def wishlist_ids(self):
-            raise CheapChartsError("read")
+        def wishlist_items(self):
+            self.calls.append(("read",))
+            raise CheapChartsError("unexpected answer shape")
 
-    class RefusedNoRead(NoRead):
-        def remove_item(self, itunes_id):
-            return False
-
+    account = NoRead(listed=["366474905"])
     with pytest.raises(WishlistError):
-        unwishlist_film(repo, WishlistGateway(FakePrices({}), RefusedNoRead(listed=["366474905"])), fid, D)
-    assert repo.wishlisted_film_ids() == {fid}
-    unwishlist_film(repo, WishlistGateway(FakePrices({}), NoRead(listed=["366474905"])), fid, D)
-    assert repo.wishlisted_film_ids() == set()
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
+    assert account.calls == [("read",)] and repo.wishlisted_film_ids() == {fid}
 
 
 def test_a_remote_failure_while_removing_becomes_the_one_wishlist_error(repo):
@@ -352,5 +392,5 @@ def test_a_remote_failure_while_removing_becomes_the_one_wishlist_error(repo):
             raise requests.ConnectionError("offline")
 
     with pytest.raises(WishlistError) as exc:
-        unwishlist_film(repo, WishlistGateway(FakePrices({}), Down()), fid, D)
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), Down(listed=["366474905"])), fid, D)
     assert str(exc.value) == "ConnectionError" and repo.wishlisted_film_ids() == {fid}

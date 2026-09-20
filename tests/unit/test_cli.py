@@ -983,9 +983,8 @@ def test_cheapcharts_wishlist_reads_the_account_and_reports_the_hearts(config_di
         '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
     )
     responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": {"sessionToken": "tok-1"}})
-    responses.post(
-        WISHLIST_URL, json={"status": "success", "results": {"movies": [{"idInStore": 273058482}, {"idInStore": 5}]}}
-    )
+    # No `status` key: the real read answers without one (brief amendment 1.3).
+    responses.post(WISHLIST_URL, json={"results": {"movies": [{"idInStore": 273058482}, {"idInStore": 5}]}})
     result = runner.invoke(app, ["cheapcharts", "wishlist"])
     assert result.exit_code == 0, result.output
     assert "2 films on CheapCharts" in result.output and "1 known here" in result.output
@@ -1018,7 +1017,8 @@ def test_cheapcharts_wishlist_unreachable_exits_1_and_keeps_the_hearts(config_di
         '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
     )
     result = runner.invoke(app, ["cheapcharts", "wishlist"])  # nothing registered: ConnectionError
-    assert result.exit_code == 1 and "last known hearts" in result.output
+    assert result.exit_code == 1 and "keeping the last known hearts" in result.output
+    assert "(ConnectionError)" in result.output  # the reason is named off-screen
     assert repo.wishlisted_film_ids() == {fid}
 
 
@@ -1082,9 +1082,8 @@ def test_dashboard_refreshes_hearts_on_a_successful_start(config_dir, monkeypatc
         '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
     )
     responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": {"sessionToken": "tok-1"}})
-    responses.post(
-        WISHLIST_URL, json={"status": "success", "results": {"movies": [{"idInStore": 273058482}, {"idInStore": 5}]}}
-    )
+    # No `status` key: the real read answers without one (brief amendment 1.3).
+    responses.post(WISHLIST_URL, json={"results": {"movies": [{"idInStore": 273058482}, {"idInStore": 5}]}})
     result = runner.invoke(app, ["dashboard"])
     assert result.exit_code == 0, result.output
     assert "wishlist: 2 films on CheapCharts · 1 known here" in result.output
@@ -1111,7 +1110,7 @@ def test_dashboard_keeps_the_last_known_hearts_when_cheapcharts_is_unreachable(c
     )
     result = runner.invoke(app, ["dashboard"])  # nothing registered: ConnectionError
     assert result.exit_code == 0, result.output  # CheapCharts being down never stops the dashboard
-    assert "wishlist: couldn't reach CheapCharts — showing the last known hearts" in result.output
+    assert "couldn't read your CheapCharts wishlist (ConnectionError) — showing the last known hearts" in result.output
     assert repo.wishlisted_film_ids() == {fid}  # kept, not wiped
     assert cap.wishlist is not None  # a gateway, not None
     assert cap.ran is True  # the dashboard still starts

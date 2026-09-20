@@ -186,8 +186,12 @@ def dashboard(
     else:
         try:
             console.print(_refresh_hearts(repo, gateway))
-        except WishlistError:
-            console.print("wishlist: couldn't reach CheapCharts — showing the last known hearts")
+        except WishlistError as exc:
+            console.print(
+                f"wishlist: couldn't read your CheapCharts wishlist ({exc}) — showing the last known hearts",
+                soft_wrap=True,
+                markup=False,
+            )
     create_app(repo, embedder=embedder, wishlist=gateway).run(host=host, port=port, debug=False)
 
 
@@ -1236,7 +1240,11 @@ def cheapcharts_wishlist_cmd() -> None:
     try:
         console.print(_refresh_hearts(_repo(), gateway))
     except WishlistError as exc:
-        err.print(f"wishlist: couldn't reach CheapCharts ({exc}) — keeping the last known hearts", soft_wrap=True)
+        err.print(
+            f"wishlist: couldn't read your CheapCharts wishlist ({exc}) — keeping the last known hearts",
+            soft_wrap=True,
+            markup=False,
+        )
         raise typer.Exit(1) from exc
 
 

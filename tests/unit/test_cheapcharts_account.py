@@ -16,6 +16,7 @@ from movie_brain.infrastructure.cheapcharts import (
     CheapChartsError,
     Pacer,
     RateLimited,
+    WishlistItem,
     parse_evolution,
 )
 from movie_brain.infrastructure.config import Config
@@ -127,6 +128,25 @@ LOGIN_OK = {
 }
 BAD_TOKEN = {"status": "error", "message": "Couldn't load user. DeviceId or sessionToken unknown"}
 
+# The SHAPE of a real `getShortItemList_v2` answer, from the owner's hands-on test on
+# 2026-09-19 — ids INVENTED, because this repo is public. The point of the fixture is the
+# keys: there is NO `status` here. Only the write calls send one, and demanding it was why
+# every read failed while every write worked (brief amendment 1.3).
+REAL_READ = {
+    "results": {
+        "ebooks": [],
+        "movies": [
+            # A target set for it — `initialPriceValue` -1 is how the API says "no SD price".
+            {"idInStore": "900000001", "initialPriceValue": -1, "initialHdPriceValue": 4.99, "customPrice": True},
+            # No target: `customPrice` is simply absent, never false.
+            {"idInStore": "900000002", "initialPriceValue": 9.99, "initialHdPriceValue": 14.99},
+        ],
+        "tv": [{"idInStore": "900000003", "initialPriceValue": 19.99, "initialHdPriceValue": 19.99}],
+    },
+    "originRequest": {"action": "getShortItemList_v2", "country": "us", "store": "itunes"},
+    "responseTimestamp": "2026-09-19 18:30:00",
+}
+
 
 def _account() -> CheapChartsAccount:
     return CheapChartsAccount(USER, PASSWORD, pacer=Pacer(0))
@@ -165,12 +185,12 @@ def test_login_sends_the_sha256_digest_never_the_plain_password_and_reads_the_wi
     responses.post(ACCOUNT_URL, json=LOGIN_OK)
     responses.post(
         WISHLIST_URL,
-        json={"status": "success", "results": {"movies": [
-            {"idInStore": 273058482, "initialPriceValue": 5.99, "initialHdPriceValue": 5.99, "customPrice": True},
-            {"idInStore": "366474905", "initialPriceValue": 5.99, "initialHdPriceValue": 5.99},
+        json={"results": {"movies": [
+            {"idInStore": 900000004, "initialPriceValue": 5.99, "initialHdPriceValue": 5.99, "customPrice": True},
+            {"idInStore": "900000005", "initialPriceValue": 5.99, "initialHdPriceValue": 5.99},
         ]}},
     )
-    assert _account().wishlist_ids() == ["273058482", "366474905"]
+    assert [i.itunes_id for i in _account().wishlist_items()] == ["900000004", "900000005"]
     login, read = responses.calls
     sent = _body(login)
     assert sent["password"] == [hashlib.sha256(PASSWORD.encode()).hexdigest()]
@@ -182,35 +202,67 @@ def test_login_sends_the_sha256_digest_never_the_plain_password_and_reads_the_wi
 
 
 @responses.activate
+def test_the_real_read_answer_carries_no_status_key_and_parses_into_items():
+    """The defect behind amendment 1.3: the read's answer has no `status` at all, so demanding
+    one refused every read. Ebooks and TV rows are not films and are ignored."""
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json=REAL_READ)
+    assert _account().wishlist_items() == [
+        WishlistItem("900000001", custom_target=True),
+        WishlistItem("900000002", custom_target=False),
+    ]
+
+
+@responses.activate
+def test_a_read_the_api_refuses_outright_is_still_an_error():
+    """`status: error` for anything but the session token is a refusal on the read too —
+    accepting it would read as an empty wishlist and wipe every heart."""
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"status": "error", "message": "whatever it says"})
+    with pytest.raises(CheapChartsError):
+        _account().wishlist_items()
+
+
+@responses.activate
+def test_a_write_answer_without_a_status_key_is_still_refused():
+    """Only the read is allowed to answer without one: a set-target that loses its `status`
+    is an answer we have never seen, and nothing is believed on it."""
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"results": {"movies": []}})
+    with pytest.raises(CheapChartsError):
+        _account().set_target("900000001", Decimal("3.99"))
+
+
+@responses.activate
 def test_an_empty_wishlist_reads_as_no_films():
     responses.post(ACCOUNT_URL, json=LOGIN_OK)
-    responses.post(WISHLIST_URL, json={"status": "success", "results": {"movies": []}})
-    assert _account().wishlist_ids() == []
+    responses.post(WISHLIST_URL, json={"results": {"movies": []}})
+    assert _account().wishlist_items() == []
 
 
 @responses.activate
 def test_a_wishlist_read_with_no_movies_key_is_refused_not_read_as_empty():
-    """A wholesale replace on `wishlist_ids() == []` would wipe every heart — so a `results`
+    """A wholesale replace on `wishlist_items() == []` would wipe every heart — so a `results`
     with no `movies` list inside it must be a refusal, never a silent empty wishlist."""
     responses.post(ACCOUNT_URL, json=LOGIN_OK)
-    responses.post(WISHLIST_URL, json={"status": "success", "results": {}})
+    responses.post(WISHLIST_URL, json={"results": {}})
     with pytest.raises(CheapChartsError, match="unexpected answer shape"):
-        _account().wishlist_ids()
+        _account().wishlist_items()
 
 
 @responses.activate
 def test_a_wishlist_read_with_a_non_object_results_is_refused():
     responses.post(ACCOUNT_URL, json=LOGIN_OK)
-    responses.post(WISHLIST_URL, json={"status": "success", "results": ["not", "a", "dict"]})
+    responses.post(WISHLIST_URL, json={"results": ["not", "a", "dict"]})
     with pytest.raises(CheapChartsError, match="unexpected answer shape"):
-        _account().wishlist_ids()
+        _account().wishlist_items()
 
 
 @responses.activate
 def test_a_login_with_a_non_object_additional_info_is_refused():
     responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": ["not", "a", "dict"]})
     with pytest.raises(CheapChartsError, match="unexpected answer shape"):
-        _account().wishlist_ids()
+        _account().wishlist_items()
 
 
 @responses.activate
@@ -232,9 +284,9 @@ def test_add_and_set_target_send_buymovies_and_the_same_price_for_sd_and_hd():
 
 
 @responses.activate
-def test_a_refused_add_is_reported_not_raised_so_set_target_can_still_run():
-    """The API's exact answer for a film already on the wishlist was never observed; whatever it
-    is, the caller goes on to set the target and lets the read-back decide."""
+def test_a_refused_add_is_reported_not_raised():
+    """The API's exact answer for a film already on the wishlist was never observed. Reporting
+    the refusal rather than raising keeps the wording of that case in the caller's hands."""
     responses.post(ACCOUNT_URL, json=LOGIN_OK)
     responses.post(WISHLIST_URL, json={"status": "error", "message": "whatever it says"})
     assert _account().add_item("1") is False
@@ -253,8 +305,8 @@ def test_an_expired_token_triggers_one_fresh_login_and_a_retry():
     responses.post(ACCOUNT_URL, json=LOGIN_OK)
     responses.post(WISHLIST_URL, json=BAD_TOKEN)
     responses.post(ACCOUNT_URL, json={**LOGIN_OK, "additionalInfo": {"sessionToken": "tok-2"}})
-    responses.post(WISHLIST_URL, json={"status": "success", "results": {"movies": []}})
-    assert _account().wishlist_ids() == []
+    responses.post(WISHLIST_URL, json={"results": {"movies": []}})
+    assert _account().wishlist_items() == []
     assert _body(responses.calls[-1])["sessionToken"] == ["tok-2"]
 
 
@@ -270,7 +322,7 @@ def test_a_token_refused_twice_is_an_error_even_for_add():
 def test_a_failed_login_raises_without_echoing_anything_the_api_said():
     responses.post(ACCOUNT_URL, json={"status": "error", "message": f"wrong password for {USER}"})
     with pytest.raises(CheapChartsError) as exc:
-        _account().wishlist_ids()
+        _account().wishlist_items()
     assert USER not in str(exc.value) and PASSWORD not in str(exc.value) and "wrong password" not in str(exc.value)
 
 
@@ -278,10 +330,10 @@ def test_a_failed_login_raises_without_echoing_anything_the_api_said():
 def test_a_429_and_a_non_json_answer_both_stop_the_call():
     responses.post(ACCOUNT_URL, status=429)
     with pytest.raises(RateLimited):
-        _account().wishlist_ids()
+        _account().wishlist_items()
     responses.replace(responses.POST, ACCOUNT_URL, body="<html>maintenance</html>", status=200)
     with pytest.raises(CheapChartsError):
-        _account().wishlist_ids()
+        _account().wishlist_items()
 
 
 @responses.activate
@@ -294,4 +346,4 @@ def test_remove_item_sends_buymovies_and_reports_a_refusal_instead_of_raising():
     q = parse_qs(urlsplit(responses.calls[1].request.url).query)
     assert q["action"] == ["removeItem"] and q["itemType"] == ["buymovies"] and q["idInStore"] == ["282538466"]
     assert q["country"] == ["us"] and q["store"] == ["itunes"]
-    assert account.remove_item("282538466") is False  # e.g. already gone: the read-back decides
+    assert account.remove_item("282538466") is False  # e.g. already gone: the caller's call

@@ -110,7 +110,10 @@ def create_app(
             return jsonify({"error": "not found"}), 404
         except NotForSale:
             return jsonify({"error": "not for sale"}), 409
-        except WishlistError:
+        except WishlistError as exc:
+            # The screen says one thing whatever happened; the terminal names the reason, which
+            # is OUR wording by construction — never the API's text, a token, an email or a price.
+            app.logger.warning("wishlist click failed: %s", exc)
             return jsonify({"error": UNREACHABLE}), 502
         return jsonify({"wishlisted": True}), 200
 
@@ -123,7 +126,8 @@ def create_app(
                 unwishlist_film(repo, wishlist, film_id, today())
         except LookupError:
             return jsonify({"error": "not found"}), 404
-        except WishlistError:
+        except WishlistError as exc:
+            app.logger.warning("wishlist click failed: %s", exc)
             return jsonify({"error": UNREACHABLE}), 502
         return jsonify({"wishlisted": False}), 200
 

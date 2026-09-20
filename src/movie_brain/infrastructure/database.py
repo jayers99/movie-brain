@@ -2582,8 +2582,8 @@ class Repository:
             return True
 
     def unmark_wishlisted(self, film_id: int) -> None:
-        """The un-wishlist button's write when the wishlist cannot be read back (an accepted
-        remove is believed). Idempotent. Every other heart removal is `replace_wishlist`'s."""
+        """The un-wishlist button's write once CheapCharts has accepted the removal.
+        Idempotent. Every other heart removal is `replace_wishlist`'s."""
         with self._conn() as c:
             c.execute("DELETE FROM cheapcharts_wishlist WHERE film_id = ?", (film_id,))
 

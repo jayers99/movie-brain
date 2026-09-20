@@ -12,6 +12,7 @@ from playwright.sync_api import Page
 
 from movie_brain.application.wishlist import WishlistError, WishlistGateway
 from movie_brain.domain.models import CastRow, CrewRow, Film, ListEntry, ListMeta, McTitle, OmdbRating, TmdbCredits
+from movie_brain.infrastructure.cheapcharts import WishlistItem
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
 
@@ -37,7 +38,9 @@ class FakePrices:
 class FakeAccount:
     """Delta's product always fails to ADD, so the add-failure line has a film of its own and
     the two add-click tests never depend on each other's order. November's product always fails
-    to REMOVE, the same way, for the un-wishlist failure test (brief 1.2)."""
+    to REMOVE, the same way, for the un-wishlist failure test (brief 1.2). `listed` is what the
+    account holds and `targets` which of those carry a custom price — the two things the read
+    reports, and what every click now consults BEFORE writing anything (brief 1.3)."""
 
     def __init__(self) -> None:
         self.targets: dict[str, Decimal] = {
@@ -45,23 +48,28 @@ class FakeAccount:
             KILO_ITUNES: Decimal("2.99"),
             NOVEMBER_ITUNES: Decimal("2.99"),
         }
+        self.listed: list[str] = list(self.targets)
 
     def add_item(self, itunes_id: str) -> bool:
         time.sleep(1.0)  # long enough for "Reaching CheapCharts…" to be seen under load (2026-09-19 flake)
         if itunes_id == DELTA_ITUNES:
             raise WishlistError("down")
+        if itunes_id not in self.listed:
+            self.listed.append(itunes_id)
         return True
 
     def set_target(self, itunes_id: str, target: Decimal) -> None:
         self.targets[itunes_id] = target
 
-    def wishlist_ids(self) -> list[str]:
-        return list(self.targets)
+    def wishlist_items(self) -> list[WishlistItem]:
+        return [WishlistItem(i, custom_target=i in self.targets) for i in self.listed]
 
     def remove_item(self, itunes_id: str) -> bool:
         time.sleep(1.0)  # same busy window as add_item, for the same reason
         if itunes_id == NOVEMBER_ITUNES:
             raise WishlistError("down")
+        if itunes_id in self.listed:
+            self.listed.remove(itunes_id)
         self.targets.pop(itunes_id, None)
         return True
 

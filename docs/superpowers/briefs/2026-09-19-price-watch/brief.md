@@ -1,6 +1,6 @@
 # Task brief — "Wishlist it" (backlog 3, the remaining half)
 
-**Version 1.2 — amended 2026-09-19 at delivery (1.1 amended during the build; 1.0 frozen the same day).** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
+**Version 1.3 — amended 2026-09-19 after the hands-on test (1.2 at delivery; 1.1 during the build; 1.0 frozen the same day).** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
 
 ## Your page
 
@@ -119,3 +119,16 @@ Format note for the record: `priceHdEvolution` entries are `date:±price` where 
 | Removal follows the add's truth rule: remove, read the wishlist back, the read decides; if the read fails an accepted remove is believed. A failure is the same line, and "Try again" repeats the removal | agent default |
 | A film you own that is on your wishlist can be taken off the same way (it cannot be put back from here: owned films get no add button) | agent default |
 | The remove call (`removeItem`) was seen in the site's code and never run against your account; its first real run is your hands-on test | fact, stated so it is not a surprise |
+
+**1.3 — 2026-09-19, by the builder, after your hands-on test found that films already on your wishlist got no heart.** Cause: the wishlist read's answer carries no `status` field (add, set-target and remove do), my code demanded one, and every test had mocked the read from the brief's wording instead of from a real answer — so every read failed while every write worked. Supersedes 1.1's first row and 1.2's truth-rule row.
+
+| Decision | Whose |
+|---|---|
+| Every click READS your wishlist first and refreshes the hearts from it. If the read fails, nothing is written — not to CheapCharts, not locally — and you see the ordinary failure line | agent default (replaces "read back after the write; if that fails, believe an accepted add") |
+| A film the read shows is already on your wishlist WITH a target — set by hand or by us — just gets its heart; its target is never touched. This is what protects a hand-set target even when the local hearts are stale | agent default — it enforces 1.0's "old hand-set targets are not touched" at the moment of the click instead of trusting the last read |
+| A film already there WITHOUT a target (a half-finished earlier click) gets its target set, nothing else | agent default |
+| An add or a remove CheapCharts refuses is a failure; there is no fallback that believes a write without proof | agent default |
+| The terminal names why a read or a click failed (our own wording only — never anything CheapCharts said); the on-screen line stays "Couldn't reach CheapCharts." | agent default |
+| Test fixtures for a CheapCharts answer are built from the real answer's shape (ids invented), never from prose | process rule, from this defect |
+
+Correction to "The account API" above, for the record: the Read answers `{results: {ebooks[], movies[], tv[]}, originRequest, responseTimestamp}` with NO `status` key; `idInStore` is a string; `customPrice` is absent when no target is set; `initialPriceValue` may be `-1`.

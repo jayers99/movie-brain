@@ -2234,3 +2234,82 @@ git add src/movie_brain tests docs/superpowers/briefs/2026-09-19-price-watch doc
 git commit -m "the click is reversible: the Wishlisted mark is the button that takes the film off again, judged by the same read-back as the add"
 ```
 (with the attribution trailer as the second -m).
+
+---
+
+### Task 9: The wishlist read really works, and nothing is ever written before a successful read (brief amendment 1.3)
+
+**Root cause, from the owner's hands-on test (2026-09-19, evidence: his own redacted `probe read` output).** Every wishlist READ failed against the real API while add / set-target / remove worked: the dashboard started with no hearts, and each click's read-back failed too (only the "accepted add is believed" fallback moved The Leopard's heart). The real `getShortItemList_v2` answer carries **no `status` key at all**. Its top-level keys are exactly `results`, `originRequest`, `responseTimestamp`; `results` is an object with `ebooks`, `movies` and `tv` lists; each movie is `{"idInStore": "<digits as a STRING>", "initialPriceValue": <number, may be -1>, "initialHdPriceValue": <number>, "customPrice": true}` with `customPrice` simply ABSENT when no target was set. `CheapChartsAccount._wishlist` demands `status == "success"`, so it raised `CheapChartsRefused` on every read. The brief's "answers JSON `{status: …}`" was a generalisation from the write calls, and every test mocked the read with an invented `"status": "success"`. An error answer DOES carry `status: "error"` (proven for a bad token: "Couldn't load user. DeviceId or sessionToken unknown").
+
+Three changes, one task.
+
+**A. The read accepts the real shape.** In `infrastructure/cheapcharts.py`:
+- `_wishlist(action, *, needs_status: bool = True, **extra)`: an answer with `status == "error"` is handled exactly as today (token message → one fresh login + one retry; anything else → `CheapChartsRefused`). With `needs_status=True` (add, set-target, remove — proven to send it) anything other than `status == "success"` is still refused. With `needs_status=False` (the read) an answer WITHOUT a `status` key is returned to the caller, whose shape guards are the validation.
+- Replace `wishlist_ids()` with:
+
+```python
+@dataclass(frozen=True)
+class WishlistItem:
+    itunes_id: str
+    custom_target: bool  # a target price was set for it — by hand on CheapCharts, or by us
+
+
+    def wishlist_items(self) -> list[WishlistItem]:
+        """Every film on the wishlist, in CheapCharts' order. The read is the one call whose
+        answer carries NO `status` key on success (seen on the real account 2026-09-19) — its
+        shape is the validation: `results` must be an object holding a `movies` list, anything
+        else is refused rather than read as an empty wishlist (a wholesale replace would erase
+        every heart). `customPrice` is simply absent on an item with no target."""
+```
+  keeping today's shape guards (`CheapChartsError("unexpected answer shape")`), `str(m["idInStore"])`, and `custom_target=m.get("customPrice") is True`.
+- Tests (`tests/unit/test_cheapcharts_account.py`): a module constant `REAL_READ` reproducing the real answer's SHAPE with INVENTED ids (never the owner's real ids — the repo is public): top-level `results` / `originRequest` / `responseTimestamp`, NO `status`; `results` with `ebooks`, `movies` (one with `customPrice: true` and `initialPriceValue: -1`, one without `customPrice`), `tv`. Pin: it parses to the right `WishlistItem`s; ebooks/tv are ignored; a `status: "error"` non-token answer raises; the bad-token answer still triggers one re-login; a write answer without `status` is still refused. **Every mocked read in the whole test suite must drop the invented `"status": "success"`** (`test_cheapcharts_account.py`, `tests/unit/test_cli.py`, `tests/web/test_wishlist_api.py`) — a read mock that still carries it is a finding.
+
+**B. Never write before a successful read.** `application/wishlist.py`: the Protocol's `wishlist_ids` becomes `wishlist_items(self) -> list[WishlistItem]` (import the dataclass from infrastructure, as the module already imports its errors). New rules, replacing the read-back-after design and its "an accepted add/remove is believed when the read fails" fallback (brief 1.1 row 1 and 1.2's truth-rule row are superseded):
+
+```python
+def _read(repo: Repository, account: WishlistAccount, today: date) -> dict[str, WishlistItem]:
+    """Read the wishlist and replace the local hearts from it. Every click starts here: if the
+    wishlist cannot be read, nothing is written — to CheapCharts or locally."""
+    try:
+        items = account.wishlist_items()
+    except _REMOTE_ERRORS as exc:
+        raise _failed(exc) from exc
+    repo.replace_wishlist([i.itunes_id for i in items], today)
+    return {i.itunes_id: i for i in items}
+```
+
+`wishlist_film`: existing guards unchanged (LookupError; locally wishlisted → return without any call; owned / no store id → NotForSale). Then `items = _read(...)`. If the film is now hearted (`film_id in repo.wishlisted_film_ids()`): look up `items.get(itunes_id)`; if it is missing (hearted through another store id) or has `custom_target` → **return: the film was already there with a target, set by hand or by us — it gets its heart and its target is never touched**. If it is there WITHOUT a custom target (a half-finished earlier click) → fall through to set the target only. Then: `low = lowest_price(...)` (None → `WishlistError("no price history")`, before any write); if the film was not on the wishlist: `add_item` must return True, else `WishlistError("add refused")`; `set_target(itunes_id, target_price(low))`; `repo.mark_wishlisted`. No trailing read.
+`unwishlist_film`: guards unchanged; `_read(...)`; if the film is no longer hearted → return (already gone on CheapCharts); else `remove_item` must return True, else `WishlistError("remove refused")`; `repo.unmark_wishlisted`. No trailing read.
+`refresh_wishlist` uses `wishlist_items`.
+Rewrite the affected unit/API/Playwright fakes and tests to the new rule. Tests that must exist (unit, with fakes logging calls): read happens FIRST and a failed read means NO add/target/remove call and no local change; a film already on the wishlist with a custom target gets its heart and NO add/target call (the hand-set-target invariant — name the test after it); a film there without a custom target gets set-target only, no add; a refused add/remove is a failure; the pre-read replaces every heart; un-wishlisting a film CheapCharts no longer holds makes no remove call and drops the heart; the two acceptance examples ($3.99 / $8.99) over fully mocked HTTP with the real read shape, asserting the call ORDER login → read → DetailData → addItem → changeInitPrice (login happens at the first account call, which is now the read; DetailData may precede it only if you keep the price lookup first — keep the order given here so a failed read costs no public call either).
+
+**C. The reason is named, off-screen.** `_failed(exc) -> WishlistError`: a `CheapChartsError`'s own message (our wording only, pinned since Task 3), `"rate limited"` for `RateLimited`, the class name for a `requests` exception. Update `test_every_remote_failure_becomes_the_one_wishlist_error…` accordingly — deliberately, it pinned the old class-name-only rule. `cli.py`: the dashboard's and the verb's failure lines become `wishlist: couldn't read your CheapCharts wishlist ({reason}) — showing the last known hearts` / `— keeping the last known hearts` (keep `soft_wrap=True`, `markup=False` where brackets could appear; update the three CLI tests, which pin "last known hearts"). `web/app.py`: both wishlist routes log the reason to the server's terminal before answering 502 — `app.logger.warning("wishlist click failed: %s", exc)` — so a failed click is diagnosable next time. **The on-screen line stays exactly `Couldn't reach CheapCharts.`** Never log or print an API message, a response body, a token, an email or a price.
+
+**D. Amend the brief to 1.3 and log the defect.** `brief.md`: version line opening → `**Version 1.3 — amended 2026-09-19 after the hands-on test (1.2 at delivery; 1.1 during the build; 1.0 frozen the same day).**`; append to `## Amendments`:
+
+```markdown
+**1.3 — 2026-09-19, by the builder, after your hands-on test found that films already on your wishlist got no heart.** Cause: the wishlist read's answer carries no `status` field (add, set-target and remove do), my code demanded one, and every test had mocked the read from the brief's wording instead of from a real answer — so every read failed while every write worked. Supersedes 1.1's first row and 1.2's truth-rule row.
+
+| Decision | Whose |
+|---|---|
+| Every click READS your wishlist first and refreshes the hearts from it. If the read fails, nothing is written — not to CheapCharts, not locally — and you see the ordinary failure line | agent default (replaces "read back after the write; if that fails, believe an accepted add") |
+| A film the read shows is already on your wishlist WITH a target — set by hand or by us — just gets its heart; its target is never touched. This is what protects a hand-set target even when the local hearts are stale | agent default — it enforces 1.0's "old hand-set targets are not touched" at the moment of the click instead of trusting the last read |
+| A film already there WITHOUT a target (a half-finished earlier click) gets its target set, nothing else | agent default |
+| An add or a remove CheapCharts refuses is a failure; there is no fallback that believes a write without proof | agent default |
+| The terminal names why a read or a click failed (our own wording only — never anything CheapCharts said); the on-screen line stays "Couldn't reach CheapCharts." | agent default |
+| Test fixtures for a CheapCharts answer are built from the real answer's shape (ids invented), never from prose | process rule, from this defect |
+
+Correction to "The account API" above, for the record: the Read answers `{results: {ebooks[], movies[], tv[]}, originRequest, responseTimestamp}` with NO `status` key; `idInStore` is a string; `customPrice` is absent when no target is set; `initialPriceValue` may be `-1`.
+```
+
+`trial-log.md`, "Surprises and corrections" table, new last row:
+
+```markdown
+| 7 | His hands-on test: no film already on his wishlist got a heart. Every wishlist read failed against the real API while every write worked — the read's answer has no `status` field, the brief had generalised one from the write calls, and every test mocked the read from that prose. 1,546 green tests, three reviews and a final review all missed it, because all of them checked the code against the same wrong sentence. Found in his first minutes with the real thing; fixed as amendment 1.3, which also stops any click from writing before a successful read. | implementation defect — caught by the hands-on test, before any merge. Process lesson: a fixture for an external answer must be captured from the real answer, and "proven against the real account" in a brief must say WHICH calls' answers were actually seen |
+```
+
+Never hard-wrap; change no other existing line.
+
+**Files:** `src/movie_brain/infrastructure/cheapcharts.py`, `src/movie_brain/application/wishlist.py`, `src/movie_brain/web/app.py`, `src/movie_brain/cli.py`, `tests/unit/test_cheapcharts_account.py`, `tests/unit/test_wishlist.py`, `tests/unit/test_cli.py`, `tests/web/test_wishlist_api.py`, `tests/web/conftest.py` (+ `tests/web/test_wishlist_page.py` only if a fake's behaviour forces it), the two docs. `app.js` does not change.
+
+**Gates and commit:** all four gates; commit subject on the why, e.g. `the wishlist read never worked against the real CheapCharts: its answer has no status field; and no click writes before a successful read, so a hand-set target is safe even when the hearts are stale`.
