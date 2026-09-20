@@ -999,6 +999,7 @@ def test_cheapcharts_wishlist_without_credentials_exits_2_and_names_the_file(con
     Repository(config_dir / "movie-brain.db")
     result = runner.invoke(app, ["cheapcharts", "wishlist"])
     assert result.exit_code == 2 and "credentials.toml" in result.output
+    assert "[cheapcharts]" in result.output  # Rich markup, not swallowed as a style tag
 
 
 @responses.activate

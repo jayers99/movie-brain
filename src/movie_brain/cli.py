@@ -177,7 +177,7 @@ def dashboard(
     )
     # Hearts are refreshed on every start. CheapCharts being down never stops the dashboard.
     if gateway is None:
-        console.print("wishlist: off — no [cheapcharts] login in credentials.toml")
+        console.print("wishlist: off — no [cheapcharts] login in credentials.toml", markup=False)
     else:
         try:
             console.print(_refresh_hearts(repo, gateway))
@@ -1225,7 +1225,7 @@ def cheapcharts_wishlist_cmd() -> None:
     """
     gateway = _wishlist_gateway()
     if gateway is None:
-        err.print(f"no [cheapcharts] username/password in {load_config().credentials_file}")
+        err.print(f"no [cheapcharts] username/password in {load_config().credentials_file}", markup=False)
         raise typer.Exit(2)
     try:
         console.print(_refresh_hearts(_repo(), gateway))
