@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Trailer link — stories and mock-up, round 1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Everything inside .window is copied from the real dashboard (static/app.css): colours, row height, the 760px drawer, the 30% black dim. */
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3e3; --accent:#b3261e; --chip:#f2f2f2; --chip-on:#1b1b1b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:22px 20px 80px; background:#ecebe7; color:var(--fg); font:14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  .page { max-width:1500px; margin:0 auto; }
+  .intro { font-size:17px; line-height:1.55; }
+  .intro h1 { font-size:26px; margin:0 0 6px; }
+  .intro p { margin:6px 0; max-width:1050px; }
+  h2.sec { font-size:21px; margin:26px 0 10px; }
+  .answer { background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:14px 18px; font-size:16px; line-height:1.55; margin-top:14px; }
+  .answer h2 { font-size:21px; margin:0 0 8px; }
+  .answer table { border-collapse:collapse; margin:8px 0; }
+  .answer th, .answer td { text-align:left; padding:4px 16px 4px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+  .answer td.num, .answer th.num { text-align:right; }
+
+  .stories { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+  @media (max-width:1000px) { .stories { grid-template-columns:1fr; } }
+  .story { background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:14px 16px 12px; font-size:16px; line-height:1.5; display:flex; flex-direction:column; }
+  .story.current { border-color:#1b1b1b; box-shadow:0 0 0 2px #1b1b1b; }
+  .story h3 { margin:0 0 6px; font-size:18px; }
+  .story h3 .n { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; background:#1b1b1b; color:#fff; font-size:14px; margin-right:8px; vertical-align:2px; }
+  .story p { margin:0 0 10px; flex:1; }
+  .story .foot { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .does { font-size:13px; color:var(--muted); }
+  button.walk { font:inherit; font-size:15px; border:1px solid #1b1b1b; background:#fff; border-radius:6px; padding:3px 12px; cursor:pointer; }
+  button.walk:hover { background:var(--chip); }
+
+  .bar { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:0 0 10px; font-size:16px; }
+  .bar .lbl { align-self:center; color:var(--muted); font-size:15px; margin-right:2px; }
+  .bar .gap { width:22px; }
+  .variant { font:inherit; border:1px solid #bdbdbd; background:#fff; border-radius:8px; padding:6px 14px; cursor:pointer; text-align:left; }
+  .variant.active { background:#1b1b1b; border-color:#1b1b1b; color:#fff; }
+  .variant small { display:block; font-size:13px; opacity:.75; }
+  .coach { background:#fff6d6; border:1px solid #e2cf86; border-radius:8px; padding:10px 14px; margin:0 0 10px; font-size:17px; line-height:1.5; min-height:48px; }
+  .coach table { border-collapse:collapse; font-size:14px; margin-top:6px; }
+  .coach td { padding:1px 14px 1px 0; }
+  .coach tr.picked td { font-weight:700; }
+  .coach tr.skipped td { color:#8a7a3a; }
+
+  .window { position:relative; isolation:isolate; height:78vh; min-height:560px; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border:1px solid #cfcfcf; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+  .top { background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; }
+  .top h1 { margin:0 0 4px; font-size:18px; }
+  #counts span { margin-right:14px; color:var(--muted); }
+  #counts b { color:var(--fg); }
+  .showing { float:right; }
+  #chips { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip, .picker { border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:4px 10px; font:inherit; color:#9a9a9a; }
+  .table-wrap { flex:1; min-height:0; overflow:auto; }
+  table.films { border-collapse:collapse; width:100%; table-layout:fixed; }
+  col.col-year { width:60px; } col.col-director { width:16%; } col.col-language { width:13%; }
+  col.col-mc, col.col-rt, col.col-imdb { width:64px; } col.col-rating { width:92px; } col.col-info { width:40px; }
+  table.films thead th { position:sticky; top:0; background:var(--bg); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; white-space:nowrap; }
+  .num { text-align:right !important; }
+  table.films tbody tr { height:36px; cursor:pointer; }
+  table.films tbody tr:hover { background:#fafafa; }
+  table.films tbody td { padding:0 8px; border-bottom:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
+  table.films tbody tr.lit { pointer-events:none; }
+  table.films tbody tr.lit td { position:relative; z-index:5; background:#fff; }
+  table.films tbody tr.marked td { background:#f2f2f2; }
+  table.films tbody tr.marked td:first-child, table.films tbody tr.lit td:first-child { box-shadow:inset 4px 0 0 #1b1b1b; }
+  input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1px solid var(--line); border-radius:4px; }
+  button.info { border:0; background:none; cursor:pointer; font-size:16px; }
+  .badge-lists { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  #backdrop { position:absolute; inset:0; background:rgba(0,0,0,.3); z-index:3; }
+  #backdrop.hand { cursor:pointer; }
+  #drawer { position:absolute; top:0; right:0; height:100%; width:min(760px, 100%); overflow:auto; background:var(--bg); z-index:6; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
+  #drawer-close { position:absolute; top:10px; right:12px; border:0; background:none; font-size:18px; cursor:pointer; }
+  #drawer .keys { position:absolute; top:14px; right:44px; color:var(--muted); font-size:12px; }
+  #drawer h2 { margin:0 0 4px; padding-right:180px; font-size:21px; }
+  #drawer .meta { color:var(--muted); margin-bottom:10px; }
+  #drawer img.poster { max-width:200px; float:right; margin:0 0 12px 12px; }
+  #drawer p { margin:8px 0; }
+  #drawer .ratings { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:12px 0; clear:both; }
+  #drawer .ratings .row { margin:3px 0; }
+  #drawer .ratings .note { color:var(--muted); }
+  #drawer p.links a, #drawer p.links .trailer-none { margin-right:6px; }
+  #drawer p.links a { color:#0000ee; text-decoration:underline; cursor:pointer; }
+  #drawer .left-out { margin-top:18px; padding:10px 12px; border:1px dashed #cfcfcf; border-radius:8px; color:var(--muted); }
+  button.wl { font:inherit; border:1px solid #767676; background:#efefef; border-radius:3px; padding:1px 6px; }
+  [hidden] { display:none !important; }
+
+  /* ---- THE CHANGE ---- */
+  /* The trailer link: a link like its neighbours, no ↗ because it does not leave the page. */
+  #drawer p.links a.trailer-link { text-decoration:underline; }
+  #drawer p.links a.trailer-search { color:var(--muted); }
+  /* The trailer window: over the WHOLE browser window, not just the dashboard replica. */
+  #trailer { position:fixed; inset:0; z-index:100; background:rgba(0,0,0,.82); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  #trailer .frame { position:relative; width:min(1280px, 92vw, calc((100vh - 130px) * 16 / 9)); }
+  #trailer .frame.apple { width:min(960px, 92vw, calc((100vh - 130px) * 16 / 9)); }
+  #trailer .screen { position:relative; width:100%; aspect-ratio:16 / 9; background:#000; border-radius:6px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.6); }
+  #trailer .screen iframe, #trailer .screen video, #trailer .screen > div { position:absolute; inset:0; width:100%; height:100%; border:0; }
+  #trailer .screen .sorry { display:flex; flex-direction:column; align-items:center; justify-content:center; color:#ddd; font-size:17px; gap:10px; }
+  #trailer .screen .sorry a { color:#9ec1ff; }
+  #trailer .cap { display:flex; justify-content:space-between; align-items:baseline; gap:16px; color:#e8e8e8; font-size:15px; padding:10px 2px 0; }
+  #trailer .cap .what { color:#b8b8b8; }
+  #trailer .cap .src button { font:inherit; font-size:13px; color:#b8b8b8; background:none; border:1px solid #666; border-radius:999px; padding:1px 10px; margin-left:4px; cursor:pointer; }
+  #trailer .cap .src button.on { color:#111; background:#e8e8e8; border-color:#e8e8e8; }
+  #trailer-close { position:absolute; top:-38px; right:-4px; border:0; background:none; color:#fff; font-size:24px; cursor:pointer; }
+  #trailer .hint { color:#9a9a9a; font-size:13px; margin-top:10px; }
+
+  .panel { margin-top:26px; background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:16px 20px; font-size:16px; line-height:1.55; }
+  .panel h2 { font-size:21px; margin:0 0 8px; }
+  .panel li { margin:5px 0; }
+</style></head>
+<body><div class="page">
+<div class="intro">
+  <h1>A trailer link in the drawer — stories and mock-up, round 1</h1>
+  <p>You asked for an easy way to watch the <b>right</b> trailer for any film: a plain link in the detail drawer, the trailer coming up <b>centred over the whole browser window, inside movie-brain, playing at once</b>. Below: the answer to your first question (which source), then <b>seven stories</b> on your real films, then <b>one mock-up</b> with three places for the link. Press <b>Walk it</b> on a story and the mock-up sets itself up. The trailers are real and they really play — this page needs the internet.</p>
+</div>
+
+<div class="answer">
+  <h2>First order of business: which trailer source?</h2>
+  <p><b>Answer: TMDB's trailer list, filtered to real trailers, played from YouTube — with Apple's own store preview as the stand-in.</b> The modal window is not difficult; both play inside the page.</p>
+  <p><b>Why CheapCharts looks bogus.</b> CheapCharts takes the first five videos TMDB files under a film <i>of any kind</i> — clips, featurettes, interviews, reviews — and shows them all as "trailers". TMDB labels every video with a type; CheapCharts ignores the label. Keeping only the ones TMDB calls <b>Trailer</b> fixes it: I read the titles of 30 picks at random and all 30 were trailers (one was a box-set trailer: Paisan got the BFI's "War Trilogy" trailer).</p>
+  <table>
+    <tr><th>Measured today on 400 of your films, picked at random</th><th class="num">TMDB → YouTube</th><th class="num">Apple store preview</th><th class="num">either</th></tr>
+    <tr><td>Films Apple sells (hold a store id) — 199 of them; every Shop film is one</td><td class="num">177 · 89%</td><td class="num">183 · 92%</td><td class="num"><b>198 · 99%</b></td></tr>
+    <tr><td>Films Apple does not sell — 201 of them (shorts, rarities, festival titles)</td><td class="num">67 · 33%</td><td class="num">—</td><td class="num">67 · 33%</td></tr>
+    <tr><td>All 400</td><td class="num">244 · 61%</td><td class="num">183</td><td class="num"><b>265 · 66%</b></td></tr>
+  </table>
+  <p>Every one of the 244 YouTube picks was checked against YouTube: <b>243 still exist and allow playing inside another page</b>; the one dead pick (Sleeping Beauty) had a second trailer that works. Apple's previews are direct video files — nothing to go wrong, no adverts — but they are small (640 pixels wide), so YouTube goes first and Apple stands in. OMDb has no trailers. A plain YouTube search is where reviews and reactions come from; it is never used to <i>play</i> anything.</p>
+</div>
+
+<h2 class="sec">The stories</h2>
+<div class="stories" id="stories"></div>
+<h2 class="sec">The mock-up</h2>
+<div class="bar"><span class="lbl">Where the link sits:</span><span id="variants" style="display:contents"></span><span class="gap"></span><span class="lbl">No trailer anywhere:</span><span id="nones" style="display:contents"></span></div>
+<div class="coach" id="coach"></div>
+<div class="window">
+  <div class="top">
+    <h1>movie-brain</h1>
+    <div id="counts"><span><b>5,007</b> films</span><span><b>4,837</b> reachable</span><span><b>856</b> owned</span><span><b>375</b> rated by me</span><span class="showing">this mock-up carries 10 of them</span></div>
+    <div id="chips"><span class="chip">Reachable</span><span class="chip">Rated</span><span class="chip">Criterion</span><span class="chip">Watchlist</span><span class="chip">Owned</span><span class="chip">On a list</span><span class="chip">Rewatch</span><span class="chip">Shop</span><span class="picker">All lists ▾</span><span class="chip" style="background:transparent">Clear</span></div>
+  </div>
+  <div class="table-wrap" id="wrap">
+    <table class="films">
+      <colgroup><col><col class="col-year"><col class="col-director"><col class="col-language"><col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-rating"><col class="col-info"></colgroup>
+      <thead><tr><th>Title</th><th>Year</th><th>Director</th><th>Language</th><th class="num">MC</th><th class="num">RT</th><th class="num">IMDb</th><th class="num">My rating</th><th></th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div id="backdrop" hidden></div>
+  <aside id="drawer" hidden><button id="drawer-close" aria-label="Close">✕</button><span class="keys">↑ ↓ previous / next film · T trailer</span><div id="drawer-body"></div></aside>
+</div>
+
+<div id="trailer" hidden>
+  <div class="frame" id="trailer-frame">
+    <button id="trailer-close" aria-label="Close trailer">✕</button>
+    <div class="screen" id="screen"></div>
+    <div class="cap"><span><b id="cap-title"></b> <span class="what" id="cap-what"></span></span><span class="src" id="cap-src"></span></div>
+  </div>
+  <div class="hint">Esc, ✕ or a click outside closes the trailer — the drawer stays open</div>
+</div>
+
+<div class="panel">
+  <h2>What may surprise you</h2>
+  <ul>
+    <li><b>About a third of your catalogue has no trailer anywhere</b> — almost all of it films Apple does not sell: shorts, rarities, festival titles. For the films you shop for, it is 99 in 100. Story 6 asks what those films should show.</li>
+    <li><b>You will often get the restoration trailer, not the original one.</b> When TMDB files several trailers I take an official one first, then the sharpest. For Army of Shadows that is STUDIOCANAL's 4K restoration trailer, not the 1969 one. There is no "other trailers" menu in this round.</li>
+    <li><b>"Official" is TMDB's word, and four picks in ten are not.</b> For older films the only trailer is often on a collector's channel (HD Retro Trailers is the most common). They are still the real trailers — that is what the 30-title check was for.</li>
+    <li><b>Apple's preview is small and soft</b> (640 pixels wide), so it shows in a smaller window. I could not watch them myself: I believe they are the store's trailers, but <b>you are the first check that they are not just a scene from the film</b> — stories 4 and 5 play two of them. When a film has both, the trailer window offers a small <i>YouTube · Apple</i> switch so you can compare.</li>
+    <li><b>Once you click inside the YouTube player, the keyboard belongs to YouTube</b> — Esc then does nothing for movie-brain. ✕ and a click on the dark area always work. If you do not click into the player, Esc closes the trailer and a second Esc closes the drawer.</li>
+    <li><b>Sound:</b> in Chrome the trailer starts with sound because your click counts as permission. Safari may start it muted or paused; one click on the player fixes it. I have not tested Safari.</li>
+    <li><b>YouTube may put an advert in front</b>, and it decides what it shows when the trailer ends. Apple previews have neither.</li>
+    <li><b>T plays the trailer</b> while the drawer is open — so browsing Shop becomes ↓, T, Esc, ↓, T, Esc. ↑ ↓ do nothing while a trailer is up. My addition; say if you would rather not have it.</li>
+    <li><b>Trailers are looked up ahead of time, not when you click</b> — one run over the whole catalogue (about ten minutes), the way cast lists were fetched. That is how the link can be absent when there is no trailer instead of failing after the click. A film added later has no link until the next run; a trailer YouTube removes later falls through to Apple's preview, as in story 7.</li>
+    <li><b>Foreign films:</b> trailers in English or in the film's own language only — never a dubbed trailer in a third language (TMDB offers an Italian-dubbed one for Rosencrantz and Guildenstern Are Dead; it is skipped).</li>
+  </ul>
+  <p style="color:var(--muted)">Real in this mock-up: ten of your films read from a copy of your database today — titles, scores, lists, owned, services, overviews — and every trailer, fetched from TMDB and Apple today. Simulated: story 7 (I broke one trailer on purpose), the wishlist button (dead here), most of the drawer. Nothing here can write anywhere.</p>
+</div>
+</div>
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+const FILMS = [{"id": 3094, "t": "Army of Shadows", "y": 1969, "d": "Jean-Pierre Melville", "l": "French, German, English", "mc": 99, "rt": 97, "im": 8.1, "r": null, "n": 1, "o": false, "badge": null, "ov": "Betrayed by an informant, Philippe Gerbier finds himself trapped in a torturous Nazi prison camp. Though Gerbier escapes to rejoin the Resistance in occupied Marseilles, France, and exacts his revenge on the informant, he must continue a quiet, seemingly endless battle against the Nazis in an atmosphere of tension, paranoia and distrust.", "poster": "https://m.media-amazon.com/images/M/MV5BMTQxZGZhOTctM2MyYi00OGZkLTgwOWItNThlNjJkNWEwOWM5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "Sight & Sound: 2022 #211", "crit": false, "cc": true, "yt": [{"key": "sxnCZ0nR2a4", "name": "Official 4K Restoration Trailer [Subtitled]"}, {"key": "GYl2I0vVok4", "name": "Trailer"}], "apple": "https://video-ssl.itunes.apple.com/itunes-assets/Video221/v4/73/a4/34/73a434e5-d873-5e34-a4d0-daafdd5c185f/mzvf_15152752049968473654.640x464.h264lc.U.p.m4v", "all": [{"key": "sxnCZ0nR2a4", "type": "Trailer", "name": "Official 4K Restoration Trailer [Subtitled]"}, {"key": "GYl2I0vVok4", "type": "Trailer", "name": "Trailer"}]}, {"id": 4905, "t": "Memories of Murder", "y": 2003, "d": "Joon-Ho Bong", "l": "Korean, English", "mc": 82, "rt": null, "im": 8.1, "r": null, "n": 1, "o": false, "badge": null, "ov": "A sadistic serial rapist and murderer of young women terrorizes a small province in 1980s South Korea. To prevent further crimes, three increasingly desperate detectives with conflicting methods race against time to unravel the violent mind of the killer in a futile effort to solve the case.", "poster": "https://m.media-amazon.com/images/M/MV5BYmRjOWE5NmMtYTdkYS00ODFlLWJiMTMtYzE2NDZlZjlkZDQ0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "BFI: Film Noir", "crit": false, "cc": true, "yt": [{"key": "0n_HQwQU8ls", "name": "MEMORIES OF MURDER Trailer"}, {"key": "pliylHilD_U", "name": "MEMORIES OF MURDER Official Int'l Main Trailer"}, {"key": "e7-fyFpoLPQ", "name": "Official UK Teaser Trailer"}], "apple": "https://video-ssl.itunes.apple.com/itunes-assets/Video211/v4/f0/15/2d/f0152d2e-6648-967b-df69-96c54f9dc877/mzvf_809997105813681341.640x458.h264lc.U.p.m4v", "all": [{"key": "ThCaszDZNiM", "type": "Featurette", "name": "This Scene in 'Memories of Murder' Was 100% Real—and Painful!"}, {"key": "amH3NZpdZSc", "type": "Featurette", "name": "Mark Kermode reviews Memories of Murder (2003) | BFI Player"}, {"key": "Qt08rUY15m4", "type": "Clip", "name": "Clip"}, {"key": "0n_HQwQU8ls", "type": "Trailer", "name": "MEMORIES OF MURDER Trailer"}, {"key": "e7-fyFpoLPQ", "type": "Teaser", "name": "Official UK Teaser Trailer"}, {"key": "pliylHilD_U", "type": "Trailer", "name": "MEMORIES OF MURDER Official Int'l Main Trailer"}, {"key": "0A_xu5G5TgI", "type": "Featurette", "name": "Bong Joon Ho & Song Kang Ho Introduce Memories of Murder"}]}, {"id": 3718, "t": "To Die For", "y": 1995, "d": "Gus Van Sant", "l": "English", "mc": 86, "rt": 88, "im": 6.8, "r": null, "n": 0, "o": false, "badge": null, "ov": "Suzanne Stone wants to be a world-famous news anchor and she is willing to do anything to get what she wants. What she lacks in intelligence, she makes up for in cold determination and diabolical wiles. As she pursues her goal with relentless focus, she is forced to destroy anything and anyone that may stand in her way, regardless of the ultimate cost or means necessary.", "poster": "https://m.media-amazon.com/images/M/MV5BZWJlODViYTUtMzY3MS00ZDRlLTkzODQtMDdiOTBiN2E0MDA5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Sony Pictures Core Amazon Channel (not subscribed) ↗", "also": "Sony Pictures Core Amazon Channel (not subscribed), Netflix (not subscribed), Netflix Standard with Ads (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": false, "cc": true, "yt": [], "apple": "https://video-ssl.itunes.apple.com/itunes-assets/Video117/v4/04/34/71/043471e3-3c6a-c5e5-a26e-93145026473b/mzvf_398123734456248728.640x478.h264lc.U.p.m4v", "all": []}, {"id": 4821, "t": "Moonrise", "y": 1948, "d": "Frank Borzage", "l": "English", "mc": null, "rt": 100, "im": 7.0, "r": null, "n": 1, "o": false, "badge": "Kanopy", "ov": "Stigmatized from infancy by the fate of his criminal father, a man is bruised and bullied until one night, in a fit of rage, he kills his most persistent tormentor. As the police close in around him, he makes a desperate bid for the love of the dead man’s girlfriend, a schoolteacher who sees the wounded soul behind his aggression.", "poster": "https://m.media-amazon.com/images/M/MV5BYzkzZWJhYTktYjAxYy00YTdhLTlkMDItYzY1Yjk1N2M3NWFmXkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Kanopy ↗", "also": "Kanopy, Plex, Plex Channel, Mometu (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "Slant: Film Noir #46", "crit": false, "cc": true, "yt": [], "apple": "https://video-ssl.itunes.apple.com/itunes-assets/Video124/v4/14/ad/75/14ad7555-ee69-1c32-ed3c-d7bb1ffab84b/mzvf_7378916086686650052.640x480.h264lc.U.p.m4v", "all": [{"key": "ypvDgbBbQlE", "type": "Clip", "name": "A Scene from MOONRISE"}]}, {"id": 4840, "t": "The Hitch-Hiker", "y": 1953, "d": "Ida Lupino", "l": "English, Spanish", "mc": null, "rt": 94, "im": 6.9, "r": null, "n": 2, "o": false, "badge": "Kanopy", "ov": "Roy and Gilbert's fishing trip takes a terrifying turn when the hitchhiker they pick up turns out to be a sociopath on the run from the law. He's killed before, and he lets the two know that as soon as they're no longer useful, he'll kill again. The two friends plot an escape, but the hitchhiker's peculiar physical affliction, an eye that never closes even when he sleeps, makes it impossible for them to tell when they can make a break for it.", "poster": "https://m.media-amazon.com/images/M/MV5BMDYwNzllZTAtYzUxMS00NTk0LWFkMjMtOTJkYjYzZjQ5NDZmXkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Kanopy ↗", "also": "Kanopy, JustWatch TV, Prime Video, Plex ⋯ 18 more", "buy": "", "lists": "Slant: Film Noir #87, BFI: Film Noir", "crit": false, "cc": false, "yt": [], "apple": null, "all": [{"key": "tF4QeO7ScKk", "type": "Clip", "name": "Ida Lupino at 100 – Official Trailer"}]}, {"id": 3704, "t": "The Big Sleep", "y": 1946, "d": "Howard Hawks", "l": "English", "mc": 86, "rt": 96, "im": 7.9, "r": null, "n": 4, "o": true, "badge": null, "ov": "Private Investigator Philip Marlowe is hired by wealthy General Sternwood regarding a matter involving his youngest daughter Carmen. Before the complex case is over, Marlowe sees murder, blackmail, deception, and what might be love.", "poster": "https://m.media-amazon.com/images/M/MV5BZTVlNDAwZTAtZmY0My00NDMyLWFkZjMtMjY0NmVmOTFlNTdhXkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "Slant: Film Noir #3, BFI: American Film Noir, BFI: Film Noir, My Ranking #168", "crit": false, "cc": true, "yt": [{"key": "n-K49CUaeto", "name": "The Big Sleep Official Trailer #1 - Humphrey Bogart, Lauren Bacall Movie (1946) HD"}], "apple": "https://video-ssl.itunes.apple.com/itunes-assets/Video122/v4/f3/93/b3/f393b3a2-f59a-2bd2-0b69-352e1f82efa2/mzvf_5524652278732815824.640x480.h264lc.U.p.m4v", "all": [{"key": "GguGT6sY4oI", "type": "Clip", "name": "Marlowe Follows Geiger From Acme Books"}, {"key": "aIQaLs0KDhA", "type": "Clip", "name": "Big Sleep, The"}, {"key": "n-K49CUaeto", "type": "Trailer", "name": "The Big Sleep Official Trailer #1 - Humphrey Bogart, Lauren Bacall Movie (1946) HD"}, {"key": "Sqoxk3SrZRw", "type": "Clip", "name": "Very Small Favor - The Big Sleep (1946)"}]}, {"id": 1821, "t": "M", "y": 1931, "d": "Fritz Lang", "l": "German", "mc": null, "rt": 100, "im": 8.3, "r": null, "n": 3, "o": false, "badge": "Criterion Channel", "ov": "In this classic German thriller, Hans Beckert, a serial killer who preys on children, becomes the focus of a massive Berlin police manhunt. Beckert's heinous crimes are so repellant and disruptive to city life that he is even targeted by others in the seedy underworld network. With both cops and criminals in pursuit, the murderer soon realizes that people are on his trail, sending him into a tense, panicked attempt to escape justice.", "poster": "https://m.media-amazon.com/images/M/MV5BODA4ODk3OTEzMF5BMl5BanBnXkFtZTgwMTQ2ODMwMzE@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, Kanopy, Plex, Plex Channel ⋯ 6 more", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #6, Sight & Sound: 2022 #36, BFI: Film Noir", "crit": true, "cc": true, "yt": [{"key": "nsVproWjN6c", "name": "Trailer"}, {"key": "DdR07aN3uoc", "name": "M (1931) Original Trailer [FHD]"}], "apple": "https://video-ssl.itunes.apple.com/itunes-assets/Video117/v4/4e/ce/d4/4eced417-57d3-e4ad-ee2d-68170278cf62/mzvf_3790426285157861980.640x480.h264lc.U.p.m4v", "all": [{"key": "DdR07aN3uoc", "type": "Trailer", "name": "M (1931) Original Trailer [FHD]"}, {"key": "FUpwMmeT4ZA", "type": "Clip", "name": "Clip"}, {"key": "nsVproWjN6c", "type": "Trailer", "name": "Trailer"}]}, {"id": 4825, "t": "Basic Instinct", "y": 1992, "d": "Paul Verhoeven", "l": "English, Spanish", "mc": 43, "rt": 56, "im": 7.1, "r": null, "n": 1, "o": false, "badge": "Kanopy", "ov": "Catherine, a novelist with an insatiable sexual appetite, becomes a prime suspect when her boyfriend is brutally murdered -- a crime she had described in her latest story.", "poster": "https://m.media-amazon.com/images/M/MV5BMjlhMGM2ZWItN2ZhZi00YzU0LTg1MTQtNzczZmY3OGJlOGM4XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Kanopy ↗", "also": "Kanopy, MGM Plus, Paramount Plus Essential (not subscribed), Philo (not subscribed) ⋯ 4 more", "buy": "Apple TV Store (iTunes)", "lists": "Slant: Film Noir #56", "crit": false, "cc": true, "yt": [{"key": "cvktbdKzsq4", "name": "Official 4K Restoration Trailer"}, {"key": "Jh6JwQ8XPK0", "name": "Official Trailer"}, {"key": "HL-eEzcSU3w", "name": "Basic Instinct Theatrical Trailer (1992) [4K] [FTD-1070]"}], "apple": "https://video-ssl.itunes.apple.com/itunes-assets/Video111/v4/f2/4c/73/f24c737f-553d-0f13-74d1-217fb7ae0aed/mzvf_7544019648702599029.640x364.h264lc.U.p.m4v", "all": [{"key": "MF-v-90HbUI", "type": "Featurette", "name": "This Prop Made 'Basic Instinct’s Stabbing Scenes Possible!"}, {"key": "HL-eEzcSU3w", "type": "Trailer", "name": "Basic Instinct Theatrical Trailer (1992) [4K] [FTD-1070]"}, {"key": "yzgpPw_hHCY", "type": "Clip", "name": "Car Scene Clip"}, {"key": "S8zk5ILRXvw", "type": "Clip", "name": "Interrogation Clip"}, {"key": "5RHVQt_8zGI", "type": "Clip", "name": "Club Scene"}, {"key": "Xo6TiQ7NsuE", "type": "Clip", "name": "Nick visits Catherine"}, {"key": "NbiHcNsnN9o", "type": "Clip", "name": "You Like Playing Games Don't You? - Clip"}, {"key": "JU1cY9RfTq0", "type": "Clip", "name": "Car Chase Clip"}, {"key": "YPfcWkC5qgg", "type": "Clip", "name": "Best Scenes"}, {"key": "67gvp3vzYaQ", "type": "Featurette", "name": "Examining Basic Instinct - A Video Essay"}, {"key": "cvktbdKzsq4", "type": "Trailer", "name": "Official 4K Restoration Trailer"}, {"key": "Jh6JwQ8XPK0", "type": "Trailer", "name": "Official Trailer"}]}, {"id": 3101, "t": "Pan's Labyrinth", "y": 2006, "d": "Guillermo del Toro", "l": "Spanish", "mc": 98, "rt": 95, "im": 8.2, "r": null, "n": 0, "o": false, "badge": null, "ov": "In post–civil war Spain, 10-year-old Ofelia moves with her pregnant mother to live under the control of her cruel stepfather. Drawn into a mysterious labyrinth, she meets a faun who reveals that she may be a lost princess from an underground kingdom. To return to her true father, she must complete a series of surreal and perilous tasks that blur the line between reality and fantasy.", "poster": "https://m.media-amazon.com/images/M/MV5BOTc1NTAxMWItMWFlNy00MmU2LTkwMTMtNzMwOTg5OTQ5YTFiXkEyXkFqcGc@._V1_QL75_UX380_CR0,2,380,562_.jpg", "watch": "", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": false, "cc": true, "yt": [{"key": "6tYUOAMsydg", "name": "Official 4K Trailer"}, {"key": "OBGKGm3RYos", "name": "Official 20th Anniversary Trailer"}, {"key": "jVZRnnVSQ8k", "name": "Official Trailer"}, {"key": "__zGGNQ8-R4", "name": "DVD TV Spot"}], "apple": null, "all": [{"key": "aaH3jpNY-rE", "type": "Featurette", "name": "Official 20th Anniversary Featurette"}, {"key": "OBGKGm3RYos", "type": "Trailer", "name": "Official 20th Anniversary Trailer"}, {"key": "3tOP9xOhkvA", "type": "Featurette", "name": "Crafting Guillermo Navarro's Oscar-Winning Cinematography"}, {"key": "ioe5bgRq30Q", "type": "Clip", "name": "Ofelia Meets The Pale Man"}, {"key": "5GtDgxRJ1K0", "type": "Clip", "name": "Ofelia meets the Faun Clip"}, {"key": "6tYUOAMsydg", "type": "Trailer", "name": "Official 4K Trailer"}, {"key": "KxocbxqjdUc", "type": "Featurette", "name": "Emilia Clarke announces PAN'S LABYRINTH for AFI Movie Club"}, {"key": "PtjO62UAl7U", "type": "Clip", "name": "Full Movie Preview"}, {"key": "jVZRnnVSQ8k", "type": "Trailer", "name": "Official Trailer"}, {"key": "8-G8pKiuG8Q", "type": "Behind the Scenes", "name": "Guillermo del Toro on the Making of Pan's Labyrinth"}, {"key": "oW1T3lKRLFE", "type": "Featurette", "name": "Guillermo del Toro On Why 4K Matters"}, {"key": "jcia8aFBNMM", "type": "Featurette", "name": "PST LA/LA at the Academy: “Pan’s Labyrinth”"}, {"key": "7XBpy5RGtx0", "type": "Featurette", "name": "Pan's Labyrinth Wins Art Direction: 2007 Oscars"}, {"key": "RJUq_GAvK5A", "type": "Featurette", "name": "Pan's Labyrinth Wins Cinematography: 2007 Oscars"}, {"key": "__zGGNQ8-R4", "type": "Teaser", "name": "DVD TV Spot"}]}, {"id": 1594, "t": "Ornette: Made in America", "y": 1985, "d": "Shirley Clarke", "l": "English, Italian", "mc": 77, "rt": 90, "im": 7.0, "r": null, "n": 0, "o": false, "badge": "Criterion Channel", "ov": "Shirley Clarke's frenetic documentary about multi-talented musician Ornette Coleman.", "poster": "https://m.media-amazon.com/images/M/MV5BMzg4OTk5NzMyNV5BMl5BanBnXkFtZTgwMDgxMzYwNzE@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "Kino Film Collection, Kanopy, Hoopla (not subscribed), OVID (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "cc": true, "yt": [], "apple": null, "all": []}];
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v, suf = '') => v == null ? '—' : v + suf;
+const film = (t) => FILMS.find((f) => f.t === t);
+const VARIANTS = [
+  { key:'A', name:'A · After CheapCharts', sub:'before ♡ Wishlist it' },
+  { key:'B', name:'B · Last', sub:'after ♡ Wishlist it' },
+  { key:'C', name:'C · First', sub:'Recommended · always in the same spot' },
+];
+const NONES = [
+  { key:'1', name:'1 · Nothing', sub:'no link at all' },
+  { key:'2', name:'2 · A search link', sub:'Recommended · opens YouTube in a new tab' },
+];
+const state = { variant:'C', none:'2', open:null, mark:null, story:null, broken:false };
+const byDefault = (a, b) => (b.mc ?? -1) - (a.mc ?? -1) || (b.rt ?? -1) - (a.rt ?? -1) || (b.im ?? -1) - (a.im ?? -1) || a.t.localeCompare(b.t);
+const ROWS = FILMS.slice().sort(byDefault);
+
+const STORIES = [
+  { n:1, title:'One click, and the trailer is playing',
+    text:'I open <b>Army of Shadows</b> and click <b>▶ Trailer</b>. Everything dims, the trailer comes up centred over the whole browser window and starts by itself, with sound: STUDIOCANAL\'s <i>Official 4K Restoration Trailer</i>. Esc, ✕ or a click outside closes it — and the drawer is still open on Army of Shadows.',
+    coach:'The drawer is open on Army of Shadows. Click <b>▶ Trailer</b> in the links row, then close it with <b>Esc</b>.',
+    setup() { openFilm('Army of Shadows'); } },
+  { n:2, title:'The real trailer — not a clip, not a review',
+    text:'<b>Memories of Murder</b>: TMDB files seven videos, among them <i>Mark Kermode reviews Memories of Murder</i>, a clip, and the director\'s introduction at Lincoln Center; CheapCharts shows five of them as "trailers". movie-brain plays the one that is a trailer: NEON\'s <i>MEMORIES OF MURDER Trailer</i>.',
+    coach:'Click <b>▶ Trailer</b>. Below is everything TMDB files for this film and the one movie-brain picks.', showVideos:true,
+    setup() { openFilm('Memories of Murder'); } },
+  { n:3, title:'Browsing by trailer, hands on the keyboard',
+    text:'The drawer is open on <b>Army of Shadows</b>. I press <b>T</b>: its trailer plays. <b>Esc</b>. <b>↓</b> — <b>Pan\'s Labyrinth</b>. <b>T</b>: the <i>Official 4K Trailer</i> plays. <b>Esc</b>, <b>↓</b>, on to <b>The Big Sleep</b>. The mouse is never needed.',
+    coach:'Keyboard only: <b>T</b>, <b>Esc</b>, <b>↓</b>, <b>T</b>, <b>Esc</b>, <b>↓</b>. (If a key seems dead, click once on the drawer first — a click inside the YouTube player hands the keyboard to YouTube.)',
+    setup() { openFilm('Army of Shadows'); } },
+  { n:4, title:'No YouTube trailer, so Apple\'s preview stands in',
+    text:'<b>To Die For</b> (1995) has no trailer on TMDB at all. The link is there all the same: a click plays <b>Apple\'s own store preview</b>, in a smaller window because the picture is small. Same for <b>Moonrise</b> (1948).',
+    coach:'Click <b>▶ Trailer</b>. This is Apple\'s preview file, not YouTube. <b>Tell me if it is a trailer or just a scene</b> — I could not watch it. Then close it and click <b>Moonrise</b> in the dimmed list for a second one.',
+    setup() { openFilm('To Die For'); } },
+  { n:5, title:'The link is where I expect it, film after film',
+    text:'<b>M</b> has <i>Open on Criterion</i> in front of its other links; <b>The Big Sleep</b> I own, so it has no ♡ Wishlist it; <b>Army of Shadows</b> has both CheapCharts and ♡ Wishlist it. In <b>C</b> the trailer link is the first thing in the row on all three. In <b>A</b> and <b>B</b> it moves sideways from film to film.',
+    coach:'Click <b>M</b>, <b>The Big Sleep</b> and <b>Army of Shadows</b> in the dimmed list (one click switches films) and watch where <b>▶ Trailer</b> sits. Then switch between <b>A</b>, <b>B</b> and <b>C</b> above. The Big Sleep has both a YouTube trailer and an Apple preview — its trailer window shows the <i>YouTube · Apple</i> switch.',
+    setup() { openFilm('M'); } },
+  { n:6, title:'The awkward one: no trailer anywhere',
+    text:'<b>The Hitch-Hiker</b> (1953) — on two of my noir lists — has no trailer on TMDB, and Apple does not sell it. <b>1:</b> the row has no trailer link; nothing to click, nothing to fail. <b>2:</b> the row says <i>Find a trailer on YouTube ↗</i> in grey, which opens a YouTube search in a new tab — clearly a search, never played inside movie-brain.',
+    coach:'Look at the links row, then switch between <b>1</b> and <b>2</b> above. (<b>Ornette: Made in America</b> is the same case with a store id.)',
+    setup() { openFilm('The Hitch-Hiker'); } },
+  { n:7, title:'YouTube says no (simulated)',
+    text:'Some day a trailer is deleted, or YouTube refuses to play it outside youtube.com. I click <b>▶ Trailer</b> on <b>Basic Instinct</b>: the YouTube pick fails, so the next trailer on TMDB\'s list is tried, then Apple\'s preview. Only when all of them fail does the window say so, with a link to YouTube.',
+    coach:'<b>Simulated:</b> for this story I broke Basic Instinct\'s first two YouTube trailers on purpose. Click <b>▶ Trailer</b> — after a moment the third one plays. Walk any other story and they are mended.',
+    setup() { state.broken = true; openFilm('Basic Instinct'); } },
+];
+
+function rowHtml(f) {
+  const title = esc(f.t)
+    + (f.badge ? ` <span class="badge-watch">${esc(f.badge)}</span>` : '')
+    + (f.n ? ` <span class="badge-lists">${f.n} list${f.n === 1 ? '' : 's'}</span>` : '')
+    + (f.o ? ' <span class="badge-owned">owned</span>' : '');
+  const cls = state.open != null ? (f.id === state.open ? 'lit' : '') : (f.id === state.mark ? 'marked' : '');
+  return `<tr data-id="${f.id}" class="${cls}"><td>${title}</td><td>${fmt(f.y)}</td><td>${esc(f.d) || '—'}</td><td>${esc(f.l) || '—'}</td>
+    <td class="num">${fmt(f.mc)}</td><td class="num">${fmt(f.rt, '%')}</td><td class="num">${f.im == null ? '—' : f.im.toFixed(1)}</td>
+    <td class="num"><input class="rating" maxlength="2" value="${f.r ?? ''}"></td><td><button class="info">ⓘ</button></td></tr>`;
+}
+function sources(f) {  // the play order: TMDB's trailers (already ranked), then Apple's preview
+  let yt = f.yt.map((v) => ({ kind:'yt', key:v.key, name:v.name }));
+  if (state.broken && f.t === 'Basic Instinct') yt = yt.map((v, i) => i < 2 ? { ...v, key:'xxxxxxxxxxx' } : v);
+  return yt.concat(f.apple ? [{ kind:'apple', url:f.apple, name:"Apple's store preview" }] : []);
+}
+function trailerHtml(f) {
+  if (sources(f).length) return '<a class="trailer-link" id="trailer-link">▶ Trailer</a>';
+  if (state.none === '2') return `<a class="trailer-search" target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${f.t} ${f.y} trailer`)}">Find a trailer on YouTube ↗</a>`;
+  return '';
+}
+function drawDrawer(f) {
+  const tr = trailerHtml(f);
+  const crit = f.crit ? '<a>Open on Criterion ↗</a>' : '', tmdb = '<a>TMDB ↗</a>';
+  const cc = f.cc ? '<a>CheapCharts ↗</a>' : '';
+  const wish = f.cc && !f.o ? '<button class="wl" disabled>♡ Wishlist it</button>' : '';
+  const row = state.variant === 'A' ? [crit, tmdb, cc, tr, wish] : state.variant === 'B' ? [crit, tmdb, cc, wish, tr] : [tr, crit, tmdb, cc, wish];
+  const critics = [f.im != null ? `IMDb <b>${f.im.toFixed(1)}</b>` : '', f.mc != null ? `Metacritic <b>${f.mc}</b>` : '', f.rt != null ? `Rotten Tomatoes <b>${f.rt}%</b>` : ''].filter(Boolean).join(' · ');
+  $('#drawer-body').innerHTML = `<h2>${esc(f.t)} ☆⚐</h2><div class="meta">${fmt(f.y)} · ${esc(f.d) || '—'}</div>
+    <p>${f.poster ? `<img class="poster" src="${esc(f.poster)}" alt="">` : ''}${esc(f.ov)}</p>
+    <div class="ratings"><div class="row">My rating: <input class="rating" maxlength="2" value="${f.r ?? ''}"></div><div class="row">${critics}</div>${f.lists ? `<div class="row">On lists: ${esc(f.lists)}</div>` : ''}</div>
+    ${f.watch ? `<p class="meta">${esc(f.watch)}</p>` : ''}${f.also ? `<p class="meta">Also streaming on: ${esc(f.also)}</p>` : ''}${f.buy ? `<p class="meta">Buy on: <u>${esc(f.buy)}</u></p>` : ''}
+    <p class="links">${row.filter(Boolean).join(' ')}</p>
+    <div class="left-out">The rest of the drawer — cast, writer, facts, the audit block — is unchanged and left out of this mock-up. The other links here are dead.</div>`;
+}
+function render() {
+  $('#tbody').innerHTML = ROWS.map(rowHtml).join('');
+  document.querySelectorAll('#variants .variant').forEach((b) => b.classList.toggle('active', b.dataset.key === state.variant));
+  document.querySelectorAll('#nones .variant').forEach((b) => b.classList.toggle('active', b.dataset.key === state.none));
+  document.querySelectorAll('.story').forEach((el) => el.classList.toggle('current', +el.dataset.n === state.story));
+  const s = STORIES.find((x) => x.n === state.story);
+  let html = s ? `<b>Story ${s.n} · link ${state.variant} · no-trailer ${state.none}.</b> ${s.coach}` : `<b>Link ${state.variant}.</b> Click any film, or press <b>Walk it</b> on a story above.`;
+  const f = FILMS.find((x) => x.id === state.open);
+  if (s && s.showVideos && f) html += '<table>' + f.all.map((v) => `<tr class="${v.key === f.yt[0].key ? 'picked' : 'skipped'}"><td>${v.key === f.yt[0].key ? '▶ plays' : v.type === 'Trailer' || v.type === 'Teaser' ? 'in reserve' : 'skipped'}</td><td>${esc(v.type)}</td><td>${esc(v.name)}</td></tr>`).join('') + '</table>';
+  $('#coach').innerHTML = html;
+  if (f) drawDrawer(f);
+}
+function openAt(i) {
+  const f = ROWS[i]; if (!f) return;
+  state.open = f.id; state.mark = f.id;
+  $('#drawer').hidden = false; $('#backdrop').hidden = false; $('#drawer').scrollTop = 0;
+  render();
+}
+function openFilm(t) { openAt(ROWS.indexOf(film(t))); }
+function closeDrawer() { state.open = null; $('#drawer').hidden = true; $('#backdrop').hidden = true; render(); }
+function rowAt(x, y) {
+  const under = document.elementsFromPoint(x, y).find((el) => el.id !== 'backdrop');
+  const tr = under && under.closest('#tbody tr[data-id]');
+  return tr ? ROWS.findIndex((f) => f.id === +tr.dataset.id) : -1;
+}
+
+// ---- the trailer window ----
+let player = null, playing = null;   // playing = { f, list, i }
+function closeTrailer() {
+  if (player && player.destroy) { try { player.destroy(); } catch (e) { /* already gone */ } }
+  player = null; playing = null; $('#screen').innerHTML = ''; $('#trailer').hidden = true;
+}
+function playAt(i) {
+  const { f, list } = playing; playing.i = i;
+  if (player && player.destroy) { try { player.destroy(); } catch (e) { /* already gone */ } } player = null;
+  const s = list[i], screen = $('#screen');
+  $('#trailer-frame').classList.toggle('apple', !!s && s.kind === 'apple');
+  $('#cap-title').textContent = `${f.t} (${f.y})`;
+  const firstYt = list.findIndex((x) => x.kind === 'yt'), apple = list.findIndex((x) => x.kind === 'apple');
+  $('#cap-src').innerHTML = s && firstYt >= 0 && apple >= 0 ? `<button data-i="${s.kind === 'yt' ? i : firstYt}" class="${s.kind === 'yt' ? 'on' : ''}">YouTube</button><button data-i="${apple}" class="${s.kind === 'apple' ? 'on' : ''}">Apple</button>` : '';
+  if (!s) {
+    $('#cap-what').textContent = '';
+    screen.innerHTML = `<div class="sorry"><div>This trailer won't play here.</div><a target="_blank" rel="noopener" href="https://www.youtube.com/results?search_query=${encodeURIComponent(`${f.t} ${f.y} trailer`)}">Find a trailer on YouTube ↗</a></div>`;
+    return;
+  }
+  $('#cap-what').textContent = `— ${s.name}${s.kind === 'yt' ? ' · YouTube' : ''}`;
+  if (s.kind === 'apple') {
+    screen.innerHTML = `<video src="${esc(s.url)}" controls autoplay playsinline></video>`;
+    screen.querySelector('video').addEventListener('error', () => playing && playAt(i + 1));
+    return;
+  }
+  screen.innerHTML = '<div id="yt"></div>';
+  // Mock-up only: YouTube does not always report a broken video, so the simulated breakage gives up by itself.
+  if (s.key === 'xxxxxxxxxxx') setTimeout(() => { if (playing && playing.i === i) playAt(i + 1); }, 2500);
+  player = new YT.Player('yt', { videoId:s.key, host:'https://www.youtube-nocookie.com',
+    playerVars:{ autoplay:1, rel:0, playsinline:1 },
+    events:{ onReady:(e) => e.target.playVideo(), onError:() => setTimeout(() => { if (playing && playing.i === i) playAt(i + 1); }, 0) } });
+}
+function openTrailer() {
+  const f = FILMS.find((x) => x.id === state.open); if (!f) return;
+  const list = sources(f); if (!list.length) return;
+  playing = { f, list, i:0 }; $('#trailer').hidden = false; playAt(0);
+}
+
+$('#tbody').addEventListener('click', (e) => { if (e.target.closest('input')) return; const tr = e.target.closest('tr[data-id]'); if (tr) { openAt(ROWS.findIndex((f) => f.id === +tr.dataset.id)); } });
+$('#backdrop').addEventListener('click', (e) => { const i = rowAt(e.clientX, e.clientY); if (i >= 0) openAt(i); else closeDrawer(); });
+$('#backdrop').addEventListener('mousemove', (e) => $('#backdrop').classList.toggle('hand', rowAt(e.clientX, e.clientY) >= 0));
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#drawer-body').addEventListener('click', (e) => { if (e.target.closest('#trailer-link')) { e.preventDefault(); openTrailer(); } });
+$('#trailer').addEventListener('click', (e) => { if (e.target === $('#trailer') || e.target.classList.contains('hint')) closeTrailer(); });
+$('#trailer-close').addEventListener('click', closeTrailer);
+$('#cap-src').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && playing) playAt(+b.dataset.i); });
+document.addEventListener('keydown', (e) => {
+  if (playing) {                       // a trailer is up: Esc closes IT, every other key is left alone
+    if (e.key === 'Escape') { e.preventDefault(); closeTrailer(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault();
+    return;
+  }
+  if (state.open == null || e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'Escape') return closeDrawer();
+  if (e.key === 't' || e.key === 'T') { e.preventDefault(); return openTrailer(); }
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const i = ROWS.findIndex((f) => f.id === state.open) + (e.key === 'ArrowDown' ? 1 : -1);
+  if (i >= 0 && i < ROWS.length) openAt(i);
+});
+
+$('#stories').innerHTML = STORIES.map((s) => `<div class="story" data-n="${s.n}"><h3><span class="n">${s.n}</span>${s.title}</h3><p>${s.text}</p><div class="foot"><span class="does"></span><button class="walk" data-n="${s.n}">Walk it</button></div></div>`).join('');
+$('#variants').innerHTML = VARIANTS.map((v) => `<button class="variant" data-key="${v.key}">${v.name}<small>${v.sub}</small></button>`).join('');
+$('#nones').innerHTML = NONES.map((v) => `<button class="variant" data-key="${v.key}">${v.name}<small>${v.sub}</small></button>`).join('');
+$('#stories').addEventListener('click', (e) => {
+  const b = e.target.closest('.walk'); if (!b) return;
+  const s = STORIES.find((x) => x.n === +b.dataset.n);
+  closeTrailer(); state.broken = false; state.story = s.n; s.setup();
+  document.querySelector('.window').scrollIntoView({ behavior:'smooth', block:'center' });
+});
+$('#variants').addEventListener('click', (e) => { const b = e.target.closest('.variant'); if (b) { state.variant = b.dataset.key; render(); } });
+$('#nones').addEventListener('click', (e) => { const b = e.target.closest('.variant'); if (b) { state.none = b.dataset.key; render(); } });
+render();
+</script>
+</body></html>

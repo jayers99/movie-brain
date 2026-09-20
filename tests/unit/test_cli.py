@@ -1216,3 +1216,30 @@ def test_dashboard_keeps_the_last_known_hearts_when_cheapcharts_is_unreachable(c
     assert repo.wishlisted_film_ids() == {fid}  # kept, not wiped
     assert cap.wishlist is not None  # a gateway, not None
     assert cap.ran is True  # the dashboard still starts
+
+
+def test_enrich_trailers_needs_a_tmdb_token(config_dir):
+    r = runner.invoke(app, ["enrich", "trailers"])
+    assert r.exit_code == 2 and "TMDB" in r.output
+
+
+def test_enrich_trailers_is_dry_run_by_default_and_prints_the_report(config_dir, monkeypatch):
+    from movie_brain.application.trailers import TrailerReport
+
+    (config_dir / "tmdb-read-token.txt").write_text("t")
+    calls = {}
+
+    def fake(repo, tmdb, itunes, today, **kw):
+        calls.update(kw)
+        return TrailerReport(scanned=10, with_youtube=6, apple_only=2, nothing=1, failed=1)
+
+    monkeypatch.setattr("movie_brain.cli.enrich_trailers", fake)
+    r = runner.invoke(app, ["enrich", "trailers"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is False and calls["limit"] is None and calls["refresh"] is False
+    assert "YouTube trailer: 6" in r.output and "Apple preview only: 2" in r.output and "dry run" in r.output
+
+    r = runner.invoke(app, ["enrich", "trailers", "--apply", "--refresh", "--limit", "5"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is True and calls["refresh"] is True and calls["limit"] == 5
+    assert "dry run" not in r.output

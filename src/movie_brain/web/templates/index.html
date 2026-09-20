@@ -77,10 +77,18 @@
   <div id="drawer-backdrop" hidden></div>
   <aside id="drawer" hidden aria-label="Film details">
     <button id="drawer-close" aria-label="Close">✕</button>
-    <span class="step-hint">↑ ↓ previous / next film</span>
+    <span class="step-hint">↑ ↓ previous / next film · T trailer</span>
     <div id="drawer-body"></div>
   </aside>
   <div id="toast" hidden></div>
+  <div id="trailer" hidden role="dialog" aria-label="Trailer">
+    <div id="trailer-frame">
+      <button id="trailer-close" aria-label="Close trailer">✕</button>
+      <div id="trailer-screen"></div>
+      <div id="trailer-caption"><span><b id="trailer-title"></b> <span id="trailer-what"></span></span><span id="trailer-sources"></span></div>
+    </div>
+    <div class="trailer-hint">Esc, ✕ or a click outside closes the trailer — the drawer stays open</div>
+  </div>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

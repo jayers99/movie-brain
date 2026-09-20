@@ -43,6 +43,7 @@ from movie_brain.application.repair_keys import (
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
+from movie_brain.application.trailers import enrich_trailers
 from movie_brain.application.wishlist import (
     WishlistError,
     WishlistGateway,
@@ -55,6 +56,7 @@ from movie_brain.infrastructure.config import Config, load_api_key, load_config,
 from movie_brain.infrastructure.credentials import load_credentials
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.embeddings import SemanticUnavailable, SentenceTransformerEmbedder
+from movie_brain.infrastructure.itunes import ItunesLookup
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
 from movie_brain.infrastructure.notify import notify
 from movie_brain.infrastructure.tmdb import TmdbClient
@@ -1326,6 +1328,36 @@ def enrich_credits_cmd(
     report = enrich_credits(_repo(), TmdbClient(token), date.today(), apply=apply, limit=limit, log=_plain)
     console.print(
         f"scanned: {report.scanned} · enriched: {report.enriched} · failed: {report.failed}"
+        + (" · ABORTED" if report.aborted else "")
+        + ("" if apply else "   (dry run — nothing written)")
+    )
+
+
+@enrich_app.command("trailers")
+def enrich_trailers_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Store the trailers (default: dry-run).")] = False,
+    limit: Annotated[int | None, typer.Option("--limit", help="Batch size over the worklist.")] = None,
+    refresh: Annotated[bool, typer.Option("--refresh", help="Ask again about every film, not only new ones.")] = False,
+) -> None:
+    """Look up what the drawer's "▶ Trailer" link plays: the videos TMDB types as a trailer
+    (YouTube), with Apple's own store preview behind them for a film holding a store id.
+
+    One TMDB call per film (two for a foreign film with no English trailer), one iTunes lookup per
+    150 films. A looked-up film is never asked about again unless it is re-keyed, gains a store id,
+    or --refresh is given, so the run can be interrupted and resumed. Never part of sync. Dry-run
+    by default.
+    """
+    cfg = load_config()
+    token = load_tmdb_token(cfg)
+    if not token:
+        err.print(f"no TMDB token: set MOVIE_BRAIN_TMDB_TOKEN or write {cfg.tmdb_token_file}")
+        raise typer.Exit(2)
+    report = enrich_trailers(
+        _repo(), TmdbClient(token), ItunesLookup(), date.today(), apply=apply, limit=limit, refresh=refresh, log=_plain
+    )
+    console.print(
+        f"scanned: {report.scanned} · YouTube trailer: {report.with_youtube} · Apple preview only: {report.apple_only}"
+        f" · nothing: {report.nothing} · failed: {report.failed}"
         + (" · ABORTED" if report.aborted else "")
         + ("" if apply else "   (dry run — nothing written)")
     )

@@ -192,7 +192,7 @@ def test_story_5_i_step_through_films_without_closing(noir: Page):
     noir.keyboard.press("ArrowUp")
     expect(noir.locator("#drawer h2")).to_contain_text("Out of the Past")
     expect(row(noir, "Out of the Past")).to_have_class("lit edge")
-    expect(noir.locator("#drawer .step-hint")).to_have_text("↑ ↓ previous / next film")
+    expect(noir.locator("#drawer .step-hint")).to_have_text("↑ ↓ previous / next film · T trailer")
 
 
 def test_story_5_the_list_scrolls_to_keep_the_white_row_in_view(noir: Page):

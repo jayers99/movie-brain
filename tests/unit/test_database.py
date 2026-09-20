@@ -139,6 +139,7 @@ def test_init_db_is_idempotent(tmp_path):
         "prose": 0,
         "old_ratings_linked": 0,
         "old_ratings": 0,
+        "trailers": 0,
     }
 
 
@@ -272,6 +273,7 @@ def test_views_and_summary(repo):
         "prose": 0,
         "old_ratings_linked": 0,
         "old_ratings": 0,
+        "trailers": 0,
     }
 
 

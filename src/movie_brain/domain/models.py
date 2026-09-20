@@ -112,6 +112,20 @@ class TmdbCredits:
 
 
 @dataclass(frozen=True)
+class TrailerTarget:
+    """A live movie whose trailers have not been looked up under the ids it now holds."""
+
+    film_id: int
+    title: str
+    tmdb_id: int | None
+    itunes_ids: tuple[str, ...]  # every store product the film holds, sorted; the first is the drawer's
+
+    @property
+    def itunes_id(self) -> str | None:
+        return self.itunes_ids[0] if self.itunes_ids else None
+
+
+@dataclass(frozen=True)
 class CreditsTarget:
     """A live movie holding a TMDB id and no `credits_fetched_on` — the enrichment worklist."""
 

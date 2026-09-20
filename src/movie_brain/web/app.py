@@ -83,6 +83,9 @@ def create_app(
             "credits": credits.to_dict() if credits is not None else None,
             "overview": repo.overview_for(film_id),
             "tmdb_url": f"https://www.themoviedb.org/movie/{ids['tmdb']}" if "tmdb" in ids else None,
+            # Detail-only as well (trailer-link brief): the stored play order, looked up ahead of
+            # time by `enrich trailers` — `[]` when there is none, and nothing is fetched here.
+            "trailers": repo.film_trailers(film_id),
             # Detail-only too (move-tier spec M7): the drawer's tier row and its "Rank this"
             # awaiting state, derived per read from the open session; a READ, never a seed.
             **_rank_keys(film_id),

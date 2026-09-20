@@ -179,6 +179,15 @@ class TmdbClient:
             runtime_min=int(runtime) if isinstance(runtime, int) and runtime > 0 else None,
         )
 
+    def movie_videos(self, tmdb_id: int, languages: str = "en,null") -> tuple[str | None, list[dict[str, Any]]]:
+        """The film's original language and the videos TMDB files under `languages`, in ONE call
+        (trailer-link brief). Raw dicts: choosing among them is `domain/trailers.py`'s job. The
+        original language is only known from this answer, so a film whose English list holds no
+        trailer is asked a second time, for its own language, by the use case."""
+        d = self._get(f"/movie/{tmdb_id}", append_to_response="videos", include_video_language=languages).json()
+        videos: list[dict[str, Any]] = (d.get("videos") or {}).get("results") or []
+        return (str(d["original_language"]) if d.get("original_language") else None), videos
+
     def movie_credits(self, tmdb_id: int) -> TmdbCredits:
         """Cast, crew, keywords, alternative titles and the movie body in ONE call (spec D11).
         Alternative titles are parsed exactly as `movie_facts` does, so `write_credits` can

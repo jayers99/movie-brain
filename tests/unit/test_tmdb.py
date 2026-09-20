@@ -312,3 +312,26 @@ def test_movie_credits_tolerates_a_film_with_no_credits_or_keywords_blocks():
     c = TmdbClient("tok").movie_credits(1)
     assert (c.year, c.runtime_min, c.overview, c.tagline) == (None, None, None, None)
     assert c.cast == () and c.crew == () and c.keywords == () and c.genres == ()
+
+
+@responses.activate
+def test_movie_videos_asks_for_the_body_and_the_videos_in_one_call():
+    # Shape of a real answer (Army of Shadows, 2026-09-20), invented keys.
+    responses.get(f"{TMDB_API}/movie/15383", json={
+        "id": 15383, "original_language": "fr",
+        "videos": {"results": [
+            {"iso_639_1": "en", "key": "en000000001", "name": "Official 4K Restoration Trailer [Subtitled]",
+             "site": "YouTube", "size": 2160, "type": "Trailer", "official": True},
+        ]},
+    })
+    language, videos = TmdbClient("tok").movie_videos(15383)
+    params = responses.calls[0].request.params
+    assert params["append_to_response"] == "videos" and params["include_video_language"] == "en,null"
+    assert language == "fr" and [v["key"] for v in videos] == ["en000000001"]
+
+
+@responses.activate
+def test_movie_videos_can_ask_for_the_films_own_language_and_tolerates_a_bare_body():
+    responses.get(f"{TMDB_API}/movie/1", json={"id": 1})
+    assert TmdbClient("tok").movie_videos(1, languages="fr") == (None, [])
+    assert responses.calls[0].request.params["include_video_language"] == "fr"
