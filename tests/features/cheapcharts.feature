@@ -96,6 +96,23 @@ Feature: Resolving the CheapCharts product page for a film
     Then the report counts 1 held
     And the film "Vertigo" still holds no itunes id
 
+  Scenario: An IMDb answer naming a product another film holds falls through to the title search
+    Given CheapCharts maps "tt0052357" to itunes id "284815525"
+    And a film "Vertigo (restored)" already holds itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    When I resolve cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "999"
+    And the report counts 1 resolved by search
+    And the report counts 0 held
+
+  Scenario: When the title search only finds the held product too, it is still reported as held
+    Given CheapCharts maps "tt0052357" to itunes id "284815525"
+    And a film "Vertigo (restored)" already holds itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "284815525"
+    When I resolve cheapcharts ids with apply
+    Then the report counts 1 held
+    And the film "Vertigo" still holds no itunes id
+
   Scenario: Films are asked for in batches no larger than the API accepts
     Given 6 more films holding imdb ids that CheapCharts does not know
     When I resolve cheapcharts ids with apply

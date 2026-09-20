@@ -134,6 +134,16 @@ def resolve_itunes_ids(
                 # CheapCharts' own index, so the search fallback runs unchanged below.
                 product = None
             source = "imdb"
+            held_id: str | None = None  # the IMDb answer's product, when another film holds it
+            if product is not None:
+                holder = repo.film_id_for_external(ITUNES_AUTHORITY, product.itunes_id)
+                if holder is not None and holder != target.film_id:
+                    # CheapCharts' IMDb index answers a film's id with its SIBLING's product often
+                    # enough to matter (Final Reckoning's tt → Dead Reckoning's page, 2026-09-20),
+                    # and the title search finds the right one — so a held answer is a miss by
+                    # IMDb id, not the end of the lookup. Nothing is ever taken from the holder.
+                    log(f"  #{target.film_id} {target.title!r}: itunes {product.itunes_id} already held by #{holder}")
+                    held_id, product = product.itunes_id, None
             if product is None:
                 try:
                     results = client.search(target.title)
@@ -149,8 +159,11 @@ def resolve_itunes_ids(
                 product, verdict = _confirm(target, results)
                 if product is None:
                     log(f"  #{target.film_id} {target.title!r} ({target.year}): {verdict}")
-                    unmatched += verdict == "unmatched"
-                    ambiguous += verdict == "ambiguous"
+                    # A held IMDb answer the search could not better stays `held`: that is the
+                    # fact a human needs, and it outranks the search's own shrug.
+                    held += held_id is not None
+                    unmatched += held_id is None and verdict == "unmatched"
+                    ambiguous += held_id is None and verdict == "ambiguous"
                     # An ANSWER with nothing in it is remembered; a failed call (above) is not.
                     if apply:
                         repo.mark_store_asked(target.film_id, today)
@@ -158,7 +171,8 @@ def resolve_itunes_ids(
                 source = "search"
             holder = repo.film_id_for_external(ITUNES_AUTHORITY, product.itunes_id)
             if holder is not None and holder != target.film_id:
-                log(f"  #{target.film_id} {target.title!r}: itunes {product.itunes_id} already held by #{holder}")
+                if product.itunes_id != held_id:  # the same product was already logged above
+                    log(f"  #{target.film_id} {target.title!r}: itunes {product.itunes_id} already held by #{holder}")
                 held += 1
                 if apply:
                     repo.mark_store_asked(target.film_id, today)
