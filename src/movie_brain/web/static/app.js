@@ -2,6 +2,7 @@
   'use strict';
   const ROW_H = 36, OVERSCAN = 10;
   const TOP_SERVICES = 3;  // drawer: services shown before the ⋯ more disclosure
+  const APPLE_STORE = 'Apple TV Store (iTunes)';  // the registry's one store, named for a film holding a store id but no TMDB store listing
   const TOP_CAST = 6;      // drawer: cast names shown inline before the ⋯ more disclosure (drawer spec D2)
   const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
   const DEFAULT_LANG = 'English';
@@ -617,8 +618,15 @@
       .map((s) => s.subscribed ? esc(s.name) : `${esc(s.name)} (not subscribed)`));
     // Every store entry links to the Apple TV app when the film holds an itunes id (the
     // registry has exactly one store, apple-tv-store) — plain text otherwise.
-    const buyable = collapse(svc.filter((s) => s.kind === 'store')
-      .map((s) => d.apple_tv_url ? `<a class="store-link" href="${esc(d.apple_tv_url)}">${esc(s.name)}</a>` : esc(s.name)));
+    // A store id alone also earns the line: CheapCharts keys a product only for a title Apple sells,
+    // and TMDB's provider feed misses some entirely (Memories of Murder, 2026-09-20: a store id, no
+    // US provider at all — 133 unowned films were in that state, so the drawer offered Wishlist it
+    // but no way into the Apple TV app). Same reasoning as `reachable`. An owned film needs no
+    // such line: its watch line already opens the app.
+    const stores = svc.filter((s) => s.kind === 'store').map((s) => s.name);
+    if (!stores.length && d.apple_tv_url && !d.owned) stores.push(APPLE_STORE);
+    const buyable = collapse(stores
+      .map((name) => d.apple_tv_url ? `<a class="store-link" href="${esc(d.apple_tv_url)}">${esc(name)}</a>` : esc(name)));
     const newOn = (d.new_on || []).map((t) => `${esc(t.name)} since ${esc(t.appeared_on)}`).join(', ');
     const lists = (d.lists || []).map((l) => {
       const label = esc(l.name);  // the same name the picker shows, so the two agree

@@ -13,6 +13,7 @@ from playwright.sync_api import Page, expect
 from movie_brain.domain.models import Film, ListEntry, ListMeta, OmdbRating
 from movie_brain.infrastructure.database import Repository
 from movie_brain.web.app import create_app
+from web.conftest import CHARLIE_ITUNES
 
 
 def count(page: Page) -> int:
@@ -739,6 +740,23 @@ def test_drawer_shows_buy_on_and_cheapcharts_link(dash):
     expect(body.locator("a.cheapcharts-link")).to_have_attribute(
         "href", "https://www.cheapcharts.com/us/search;q=Hotel;t=all"  # matrix params — `?q=` is ignored by the site
     )
+
+
+def test_a_store_id_alone_earns_the_buy_on_line(dash):
+    # Memories of Murder (2026-09-20): it holds a store id — so Apple sells it, and the drawer offers
+    # CheapCharts and Wishlist it — but TMDB lists no US provider at all, so the Buy-on line (built
+    # only from TMDB's store listing) never appeared and the film had no Apple TV link anywhere.
+    # Charlie is the seeded film in that state: a store id, a Criterion listing, no store listing.
+    body = _open(dash, "Charlie")
+    expect(body).to_contain_text("Buy on: Apple TV Store (iTunes)")
+    link = body.locator("p.meta a.store-link")
+    expect(link).to_have_count(1)
+    expect(link).to_have_attribute("href", f"com.apple.tv://itunes.apple.com/us/movie/id{CHARLIE_ITUNES}")
+
+
+def test_no_store_id_and_no_store_listing_still_means_no_buy_on_line(dash):
+    body = _open(dash, "Bravo")  # streams on five services; nothing says Apple sells it
+    expect(body).not_to_contain_text("Buy on:")
 
 
 def test_buy_on_line_links_the_store_to_the_app_when_the_id_is_known(dash):
