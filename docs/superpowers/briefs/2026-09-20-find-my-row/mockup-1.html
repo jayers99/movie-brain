@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Find my row — stories and mock-up, round 1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Everything inside .window is copied from the real dashboard (static/app.css): colours, row height, column widths, the 760px drawer, the 30% black dim. */
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3e3; --accent:#b3261e; --chip:#f2f2f2; --chip-on:#1b1b1b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:22px 20px 80px; background:#ecebe7; color:var(--fg); font:14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  .page { max-width:1500px; margin:0 auto; }
+  .intro { font-size:17px; line-height:1.55; }
+  .intro h1 { font-size:26px; margin:0 0 6px; }
+  .intro p { margin:6px 0; max-width:1000px; }
+  h2.sec { font-size:21px; margin:26px 0 10px; }
+
+  /* ---- stories ---- */
+  .stories { display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; }
+  @media (max-width:1000px) { .stories { grid-template-columns:1fr; } }
+  .story { background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:14px 16px 12px; font-size:16px; line-height:1.5; display:flex; flex-direction:column; }
+  .story.current { border-color:#1b1b1b; box-shadow:0 0 0 2px #1b1b1b; }
+  .story h3 { margin:0 0 6px; font-size:18px; }
+  .story h3 .n { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; background:#1b1b1b; color:#fff; font-size:14px; margin-right:8px; vertical-align:2px; }
+  .story p { margin:0 0 10px; flex:1; }
+  .story .foot { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .does { font-size:13px; color:var(--muted); }
+  .does b { display:inline-block; min-width:22px; text-align:center; border-radius:999px; padding:0 6px; margin-left:3px; border:1px solid var(--line); color:#aaa; font-weight:600; }
+  .does b.yes { background:#1b1b1b; border-color:#1b1b1b; color:#fff; }
+  button.walk { font:inherit; font-size:15px; border:1px solid #1b1b1b; background:#fff; border-radius:6px; padding:3px 12px; cursor:pointer; }
+  button.walk:hover { background:var(--chip); }
+
+  /* ---- variant switch + coach ---- */
+  .bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 10px; font-size:16px; }
+  .variant { font:inherit; border:1px solid #bdbdbd; background:#fff; border-radius:8px; padding:6px 14px; cursor:pointer; text-align:left; }
+  .variant.active { background:#1b1b1b; border-color:#1b1b1b; color:#fff; }
+  .variant small { display:block; font-size:13px; opacity:.75; }
+  .coach { background:#fff6d6; border:1px solid #e2cf86; border-radius:8px; padding:10px 14px; margin:0 0 10px; font-size:17px; line-height:1.5; min-height:48px; }
+
+  /* ---- the dashboard replica ---- */
+  .window { position:relative; isolation:isolate; height:78vh; min-height:520px; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border:1px solid #cfcfcf; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+  .top { background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; }
+  .top h1 { margin:0 0 4px; font-size:18px; }
+  #counts span { margin-right:14px; color:var(--muted); }
+  #counts b { color:var(--fg); }
+  .showing { float:right; }
+  #chips { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip, .picker { border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:4px 10px; font:inherit; }
+  .chip.live { cursor:pointer; }
+  .chip.inert { color:#9a9a9a; }
+  .chip.active { background:var(--chip-on); color:#fff; border-color:var(--chip-on); }
+  .table-wrap { flex:1; min-height:0; overflow:auto; }
+  table.films { border-collapse:collapse; width:100%; table-layout:fixed; }
+  col.col-year { width:60px; } col.col-director { width:16%; } col.col-language { width:13%; }
+  col.col-mc, col.col-rt, col.col-imdb { width:64px; } col.col-rating { width:92px; } col.col-info { width:40px; }
+  table.films thead th { position:sticky; top:0; background:var(--bg); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; white-space:nowrap; }
+  .num { text-align:right !important; }
+  table.films tbody tr { height:36px; cursor:pointer; }
+  table.films tbody tr:hover { background:#fafafa; }
+  table.films tbody td { padding:0 8px; border-bottom:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
+  input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1px solid var(--line); border-radius:4px; }
+  button.info { border:0; background:none; cursor:pointer; font-size:16px; }
+  .badge-lists { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-old-loved { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .icon-wish { color:#c2410c; font-size:13px; margin-left:2px; }
+  #backdrop { position:absolute; inset:0; background:rgba(0,0,0,.3); z-index:3; }
+  #drawer { position:absolute; top:0; right:0; height:100%; width:min(760px, 100%); overflow:auto; background:var(--bg); z-index:6; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
+  #drawer-close { position:absolute; top:10px; right:12px; border:0; background:none; font-size:18px; cursor:pointer; }
+  #drawer h2 { margin:0 0 4px; font-size:21px; }
+  #drawer .meta { color:var(--muted); margin-bottom:10px; }
+  #drawer .left-out { margin-top:18px; padding:10px 12px; border:1px dashed #cfcfcf; border-radius:8px; color:var(--muted); }
+  #drawer .keys { position:absolute; top:13px; right:44px; color:var(--muted); font-size:12px; }
+  [hidden] { display:none !important; }
+
+  /* ---- THE CHANGE ---- */
+  /* The open film's row is lifted above the dim, so it keeps the page's own white while every other row goes grey. */
+  table.films tbody tr.lit { pointer-events:none; }
+  table.films tbody tr.lit td { position:relative; z-index:5; background:#fff; }
+  /* B and C: the same row stays marked after the drawer closes — grey fill, dark bar at the left edge. */
+  table.films tbody tr.marked td { background:#f2f2f2; }
+  table.films tbody tr.marked:hover td { background:#ececec; }
+  table.films tbody tr.marked td:first-child, table.films tbody tr.lit.edge td:first-child { box-shadow:inset 4px 0 0 #1b1b1b; }
+
+  .panel { margin-top:26px; background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:16px 20px; font-size:16px; line-height:1.55; }
+  .panel h2 { font-size:21px; margin:0 0 8px; }
+  .panel li { margin:5px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="intro">
+  <h1>Find my row — stories and mock-up, round 1</h1>
+  <p>You asked for the open film's row to stay white behind the drawer, because it is hard to get back to where you were when clicking through films. Below are <b>six short stories</b> of you doing that, on your real <i>BFI: Film Noir</i> list, and <b>one mock-up with three variants</b> (A, B, C). Press <b>Walk it</b> on a story and the mock-up sets itself up for it.</p>
+  <p>The stories are the contract: the ones you keep become the automated tests, word for word.</p>
+</div>
+
+<h2 class="sec">The stories</h2>
+<div class="stories" id="stories"></div>
+
+<h2 class="sec">The mock-up</h2>
+<div class="bar" id="variants"></div>
+<div class="coach" id="coach"></div>
+
+<div class="window">
+  <div class="top">
+    <h1>movie-brain</h1>
+    <div id="counts"><span><b>5,007</b> films</span><span><b>4,837</b> reachable</span><span><b>856</b> owned</span><span><b>375</b> rated by me</span><span class="showing" id="showing"></span></div>
+    <div id="chips">
+      <span class="chip inert">Reachable</span><span class="chip inert">Rated</span><span class="chip inert">Criterion</span><span class="chip inert">Watchlist</span>
+      <button class="chip live" id="chip-owned" title="This one chip works in the mock-up">Owned</button>
+      <span class="chip inert">On a list</span><span class="chip inert">Rewatch</span>
+      <span class="picker">BFI: Film Noir (100)</span>
+    </div>
+  </div>
+  <div class="table-wrap" id="wrap">
+    <table class="films">
+      <colgroup><col><col class="col-year"><col class="col-director"><col class="col-language"><col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-rating"><col class="col-info"></colgroup>
+      <thead><tr><th>Title</th><th>Year</th><th>Director</th><th>Language</th><th class="num">MC</th><th class="num">RT</th><th class="num">IMDb</th><th class="num">My rating</th><th></th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div id="backdrop" hidden></div>
+  <aside id="drawer" hidden><button id="drawer-close" aria-label="Close">✕</button><span class="keys" id="keys" hidden>↑ ↓ previous / next film</span><div id="drawer-body"></div></aside>
+</div>
+
+<div class="panel">
+  <h2>What may surprise you</h2>
+  <ul>
+    <li><b>"White" only works while the drawer is open.</b> Your page is already white; the drawer dims it to grey, and the open row is the one thing left un-dimmed. After you close the drawer nothing is dimmed, so a white row would be invisible — variants B and C mark it with a <b>grey fill and a dark bar at the left edge</b> instead. That look is my guess, not your choice; say so if it is wrong.</li>
+    <li><b>The white row is not clickable.</b> As today, a click anywhere outside the drawer closes it — the white row included. The list still cannot be scrolled while the drawer is open (except in C, where ↑ ↓ scroll it for you).</li>
+    <li><b>The mark is a bookmark, not a filter.</b> Clear leaves it alone. It is forgotten when you reload the page, and it is not part of the address you can copy.</li>
+    <li><b>On a narrow window there is nothing to see.</b> The drawer is 760 pixels wide. If your browser window is not much wider than that, the drawer covers the row. Nothing changes for that case.</li>
+    <li><b>Opening a film from a link or the Back button does not scroll the list to it.</b> If the row happens to be on screen it is white; if not, the list stays where it was.</li>
+    <li><b>Only in C:</b> ↑ ↓ do nothing while you are typing in a rating or a note, and they stop at the first and last film of what the list is showing.</li>
+  </ul>
+  <p style="color:var(--muted)">Real in this mock-up: the 45 films, their years, directors, scores, list counts, owned marks, services and hearts — read from a copy of your database today. Left out: the rest of the drawer, the filter row, the other chips. Nothing here can write anywhere.</p>
+</div>
+
+</div>
+<script>
+const FILMS = 
+[{"id": 1821, "title": "M", "year": 1931, "director": "Fritz Lang", "language": "German", "metacritic": null, "rt": 100, "imdb": 8.3, "my_rating": null, "owned": false, "lists": 3, "departed": false, "wishlisted": false, "best": "Criterion Channel", "old": null, "rank": 1, "overview": "In this classic German thriller, Hans Beckert, a serial killer who preys on children, becomes the focus of a massive Berlin police manhunt. Beckert's heinous crimes are so repellant and disruptive to city life that he is even targeted by others in the seedy underworld network. With both cops and criminals in pursuit, the murderer soon realizes that people are on his trail, sending him into a tense, panicked attempt to escape justice."}, {"id": 1894, "title": "La bête humaine", "year": 1938, "director": "Jean Renoir", "language": "French", "metacritic": null, "rt": 94, "imdb": 7.5, "my_rating": null, "owned": false, "lists": 2, "departed": false, "wishlisted": false, "best": "Criterion Channel", "old": null, "rank": 2, "overview": "Returning by train to the French port of Le Havre, Jacques Lantier, a tormented railwayman, meets by chance the impulsive stationmaster Roubard and Séverine, his wife."}, {"id": 483, "title": "Le jour se lève", "year": 1939, "director": "Marcel Carné", "language": "French", "metacritic": null, "rt": 92, "imdb": 7.7, "my_rating": null, "owned": false, "lists": 2, "departed": false, "wishlisted": false, "best": "Criterion Channel", "old": null, "rank": 3, "overview": "After committing a murder, a man locks himself in his apartment and recollects the events that led him to the killing."}, {"id": 4875, "title": "I Wake Up Screaming", "year": 1941, "director": "H. Bruce Humberstone", "language": "English", "metacritic": null, "rt": 86, "imdb": 7.2, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 4, "overview": "A young promoter is accused of the murder of Vicky Lynn, a young actress he \"discovered\" as a waitress while out with ex-actor Robin Ray and gossip columnist Larry Evans."}, {"id": 3116, "title": "The Maltese Falcon", "year": 1941, "director": "John Huston", "language": "English", "metacritic": 97, "rt": 99, "imdb": 7.9, "my_rating": 10, "owned": true, "lists": 4, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 5, "overview": "A private detective takes on a case that involves him with three eccentric criminals, a beautiful liar, and their quest for a priceless statuette."}, {"id": 4876, "title": "The Glass Key", "year": 1942, "director": "Stuart Heisler", "language": "English", "metacritic": null, "rt": 88, "imdb": 7.0, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 6, "overview": "A crooked politician finds himself being accused of murder by a gangster from whom he refused help during a re-election campaign."}, {"id": 4877, "title": "Journey into Fear", "year": 1943, "director": "Norman Foster", "language": "English, Turkish, French, German", "metacritic": null, "rt": 73, "imdb": 6.5, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 7, "overview": "An American ballistics expert in Turkey finds himself targeted by Nazi agents. Safe passage home by ship is arranged for him, but he soon discovers that his pursuers are also on board."}, {"id": 3161, "title": "Double Indemnity", "year": 1944, "director": "Billy Wilder", "language": "English", "metacritic": 95, "rt": 97, "imdb": 8.3, "my_rating": 10, "owned": true, "lists": 5, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 8, "overview": "An insurance representative is seduced by a dissatisfied housewife into a scheme of insurance fraud and murder that arouses the suspicion of his colleague, a claims investigator."}, {"id": 4342, "title": "Laura", "year": 1944, "director": "Otto Preminger, Rouben Mamoulian", "language": "English", "metacritic": null, "rt": 100, "imdb": 7.9, "my_rating": null, "owned": true, "lists": 4, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 9, "overview": "A police detective falls in love with the woman whose murder he's investigating."}, {"id": 4078, "title": "Murder, My Sweet", "year": 1944, "director": "Edward Dmytryk", "language": "English", "metacritic": null, "rt": 94, "imdb": 7.5, "my_rating": null, "owned": true, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 10, "overview": "After being hired to find an ex-con's former girlfriend, Philip Marlowe is drawn into a deeply complex web of mystery and deceit."}, {"id": 4878, "title": "Phantom Lady", "year": 1944, "director": "Robert Siodmak", "language": "English, Portuguese", "metacritic": null, "rt": 94, "imdb": 7.2, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 11, "overview": "A devoted secretary embarks on a dangerous mission to try to find the elusive woman who may prove her boss didn't murder his wife."}, {"id": 4914, "title": "Cornered", "year": 1945, "director": "Edward Dmytryk", "language": "English, Spanish, French", "metacritic": null, "rt": null, "imdb": 6.6, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 12, "overview": "A World War II veteran hunts down the Nazi collaborators who killed his wife."}, {"id": 1825, "title": "Detour", "year": 1945, "director": "Edgar G. Ulmer", "language": "English", "metacritic": null, "rt": 98, "imdb": 7.3, "my_rating": null, "owned": true, "lists": 2, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 13, "overview": "The life of Al Roberts, a pianist in a New York nightclub, turns into a nightmare when he decides to hitchhike to Los Angeles to visit his girlfriend."}, {"id": 4879, "title": "Fallen Angel", "year": 1945, "director": "Otto Preminger", "language": "English", "metacritic": null, "rt": 85, "imdb": 7.0, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Plex", "old": null, "rank": 14, "overview": "An unemployed drifter, Eric Stanton wanders into a small California town and begins hanging around the local diner. While Eric falls for the lovely waitress Stella, he also begins romancing a quiet and well-to-do woman named June Mills. Since Stella isn't interested in Eric unless he has money, the lovelorn guy comes up with a scheme to win her over, and it involves June. Before long, murder works its way into this passionate love triangle."}, {"id": 3525, "title": "Mildred Pierce", "year": 1945, "director": "Michael Curtiz", "language": "English, French", "metacritic": 88, "rt": 88, "imdb": 7.9, "my_rating": null, "owned": true, "lists": 3, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 15, "overview": "A hard-working mother inches towards disaster as she divorces her husband and starts a successful restaurant business to support her spoiled daughter."}, {"id": 4807, "title": "Scarlet Street", "year": 1945, "director": "Fritz Lang", "language": "English", "metacritic": null, "rt": 100, "imdb": 7.7, "my_rating": null, "owned": false, "lists": 2, "departed": false, "wishlisted": true, "best": "Kanopy", "old": null, "rank": 16, "overview": "Cashier and part-time starving artist Christopher Cross is absolutely smitten with the beautiful Kitty March. Kitty plays along, but she's really only interested in Johnny, a two-bit crook. When Kitty and Johnny find out that art dealers are interested in Chris's work, they con him into letting Kitty take credit for the paintings. Cross allows it because he is in love with Kitty, but his love will only let her get away with so much."}, {"id": 3704, "title": "The Big Sleep", "year": 1946, "director": "Howard Hawks", "language": "English", "metacritic": 86, "rt": 96, "imdb": 7.9, "my_rating": null, "owned": true, "lists": 4, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 17, "overview": "Private Investigator Philip Marlowe is hired by wealthy General Sternwood regarding a matter involving his youngest daughter Carmen. Before the complex case is over, Marlowe sees murder, blackmail, deception, and what might be love."}, {"id": 4880, "title": "The Blue Dahlia", "year": 1946, "director": "George Marshall", "language": "English", "metacritic": null, "rt": 100, "imdb": 7.1, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 18, "overview": "Soon after a veteran returns from war, his cheating wife is found dead. He evades police in an attempt to find the real murderer."}, {"id": 4915, "title": "The Chase", "year": 1946, "director": "Arthur Ripley", "language": "English, Spanish", "metacritic": null, "rt": 40, "imdb": 6.4, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Kanopy", "old": null, "rank": 19, "overview": "Chuck Scott gets a job as chauffeur to tough guy Eddie Roman; but Chuck's involvement with Eddie's fearful wife becomes a nightmare."}, {"id": 4881, "title": "The Dark Corner", "year": 1946, "director": "Henry Hathaway", "language": "English, Italian", "metacritic": null, "rt": 100, "imdb": 7.1, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 20, "overview": "Ex-con turned private investigator Bradford Galt suspects someone is following him and maybe even trying to kill him. With the assistance of his spunky secretary, Kathleen Stewart, he dives deep into a mystery in search of answers."}, {"id": 4000, "title": "Gilda", "year": 1946, "director": "Charles Vidor", "language": "English, Spanish, French, German", "metacritic": null, "rt": 90, "imdb": 7.6, "my_rating": null, "owned": true, "lists": 4, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 21, "overview": "A gambler discovers an old flame while in Argentina, but she's married to his new boss."}, {"id": 4659, "title": "The Killers", "year": 1946, "director": "Robert Siodmak", "language": "English", "metacritic": null, "rt": 97, "imdb": 7.7, "my_rating": null, "owned": true, "lists": 3, "departed": false, "wishlisted": false, "best": null, "old": 4, "rank": 22, "overview": "Two hit men walk into a diner asking for a man called \"the Swede\". When the killers find the Swede, he's expecting them and doesn't put up a fight. Since the Swede had a life insurance policy, an investigator, on a hunch, decides to look into the murder. As the Swede's past is laid bare, it comes to light that he was in love with a beautiful woman who may have lured him into pulling off a bank robbery overseen by another man."}, {"id": 4666, "title": "The Postman Always Rings Twice", "year": 1946, "director": "Tay Garnett", "language": "English", "metacritic": 84, "rt": 89, "imdb": 7.4, "my_rating": null, "owned": true, "lists": 3, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 23, "overview": "A married woman and a drifter fall in love, then plot to murder her husband."}, {"id": 4916, "title": "Body and Soul", "year": 1947, "director": "Robert Rossen", "language": "English", "metacritic": null, "rt": 92, "imdb": 7.6, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Plex", "old": null, "rank": 24, "overview": "Charley Davis, against the wishes of his mother, becomes a boxer. As he becomes more successful the fighter becomes surrounded by shady characters, including an unethical promoter named Roberts, who tempt the man with a number of vices. Charley finds himself faced with increasingly difficult choices."}, {"id": 4882, "title": "Born to Kill", "year": 1947, "director": "Robert Wise", "language": "English, Latin, French", "metacritic": null, "rt": 83, "imdb": 7.2, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": true, "best": null, "old": null, "rank": 25, "overview": "A calculating divorcée risks her chances at wealth and security with a man she doesn't love by getting involved with a hotheaded murderer."}, {"id": 4844, "title": "Brighton Rock", "year": 1948, "director": "John Boulting", "language": "English", "metacritic": null, "rt": 95, "imdb": 7.3, "my_rating": null, "owned": false, "lists": 3, "departed": false, "wishlisted": false, "best": "Kanopy", "old": null, "rank": 26, "overview": "Centring on the activities of a gang of assorted criminals and, in particular, their leader – a vicious young hoodlum known as \"Pinkie\" – the film's main thematic concern is the criminal underbelly evident in inter-war Brighton."}, {"id": 4883, "title": "Crossfire", "year": 1947, "director": "Edward Dmytryk", "language": "English", "metacritic": null, "rt": 88, "imdb": 7.2, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 27, "overview": "A man is murdered, apparently by one of a group of soldiers just out of the army. But which one? And why?"}, {"id": 4884, "title": "Dark Passage", "year": 1947, "director": "Delmer Daves", "language": "English", "metacritic": 68, "rt": 90, "imdb": 7.5, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Plex", "old": null, "rank": 28, "overview": "A man convicted of murdering his wife escapes from prison and works with a woman to try and prove his innocence."}, {"id": 4885, "title": "Dead Reckoning", "year": 1946, "director": "John Cromwell", "language": "English, Latin", "metacritic": 51, "rt": 82, "imdb": 7.0, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Tubi TV", "old": null, "rank": 29, "overview": "War heroes Rip Murdock  and Johnny Drake are sent to Washington, D.C, to receive top honors for their service. Johnny, seemingly terrified by the publicity that awaits him, jumps off the train and later turns up dead. Suspecting foul play, Rip begins digging into his pal's past. He encounters cover-ups, threats to his own life and deadly femme fatale Coral Chandler."}, {"id": 4917, "title": "Fear in the Night", "year": 1947, "director": "Maxwell Shane", "language": "English", "metacritic": null, "rt": null, "imdb": 6.3, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "JustWatch TV", "old": null, "rank": 30, "overview": "The dream is unusually vivid: Bank employee Vince Grayson finds himself murdering a man in a sinister octagonal-shaped room lined with mirrors while a mysterious woman breaks into a safe. It is so vivid that Vince suspects it may have really happened. To get the dream off his mind, he goes on a picnic with some relatives. When a thunderstorm forces his party into a nearby mansion, Vince discovers that the bizarre room does exist, and it means nothing but trouble."}, {"id": 4886, "title": "Kiss of Death", "year": 1947, "director": "Henry Hathaway", "language": "English", "metacritic": null, "rt": 89, "imdb": 7.4, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Plex", "old": null, "rank": 31, "overview": "An ex-con trying to go straight must face a crazed criminal out for revenge."}, {"id": 4808, "title": "The Lady from Shanghai", "year": 1947, "director": "Orson Welles", "language": "English, Cantonese", "metacritic": null, "rt": 86, "imdb": 7.5, "my_rating": null, "owned": false, "lists": 2, "departed": false, "wishlisted": true, "best": null, "old": null, "rank": 32, "overview": "A romantic drifter gets caught between a corrupt tycoon and his voluptuous wife."}, {"id": 4887, "title": "Lady in the Lake", "year": 1946, "director": "Robert Montgomery", "language": "English", "metacritic": null, "rt": 60, "imdb": 6.5, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 33, "overview": "Private eye Phillip Marlowe wants to get out of the detective racket and into crime writing. But when he's called to the office of editor Adrienne Fromsett, it's not to talk about his story ideas — she wants him to locate the missing wife of her boss, Mr. Kingsby. The assignment quickly becomes complicated when bodies start turning up."}, {"id": 4888, "title": "Nightmare Alley", "year": 1947, "director": "Edmund Goulding", "language": "English", "metacritic": 75, "rt": 87, "imdb": 7.7, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 34, "overview": "A roustabout joins a traveling carny and schemes to figure out the mind-reading act of Mademoiselle Zeena and her alcoholic husband."}, {"id": 2538, "title": "Odd Man Out", "year": 1947, "director": "Carol Reed", "language": "English", "metacritic": 87, "rt": 100, "imdb": 7.6, "my_rating": null, "owned": false, "lists": 2, "departed": false, "wishlisted": false, "best": "Criterion Channel", "old": null, "rank": 35, "overview": "Belfast police conduct a door-to-door manhunt for an IRA gunman wounded in a daring robbery."}, {"id": 3831, "title": "Out of the Past", "year": 1947, "director": "Jacques Tourneur", "language": "English, American Sign ", "metacritic": 85, "rt": 87, "imdb": 8.0, "my_rating": null, "owned": true, "lists": 6, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 36, "overview": "The peaceful life of a gas station owner is disrupted when a man from his past arrives in town and forces him to return to the dark world he had tried to escape."}, {"id": 4889, "title": "Pursued", "year": 1947, "director": "Raoul Walsh", "language": "English", "metacritic": null, "rt": 100, "imdb": 7.2, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Plex", "old": null, "rank": 37, "overview": "A boy haunted by nightmares about the night his entire family was murdered is brought up by a neighboring family in the 1880s. He falls for his lovely adoptive sister but his nasty adoptive brother and mysterious uncle want him dead."}, {"id": 4890, "title": "T-Men", "year": 1947, "director": "Anthony Mann", "language": "English, Italian", "metacritic": null, "rt": 100, "imdb": 6.9, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Kanopy", "old": null, "rank": 38, "overview": "Two T-men, U.S. Treasury agents, go undercover in Detroit, and then Los Angeles, in an attempt to break a U.S. currency counterfeiting ring."}, {"id": 4891, "title": "Call Northside 777", "year": 1948, "director": "Henry Hathaway", "language": "English, Polish", "metacritic": null, "rt": 81, "imdb": 7.4, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 39, "overview": "In 1932, a cop is killed and Frank Wiecek sentenced to life. Eleven years later, a newspaper ad by Frank's mother leads Chicago reporter P.J. McNeal to look into the case. For some time, McNeal continues to believe Frank guilty. But when he starts to change his mind, he meets increased resistance from authorities unwilling to be proved wrong."}, {"id": 4892, "title": "Cry of the City", "year": 1948, "director": "Robert Siodmak", "language": "English, Italian, Latin", "metacritic": null, "rt": 93, "imdb": 7.2, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 40, "overview": "Petty crook and cop-killer Martin Rome, in bad shape from wounds in the hospital prison ward, still refuses to help slimy lawyer Niles clear his client by confessing to another crime. Police Lt. Candella must check Niles' allegation; a friend of the Rome family, he walks a tightrope between sentiment and cynicism. When Martin fears Candella will implicate his girlfriend Teena, he'll do anything to protect her. How many others will he drag down to disaster with him?"}, {"id": 3425, "title": "Force of Evil", "year": 1950, "director": "Abraham Polonsky", "language": "English", "metacritic": 89, "rt": 100, "imdb": 7.2, "my_rating": null, "owned": false, "lists": 2, "departed": false, "wishlisted": false, "best": null, "old": null, "rank": 41, "overview": "Lawyer Joe Morse wants to consolidate all the small-time numbers racket operators into one big powerful operation. But his elder brother Leo is one of these small-time operators who wants to stay that way, preferring not to deal with the gangsters who dominate the big-time."}, {"id": 4893, "title": "He Walked by Night", "year": 1949, "director": "Alfred L. Werker", "language": "English, Spanish, Cantonese", "metacritic": null, "rt": 82, "imdb": 7.0, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": true, "best": "Kanopy", "old": null, "rank": 42, "overview": "Roy Martin aka Roy Morgan is a burglar and former war-time Radio & Electronics Engineer who listens in to radio police calls, allowing him to stay one step ahead of the cops."}, {"id": 4894, "title": "I Walk Alone", "year": 1947, "director": "Byron Haskin", "language": "English, French", "metacritic": 55, "rt": null, "imdb": 7.0, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Plex", "old": null, "rank": 43, "overview": "Bootleggers on the lam Frankie and Noll split up to evade capture by the police. Frankie is caught and jailed, but Noll manages to escape and open a posh New York City nightclub. 14 years later, Frankie is released from the clink and visits Noll with the intention of collecting his half of the nightclub's profits. But Noll, who has no intention of being so equitable, uses his ex-girlfriend Kay to divert Frankie from his intended goal."}, {"id": 4918, "title": "Pitfall", "year": 1948, "director": "Andre de Toth", "language": "English, French", "metacritic": null, "rt": 80, "imdb": 7.1, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": false, "best": "Plex", "old": null, "rank": 44, "overview": "An insurance man wishing for a more exciting life becomes wrapped up in the affairs of an imprisoned embezzler, his model girlfriend, and a violent private investigator."}, {"id": 4895, "title": "Criss Cross", "year": 1949, "director": "Robert Siodmak", "language": "English", "metacritic": null, "rt": 86, "imdb": 7.4, "my_rating": null, "owned": false, "lists": 1, "departed": false, "wishlisted": true, "best": "Fawesome", "old": null, "rank": 45, "overview": "An armored-car guard must join a robbery after being caught with his ex-wife by her gangster husband."}];
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v, suf = '') => v == null ? '—' : v + suf;
+const byTitle = (t) => FILMS.find((f) => f.title === t);
+const OOTP = byTitle('Out of the Past'), PURSUED = byTitle('Pursued');
+
+const VARIANTS = [
+  { key:'A', name:'A · White while open', sub:'exactly what you asked for' },
+  { key:'B', name:'B · …and still marked after you close', sub:'Recommended' },
+  { key:'C', name:'C · B, plus ↑ ↓ to step through films', sub:'more than you asked for' },
+];
+const STORIES = [
+  { n:1, does:'ABC', title:'I can see my row while the drawer is open',
+    text:'I am going down <i>BFI: Film Noir</i> and click <b>Out of the Past</b>. The drawer opens and the list behind it goes grey — except the Out of the Past row, which stays white. I can see exactly where I am.',
+    coach:'Click <b>Out of the Past</b> in the list. Look left of the drawer: one white row in the grey.',
+    setup() { closeDrawer(); setOwned(false); state.mark = null; render(); scrollTo(OOTP.id); } },
+  { n:2, does:'BC', title:'I can get back to where I was',
+    text:'I close the drawer. The row I just had open is <b>still marked</b>, so my eye lands on it and I carry on to <b>Pursued</b>, the next film down.',
+    coach:'The drawer is open on Out of the Past. <b>Close it</b> (✕, Esc, or click the grey). Now find where you were.',
+    coachA:'The drawer is open on Out of the Past. <b>Close it</b> — and notice that in variant A nothing is left behind: you hunt for the row, as today. Switch to <b>B</b> and walk this story again to compare.',
+    setup() { setOwned(false); render(); scrollTo(OOTP.id); openDrawer(OOTP.id); } },
+  { n:3, does:'BC', title:'There is one mark, and it moves',
+    text:'I open <b>Pursued</b>. The mark leaves Out of the Past and sits on Pursued. Only one row is ever marked — it always means "the last film I looked at".',
+    coach:'The mark is on Out of the Past. Click <b>Pursued</b>, then close the drawer. One mark, now on Pursued.',
+    coachA:'Variant A leaves no mark, so there is nothing to move. Switch to <b>B</b>.',
+    setup() { closeDrawer(); setOwned(false); state.mark = OOTP.id; render(); scrollTo(OOTP.id); } },
+  { n:4, does:'BC', title:'I scroll away and come back',
+    text:'With the mark on <b>Out of the Past</b> I scroll up to <b>M</b> at the top of the list, then back down. The mark is still there.',
+    coach:'The mark is on Out of the Past. <b>Scroll the list</b> to the top and back down — it is still marked.',
+    coachA:'Variant A leaves no mark. Switch to <b>B</b>.',
+    setup() { closeDrawer(); setOwned(false); state.mark = OOTP.id; render(); scrollTo(OOTP.id); } },
+  { n:5, does:'C', title:'I step through films without closing',
+    text:'With the drawer open on <b>Out of the Past</b> I press <b>↓</b>. The drawer changes to <b>Pursued</b>, the white row moves down with it, and the list scrolls to keep it in view. <b>↑</b> goes back.',
+    coach:'The drawer is open on Out of the Past. Press <b>↓</b> a few times, then <b>↑</b>. Watch the white row walk down the list.',
+    coachA:'Only variant <b>C</b> does this. Switch to C and walk it again.',
+    setup() { setOwned(false); render(); scrollTo(OOTP.id); openDrawer(OOTP.id); } },
+  { n:6, does:'BC', title:'The awkward one: my marked film leaves the list',
+    text:'The mark is on <b>Pursued</b>, which I do not own. I press the <b>Owned</b> chip. Pursued drops out of the list, so no row is marked — and nothing jumps or scrolls. I press Owned again: the mark is back on Pursued.',
+    coach:'The mark is on Pursued. Press the <b>Owned</b> chip in the mock-up (it is the one chip that works), then press it again.',
+    coachA:'Variant A leaves no mark. Switch to <b>B</b>.',
+    setup() { closeDrawer(); setOwned(false); state.mark = PURSUED.id; render(); scrollTo(PURSUED.id); } },
+];
+
+const state = { variant: (location.hash.slice(1) || 'B').toUpperCase(), open: null, mark: null, owned: false, story: null };
+if (!'ABC'.includes(state.variant)) state.variant = 'B';
+const keepsMark = () => state.variant !== 'A';
+const shown = () => FILMS.filter((f) => !state.owned || f.owned);
+
+function rowHtml(f) {
+  const title = esc(f.title)
+    + (f.lists ? ` <span class="badge-lists">${f.lists} list${f.lists === 1 ? '' : 's'}</span>` : '')
+    + (f.owned ? ' <span class="badge-owned">owned</span>' : '')
+    + (f.old === 5 ? ' <span class="badge-old-loved">★5 then</span>' : '')
+    + (f.best ? ` <span class="badge-watch">${esc(f.best)}</span>` : '')
+    + (f.wishlisted ? ' <span class="icon-wish">♥</span>' : '');
+  const cls = f.id === state.open ? 'lit' + (keepsMark() ? ' edge' : '')
+    : (keepsMark() && state.open == null && f.id === state.mark ? 'marked' : '');
+  return `<tr data-id="${f.id}" class="${cls}"><td>${title}</td><td>${fmt(f.year)}</td><td>${esc(f.director) || '—'}</td><td>${esc(f.language) || '—'}</td>
+    <td class="num">${fmt(f.metacritic)}</td><td class="num">${fmt(f.rt, '%')}</td><td class="num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
+    <td class="num"><input class="rating" maxlength="2" value="${f.my_rating ?? ''}" aria-label="My rating"></td><td><button class="info">ⓘ</button></td></tr>`;
+}
+function render() {
+  const rows = shown();
+  $('#tbody').innerHTML = rows.map(rowHtml).join('');
+  $('#showing').textContent = `showing ${rows.length} of 45 (the first 45 of the list's 100)`;
+  $('#chip-owned').classList.toggle('active', state.owned);
+  $('#keys').hidden = state.variant !== 'C';
+  document.querySelectorAll('.variant').forEach((b) => b.classList.toggle('active', b.dataset.key === state.variant));
+  document.querySelectorAll('.story').forEach((el) => el.classList.toggle('current', +el.dataset.n === state.story));
+  const s = STORIES.find((x) => x.n === state.story);
+  $('#coach').innerHTML = s
+    ? `<b>Story ${s.n} · variant ${state.variant}.</b> ` + (s.does.includes(state.variant) ? s.coach : (s.coachA || s.coach))
+    : `<b>Variant ${state.variant}.</b> Click any film, or press <b>Walk it</b> on a story above.`;
+}
+function scrollTo(id, onlyIfNeeded = false) {
+  const tr = document.querySelector(`tr[data-id="${id}"]`); if (!tr) return;
+  const wrap = $('#wrap'), head = 34, top = tr.offsetTop - head, bottom = tr.offsetTop + tr.offsetHeight;
+  if (!onlyIfNeeded) { wrap.scrollTop = Math.max(0, tr.offsetTop - wrap.clientHeight / 2); return; }
+  if (top < wrap.scrollTop) wrap.scrollTop = top;
+  else if (bottom > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = bottom - wrap.clientHeight;
+}
+function openDrawer(id) {
+  const f = FILMS.find((x) => x.id === id); if (!f) return;
+  state.open = id; state.mark = id;
+  $('#drawer-body').innerHTML = `<h2>${esc(f.title)}</h2><div class="meta">${fmt(f.year)} · ${esc(f.director) || '—'}</div>
+    <p>${esc(f.overview) || ''}</p><div class="left-out">The rest of the drawer — cast, ratings, where to watch, links — is unchanged and left out of this mock-up.</div>`;
+  $('#drawer').hidden = false; $('#backdrop').hidden = false; $('#drawer').scrollTop = 0;
+  render();
+}
+function closeDrawer() { state.open = null; $('#drawer').hidden = true; $('#backdrop').hidden = true; render(); }
+function setOwned(on) { state.owned = on; }
+
+$('#tbody').addEventListener('click', (e) => {
+  if (e.target.closest('input')) return;
+  const tr = e.target.closest('tr[data-id]'); if (tr) openDrawer(+tr.dataset.id);
+});
+$('#backdrop').addEventListener('click', closeDrawer);
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#chip-owned').addEventListener('click', () => { state.owned = !state.owned; render(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.open != null) { closeDrawer(); return; }
+  if (state.variant !== 'C' || state.open == null || e.target.matches('input, textarea')) return;
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const rows = shown(), i = rows.findIndex((f) => f.id === state.open);
+  const next = rows[i + (e.key === 'ArrowDown' ? 1 : -1)];
+  if (next) { openDrawer(next.id); scrollTo(next.id, true); }
+});
+
+$('#variants').innerHTML = VARIANTS.map((v) => `<button class="variant" data-key="${v.key}">${v.name}<small>${v.sub}</small></button>`).join('');
+$('#variants').addEventListener('click', (e) => {
+  const b = e.target.closest('.variant'); if (!b) return;
+  state.variant = b.dataset.key; history.replaceState(null, '', '#' + state.variant); render();
+});
+$('#stories').innerHTML = STORIES.map((s) => `<div class="story" data-n="${s.n}"><h3><span class="n">${s.n}</span>${s.title}</h3><p>${s.text}</p>
+  <div class="foot"><span class="does">works in ${'ABC'.split('').map((k) => `<b class="${s.does.includes(k) ? 'yes' : ''}">${k}</b>`).join('')}</span>
+  <button class="walk" data-n="${s.n}">Walk it ▸</button></div></div>`).join('');
+$('#stories').addEventListener('click', (e) => {
+  const b = e.target.closest('.walk'); if (!b) return;
+  const s = STORIES.find((x) => x.n === +b.dataset.n);
+  state.story = s.n; s.setup(); render();
+  document.querySelector('.window').scrollIntoView({ behavior:'smooth', block:'end' });
+});
+render();
+</script>
+</body>
+</html>
