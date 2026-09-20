@@ -43,6 +43,15 @@ th.lang-cell { overflow:visible; }  /* stays position:sticky from `thead th`; st
 tbody tr { height:36px; cursor:pointer; }
 tbody tr:hover { background:#fafafa; }
 tbody td { padding:0 8px; border-bottom:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
+/* Find my row: the open film's row is lifted above the drawer's dim (backdrop 3 < row 5 < drawer 6), so it keeps the
+   page's own white while every other row goes grey. On the td, not the tr — positioned rows are weak in WebKit. It is
+   not clickable: a click there falls through to the backdrop and closes the drawer like any other click outside it.
+   After the close the same row stays marked — chip grey, with the dark bar at its left edge. */
+tbody tr.lit { pointer-events:none; }
+tbody tr.lit td { position:relative; z-index:5; background:var(--bg); }
+tbody tr.marked td { background:var(--chip); }
+tbody tr.marked:hover td { background:#ececec; }
+tbody tr.edge td:first-child, tbody tr.marked td:first-child { box-shadow:inset 4px 0 0 var(--chip-on); }
 tbody tr.spacer td { padding:0; border:0; }
 tbody tr.empty-state { height:auto; cursor:default; }
 tbody tr.empty-state:hover { background:none; }
@@ -53,15 +62,16 @@ input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1
 input.rating.invalid { border-color:var(--accent); background:#fdecea; }
 button.info { border:0; background:none; cursor:pointer; font-size:16px; }
 #drawer-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.3); z-index:3; }
-#drawer { position:fixed; top:0; right:0; height:100vh; width:min(760px, 100vw); overflow:auto; background:var(--bg); z-index:4; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
+#drawer { position:fixed; top:0; right:0; height:100vh; width:min(760px, 100vw); overflow:auto; background:var(--bg); z-index:6; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
 #drawer-close { position:absolute; top:10px; right:12px; border:0; background:none; font-size:18px; cursor:pointer; }
+#drawer .step-hint { position:absolute; top:14px; right:44px; color:var(--muted); font-size:12px; }
 #drawer img.poster { max-width:200px; float:right; margin:0 0 12px 12px; }
-#drawer h2 { margin:0 0 4px; }
+#drawer h2 { margin:0 0 4px; padding-right:180px; }  /* a long title must not run under the step hint and ✕ */
 #drawer .meta { color:var(--muted); margin-bottom:10px; }
 #drawer dl { display:grid; grid-template-columns:max-content 1fr; gap:4px 12px; margin:12px 0; }
 #drawer dt { color:var(--muted); }
 #drawer details pre { font-size:12px; background:#f6f6f6; padding:8px; overflow:auto; }
-#toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--accent); color:#fff; padding:8px 14px; border-radius:6px; z-index:5; }
+#toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--accent); color:#fff; padding:8px 14px; border-radius:6px; z-index:7; }
 tbody tr.departed td { color:var(--muted); }
 .badge-gone { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
 .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }

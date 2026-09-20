@@ -12,9 +12,10 @@
     cols: { title: '', director: '', languages: new Set(), yearMin: null, yearMax: null, mcMin: null, mcMax: null, rtMin: null, rtMax: null, imdbMin: null, imdbMax: null },
     sort: null,            // {col, dir} or null = default
     filtered: [], openFilm: null,
+    mark: null,            // find-my-row: the last film opened — a bookmark in memory, never in the URL
   };
   const $ = (s) => document.querySelector(s);
-  const tbody = $('#films tbody'), wrap = $('#table-wrap');
+  const tbody = $('#films tbody'), wrap = $('#table-wrap'), thead = $('#films thead');
 
   // ---- canned predicates (mirror domain/filters.py; thresholds come from /api/config) ----
   const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
@@ -142,7 +143,18 @@
     const cls = s === 5 ? 'badge-old-loved' : 'badge-old-avoid';
     return ` <span class="${cls}" title="I rated this ${s}★ in ${OLD_SPAN}">${s}★ then</span>`;
   }
-  function rowHtml(f) {
+  // Find my row (brief 2026-09-20): the open film's row is lifted above the drawer's dim so it
+  // stays white (`lit`, with the dark `edge` bar), and once the drawer closes the last film opened
+  // keeps a grey `marked` row. Both are drawn here from state, so the virtual scroll cannot lose
+  // them. A row is lifted only while it sits wholly below the sticky header (`i` is its index in
+  // state.filtered): lifted any higher it would paint over the header instead of sliding under it.
+  function rowClass(f, i) {
+    const cls = f.departed ? ['departed'] : [];
+    if (drawer.hidden) { if (f.id === state.mark) cls.push('marked'); }
+    else if (f.id === state.openFilm && i * ROW_H >= wrap.scrollTop) cls.push('lit', 'edge');
+    return cls.length ? ` class="${cls.join(' ')}"` : '';
+  }
+  function rowHtml(f, i) {
     const link = f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.title)}</a>` : esc(f.title);
     const listCount = (f.lists || []).length;
     // An owned film already carries the "owned" badge, and its best source IS that purchase —
@@ -156,7 +168,7 @@
       + oldBadge(f) + watchBadge
       // On my CheapCharts wishlist — always the last mark on the row, and never a price.
       + (f.wishlisted ? ' <span class="icon-wish" title="On your CheapCharts wishlist">♥</span>' : '');
-    return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
+    return `<tr data-id="${f.id}"${rowClass(f, i)}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
       <td class="c-rt num">${fmt(f.rt, '%')}</td><td class="c-imdb num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
@@ -174,7 +186,7 @@
     const top = start * ROW_H, bottom = (total - end) * ROW_H;
     tbody.innerHTML =
       (top ? `<tr class="spacer"><td colspan="9" style="height:${top}px"></td></tr>` : '') +
-      state.filtered.slice(start, end).map(rowHtml).join('') +
+      state.filtered.slice(start, end).map((f, k) => rowHtml(f, start + k)).join('') +
       (bottom ? `<tr class="spacer"><td colspan="9" style="height:${bottom}px"></td></tr>` : '');
   }
   wrap.addEventListener('scroll', () => requestAnimationFrame(renderRows));
@@ -658,9 +670,13 @@
   }
   let drawerSeq = 0;
   let drawerOpenPushed = false; // true once the currently-open drawer got its own pushState entry
+  let drawnFilm = null;         // the film whose details are on screen — where a failed step falls back to
+  // The one close choke point (direct close, popstate close, person links): the redraw is what
+  // turns the white row into the mark.
   function hideDrawer() {
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
-    state.openFilm = null;
+    state.openFilm = null; drawnFilm = null;
+    renderRows();
   }
   // Person links (drawer spec D4). Close WITHOUT walking history back: closeDrawer() would call
   // history.back(), and the popstate handler then re-reads state from the previous URL, wiping
@@ -680,17 +696,49 @@
     syncUrl(true);
     runSearch();
   });
-  async function openDrawer(id, push = true) {
+  // mode: 'push' (a click — the open gets its own history entry), 'keep' (boot / popstate — the
+  // URL already names the film, history is never touched) or 'step' (↑ ↓ — the open film is
+  // REPLACED in the current entry and drawerOpenPushed is left alone, so one Back or ✕ still
+  // closes the drawer however many films were stepped through; 'keep' would clear the flag and
+  // the next close would push a stale film= entry behind itself).
+  async function openDrawer(id, mode = 'push') {
     const seq = ++drawerSeq;
     const r = await fetch(`/api/films/${id}`);
     if (seq !== drawerSeq) return; // a newer open (or a close) superseded this one
-    if (!r.ok) { toast('Film not found'); return; }
+    if (!r.ok) {
+      toast('Film not found');
+      // A step moved the white row ahead of its fetch: put it back on the film still on screen.
+      if (mode === 'step') { state.openFilm = drawnFilm; state.mark = drawnFilm; renderRows(); }
+      return;
+    }
     const d = await r.json();
     if (seq !== drawerSeq) return;
     body.innerHTML = detailHtml(d);
-    drawer.hidden = false; backdrop.hidden = false;
-    state.openFilm = id;
-    if (push) { syncUrl(true); drawerOpenPushed = true; } else { drawerOpenPushed = false; }
+    drawer.hidden = false; backdrop.hidden = false; drawer.scrollTop = 0;
+    state.openFilm = id; state.mark = id; drawnFilm = id;
+    renderRows();
+    if (mode === 'push') { syncUrl(true); drawerOpenPushed = true; }
+    else if (mode === 'keep') drawerOpenPushed = false;
+    else { try { syncUrl(); } catch { /* Safari throws past 100 replaceState calls in 30 s (a held key) */ } }
+  }
+  // Nudge the list only as far as needed to show the whole of row i below the sticky header.
+  // Arithmetic, never scrollIntoView: a row outside the rendered window is not in the DOM.
+  function revealRow(i) {
+    const top = i * ROW_H, view = wrap.clientHeight - thead.offsetHeight;
+    if (top < wrap.scrollTop) wrap.scrollTop = top;
+    else if (top + ROW_H > wrap.scrollTop + view) wrap.scrollTop = top + ROW_H - view;
+  }
+  // ↑ ↓ with the drawer open: the previous / next film of the list exactly as it is shown. The
+  // white row moves at once; drawerSeq lets only the last film's details be drawn. Does nothing
+  // at either end, or when the open film is not in the shown list.
+  function stepDrawer(dir) {
+    const i = state.filtered.findIndex((f) => f.id === state.openFilm);
+    const next = i < 0 ? undefined : state.filtered[i + dir];
+    if (!next) return;
+    state.openFilm = next.id; state.mark = next.id;
+    revealRow(i + dir);
+    renderRows();
+    openDrawer(next.id, 'step');
   }
   // fromPopstate=true: the URL already changed (browser back/forward already happened) — just
   // reflect it in the DOM, never touch history again (that's what caused the re-push bug).
@@ -716,7 +764,10 @@
   }
   tbody.addEventListener('click', (e) => {
     if (e.target.closest('a, input')) return;
-    const tr = e.target.closest('tr[data-id]'); if (tr) openDrawer(+tr.dataset.id);
+    if (!drawer.hidden) return; // a keyboard Enter on a still-focused ⓘ would push a second history entry
+    const tr = e.target.closest('tr[data-id]'); if (!tr) return;
+    revealRow(state.filtered.findIndex((f) => f.id === +tr.dataset.id)); // a half-hidden row is shown whole first
+    openDrawer(+tr.dataset.id);
   });
   $('#drawer-close').addEventListener('click', () => closeDrawer());
   backdrop.addEventListener('click', () => closeDrawer());
@@ -854,16 +905,26 @@
     if (!langPanel.hidden) { closeLangPanel(); return; }
     closeDrawer();
   });
+  // While the drawer is open the plain arrow keys belong to stepping (so they no longer scroll the
+  // drawer's own content; the wheel, Space and Page Down still do). Typing and modified arrows are
+  // left alone.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (drawer.hidden || e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return;
+    if (e.target.matches('input, textarea, select')) return;
+    e.preventDefault();
+    stepDrawer(e.key === 'ArrowDown' ? 1 : -1);
+  });
   window.addEventListener('popstate', () => {
     readUrl(); writeControlsFromState();
     // A pushed q= entry (a person link) can be walked back: state.search must follow the URL,
     // or the table stays filtered by a query that is no longer in the box or the address bar.
     if (state.q !== (searchEl.dataset.settled ?? '')) { delete searchEl.dataset.settled; runSearch(); }
     else applyFilters();
-    if (state.openFilm != null) openDrawer(state.openFilm, false); else closeDrawer(true);
+    if (state.openFilm != null) openDrawer(state.openFilm, 'keep'); else closeDrawer(true);
   });
 
-  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm, false); } };
+  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm, 'keep'); } };
 
   // ---- boot ----
   async function boot() {
