@@ -31,3 +31,7 @@ Third trial of the version 2 process, upstream half only; stories first.
 ## Delivery, 2026-09-20
 
 Built test-first on `feature/STORY-25-shop-chip`: 12 unit tests for the predicate and 13 Playwright tests — the six stories under their own names plus the brief's named defaults — on their own server with a fresh fake wishlist account; the two load-bearing lines (the `svod` check, the arrows carrying on) each proven by removing them; whole suite 1,628 passed, ruff and mypy clean. On a copy of the live data the chip shows 310 films and 109 with On a list, leading with exactly the films the stories name (screenshots `delivery-story-*.png`). Interruptions during the build: **0**. Unverified: a real wishlist click while browsing (his to make — the build never touches his account); how many of the 310 hold a store id Apple has since removed; Safari.
+
+## Outcome
+
+Merged to main 2026-09-20 (78a880f) after his hands-on test, with no change requests. One mock-up round, one read-back, zero interruptions. His verdict on the process, unprompted: "the new way of html stories and mockup for review is far superior."
