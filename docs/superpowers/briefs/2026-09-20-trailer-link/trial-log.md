@@ -8,6 +8,7 @@ Fourth trial of the version 2 process, upstream half only; stories first.
 |---|---|---|
 | 2026-09-20 | described the feature: the right trailer, a link in the drawer, a window over the whole browser, playing at once; asked first which source is reliable | 2–3 |
 | 2026-09-20 | walked the mock-up, chose C-2: "c-2 mockup looks great. proceed" | unmeasured |
+| 2026-09-20 | tried it on the copy of his catalogue: "looks great. call it complete success, merge and push" | unmeasured |
 
 ## Interruptions (each tagged by you: needed / not needed)
 
@@ -35,3 +36,7 @@ Fourth trial of the version 2 process, upstream half only; stories first.
 Built test-first on `feature/STORY-4-trailer-link`: the pick rule (9 unit tests, story 2 under its own name), the iTunes and TMDB adapters, the repository (worklist, write, merge, summary), 13 pytest-bdd scenarios for the lookup verb, the API key, and 21 Playwright tests — the seven stories under their own names plus the brief's named defaults — on their own server, YouTube's script routed to a stub and Apple's host to a request that never answers; two load-bearing lines (Esc taken ahead of the drawer's handler; T only for the film on screen) each proven by removing them. Whole suite 1,692 passed, ruff and mypy clean. Interruptions during the build: **0**.
 
 On a migrated COPY of the live database the lookup ran for real: 4,947 films looked up, 3,318 with a YouTube trailer, 187 with Apple's preview only, 1,442 with nothing — **71% of the catalogue has a ▶ Trailer, and 2,551 of the 2,562 films Apple sells (99.6%)**; 0 failures. One film at a time it ran at about 65 films a minute (over an hour for the catalogue), so TMDB is now asked four films at a time: the last 4,300 films took about eight minutes. The real dashboard on that copy, in real Chrome against real YouTube and Apple: Cape Fear plays its Theatrical Trailer unmuted over the whole window (`delivery-story-1-playing.png`), the switch plays Apple's preview, Encore (no TMDB trailer) plays Apple's preview, Trio shows the search link, Esc leaves the drawer open. Unverified: Safari; whether Apple's previews are all trailers (he raised nothing on the two in the mock-up); a READY player that shows YouTube's own "unavailable" pane without reporting an error.
+
+## Outcome
+
+Merged to main 2026-09-20 (350413e) after his hands-on trial on a migrated copy, with no change requests: "looks great. call it complete success, merge and push". Migration 028 and the first `enrich trailers --apply` were then run on the live database. One mock-up round, one read-back, zero interruptions during the build.
