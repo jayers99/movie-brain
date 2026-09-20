@@ -98,7 +98,8 @@ class ResolveUnknownReport:
     resolved: tuple[ResolvedFilm, ...]  # an IMDb-id join found the film
     not_in_catalogue: int  # CheapCharts names an IMDb id no live film holds
     no_imdb: int  # CheapCharts has no IMDb id for the product
-    rate_limited: bool  # stopped early; re-running resumes (a stored id is never asked again)
+    rate_limited: bool  # stopped early; re-running with --apply resumes (a stored id already
+    # applied is never asked again) — a dry run stores nothing, so re-running it starts over
     known: int  # hearts after the run (after a dry run: as they would be WITHOUT the new ids)
 
 
@@ -140,6 +141,9 @@ def resolve_unknown_wishlist(
             no_imdb += 1
             continue
         film_id = repo.film_id_for_external("imdb", tt)
+        # The whole feature's guard against handing a hidden film a store id: `film_title_year`
+        # answers None for a disposed (tombstoned/merged-away) film exactly as it does for a
+        # missing one, so it must stay disposition-aware — never "optimised" to a bare id lookup.
         named = None if film_id is None else repo.film_title_year(film_id)
         if film_id is None or named is None or itunes_id in spoken_for:
             not_in_catalogue += 1
@@ -211,9 +215,15 @@ def unwishlist_film(repo: Repository, gateway: WishlistGateway, film_id: int, to
     view = repo.get_view(film_id, today)
     if view is None:
         raise LookupError(film_id)
-    mine = repo.itunes_ids_for(film_id)
-    if not view.wishlisted or not mine:
+    if not view.wishlisted:
         return  # a stale page: nothing to remove, and CheapCharts is asked nothing
+    mine = repo.itunes_ids_for(film_id)
+    if not mine:
+        # Hearted locally with no store id to remove it by (unreachable today — the button never
+        # shows on such a film). There is nothing CheapCharts can be asked, so answering success
+        # while leaving the row in place would just bring the heart back on the next reload.
+        repo.unmark_wishlisted(film_id)
+        return
     items = _read(repo, gateway.account, today)
     if film_id not in repo.wishlisted_film_ids():
         return  # already gone on CheapCharts: the read has taken the heart off

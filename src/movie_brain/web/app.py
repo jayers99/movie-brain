@@ -102,6 +102,7 @@ def create_app(
     @app.post("/api/films/<int:film_id>/wishlist")
     def post_wishlist(film_id: int) -> tuple[Response, int]:
         if wishlist is None:  # no credentials file: the same line as any other failure
+            app.logger.warning("wishlist click failed: no [cheapcharts] login configured")
             return jsonify({"error": UNREACHABLE}), 502
         try:
             with wishlist_lock:
@@ -120,6 +121,7 @@ def create_app(
     @app.delete("/api/films/<int:film_id>/wishlist")
     def delete_wishlist(film_id: int) -> tuple[Response, int]:
         if wishlist is None:
+            app.logger.warning("wishlist click failed: no [cheapcharts] login configured")
             return jsonify({"error": UNREACHABLE}), 502
         try:
             with wishlist_lock:

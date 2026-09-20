@@ -96,12 +96,7 @@ FILMS = [
 # below the imdb-min filter tests' cutoff) keeps the chip/filter counts untouched.
 FOXTROT = Film("Foxtrot", 1955, "Fay", "https://c/foxtrot")
 
-# Un-wishlist (brief 1.2): two brand-new, unrated films, current on Criterion in BOTH walks below
-# (like Charlie/Echo, never a new arrival like Delta) — reusing Foxtrot (departed) or Golf (no
-# listing) for a store id would flip them into the "reachable" bucket and gut
-# test_reachable_chip_is_the_market_test's own proof that a rating and a bare discovery listing
-# do NOT count; Alpha/Bravo/Hotel each carry their own pinned "no button"/"no itunes id"
-# assertion; Echo/Charlie/Delta are excluded by the brief itself.
+# Un-wishlist (brief 1.2): Kilo and November — see the rationale by KILO_ITUNES/NOVEMBER_ITUNES above.
 KILO = Film("Kilo", 2010, "Kip", "https://c/kilo")
 NOVEMBER = Film("November", 2011, "Nora", "https://c/november")
 

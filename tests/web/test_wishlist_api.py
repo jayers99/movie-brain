@@ -160,6 +160,20 @@ def test_with_no_credentials_configured_the_click_fails_the_same_way(repo):
     assert r.status_code == 502 and r.get_json() == {"error": "Couldn't reach CheapCharts."}
 
 
+def test_with_no_credentials_configured_the_terminal_names_the_reason_too(repo, caplog):
+    """The `wishlist is None` branches used to log nothing while every other 502 names its
+    reason (C7) — this is the missing case beside the failure one above."""
+    app = create_app(repo, today=lambda: D)  # wishlist=None: no credentials file
+    app.testing = True
+    fid = _film(repo, "Do the Right Thing", 1989, DTRT)
+    with caplog.at_level(logging.WARNING):
+        r = app.test_client().post(f"/api/films/{fid}/wishlist")
+    assert r.get_json() == {"error": "Couldn't reach CheapCharts."}  # unchanged on screen
+    assert [rec.getMessage() for rec in caplog.records] == [
+        "wishlist click failed: no [cheapcharts] login configured"
+    ]
+
+
 @pytest.mark.parametrize(
     ("title", "year", "itunes", "history", "target"),
     [

@@ -770,13 +770,14 @@
     // the same slot and repeats whichever action failed, remembered on the slot.
     if (!b.closest('.wish-failed')) slot.dataset.action = b.classList.contains('wish-done') ? 'remove' : 'add';
     const removing = slot.dataset.action === 'remove';
-    // Four or five paced calls to CheapCharts: 5-10 s. A "Try again" click starts inside
-    // .wish-failed; swap the WHOLE slot to a fresh busy button first, so the stale failure text
-    // never shows beside it, and so it cannot be clicked twice.
+    // Adding paces four or five calls to CheapCharts (5-10 s); removing is two. A "Try again"
+    // click starts inside .wish-failed; swap the WHOLE slot to a fresh busy button first, so the
+    // stale failure text never shows beside it, and so it cannot be clicked twice.
     slot.innerHTML = '<button class="wish-button" disabled>Reaching CheapCharts…</button>';
     const r = await fetch(`/api/films/${id}/wishlist`, { method: removing ? 'DELETE' : 'POST' }).catch(() => null);
     if (!r || !r.ok) {
-      // One line whatever went wrong — offline, a refused password, no price history — and nothing is marked.
+      // One line whatever went wrong — offline, a refused password, no price history — a failed
+      // add marks nothing, and a failed removal changes nothing: the heart it already had stays.
       slot.innerHTML = '<span class="wish-failed">Couldn\'t reach CheapCharts. <button class="wish-button">Try again</button></span>';
       return;
     }

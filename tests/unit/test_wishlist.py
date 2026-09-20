@@ -529,6 +529,17 @@ def test_un_wishlisting_a_film_that_is_not_wishlisted_asks_cheapcharts_nothing(r
         unwishlist_film(repo, WishlistGateway(FakePrices({}), account), 999, D)
 
 
+def test_un_wishlisting_a_locally_hearted_film_with_no_store_id_drops_the_heart_with_no_account_call(repo):
+    """Unreachable today (the button never shows without a store id), but honest: the early
+    return used to answer success while the `cheapcharts_wishlist` row stayed, so the heart came
+    back on reload. It must take the heart off itself instead of pretending nothing is wrong."""
+    fid = _film(repo, "No Store Id", 1970)
+    repo.mark_wishlisted(fid, D)
+    account = FakeAccount()
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
+    assert account.calls == [] and repo.wishlisted_film_ids() == set()
+
+
 def test_un_wishlisting_a_film_cheapcharts_no_longer_holds_removes_nothing_and_drops_the_heart(repo):
     """The local heart was stale — somebody took it off on CheapCharts. The pre-read says so,
     the heart goes, and no removal is sent for a film that is already gone."""

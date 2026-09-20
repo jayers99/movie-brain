@@ -149,7 +149,12 @@ def _resolve_unknown(repo: Repository, gateway: WishlistGateway, *, apply: bool)
     one it would place, and word the outcome. Raises WishlistError."""
     report = resolve_unknown_wishlist(repo, gateway, date.today(), apply=apply)
     for film in report.resolved:
-        console.print(f"{film.title} ({film.year or '?'}) ← store id {film.itunes_id}", markup=False)
+        console.print(
+            f"{film.title} ({film.year or '?'}) ← store id {film.itunes_id}",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
     line = (
         f"wishlist: {report.on_cheapcharts} films on CheapCharts · {report.unknown} held no store id here · "
         f"{len(report.resolved)} resolved · {report.not_in_catalogue} not in the catalogue · "
@@ -1269,12 +1274,15 @@ def cheapcharts_wishlist_cmd(
     and replaces the local hearts wholesale: a film bought or removed on CheapCharts loses its
     heart, one added there by hand gains it. Reads the account, never writes to it; the only
     write is the local mirror, which the dashboard refreshes the same way every time it starts —
-    so there is no dry run. Prints counts only, never a price or anything from the account.
+    so the bare verb has no dry run. Prints counts only, never a price or anything from the account.
 
     `--resolve` places the wishlist films movie-brain holds no store id for: it asks CheapCharts
     which IMDb id each unplaced product carries and joins on that exact id, so the film gets its
-    store id, its heart and its button. One paced call per unplaced film, and a stored id is
-    never asked about again, so a rate-limited run simply resumes. Dry-run by default.
+    store id, its heart and its button. One paced call per unplaced film. Dry-run by default:
+    `--resolve` alone still runs the ordinary refresh above and asks CheapCharts about every
+    unplaced film, but stores no store id — a rate-limited dry run stores nothing and starts over
+    from the beginning next time. Only with `--apply` is a stored id never asked about again, so
+    a rate-limited `--apply` run simply resumes.
     """
     if apply and not resolve:
         err.print("--apply only makes sense with --resolve", markup=False)
