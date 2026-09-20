@@ -19,6 +19,14 @@ TODAY = date(2026, 8, 19)
 
 # "Wishlist it": the live server is driven by fakes — no test run can reach a real account.
 CHARLIE_ITUNES, DELTA_ITUNES, ECHO_ITUNES = "273058482", "366474905", "495816081"
+# Un-wishlist (brief 1.2): Kilo and November are two brand-new Criterion-current, unrated films
+# — reusing Foxtrot (departed) or Golf (no listing) would flip them into the "reachable" bucket
+# and gut test_reachable_chip_is_the_market_test's own proof that a rating and a bare discovery
+# listing do NOT count; reusing Alpha/Bravo/Hotel would break their own pinned "no button"/"no
+# itunes id" assertions; Echo/Charlie/Delta are excluded by the brief itself. Both hold a
+# CURRENT Criterion listing (like Charlie/Delta) so the extra itunes id changes no reachability
+# bucket, and both are seeded in the OLD walk too so neither counts as a new arrival.
+KILO_ITUNES, NOVEMBER_ITUNES = "111000111", "222000222"
 
 
 class FakePrices:
@@ -27,11 +35,16 @@ class FakePrices:
 
 
 class FakeAccount:
-    """Delta's product always fails, so the failure line has a film of its own and the two
-    click tests never depend on each other's order."""
+    """Delta's product always fails to ADD, so the add-failure line has a film of its own and
+    the two add-click tests never depend on each other's order. November's product always fails
+    to REMOVE, the same way, for the un-wishlist failure test (brief 1.2)."""
 
     def __init__(self) -> None:
-        self.targets: dict[str, Decimal] = {ECHO_ITUNES: Decimal("5.99")}
+        self.targets: dict[str, Decimal] = {
+            ECHO_ITUNES: Decimal("5.99"),
+            KILO_ITUNES: Decimal("2.99"),
+            NOVEMBER_ITUNES: Decimal("2.99"),
+        }
 
     def add_item(self, itunes_id: str) -> bool:
         time.sleep(1.0)  # long enough for "Reaching CheapCharts…" to be seen under load (2026-09-19 flake)
@@ -44,6 +57,13 @@ class FakeAccount:
 
     def wishlist_ids(self) -> list[str]:
         return list(self.targets)
+
+    def remove_item(self, itunes_id: str) -> bool:
+        time.sleep(1.0)  # same busy window as add_item, for the same reason
+        if itunes_id == NOVEMBER_ITUNES:
+            raise WishlistError("down")
+        self.targets.pop(itunes_id, None)
+        return True
 
 
 FAKE_ACCOUNT = FakeAccount()
@@ -65,13 +85,22 @@ FILMS = [
 # below the imdb-min filter tests' cutoff) keeps the chip/filter counts untouched.
 FOXTROT = Film("Foxtrot", 1955, "Fay", "https://c/foxtrot")
 
+# Un-wishlist (brief 1.2): two brand-new, unrated films, current on Criterion in BOTH walks below
+# (like Charlie/Echo, never a new arrival like Delta) — reusing Foxtrot (departed) or Golf (no
+# listing) for a store id would flip them into the "reachable" bucket and gut
+# test_reachable_chip_is_the_market_test's own proof that a rating and a bare discovery listing
+# do NOT count; Alpha/Bravo/Hotel each carry their own pinned "no button"/"no itunes id"
+# assertion; Echo/Charlie/Delta are excluded by the brief itself.
+KILO = Film("Kilo", 2010, "Kip", "https://c/kilo")
+NOVEMBER = Film("November", 2011, "Nora", "https://c/november")
+
 
 def seed(repo: Repository) -> None:
     films = FILMS
     # Old walk without Delta, then today's walk with all five → only Delta has first_seen = today.
-    repo.record_catalog("criterion", [f for f in films if f.title != "Delta"] + [FOXTROT], date(2026, 1, 1))
-    repo.record_catalog("criterion", films, TODAY)
-    ids = {f.key: repo.film_id_by_key(f.key) for f in films + [FOXTROT]}
+    repo.record_catalog("criterion", [f for f in films if f.title != "Delta"] + [FOXTROT, KILO, NOVEMBER], date(2026, 1, 1))
+    repo.record_catalog("criterion", films + [KILO, NOVEMBER], TODAY)
+    ids = {f.key: repo.film_id_by_key(f.key) for f in films + [FOXTROT, KILO, NOVEMBER]}
     repo.upsert_omdb(ids["foxtrot (1955)"], OmdbRating(6.5, None, True, "German", '{"Title":"Foxtrot"}'), TODAY)
     repo.set_rating(ids["foxtrot (1955)"], 7, TODAY)
     repo.upsert_omdb(
@@ -258,6 +287,15 @@ def seed(repo: Repository) -> None:
     repo.set_external_id(ids["delta (1980)"], "itunes", DELTA_ITUNES, TODAY)
     repo.set_external_id(ids["echo (1990)"], "itunes", ECHO_ITUNES, TODAY)
     repo.mark_wishlisted(ids["echo (1990)"], TODAY)
+    # Un-wishlist (brief 1.2): Kilo is already wishlisted and comes off cleanly (the un-wishlist
+    # click film); November is already wishlisted and its removal always fails (the un-wishlist
+    # failure film).
+    repo.upsert_omdb(ids["kilo (2010)"], OmdbRating(None, None, False), TODAY)
+    repo.upsert_omdb(ids["november (2011)"], OmdbRating(None, None, False), TODAY)
+    repo.set_external_id(ids["kilo (2010)"], "itunes", KILO_ITUNES, TODAY)
+    repo.set_external_id(ids["november (2011)"], "itunes", NOVEMBER_ITUNES, TODAY)
+    repo.mark_wishlisted(ids["kilo (2010)"], TODAY)
+    repo.mark_wishlisted(ids["november (2011)"], TODAY)
 
 
 @pytest.fixture(scope="session")

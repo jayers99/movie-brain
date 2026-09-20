@@ -59,6 +59,12 @@ class FakeAccount:
     def wishlist_ids(self):
         return list(self.targets)
 
+    def remove_item(self, itunes_id):
+        if self.down:
+            raise WishlistError("down")
+        self.targets.pop(itunes_id, None)
+        return True
+
 
 @pytest.fixture
 def account():
@@ -178,3 +184,36 @@ def test_acceptance_owned_and_unsold_films_never_reach_cheapcharts(repo):
     assert client.post(f"/api/films/{big_sleep}/wishlist").status_code == 409
     assert client.post(f"/api/films/{dolce_vita}/wishlist").status_code == 409
     assert len(responses.calls) == 0
+
+
+def test_delete_un_wishlists_the_film(client, repo, account):
+    fid = _film(repo, "Do the Right Thing", 1989, DTRT)
+    client.post(f"/api/films/{fid}/wishlist")
+    r = client.delete(f"/api/films/{fid}/wishlist")
+    assert r.status_code == 200 and r.get_json() == {"wishlisted": False}
+    assert account.targets == {} and repo.wishlisted_film_ids() == set()
+    assert client.get(f"/api/films/{fid}").get_json()["wishlisted"] is False
+    assert client.delete("/api/films/999/wishlist").status_code == 404
+
+
+def test_a_failed_un_wishlist_is_the_same_failure_line_and_the_heart_stays(client, repo, account):
+    fid = _film(repo, "Do the Right Thing", 1989, DTRT)
+    client.post(f"/api/films/{fid}/wishlist")
+    account.down = True
+    r = client.delete(f"/api/films/{fid}/wishlist")
+    assert r.status_code == 502 and r.get_json() == {"error": "Couldn't reach CheapCharts."}
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+@responses.activate
+def test_acceptance_un_wishlisting_sends_remove_item_and_believes_the_read_back(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"status": "success", "message": "Item removed"})
+    responses.post(WISHLIST_URL, json={"status": "success", "results": {"movies": []}})
+    r = _real_client(repo).delete(f"/api/films/{fid}/wishlist")
+    assert r.status_code == 200 and r.get_json() == {"wishlisted": False}
+    remove = responses.calls[1].request.url
+    assert "action=removeItem" in remove and "idInStore=366474905" in remove and "itemType=buymovies" in remove
+    assert repo.wishlisted_film_ids() == set()

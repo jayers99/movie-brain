@@ -1893,3 +1893,344 @@ Append a row to the "Probes used" table of `trial-log.md`:
 git add docs/superpowers/briefs/2026-09-19-price-watch
 git commit -m "the brief becomes 1.1 by amendment: the build's own defaults are on the record, above all that a click is believed only when CheapCharts reads it back" -m "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 8: Un-wishlist — the click is reversible (brief amendment 1.2, the owner's ruling at delivery)
+
+The owner, on delivery: "there is no way to unwhishlist it. it should be reversable". This reverses one line of 1.0's "What deliberately does not ship" (no un-wishlist button). Design (agent default, the simplest symmetric one): in the drawer the "♥ Wishlisted" mark IS the button. One click removes the film from the CheapCharts wishlist, the slot goes back to "♡ Wishlist it" (or to nothing, for a film that gets no add button — an owned one), and the heart leaves the row. No confirmation step: the watchlist star beside the title is instant too, and a mistaken click is undone by one more click, which re-adds at lowest + $1 — the owner's own rule. The truth rule is the add's mirror image: remove, then read the wishlist back; the read IS the truth; if the read fails, an ACCEPTED remove is believed and a refused one is not. `removeItem` was seen in the site's code and never exercised — its first real run is the owner's hands-on test.
+
+**Files:**
+- Modify: `src/movie_brain/infrastructure/cheapcharts.py`, `src/movie_brain/infrastructure/database.py`, `src/movie_brain/application/wishlist.py`, `src/movie_brain/web/app.py`, `src/movie_brain/web/static/app.js`, `src/movie_brain/web/static/app.css`, `tests/unit/test_cheapcharts_account.py`, `tests/unit/test_wishlist.py`, `tests/web/test_wishlist_api.py`, `tests/web/test_wishlist_page.py`, `tests/web/conftest.py`, `docs/superpowers/briefs/2026-09-19-price-watch/brief.md`, `docs/superpowers/briefs/2026-09-19-price-watch/trial-log.md`
+
+**Interfaces:**
+- Consumes: `CheapChartsAccount._wishlist`, `CheapChartsRefused`, `WishlistAccount` Protocol, `_REMOTE_ERRORS`, `WishlistError`, `Repository.replace_wishlist / wishlisted_film_ids / itunes_id_for`, the route's `wishlist_lock` and `UNREACHABLE`, `wishHtml`, the `.wish-button` handler.
+- Produces:
+  - `CheapChartsAccount.remove_item(itunes_id: str) -> bool` (False = the API refused for a non-token reason); `WishlistAccount` Protocol gains the same method
+  - `Repository.unmark_wishlisted(film_id: int) -> None`
+  - `application/wishlist.py::unwishlist_film(repo, gateway, film_id, today) -> None` (raises `LookupError`, `WishlistError`)
+  - `DELETE /api/films/<int:film_id>/wishlist` → `200 {"wishlisted": false}` · `404 {"error": "not found"}` · `502 {"error": "Couldn't reach CheapCharts."}`
+
+Exact wording stays a hard boundary: `♡ Wishlist it` · `Reaching CheapCharts…` · `♥ Wishlisted` · `Couldn't reach CheapCharts.` · `Try again`. One new string, a tooltip on the "♥ Wishlisted" button only: `Remove from your CheapCharts wishlist`. No price anywhere.
+
+- [ ] **Step 1: Failing tests — the account**
+
+Append to `tests/unit/test_cheapcharts_account.py` (merge imports at the top):
+
+```python
+@responses.activate
+def test_remove_item_sends_buymovies_and_reports_a_refusal_instead_of_raising():
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"status": "success", "message": "Item removed"})
+    responses.post(WISHLIST_URL, json={"status": "error", "message": "whatever it says"})
+    account = _account()
+    assert account.remove_item("282538466") is True
+    q = parse_qs(urlsplit(responses.calls[1].request.url).query)
+    assert q["action"] == ["removeItem"] and q["itemType"] == ["buymovies"] and q["idInStore"] == ["282538466"]
+    assert q["country"] == ["us"] and q["store"] == ["itunes"]
+    assert account.remove_item("282538466") is False  # e.g. already gone: the read-back decides
+```
+
+Implement in `CheapChartsAccount`, after `set_target`:
+
+```python
+    def remove_item(self, itunes_id: str) -> bool:
+        """False when the API refused — most likely the film is already gone. Seen in the site's
+        own code, first exercised by the owner's hands-on test; the caller trusts the read-back."""
+        try:
+            self._wishlist("removeItem", itemType="buymovies", idInStore=itunes_id)
+        except CheapChartsRefused:
+            return False
+        return True
+```
+
+- [ ] **Step 2: Failing tests — repository and use case**
+
+Append to `tests/unit/test_wishlist.py`. First give the module's `FakeAccount` a `remove_item` that logs `("remove", itunes_id)`, drops the id from `self.listed` and returns True. Then:
+
+```python
+def test_unmark_wishlisted_is_idempotent(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+    repo.unmark_wishlisted(fid)
+    repo.unmark_wishlisted(fid)
+    assert repo.wishlisted_film_ids() == set() and repo.get_view(fid, D).wishlisted is False
+
+
+def test_un_wishlisting_removes_the_film_and_the_read_back_replaces_every_heart(repo):
+    nashville = _film(repo, "Nashville", 1975, "366474905")
+    leopard = _film(repo, "The Leopard", 1963, "273058482")
+    stale = _film(repo, "Bought Since", 1990, "777")
+    for fid in (nashville, stale):
+        repo.mark_wishlisted(fid, D)
+    account = FakeAccount(listed=["366474905", "273058482"])
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), nashville, D)
+    assert [c[0] for c in account.calls] == ["remove", "read"]
+    assert repo.wishlisted_film_ids() == {leopard}
+
+
+def test_an_owned_wishlisted_film_can_be_un_wishlisted(repo):
+    fid = _film(repo, "The Big Sleep", 1946, "290555722")
+    repo.mark_owned(fid, D)
+    repo.mark_wishlisted(fid, D)
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), FakeAccount(listed=["290555722"])), fid, D)
+    assert repo.wishlisted_film_ids() == set()
+
+
+def test_un_wishlisting_a_film_that_is_not_wishlisted_asks_cheapcharts_nothing(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    account = FakeAccount(listed=["366474905"])
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
+    assert account.calls == []
+    with pytest.raises(LookupError):
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), account), 999, D)
+
+
+def test_a_remove_the_read_back_still_holds_is_a_failure_and_the_heart_stays(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+
+    class Sticky(FakeAccount):
+        def remove_item(self, itunes_id):
+            self.calls.append(("remove", itunes_id))
+            return False  # refused, and the film is still listed
+
+    with pytest.raises(WishlistError):
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), Sticky(listed=["366474905"])), fid, D)
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+def test_when_the_read_back_fails_an_accepted_remove_is_believed_and_a_refused_one_is_not(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+
+    class NoRead(FakeAccount):
+        def wishlist_ids(self):
+            raise CheapChartsError("read")
+
+    class RefusedNoRead(NoRead):
+        def remove_item(self, itunes_id):
+            return False
+
+    with pytest.raises(WishlistError):
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), RefusedNoRead(listed=["366474905"])), fid, D)
+    assert repo.wishlisted_film_ids() == {fid}
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), NoRead(listed=["366474905"])), fid, D)
+    assert repo.wishlisted_film_ids() == set()
+
+
+def test_a_remote_failure_while_removing_becomes_the_one_wishlist_error(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+
+    class Down(FakeAccount):
+        def remove_item(self, itunes_id):
+            raise requests.ConnectionError("offline")
+
+    with pytest.raises(WishlistError) as exc:
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), Down()), fid, D)
+    assert str(exc.value) == "ConnectionError" and repo.wishlisted_film_ids() == {fid}
+```
+
+Implement. `database.py`, after `mark_wishlisted`:
+
+```python
+    def unmark_wishlisted(self, film_id: int) -> None:
+        """The un-wishlist button's write when the wishlist cannot be read back (an accepted
+        remove is believed). Idempotent. Every other heart removal is `replace_wishlist`'s."""
+        with self._conn() as c:
+            c.execute("DELETE FROM cheapcharts_wishlist WHERE film_id = ?", (film_id,))
+```
+
+Update `mark_wishlisted`'s docstring (it says there is no un-mark) and migration-independent comments accordingly — never edit `migrations/027`. `application/wishlist.py`: add `def remove_item(self, itunes_id: str) -> bool: ...` to the `WishlistAccount` Protocol, and after `wishlist_film`:
+
+```python
+def unwishlist_film(repo: Repository, gateway: WishlistGateway, film_id: int, today: date) -> None:
+    """The click is reversible (owner ruling at delivery, brief 1.2). The add's mirror image:
+    remove, then read the wishlist back — the read IS the truth. An owned film can be taken off
+    too: that is the likeliest reason to want it gone."""
+    view = repo.get_view(film_id, today)
+    if view is None:
+        raise LookupError(film_id)
+    itunes_id = repo.itunes_id_for(film_id)
+    if not view.wishlisted or itunes_id is None:
+        return  # a stale page: nothing to remove, and CheapCharts is asked nothing
+    try:
+        removed = gateway.account.remove_item(itunes_id)
+    except _REMOTE_ERRORS as exc:
+        raise WishlistError(type(exc).__name__) from exc
+    try:
+        ids: list[str] | None = gateway.account.wishlist_ids()
+    except _REMOTE_ERRORS:
+        ids = None
+    if ids is None:
+        if not removed:
+            raise WishlistError("remove refused and the wishlist could not be read back")
+        repo.unmark_wishlisted(film_id)
+        return
+    repo.replace_wishlist(ids, today)
+    if film_id in repo.wishlisted_film_ids():
+        raise WishlistError("the wishlist read back still holding the film")
+```
+
+(The last check asks the repository rather than `itunes_id in ids` so a film holding two store ids is judged by either.)
+
+- [ ] **Step 3: Failing tests — the route**
+
+In `tests/web/test_wishlist_api.py` give the module's `FakeAccount` `remove_item` (raises `WishlistError("down")` when `self.down`, else pops the id from `self.targets` and returns True). Add:
+
+```python
+def test_delete_un_wishlists_the_film(client, repo, account):
+    fid = _film(repo, "Do the Right Thing", 1989, DTRT)
+    client.post(f"/api/films/{fid}/wishlist")
+    r = client.delete(f"/api/films/{fid}/wishlist")
+    assert r.status_code == 200 and r.get_json() == {"wishlisted": False}
+    assert account.targets == {} and repo.wishlisted_film_ids() == set()
+    assert client.get(f"/api/films/{fid}").get_json()["wishlisted"] is False
+    assert client.delete("/api/films/999/wishlist").status_code == 404
+
+
+def test_a_failed_un_wishlist_is_the_same_failure_line_and_the_heart_stays(client, repo, account):
+    fid = _film(repo, "Do the Right Thing", 1989, DTRT)
+    client.post(f"/api/films/{fid}/wishlist")
+    account.down = True
+    r = client.delete(f"/api/films/{fid}/wishlist")
+    assert r.status_code == 502 and r.get_json() == {"error": "Couldn't reach CheapCharts."}
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+@responses.activate
+def test_acceptance_un_wishlisting_sends_remove_item_and_believes_the_read_back(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"status": "success", "message": "Item removed"})
+    responses.post(WISHLIST_URL, json={"status": "success", "results": {"movies": []}})
+    r = _real_client(repo).delete(f"/api/films/{fid}/wishlist")
+    assert r.status_code == 200 and r.get_json() == {"wishlisted": False}
+    remove = responses.calls[1].request.url
+    assert "action=removeItem" in remove and "idInStore=366474905" in remove and "itemType=buymovies" in remove
+    assert repo.wishlisted_film_ids() == set()
+```
+
+Route, in `web/app.py` after `post_wishlist` (import `unwishlist_film`):
+
+```python
+    @app.delete("/api/films/<int:film_id>/wishlist")
+    def delete_wishlist(film_id: int) -> tuple[Response, int]:
+        if wishlist is None:
+            return jsonify({"error": UNREACHABLE}), 502
+        try:
+            with wishlist_lock:
+                unwishlist_film(repo, wishlist, film_id, today())
+        except LookupError:
+            return jsonify({"error": "not found"}), 404
+        except WishlistError:
+            return jsonify({"error": UNREACHABLE}), 502
+        return jsonify({"wishlisted": False}), 200
+```
+
+- [ ] **Step 4: Failing Playwright tests, then the drawer**
+
+`tests/web/conftest.py`: `FakeAccount.remove_item` — sleep 1.0 s like `add_item`; raise `WishlistError("down")` for a new seeded film whose remove always fails; otherwise pop from `targets` and return True. Seed (at the end of `seed()`, comment in the file's voice): **Foxtrot** gets itunes id `FOXTROT_ITUNES = "111000111"` and is wishlisted, and its remove always fails (the un-wishlist failure film); **Golf** gets `GOLF_ITUNES = "222000222"` and is wishlisted (the un-wishlist click film — it has no Criterion listing and no services, so check `reachable` first: a film holding an itunes id IS reachable, and Golf was reachable-neutral before? If giving Golf or Foxtrot a store id changes any existing test's count, pick different seeded films or create two new discovery films "India" and "Juliet" with `repo.create_film` + OMDb language English — new films may change header counts that tests pin, so prefer reusing films, and never weaken an existing test). Both ids must also be in `FAKE_ACCOUNT.targets` initially so a read-back during another test's click keeps their hearts. Echo stays wishlisted and untouched by any click test (other tests pin its heart).
+
+Append to `tests/web/test_wishlist_page.py` (use the real titles you seeded):
+
+```python
+def test_the_wishlisted_mark_is_a_button_and_one_click_takes_the_film_off_again(dash: Page):
+    expect(_row(dash, "Golf").locator(".icon-wish")).to_have_count(1)
+    body = _open(dash, "Golf")
+    mark = body.locator("p.links button.wish-button.wish-done")
+    expect(mark).to_have_text("♥ Wishlisted")
+    expect(mark).to_have_attribute("title", "Remove from your CheapCharts wishlist")
+    mark.click()
+    busy = body.locator("p.links button.wish-button")
+    expect(busy).to_have_text("Reaching CheapCharts…")
+    expect(busy).to_be_disabled()
+    expect(body.locator("p.links button.wish-button")).to_have_text("♡ Wishlist it")
+    expect(_row(dash, "Golf").locator(".icon-wish")).to_have_count(0)
+
+
+def test_a_failed_un_wishlist_says_so_and_try_again_retries_the_removal(dash: Page):
+    body = _open(dash, "Foxtrot")
+    body.locator("p.links button.wish-done").click()
+    failed = body.locator("p.links .wish-failed")
+    expect(failed).to_contain_text("Couldn't reach CheapCharts.")
+    expect(_row(dash, "Foxtrot").locator(".icon-wish")).to_have_count(1)  # nothing changed
+    with dash.expect_request(lambda r: r.method == "DELETE" and r.url.endswith("/wishlist")):
+        failed.locator("button.wish-button").click()  # Try again repeats the REMOVAL, not an add
+    expect(body.locator("p.links .wish-failed")).to_contain_text("Couldn't reach CheapCharts.")
+```
+
+The session-scoped server is shared: the Golf test must not depend on order — if another test could re-heart Golf (a read-back replaces hearts from `FAKE_ACCOUNT.targets`, and the remove pops Golf from it, so it stays gone) confirm by running the file forwards and with `-p no:randomly` reversed (`uv run pytest tests/web/test_wishlist_page.py -q` then the same with the tests listed in reverse order on the command line). Update the two existing tests that pin the already-wishlisted drawer (`.wish-done` is now a `button.wish-button.wish-done`; `test_an_already_wishlisted_film_shows_the_mark_where_the_button_was` asserted there is NO `button.wish-button` — it must now assert the mark is the un-wishlist button with its tooltip) and `test_only_wishlisted_rows_carry_anything_new` (its allowed set of hearted titles grows by the new seeded films). Those are the only existing assertions that may change, and only in that direction.
+
+`app.js`:
+
+```js
+  const WISH_DONE = '<button class="wish-button wish-done" title="Remove from your CheapCharts wishlist">♥ Wishlisted</button>';
+  function wishSlotHtml(d) {  // the slot's resting content for this film's state
+    if (d.wishlisted) return WISH_DONE;
+    if (!d.cheapcharts_url || d.owned) return '';
+    return `<button class="wish-button">${WISH_BUTTON}</button>`;
+  }
+  function wishHtml(d) {
+    const inner = wishSlotHtml(d);
+    return inner ? ` <span class="wish" data-id="${d.id}">${inner}</span>` : '';
+  }
+```
+
+and the handler: decide the action ONCE per slot and remember it on the slot, so "Try again" repeats the same action:
+
+```js
+    const b = e.target.closest('.wish-button'); if (!b || b.disabled) return;
+    const slot = b.closest('.wish'); const id = Number(slot.dataset.id);
+    const film = state.films.find((f) => f.id === id);
+    // The mark is the un-wishlist button (brief 1.2: the click is reversible). "Try again" sits in
+    // the same slot and repeats whichever action failed, remembered on the slot.
+    if (!b.closest('.wish-failed')) slot.dataset.action = b.classList.contains('wish-done') ? 'remove' : 'add';
+    const removing = slot.dataset.action === 'remove';
+    slot.innerHTML = '<button class="wish-button" disabled>Reaching CheapCharts…</button>';
+    const r = await fetch(`/api/films/${id}/wishlist`, { method: removing ? 'DELETE' : 'POST' }).catch(() => null);
+    if (!r || !r.ok) { /* the existing failure line, unchanged */ return; }
+    const wishlisted = !removing;
+    if (film) { film.wishlisted = wishlisted; applyFilters(); }
+    // An owned film gets no add button: its slot simply empties.
+    slot.innerHTML = wishSlotHtml({ ...(film || {}), id, wishlisted });
+```
+
+Note the drawer's detail object `d` and the list's `film` both carry `cheapcharts_url` and `owned`; if `film` is missing (it should not be) fall back to leaving the slot empty after a removal. Keep the existing comments' substance. CSS: `.wish-done` is now a button — make it read as the mark, not as a grey system button: keep the `#c2410c` colour and give it `background:none; border:none; padding:0; font:inherit; cursor:pointer;` so the approved preview's look of "♥ Wishlisted" is unchanged.
+
+- [ ] **Step 5: Amend the brief to 1.2 and log the correction**
+
+`brief.md`: change the version line's opening to `**Version 1.2 — amended 2026-09-19 at delivery (1.1 amended during the build; 1.0 frozen the same day).**`, leave every other existing line untouched (including "no un-wishlist button" in 1.0's list — the amendment supersedes it, the original stays), and append to the `## Amendments` section:
+
+```markdown
+**1.2 — 2026-09-19, by the owner, on first sight of the delivery:** "there is no way to unwhishlist it. it should be reversable". This supersedes 1.0's "no un-wishlist button" (What deliberately does not ship) and 1.0's "exactly two writers".
+
+| Decision | Whose |
+|---|---|
+| The click is reversible | your choice, 2026-09-19 |
+| In the drawer the "♥ Wishlisted" mark IS the button: one click removes the film from your CheapCharts wishlist, the button goes back to "♡ Wishlist it" (an owned film's slot just empties) and the heart leaves the row. Its tooltip reads "Remove from your CheapCharts wishlist". No confirmation step — a mistaken click is undone by one more click | agent default, NOT previewed — look at it in the hands-on test |
+| Taking a film off and putting it back sets the target to lowest + $1 again, so a target you had set by hand on CheapCharts is not restored | agent default — a consequence of "a click always means lowest + $1" |
+| Removal follows the add's truth rule: remove, read the wishlist back, the read decides; if the read fails an accepted remove is believed. A failure is the same line, and "Try again" repeats the removal | agent default |
+| A film you own that is on your wishlist can be taken off the same way (it cannot be put back from here: owned films get no add button) | agent default |
+| The remove call (`removeItem`) was seen in the site's code and never run against your account; its first real run is your hands-on test | fact, stated so it is not a surprise |
+```
+
+`trial-log.md`: append to the "Surprises and corrections" table:
+
+```markdown
+| 6 | On first sight of the delivery he asked for the one thing the frozen brief listed as deliberately not shipping: an un-wishlist. "There is no way to unwhishlist it. it should be reversable." The line sat in a list of twelve exclusions he approved by reading, never by using — the same failure as correction 4: words he had not pictured. Built the same evening as amendment 1.2. | changed preference or misunderstood intent — his to tag; caught at delivery, before the hands-on test |
+```
+
+Never hard-wrap these lines.
+
+- [ ] **Step 6: Gates and commit**
+
+All four gates. Then:
+
+```bash
+git add src/movie_brain tests docs/superpowers/briefs/2026-09-19-price-watch docs/superpowers/plans/2026-09-19-wishlist-it.md
+git commit -m "the click is reversible: the Wishlisted mark is the button that takes the film off again, judged by the same read-back as the add"
+```
+(with the attribution trailer as the second -m).

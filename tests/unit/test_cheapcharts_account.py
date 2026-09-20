@@ -282,3 +282,16 @@ def test_a_429_and_a_non_json_answer_both_stop_the_call():
     responses.replace(responses.POST, ACCOUNT_URL, body="<html>maintenance</html>", status=200)
     with pytest.raises(CheapChartsError):
         _account().wishlist_ids()
+
+
+@responses.activate
+def test_remove_item_sends_buymovies_and_reports_a_refusal_instead_of_raising():
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"status": "success", "message": "Item removed"})
+    responses.post(WISHLIST_URL, json={"status": "error", "message": "whatever it says"})
+    account = _account()
+    assert account.remove_item("282538466") is True
+    q = parse_qs(urlsplit(responses.calls[1].request.url).query)
+    assert q["action"] == ["removeItem"] and q["itemType"] == ["buymovies"] and q["idInStore"] == ["282538466"]
+    assert q["country"] == ["us"] and q["store"] == ["itunes"]
+    assert account.remove_item("282538466") is False  # e.g. already gone: the read-back decides

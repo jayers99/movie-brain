@@ -13,7 +13,13 @@ from movie_brain.application.rank import RankError
 from movie_brain.application.ratings import rate_film
 from movie_brain.application.search import run_search
 from movie_brain.application.sync import SOURCE
-from movie_brain.application.wishlist import NotForSale, WishlistError, WishlistGateway, wishlist_film
+from movie_brain.application.wishlist import (
+    NotForSale,
+    WishlistError,
+    WishlistGateway,
+    unwishlist_film,
+    wishlist_film,
+)
 from movie_brain.domain.audit import VERDICTS
 from movie_brain.domain.filters import CHIPS, thresholds
 from movie_brain.infrastructure.database import Repository
@@ -107,6 +113,19 @@ def create_app(
         except WishlistError:
             return jsonify({"error": UNREACHABLE}), 502
         return jsonify({"wishlisted": True}), 200
+
+    @app.delete("/api/films/<int:film_id>/wishlist")
+    def delete_wishlist(film_id: int) -> tuple[Response, int]:
+        if wishlist is None:
+            return jsonify({"error": UNREACHABLE}), 502
+        try:
+            with wishlist_lock:
+                unwishlist_film(repo, wishlist, film_id, today())
+        except LookupError:
+            return jsonify({"error": "not found"}), 404
+        except WishlistError:
+            return jsonify({"error": UNREACHABLE}), 502
+        return jsonify({"wishlisted": False}), 200
 
     @app.post("/api/films/<int:film_id>/revisit")
     def toggle_revisit(film_id: int) -> tuple[Response, int]:

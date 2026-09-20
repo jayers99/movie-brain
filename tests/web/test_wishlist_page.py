@@ -28,8 +28,9 @@ def test_one_click_wishlists_the_film_and_the_heart_arrives_on_its_row(dash: Pag
     button.click()
     expect(button).to_have_text("Reaching CheapCharts…")
     expect(button).to_be_disabled()
-    expect(body.locator("p.links .wish-done")).to_have_text("♥ Wishlisted")
-    expect(body.locator("p.links button.wish-button")).to_have_count(0)
+    mark = body.locator("p.links .wish-done")
+    expect(mark).to_have_text("♥ Wishlisted")
+    expect(body.locator("p.links button.wish-button:not(.wish-done)")).to_have_count(0)
     heart = _row(dash, "Charlie").locator(".icon-wish")
     expect(heart).to_have_text("♥")
     expect(heart).to_have_attribute("title", HEART_TIP)
@@ -54,8 +55,10 @@ def test_a_failed_click_says_so_offers_try_again_and_marks_nothing(dash: Page):
 
 def test_an_already_wishlisted_film_shows_the_mark_where_the_button_was(dash: Page):
     body = _open(dash, "Echo")
-    expect(body.locator("p.links .wish-done")).to_have_text("♥ Wishlisted")
-    expect(body.locator("p.links button.wish-button")).to_have_count(0)
+    mark = body.locator("p.links button.wish-button.wish-done")
+    expect(mark).to_have_text("♥ Wishlisted")
+    expect(mark).to_have_attribute("title", "Remove from your CheapCharts wishlist")
+    expect(body.locator("p.links button.wish-button:not(.wish-done)")).to_have_count(0)
 
 
 def test_the_heart_comes_last_after_the_list_count_and_any_other_badge(dash: Page):
@@ -77,11 +80,38 @@ def test_an_owned_film_and_a_film_apple_does_not_sell_get_no_button_and_no_messa
     expect(body).not_to_contain_text("CheapCharts.")  # nothing said
 
 
+def test_the_wishlisted_mark_is_a_button_and_one_click_takes_the_film_off_again(dash: Page):
+    expect(_row(dash, "Kilo").locator(".icon-wish")).to_have_count(1)
+    body = _open(dash, "Kilo")
+    mark = body.locator("p.links button.wish-button.wish-done")
+    expect(mark).to_have_text("♥ Wishlisted")
+    expect(mark).to_have_attribute("title", "Remove from your CheapCharts wishlist")
+    mark.click()
+    busy = body.locator("p.links button.wish-button")
+    expect(busy).to_have_text("Reaching CheapCharts…")
+    expect(busy).to_be_disabled()
+    expect(body.locator("p.links button.wish-button")).to_have_text("♡ Wishlist it")
+    expect(_row(dash, "Kilo").locator(".icon-wish")).to_have_count(0)
+
+
+def test_a_failed_un_wishlist_says_so_and_try_again_retries_the_removal(dash: Page):
+    body = _open(dash, "November")
+    body.locator("p.links button.wish-done").click()
+    failed = body.locator("p.links .wish-failed")
+    expect(failed).to_contain_text("Couldn't reach CheapCharts.")
+    expect(_row(dash, "November").locator(".icon-wish")).to_have_count(1)  # nothing changed
+    with dash.expect_request(lambda r: r.method == "DELETE" and r.url.endswith("/wishlist")):
+        failed.locator("button.wish-button").click()  # Try again repeats the REMOVAL, not an add
+    expect(body.locator("p.links .wish-failed")).to_contain_text("Couldn't reach CheapCharts.")
+
+
 def test_only_wishlisted_rows_carry_anything_new(dash: Page):
-    # Echo is seeded; Charlie joins it only if the click test already ran in this session — so
-    # every hearted row must be one of the two, and Echo must always be among them.
+    # Echo and November are seeded wishlisted and stay that way (brief 1.2: November's removal
+    # always fails); Charlie joins them only if the add-click test already ran this session, and
+    # Kilo drops out only if the un-wishlist-click test already ran this session — so every
+    # hearted row must be one of the four, and Echo/November must always be among them.
     hearted_rows = dash.locator("#films tbody .icon-wish").locator("xpath=ancestor::tr[1]")
     texts = hearted_rows.all_text_contents()
-    assert texts and all(("Echo" in t) or ("Charlie" in t) for t in texts)
-    assert any("Echo" in t for t in texts)
+    assert texts and all(any(name in t for name in ("Echo", "Charlie", "Kilo", "November")) for t in texts)
+    assert any("Echo" in t for t in texts) and any("November" in t for t in texts)
     expect(_row(dash, "Bravo").locator(".icon-wish")).to_have_count(0)

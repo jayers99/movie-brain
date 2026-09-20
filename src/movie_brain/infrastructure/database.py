@@ -2569,8 +2569,9 @@ class Repository:
             return _wishlisted_ids(c)
 
     def mark_wishlisted(self, film_id: int, today: date) -> bool | None:
-        """The button's write: idempotent, None when the film does not exist. There is no
-        un-mark — a heart only comes off when a wishlist read no longer holds the film."""
+        """The button's write: idempotent, None when the film does not exist. A heart also comes
+        off when a wishlist read no longer holds the film (`replace_wishlist`), or through the
+        un-wishlist button's own write, `unmark_wishlisted`, below."""
         with self._conn() as c:
             if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
                 return None
@@ -2579,6 +2580,12 @@ class Repository:
                 (film_id, today.isoformat()),
             )
             return True
+
+    def unmark_wishlisted(self, film_id: int) -> None:
+        """The un-wishlist button's write when the wishlist cannot be read back (an accepted
+        remove is believed). Idempotent. Every other heart removal is `replace_wishlist`'s."""
+        with self._conn() as c:
+            c.execute("DELETE FROM cheapcharts_wishlist WHERE film_id = ?", (film_id,))
 
     def replace_wishlist(self, itunes_ids: Iterable[str], today: date) -> int:
         """The wishlist read's write: the local hearts become exactly the films holding one of

@@ -13,6 +13,7 @@ from movie_brain.application.wishlist import (
     WishlistError,
     WishlistGateway,
     refresh_wishlist,
+    unwishlist_film,
     wishlist_film,
 )
 from movie_brain.domain.models import Film
@@ -55,6 +56,12 @@ class FakeAccount:
     def wishlist_ids(self):
         self.calls.append(("read",))
         return list(self.listed)
+
+    def remove_item(self, itunes_id):
+        self.calls.append(("remove", itunes_id))
+        if itunes_id in self.listed:
+            self.listed.remove(itunes_id)
+        return True
 
 
 def test_target_is_the_lowest_price_ever_plus_one_dollar():
@@ -264,3 +271,86 @@ def test_merge_moves_the_heart_survivor_wins(repo):
     repo.mark_wishlisted(d, D)
     report = repo.merge_film(d, c, D)
     assert report.dropped.get("cheapcharts_wishlist") == 1 and repo.wishlisted_film_ids() == {a, c}
+
+
+def test_unmark_wishlisted_is_idempotent(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+    repo.unmark_wishlisted(fid)
+    repo.unmark_wishlisted(fid)
+    assert repo.wishlisted_film_ids() == set() and repo.get_view(fid, D).wishlisted is False
+
+
+def test_un_wishlisting_removes_the_film_and_the_read_back_replaces_every_heart(repo):
+    nashville = _film(repo, "Nashville", 1975, "366474905")
+    leopard = _film(repo, "The Leopard", 1963, "273058482")
+    stale = _film(repo, "Bought Since", 1990, "777")
+    for fid in (nashville, stale):
+        repo.mark_wishlisted(fid, D)
+    account = FakeAccount(listed=["366474905", "273058482"])
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), nashville, D)
+    assert [c[0] for c in account.calls] == ["remove", "read"]
+    assert repo.wishlisted_film_ids() == {leopard}
+
+
+def test_an_owned_wishlisted_film_can_be_un_wishlisted(repo):
+    fid = _film(repo, "The Big Sleep", 1946, "290555722")
+    repo.mark_owned(fid, D)
+    repo.mark_wishlisted(fid, D)
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), FakeAccount(listed=["290555722"])), fid, D)
+    assert repo.wishlisted_film_ids() == set()
+
+
+def test_un_wishlisting_a_film_that_is_not_wishlisted_asks_cheapcharts_nothing(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    account = FakeAccount(listed=["366474905"])
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
+    assert account.calls == []
+    with pytest.raises(LookupError):
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), account), 999, D)
+
+
+def test_a_remove_the_read_back_still_holds_is_a_failure_and_the_heart_stays(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+
+    class Sticky(FakeAccount):
+        def remove_item(self, itunes_id):
+            self.calls.append(("remove", itunes_id))
+            return False  # refused, and the film is still listed
+
+    with pytest.raises(WishlistError):
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), Sticky(listed=["366474905"])), fid, D)
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+def test_when_the_read_back_fails_an_accepted_remove_is_believed_and_a_refused_one_is_not(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+
+    class NoRead(FakeAccount):
+        def wishlist_ids(self):
+            raise CheapChartsError("read")
+
+    class RefusedNoRead(NoRead):
+        def remove_item(self, itunes_id):
+            return False
+
+    with pytest.raises(WishlistError):
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), RefusedNoRead(listed=["366474905"])), fid, D)
+    assert repo.wishlisted_film_ids() == {fid}
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), NoRead(listed=["366474905"])), fid, D)
+    assert repo.wishlisted_film_ids() == set()
+
+
+def test_a_remote_failure_while_removing_becomes_the_one_wishlist_error(repo):
+    fid = _film(repo, "Nashville", 1975, "366474905")
+    repo.mark_wishlisted(fid, D)
+
+    class Down(FakeAccount):
+        def remove_item(self, itunes_id):
+            raise requests.ConnectionError("offline")
+
+    with pytest.raises(WishlistError) as exc:
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), Down()), fid, D)
+    assert str(exc.value) == "ConnectionError" and repo.wishlisted_film_ids() == {fid}

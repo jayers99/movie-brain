@@ -286,6 +286,15 @@ class CheapChartsAccount:
             "changeInitPrice", itemType="buymovies", idInStore=itunes_id, customPrice=price, customPriceHd=price
         )
 
+    def remove_item(self, itunes_id: str) -> bool:
+        """False when the API refused — most likely the film is already gone. Seen in the site's
+        own code, first exercised by the owner's hands-on test; the caller trusts the read-back."""
+        try:
+            self._wishlist("removeItem", itemType="buymovies", idInStore=itunes_id)
+        except CheapChartsRefused:
+            return False
+        return True
+
     def _wishlist(self, action: str, **extra: str) -> dict[str, Any]:
         params = {"country": COUNTRY, "store": STORE, "action": action, **extra}
         for attempt in (1, 2):

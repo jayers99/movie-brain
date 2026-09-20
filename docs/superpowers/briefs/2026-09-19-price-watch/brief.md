@@ -1,6 +1,6 @@
 # Task brief — "Wishlist it" (backlog 3, the remaining half)
 
-**Version 1.1 — amended 2026-09-19 during the build (1.0 frozen the same day).** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
+**Version 1.2 — amended 2026-09-19 at delivery (1.1 amended during the build; 1.0 frozen the same day).** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
 
 ## Your page
 
@@ -108,3 +108,14 @@
 | One click at a time: a second click anywhere waits for the first to finish | agent default |
 
 Format note for the record: `priceHdEvolution` entries are `date:±price` where the sign is the DIRECTION of the change, not part of the price; the oldest entry has no sign (read from the public endpoint 2026-09-19, no account involved).
+
+**1.2 — 2026-09-19, by the owner, on first sight of the delivery:** "there is no way to unwhishlist it. it should be reversable". This supersedes 1.0's "no un-wishlist button" (What deliberately does not ship) and 1.0's "exactly two writers".
+
+| Decision | Whose |
+|---|---|
+| The click is reversible | your choice, 2026-09-19 |
+| In the drawer the "♥ Wishlisted" mark IS the button: one click removes the film from your CheapCharts wishlist, the button goes back to "♡ Wishlist it" (an owned film's slot just empties) and the heart leaves the row. Its tooltip reads "Remove from your CheapCharts wishlist". No confirmation step — a mistaken click is undone by one more click | agent default, NOT previewed — look at it in the hands-on test |
+| Taking a film off and putting it back sets the target to lowest + $1 again, so a target you had set by hand on CheapCharts is not restored | agent default — a consequence of "a click always means lowest + $1" |
+| Removal follows the add's truth rule: remove, read the wishlist back, the read decides; if the read fails an accepted remove is believed. A failure is the same line, and "Try again" repeats the removal | agent default |
+| A film you own that is on your wishlist can be taken off the same way (it cannot be put back from here: owned films get no add button) | agent default |
+| The remove call (`removeItem`) was seen in the site's code and never run against your account; its first real run is your hands-on test | fact, stated so it is not a surprise |

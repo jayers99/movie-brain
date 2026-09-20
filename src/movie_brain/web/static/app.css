@@ -71,7 +71,9 @@ tbody tr.departed td { color:var(--muted); }
 .badge-lists { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
 .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
 .icon-wish { color:#c2410c; font-size:13px; margin-left:2px; }
-#drawer p.links .wish-done { color:#c2410c; }
+/* The mark is a button now (brief 1.2: the click is reversible) — read as the mark, not a
+   grey system button, so the approved "♥ Wishlisted" preview look is unchanged. */
+#drawer p.links .wish-done { color:#c2410c; background:none; border:none; padding:0; font:inherit; cursor:pointer; }
 #drawer p.links .wish-failed { color:var(--muted); }
 .svc-more { display:inline; }
 .svc-more > summary { display:inline; cursor:pointer; color:var(--muted); list-style:none; }

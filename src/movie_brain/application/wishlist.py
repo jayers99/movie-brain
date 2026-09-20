@@ -31,6 +31,8 @@ class WishlistAccount(Protocol):
 
     def wishlist_ids(self) -> list[str]: ...
 
+    def remove_item(self, itunes_id: str) -> bool: ...
+
 
 @dataclass(frozen=True)
 class WishlistGateway:
@@ -100,3 +102,31 @@ def wishlist_film(repo: Repository, gateway: WishlistGateway, film_id: int, toda
     repo.replace_wishlist(ids, today)  # hearts are refreshed after every add
     if itunes_id not in ids:
         raise WishlistError("the wishlist read back without the film")
+
+
+def unwishlist_film(repo: Repository, gateway: WishlistGateway, film_id: int, today: date) -> None:
+    """The click is reversible (owner ruling at delivery, brief 1.2). The add's mirror image:
+    remove, then read the wishlist back — the read IS the truth. An owned film can be taken off
+    too: that is the likeliest reason to want it gone."""
+    view = repo.get_view(film_id, today)
+    if view is None:
+        raise LookupError(film_id)
+    itunes_id = repo.itunes_id_for(film_id)
+    if not view.wishlisted or itunes_id is None:
+        return  # a stale page: nothing to remove, and CheapCharts is asked nothing
+    try:
+        removed = gateway.account.remove_item(itunes_id)
+    except _REMOTE_ERRORS as exc:
+        raise WishlistError(type(exc).__name__) from exc
+    try:
+        ids: list[str] | None = gateway.account.wishlist_ids()
+    except _REMOTE_ERRORS:
+        ids = None
+    if ids is None:
+        if not removed:
+            raise WishlistError("remove refused and the wishlist could not be read back")
+        repo.unmark_wishlisted(film_id)
+        return
+    repo.replace_wishlist(ids, today)
+    if film_id in repo.wishlisted_film_ids():
+        raise WishlistError("the wishlist read back still holding the film")

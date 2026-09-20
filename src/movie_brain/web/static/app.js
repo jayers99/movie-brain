@@ -556,11 +556,18 @@
   // "Wishlist it" (brief 2026-09-19-price-watch). One slot in the links row, after the CheapCharts
   // link: the done mark, or the button — shown only for a film the Apple store sells (it holds a
   // store id, hence a direct CheapCharts page) that I do not own. Anything else: nothing, no message.
+  // The click is reversible (brief 1.2, the owner's ruling at delivery): the "♥ Wishlisted" mark
+  // IS the button, one click taking the film back off again.
   const WISH_BUTTON = '♡ Wishlist it';
-  function wishHtml(d) {
-    if (d.wishlisted) return ' <span class="wish" data-id="' + d.id + '"><span class="wish-done">♥ Wishlisted</span></span>';
+  const WISH_DONE = '<button class="wish-button wish-done" title="Remove from your CheapCharts wishlist">♥ Wishlisted</button>';
+  function wishSlotHtml(d) {  // the slot's resting content for this film's state
+    if (d.wishlisted) return WISH_DONE;
     if (!d.cheapcharts_url || d.owned) return '';
-    return ` <span class="wish" data-id="${d.id}"><button class="wish-button">${WISH_BUTTON}</button></span>`;
+    return `<button class="wish-button">${WISH_BUTTON}</button>`;
+  }
+  function wishHtml(d) {
+    const inner = wishSlotHtml(d);
+    return inner ? ` <span class="wish" data-id="${d.id}">${inner}</span>` : '';
   }
   function detailHtml(d) {
     const p = d.payload || {};
@@ -758,20 +765,26 @@
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.wish-button'); if (!b || b.disabled) return;
     const slot = b.closest('.wish'); const id = Number(slot.dataset.id);
+    const film = state.films.find((f) => f.id === id);
+    // The mark is the un-wishlist button (brief 1.2: the click is reversible). "Try again" sits in
+    // the same slot and repeats whichever action failed, remembered on the slot.
+    if (!b.closest('.wish-failed')) slot.dataset.action = b.classList.contains('wish-done') ? 'remove' : 'add';
+    const removing = slot.dataset.action === 'remove';
     // Four or five paced calls to CheapCharts: 5-10 s. A "Try again" click starts inside
     // .wish-failed; swap the WHOLE slot to a fresh busy button first, so the stale failure text
     // never shows beside it, and so it cannot be clicked twice.
     slot.innerHTML = '<button class="wish-button" disabled>Reaching CheapCharts…</button>';
-    const r = await fetch(`/api/films/${id}/wishlist`, { method: 'POST' }).catch(() => null);
+    const r = await fetch(`/api/films/${id}/wishlist`, { method: removing ? 'DELETE' : 'POST' }).catch(() => null);
     if (!r || !r.ok) {
       // One line whatever went wrong — offline, a refused password, no price history — and nothing is marked.
       slot.innerHTML = '<span class="wish-failed">Couldn\'t reach CheapCharts. <button class="wish-button">Try again</button></span>';
       return;
     }
     // Patch in place, as the toggles do: re-opening the drawer would desync closeDrawer()'s history bookkeeping.
-    slot.innerHTML = '<span class="wish-done">♥ Wishlisted</span>';
-    const film = state.films.find((f) => f.id === id);
-    if (film) { film.wishlisted = true; applyFilters(); }
+    const wishlisted = !removing;
+    if (film) { film.wishlisted = wishlisted; applyFilters(); }
+    // An owned film gets no add button: its slot simply empties.
+    slot.innerHTML = wishSlotHtml({ ...(film || {}), id, wishlisted });
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.tier-pick'); if (!b || b.getAttribute('aria-current') === 'true') return;
