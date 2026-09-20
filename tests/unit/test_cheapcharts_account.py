@@ -91,6 +91,34 @@ def test_lowest_price_returns_none_rather_than_raising_on_a_reshaped_results():
     assert CheapChartsClient(delay_s=0).lowest_price("1") is None
 
 
+@responses.activate
+def test_imdb_id_for_reads_the_products_own_imdb_id():
+    """The wishlist's join (amendment 1.4): DetailData answers ONE `results.movies` object, and
+    it carries the IMDb id CheapCharts files the product under — an exact id join, no titles."""
+    responses.get(DETAIL_URL, json={"results": {"movies": {"imdbId": "tt0097216", "title": "A Film"}}})
+    assert CheapChartsClient().imdb_id_for("282538466") == "tt0097216"
+    sent = responses.calls[0].request
+    assert "idInStore=282538466" in sent.url and "itemType=movies" in sent.url
+
+
+@responses.activate
+def test_imdb_id_for_believes_only_a_well_formed_tt():
+    """Three ways of not knowing, one answer: a hole in CheapCharts' IMDb index (no key at
+    all), a value that is not an IMDb id, and no such product."""
+    responses.get(DETAIL_URL, json={"results": {"movies": {"title": "No mapping here"}}})
+    responses.get(DETAIL_URL, json={"results": {"movies": {"imdbId": "0097216"}}})
+    responses.get(DETAIL_URL, json={"results": {"movies": []}})
+    client = CheapChartsClient(delay_s=0)
+    assert [client.imdb_id_for(str(i)) for i in (1, 2, 3)] == [None, None, None]
+
+
+@responses.activate
+def test_imdb_id_for_stops_on_a_429():
+    responses.get(DETAIL_URL, status=429)
+    with pytest.raises(RateLimited):
+        CheapChartsClient().imdb_id_for("1")
+
+
 def test_pacer_waits_only_the_remainder_since_the_last_call():
     now, slept = [100.0], []
 

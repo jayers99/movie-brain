@@ -12,6 +12,7 @@ answer is confirmed on title and year before anyone believes it.
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -37,6 +38,7 @@ MAX_IMDB_IDS = 5  # the API's own documented cap, echoed in every response's add
 DELAY_S = 1.5  # llms.txt promises "no rate limiting concerns"; the API answers 429. Pace anyway.
 REMOVED_MARKER = "[❌Removed from iTunes]"  # the only signal — the product page itself is a JS
 # shell that returns 200 for any id, dead or not
+_IMDB_ID_RE = re.compile(r"tt\d+")  # an id join is only as good as the id: anything else is "no mapping"
 
 
 class RateLimited(Exception):
@@ -199,17 +201,32 @@ class CheapChartsClient:
             )
         return products
 
-    def lowest_price(self, itunes_id: str) -> Decimal | None:
-        """The product's lowest price EVER, computed from its full history — never taken from
-        `priceHdIsLowest`, so the number is ours. HD history first; a film with no HD history
-        uses the SD one; None when there is no history at all (or no such product, or `results`
-        comes back in a shape we've never seen — isinstance-guarded so no exception escapes)."""
+    def _detail(self, itunes_id: str) -> dict[str, Any] | None:
+        """One product's DetailData record — `results.movies`, which is ONE object here and not
+        a list. None when there is no such product, or `results` comes back in a shape we've
+        never seen: isinstance-guarded both ways so no exception escapes to a caller."""
         data = self._get(
             DETAIL_URL, {"store": STORE, "country": COUNTRY, "itemType": "movies", "idInStore": itunes_id}
         )
         results = data.get("results")
         movie = results.get("movies") if isinstance(results, dict) else None
-        if not isinstance(movie, dict):
+        return movie if isinstance(movie, dict) else None
+
+    def imdb_id_for(self, itunes_id: str) -> str | None:
+        """The IMDb id CheapCharts files this product under — the wishlist's join (amendment
+        1.4), as exact as `products_by_imdb` and in the other direction. None when their index
+        has no mapping for the product, or answers something that is not an IMDb id."""
+        movie = self._detail(itunes_id) or {}
+        imdb_id = str(movie.get("imdbId") or "")
+        return imdb_id if _IMDB_ID_RE.fullmatch(imdb_id) else None
+
+    def lowest_price(self, itunes_id: str) -> Decimal | None:
+        """The product's lowest price EVER, computed from its full history — never taken from
+        `priceHdIsLowest`, so the number is ours. HD history first; a film with no HD history
+        uses the SD one; None when there is no history at all (or no such product, or `results`
+        comes back in a shape we've never seen)."""
+        movie = self._detail(itunes_id)
+        if movie is None:
             return None
         for field in ("priceHdEvolution", "priceSdEvolution"):
             prices = parse_evolution(str(movie.get(field) or ""))

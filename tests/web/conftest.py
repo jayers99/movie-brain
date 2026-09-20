@@ -34,6 +34,9 @@ class FakePrices:
     def lowest_price(self, itunes_id: str) -> Decimal | None:
         return Decimal("2.99")
 
+    def imdb_id_for(self, itunes_id: str) -> str | None:
+        return None  # the whole PriceSource, though no route resolves: that is a verb, not a click
+
 
 class FakeAccount:
     """Delta's product always fails to ADD, so the add-failure line has a film of its own and

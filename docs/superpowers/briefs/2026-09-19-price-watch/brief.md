@@ -1,6 +1,6 @@
 # Task brief — "Wishlist it" (backlog 3, the remaining half)
 
-**Version 1.3 — amended 2026-09-19 after the hands-on test (1.2 at delivery; 1.1 during the build; 1.0 frozen the same day).** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
+**Version 1.4 — amended 2026-09-20 after the second hands-on finding (1.3 after the first; 1.2 at delivery; 1.1 during the build; 1.0 frozen 2026-09-19).** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
 
 ## Your page
 
@@ -132,3 +132,12 @@ Format note for the record: `priceHdEvolution` entries are `date:±price` where 
 | Test fixtures for a CheapCharts answer are built from the real answer's shape (ids invented), never from prose | process rule, from this defect |
 
 Correction to "The account API" above, for the record: the Read answers `{results: {ebooks[], movies[], tv[]}, originRequest, responseTimestamp}` with NO `status` key; `idInStore` is a string; `customPrice` is absent when no target is set; `initialPriceValue` may be `-1`.
+
+**1.4 — 2026-09-20, by the builder, after you found Scarlet Street wishlisted with no heart and no button.** Cause: movie-brain held no store id for it (the store lookup has not run since the newer lists were imported), so your wishlist's entry matched no film. 115 of your 198 wishlist films matched nothing for this reason or because the film is not in movie-brain at all. 1.0's Prerequisite understated this: it said most films would "show no button"; it did not say a film already on your wishlist would silently show no heart either.
+
+| Decision | Whose |
+|---|---|
+| `movie-brain cheapcharts wishlist --resolve` asks CheapCharts, for each wishlist film movie-brain cannot place, which IMDb id the product carries, and joins on that exact id — then the film has its store id, its heart, and (if you take it off) its button. At most one paced call per unplaced film, dry run by default, `--apply` stores | agent default — it keeps 1.0's promise "films you wishlisted before today get their heart too" without waiting for the bulk store lookup (about 2,500 films) |
+| The dashboard never does this at start (it would add minutes); when some wishlist films are unplaced its start-up line says how many and names the command | agent default |
+| A film can now hold two store ids (your wishlist names one product, the store lookup another). Un-wishlisting removes whichever of its products is on your wishlist; wishlisting leaves a product that is already there with a target alone | agent default |
+| This is a second writer of store ids beside `cheapcharts resolve`; both believe only an exact IMDb-id match from CheapCharts | agent default — `CLAUDE.md` is updated with the rest after your say-so |

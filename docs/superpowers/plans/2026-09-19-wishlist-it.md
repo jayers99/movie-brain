@@ -2313,3 +2313,67 @@ Never hard-wrap; change no other existing line.
 **Files:** `src/movie_brain/infrastructure/cheapcharts.py`, `src/movie_brain/application/wishlist.py`, `src/movie_brain/web/app.py`, `src/movie_brain/cli.py`, `tests/unit/test_cheapcharts_account.py`, `tests/unit/test_wishlist.py`, `tests/unit/test_cli.py`, `tests/web/test_wishlist_api.py`, `tests/web/conftest.py` (+ `tests/web/test_wishlist_page.py` only if a fake's behaviour forces it), the two docs. `app.js` does not change.
 
 **Gates and commit:** all four gates; commit subject on the why, e.g. `the wishlist read never worked against the real CheapCharts: its answer has no status field; and no click writes before a successful read, so a hand-set target is safe even when the hearts are stale`.
+
+---
+
+### Task 10: A wishlisted film movie-brain holds no store id for still gets its heart — `cheapcharts wishlist --resolve` (brief amendment 1.4)
+
+**The defect, from the owner's hands-on test (evidence gathered 2026-09-20, no account involved).** "Scarlet Street … is wish listed but does not have a heart and the button is not present." After Task 9 the read works (83 hearts on the scratch copy), but Scarlet Street (film 4807, `imdb=tt0038057`, an `apple-tv-store` listing) holds NO `itunes` external id locally — `cheapcharts resolve` has not run since the newer lists were imported — so the wishlist's store id matches no film (no heart) and the drawer shows no button (no store id). CheapCharts' public price API maps its IMDb id to product `1355527894`, live. 115 of the 198 wishlist films match nothing today; 2,467 films hold an IMDb id and no store id, so the bulk `cheapcharts resolve` prerequisite is ~500 paced calls plus a search per miss. The wishlist itself already names the store ids: `DetailData.php?idInStore=<id>` answers `results.movies.imdbId` (seen: `"imdbId": "tt0097216"` for Do the Right Thing), an exact id join — as accurate as `resolve`'s by-IMDb path, and at most one call per unknown wishlist film.
+
+**A. The adapter.** `infrastructure/cheapcharts.py`: factor `lowest_price`'s fetch into `_detail(itunes_id) -> dict[str, Any] | None` (the `results.movies` object, None when it is not an object) and add `CheapChartsClient.imdb_id_for(itunes_id: str) -> str | None` — `imdbId` when it matches `^tt\d+$`, else None. Tests with `responses` (RED first): found, missing key, junk value, no such product, 429 → `RateLimited`.
+
+**B. The repository.** `Repository.itunes_ids_held() -> set[str]` (every `itunes` external id of a non-disposed film) and `Repository.itunes_ids_for(film_id) -> list[str]` (sorted; `itunes_id_for` stays the MIN pick the drawer links to). Find the existing IMDb lookup (`find_by_imdb` — read its contract: does it return the canonical, non-disposed film?) and use it; do not add a second one.
+
+**C. The use case.** `application/wishlist.py`: `PriceSource` gains `imdb_id_for`; new
+
+```python
+@dataclass(frozen=True)
+class ResolvedFilm:
+    film_id: int
+    title: str
+    year: int | None
+    itunes_id: str
+
+@dataclass(frozen=True)
+class ResolveUnknownReport:
+    on_cheapcharts: int          # films on the wishlist
+    unknown: int                 # of those, store ids no film held before this run
+    resolved: tuple[ResolvedFilm, ...]   # an IMDb-id join found the film
+    not_in_catalogue: int        # CheapCharts names an IMDb id no film holds
+    no_imdb: int                 # CheapCharts has no IMDb id for the product
+    rate_limited: bool           # stopped early; re-running resumes (a stored id is never asked again)
+    known: int                   # hearts after the run (after the dry run: as they would be WITHOUT the new ids)
+
+def resolve_unknown_wishlist(repo, gateway, today, *, apply: bool) -> ResolveUnknownReport
+```
+
+Read the wishlist (failure → `WishlistError` via `_failed`, nothing written); unknown = wishlist ids − `itunes_ids_held()`; for each, `imdb_id_for` → the film by IMDb id → with `apply`, `repo.set_external_id(film_id, "itunes", store_id, today)` (a film that already holds another store id simply gains a second claim — `itunes` is a claim authority and may repeat; `UNIQUE(authority, value)` cannot fire because the id was unheld, but catch `sqlite3`'s integrity error nowhere in the application layer — if the repository can raise, give it a narrow method that returns False instead). A `RateLimited` stops the loop and is reported, not raised; any other remote error → `WishlistError`. Finish with `replace_wishlist` (always — it is the ordinary refresh; in a dry run the new ids are not stored, so they are not hearted). Unit tests with fakes: resolves and hearts; dry run stores nothing; not-in-catalogue / no-imdb counted; a film already holding a different store id gains the second and is hearted; rate limit stops early and keeps what was stored; a disposed film is never the target.
+
+**D. Second store ids become real, so both click verbs must use the id that is actually on the wishlist.** (Task 9's deferred finding: `unwishlist_film` removed the MIN-picked id even when the heart came through another — "remove refused" forever.) `unwishlist_film`: after `_read`, remove EVERY wishlist item whose id is in `repo.itunes_ids_for(film_id)` (each must be accepted, else `WishlistError("remove refused")`), then `unmark_wishlisted`. `wishlist_film`: after `_read`, the film's item is the first of `itunes_ids_for(film_id)` present in the read; "already there with a target" and "there without a target → set the target on THAT id" follow from it; a fresh add still uses `itunes_id_for` (the product the drawer links to). Unit tests for both, named after the two-store-id case.
+
+**E. The verb.** `movie-brain cheapcharts wishlist [--resolve] [--apply]`: bare = today's refresh, unchanged. `--resolve` = dry run: one line per film it WOULD give a store id (`Title (year) ← store id N`, `markup=False`), then a summary `wishlist: N films on CheapCharts · U held no store id here · R resolved · C not in the catalogue · I without an IMDb id · K known here` plus ` · RATE-LIMITED, stopped early — run it again` when so, and `dry run — re-run with --resolve --apply to store the ids` when not applied. `--apply` without `--resolve` exits 2 with a plain message. Never a price, never anything from the account. The dashboard's start-up never resolves (it would add minutes to a start); it prints one extra hint when its refresh reports unknown films: append ` · U not matched — movie-brain cheapcharts wishlist --resolve` to the success line when `on_cheapcharts > known` (RefreshReport already carries both). CLI tests in the file's idiom with `responses` (real read shape, NO status on the read; DetailData mocked), `Pacer(0)`.
+
+**F. Docs.** `brief.md` version line opening → `**Version 1.4 — amended 2026-09-20 after the second hands-on finding (1.3 after the first; 1.2 at delivery; 1.1 during the build; 1.0 frozen 2026-09-19).**`; append to `## Amendments`:
+
+```markdown
+**1.4 — 2026-09-20, by the builder, after you found Scarlet Street wishlisted with no heart and no button.** Cause: movie-brain held no store id for it (the store lookup has not run since the newer lists were imported), so your wishlist's entry matched no film. 115 of your 198 wishlist films matched nothing for this reason or because the film is not in movie-brain at all. 1.0's Prerequisite understated this: it said most films would "show no button"; it did not say a film already on your wishlist would silently show no heart either.
+
+| Decision | Whose |
+|---|---|
+| `movie-brain cheapcharts wishlist --resolve` asks CheapCharts, for each wishlist film movie-brain cannot place, which IMDb id the product carries, and joins on that exact id — then the film has its store id, its heart, and (if you take it off) its button. At most one paced call per unplaced film, dry run by default, `--apply` stores | agent default — it keeps 1.0's promise "films you wishlisted before today get their heart too" without waiting for the bulk store lookup (about 2,500 films) |
+| The dashboard never does this at start (it would add minutes); when some wishlist films are unplaced its start-up line says how many and names the command | agent default |
+| A film can now hold two store ids (your wishlist names one product, the store lookup another). Un-wishlisting removes whichever of its products is on your wishlist; wishlisting leaves a product that is already there with a target alone | agent default |
+| This is a second writer of store ids beside `cheapcharts resolve`; both believe only an exact IMDb-id match from CheapCharts | agent default — `CLAUDE.md` is updated with the rest after your say-so |
+```
+
+`trial-log.md`, "Surprises and corrections", new last row:
+
+```markdown
+| 8 | Second hands-on finding: Scarlet Street, wishlisted by hand long ago, showed no heart and no button — movie-brain held no store id for it, so nothing matched. The brief's Prerequisite had named the missing store ids but only as "no button", and I never asked what a wishlisted film WITHOUT one would look like: nothing at all, silently. Fixed as amendment 1.4 (the wishlist's own store ids are joined to films by IMDb id). | implementation defect (an unexamined consequence of a known prerequisite) — caught by the hands-on test, before any merge |
+```
+
+Never hard-wrap; change no other existing line.
+
+**Files:** `src/movie_brain/infrastructure/cheapcharts.py`, `src/movie_brain/infrastructure/database.py`, `src/movie_brain/application/wishlist.py`, `src/movie_brain/cli.py`, the fakes in `tests/unit/test_wishlist.py`, `tests/web/test_wishlist_api.py`, `tests/web/conftest.py` (they must satisfy the grown Protocol), `tests/unit/test_cheapcharts_account.py`, `tests/unit/test_cli.py`, the two docs, this plan.
+
+**Gates and commit:** all four gates; one brief subject line on the why.

@@ -55,6 +55,9 @@ class FakePrices:
     def lowest_price(self, itunes_id):
         return Decimal("2.99")
 
+    def imdb_id_for(self, itunes_id):
+        return None  # the whole PriceSource, though no route resolves: that is a verb, not a click
+
 
 class FakeAccount:
     """`listed` is what CheapCharts holds, `targets` which of those carry a custom price — the

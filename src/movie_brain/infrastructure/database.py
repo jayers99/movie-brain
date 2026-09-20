@@ -1879,6 +1879,17 @@ class Repository:
             row = c.execute("SELECT kind FROM films WHERE id = ?", (film_id,)).fetchone()
             return "movie" if row is None else str(row["kind"])
 
+    def film_title_year(self, film_id: int) -> tuple[str, int | None] | None:
+        """One LIVE film's name, for a line of printed report. None when there is no such film
+        or a human hid it (`_NOT_DISPOSED`) — which is what keeps a disposed film from ever
+        being the target of a write. `get_view` answers the same question by building the whole
+        read model, which is catalogue-wide work for two columns."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT f.title, f.year FROM films f WHERE f.id = ? AND " + _NOT_DISPOSED, (film_id,)
+            ).fetchone()
+            return None if row is None else (str(row["title"]), row["year"])
+
     def stale_omdb_years(self) -> list[tuple[int, str, int | None, int]]:
         """Non-Criterion films whose OMDb payload was fetched under a different year than films.year."""
         with self._conn() as c:
@@ -2611,6 +2622,29 @@ class Repository:
                 [(f, today.isoformat()) for f in sorted(film_ids - current)],
             )
             return len(film_ids)
+
+    def itunes_ids_held(self) -> set[str]:
+        """Every store id a LIVE film holds — what the wishlist resolver (amendment 1.4) already
+        knows, so a wishlist entry outside this set is one that showed no heart. A tombstoned
+        film keeps its `external_ids` row and shows no heart, so its id is deliberately absent."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT e.value FROM external_ids e JOIN films f ON f.id = e.film_id "
+                "WHERE e.authority = 'itunes' AND " + _NOT_DISPOSED
+            )
+            return {str(r["value"]) for r in rows}
+
+    def itunes_ids_for(self, film_id: int) -> list[str]:
+        """EVERY store id this film holds, sorted. `itunes` is a claim authority and may repeat —
+        since amendment 1.4 the wishlist's own product and the store lookup's can be two ids of
+        one film — so the click verbs act on all of them, while `itunes_id_for` below stays the
+        single pick the drawer links to."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT value FROM external_ids WHERE film_id = ? AND authority = 'itunes' ORDER BY value",
+                (film_id,),
+            )
+            return [str(r["value"]) for r in rows]
 
     def itunes_id_for(self, film_id: int) -> str | None:
         """The store id behind this film's CheapCharts link. `itunes` is a claim authority and

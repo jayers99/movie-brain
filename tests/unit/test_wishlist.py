@@ -10,9 +10,12 @@ import responses
 from movie_brain.application.wishlist import (
     NotForSale,
     RefreshReport,
+    ResolvedFilm,
+    ResolveUnknownReport,
     WishlistError,
     WishlistGateway,
     refresh_wishlist,
+    resolve_unknown_wishlist,
     unwishlist_film,
     wishlist_film,
 )
@@ -38,11 +41,17 @@ def _film(repo, title, year, itunes=None):
 
 
 class FakePrices:
-    def __init__(self, lows):
+    def __init__(self, lows, imdb=None):
         self.lows = lows
+        self.imdb = dict(imdb or {})  # store id → the IMDb id CheapCharts files the product under
+        self.asked = []
 
     def lowest_price(self, itunes_id):
         return self.lows.get(itunes_id)
+
+    def imdb_id_for(self, itunes_id):
+        self.asked.append(itunes_id)
+        return self.imdb.get(itunes_id)
 
 
 class FakeAccount:
@@ -187,6 +196,35 @@ def test_a_film_holding_two_store_ids_is_hearted_by_either(repo):
     assert repo.replace_wishlist(["2"], D) == 1 and repo.wishlisted_film_ids() == {fid}
 
 
+def test_itunes_ids_for_lists_them_all_while_itunes_id_for_keeps_its_single_pick(repo):
+    """`itunes` is a claim authority and may repeat, and since amendment 1.4 it really does: the
+    wishlist names one product and the store lookup another. The click verbs act on every one of
+    them; the drawer's link is still the MIN pick."""
+    fid = _film(repo, "A", 1950, "20")
+    repo.set_external_id(fid, "itunes", "3", D)
+    assert repo.itunes_ids_for(fid) == ["20", "3"] and repo.itunes_id_for(fid) == "20"
+    assert repo.itunes_ids_for(_film(repo, "B", 1960)) == []
+
+
+def test_itunes_ids_held_is_every_live_films_store_id(repo):
+    """What the resolver already knows. A tombstoned film keeps its `external_ids` row but shows
+    no heart, so its id is NOT held here — the wishlist entry behind it is genuinely unplaced."""
+    _film(repo, "A", 1950, "1")
+    _film(repo, "B", 1960)
+    gone = _film(repo, "Ghost", 1958, "42")
+    repo.tombstone_film(gone, D)
+    assert repo.itunes_ids_held() == {"1"}
+
+
+def test_film_title_year_answers_for_a_live_film_only(repo):
+    fid = _film(repo, "A", 1950)
+    yearless = _film(repo, "B", None)
+    gone = _film(repo, "Ghost", 1958)
+    repo.tombstone_film(gone, D)
+    assert repo.film_title_year(fid) == ("A", 1950) and repo.film_title_year(yearless) == ("B", None)
+    assert repo.film_title_year(gone) is None and repo.film_title_year(999) is None
+
+
 def test_refresh_reads_the_wishlist_and_reports_how_much_of_it_we_know(repo):
     known = _film(repo, "The Leopard", 1963, "273058482")
     report = refresh_wishlist(repo, FakeAccount(listed=["273058482", "555", "556"]), D)
@@ -204,6 +242,132 @@ def test_a_failed_refresh_keeps_the_last_known_hearts(repo):
     with pytest.raises(WishlistError):
         refresh_wishlist(repo, Down(), D)
     assert repo.wishlisted_film_ids() == {fid}
+
+
+def _unplaced(repo, title="Scarlet Street", year=1945, tt="tt9000001"):
+    """A film movie-brain knows by its IMDb id and holds no store id for — the second hands-on
+    finding: on the wishlist, and so no heart and no button."""
+    fid = _film(repo, title, year)
+    repo.set_external_id(fid, "imdb", tt, D)
+    return fid
+
+
+def test_resolve_unknown_joins_the_wishlists_own_store_id_by_imdb_id_and_hearts_the_film(repo):
+    fid = _unplaced(repo)
+    prices = FakePrices({}, imdb={"555": "tt9000001"})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["555"])), D, apply=True)
+    assert report == ResolveUnknownReport(
+        on_cheapcharts=1,
+        unknown=1,
+        resolved=(ResolvedFilm(fid, "Scarlet Street", 1945, "555"),),
+        not_in_catalogue=0,
+        no_imdb=0,
+        rate_limited=False,
+        known=1,
+    )
+    assert repo.itunes_ids_for(fid) == ["555"] and repo.wishlisted_film_ids() == {fid}
+
+
+def test_a_dry_run_names_the_film_it_would_place_and_stores_nothing(repo):
+    fid = _unplaced(repo)
+    prices = FakePrices({}, imdb={"555": "tt9000001"})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["555"])), D, apply=False)
+    assert report.resolved == (ResolvedFilm(fid, "Scarlet Street", 1945, "555"),)
+    assert report.known == 0  # the hearts as they would be WITHOUT the new ids
+    assert repo.itunes_ids_for(fid) == [] and repo.wishlisted_film_ids() == set()
+
+
+def test_a_store_id_a_film_already_holds_is_never_asked_about(repo):
+    placed = _film(repo, "Placed", 1950, "111")
+    prices = FakePrices({}, imdb={})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["111"])), D, apply=True)
+    assert prices.asked == [] and report.unknown == 0 and report.known == 1
+    assert repo.wishlisted_film_ids() == {placed}
+
+
+def test_a_product_cheapcharts_cannot_place_here_is_counted_not_resolved(repo):
+    """Two ways of staying unplaced: CheapCharts has no IMDb id for the product (a hole in their
+    index), and it names one no film here holds (the film is simply not in movie-brain)."""
+    prices = FakePrices({}, imdb={"2": "tt9000404"})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["1", "2"])), D, apply=True)
+    assert (report.no_imdb, report.not_in_catalogue, report.resolved) == (1, 1, ())
+    assert report.unknown == 2 and report.known == 0
+
+
+def test_a_film_that_already_holds_a_store_id_gains_the_second_and_is_hearted(repo):
+    """The wishlist names one product of a film and the store lookup another — `itunes` is a
+    claim authority, so the film simply holds both."""
+    fid = _unplaced(repo, "Two Products", 1960, "tt9000002")
+    repo.set_external_id(fid, "itunes", "111", D)
+    prices = FakePrices({}, imdb={"555": "tt9000002"})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["555"])), D, apply=True)
+    assert report.resolved == (ResolvedFilm(fid, "Two Products", 1960, "555"),)
+    assert repo.itunes_ids_for(fid) == ["111", "555"] and repo.wishlisted_film_ids() == {fid}
+
+
+def test_a_rate_limit_stops_the_run_early_and_keeps_what_it_stored(repo):
+    """Nothing is lost: a stored id is never asked about again, so re-running resumes."""
+    first, second = _unplaced(repo, "First", 1950, "tt9000003"), _unplaced(repo, "Second", 1960, "tt9000004")
+
+    class Limited(FakePrices):
+        def imdb_id_for(self, itunes_id):
+            self.asked.append(itunes_id)
+            if itunes_id == "2":
+                raise RateLimited("https://secret")
+            return self.imdb.get(itunes_id)
+
+    prices = Limited({}, imdb={"1": "tt9000003", "2": "tt9000004"})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["1", "2"])), D, apply=True)
+    assert report.rate_limited is True and prices.asked == ["1", "2"]
+    assert report.resolved == (ResolvedFilm(first, "First", 1950, "1"),)
+    assert repo.itunes_ids_for(first) == ["1"] and repo.itunes_ids_for(second) == []
+    assert repo.wishlisted_film_ids() == {first}  # the read still replaced the hearts
+
+
+def test_a_film_a_human_hid_is_never_given_a_store_id(repo):
+    gone = _unplaced(repo, "Ghost", 1958, "tt9000005")
+    repo.tombstone_film(gone, D)
+    prices = FakePrices({}, imdb={"555": "tt9000005"})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["555"])), D, apply=True)
+    assert report.resolved == () and report.not_in_catalogue == 1
+    assert repo.itunes_ids_for(gone) == []
+
+
+def test_a_product_a_hidden_film_already_holds_is_left_alone(repo):
+    """`external_ids` is UNIQUE on (authority, value) and a tombstoned film keeps its rows, so
+    the live film cannot take that product's id — refused here rather than raised at the write."""
+    gone = _film(repo, "Ghost", 1958, "555")
+    repo.tombstone_film(gone, D)
+    live = _unplaced(repo, "Live", 1960, "tt9000006")
+    prices = FakePrices({}, imdb={"555": "tt9000006"})
+    report = resolve_unknown_wishlist(repo, WishlistGateway(prices, FakeAccount(listed=["555"])), D, apply=True)
+    assert report.resolved == () and report.not_in_catalogue == 1
+    assert repo.itunes_ids_for(live) == []
+
+
+def test_a_failed_read_resolves_nothing_and_asks_cheapcharts_nothing(repo):
+    _unplaced(repo)
+
+    class Down(FakeAccount):
+        def wishlist_items(self):
+            raise CheapChartsError("unexpected answer shape")
+
+    prices = FakePrices({}, imdb={"555": "tt9000001"})
+    with pytest.raises(WishlistError, match="unexpected answer shape"):
+        resolve_unknown_wishlist(repo, WishlistGateway(prices, Down(listed=["555"])), D, apply=True)
+    assert prices.asked == []
+
+
+def test_a_remote_failure_mid_run_becomes_the_one_wishlist_error(repo):
+    _unplaced(repo)
+
+    class Down(FakePrices):
+        def imdb_id_for(self, itunes_id):
+            raise requests.ConnectionError("https://secret")
+
+    with pytest.raises(WishlistError) as exc:
+        resolve_unknown_wishlist(repo, WishlistGateway(Down({}), FakeAccount(listed=["555"])), D, apply=True)
+    assert str(exc.value) == "ConnectionError" and "secret" not in str(exc.value)
 
 
 def test_a_click_reads_the_wishlist_first_and_replaces_every_heart(repo):
@@ -252,6 +416,27 @@ def test_a_film_on_the_wishlist_without_a_target_gets_the_target_and_nothing_els
     account = FakeAccount(listed=["282538466"])
     wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), account), fid, D)
     assert account.calls == [("read",), ("target", "282538466", Decimal("3.99"))]
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+def test_a_film_with_two_store_ids_repairs_the_product_that_is_actually_on_the_wishlist(repo):
+    """Amendment 1.4's consequence: a film can hold two store ids — the wishlist's own product
+    and the store lookup's — so "which item is this film's?" is the first of them the read holds,
+    never the one the drawer happens to link to."""
+    fid = _film(repo, "Two Products", 1960, "111")  # the drawer's pick (MIN)
+    repo.set_external_id(fid, "itunes", "555", D)  # the product the wishlist names
+    account = FakeAccount(listed=["555"])
+    wishlist_film(repo, WishlistGateway(FakePrices({"555": Decimal("2.99")}), account), fid, D)
+    assert account.calls == [("read",), ("target", "555", Decimal("3.99"))]
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+def test_a_film_with_two_store_ids_keeps_the_hand_set_target_on_whichever_one_carries_it(repo):
+    fid = _film(repo, "Two Products", 1960, "111")
+    repo.set_external_id(fid, "itunes", "555", D)
+    account = FakeAccount(listed=["555"], targeted=["555"])
+    wishlist_film(repo, WishlistGateway(FakePrices({"555": Decimal("2.99")}), account), fid, D)
+    assert account.calls == [("read",)]  # no add, and above all no target
     assert repo.wishlisted_film_ids() == {fid}
 
 
@@ -365,6 +550,46 @@ def test_a_refused_remove_is_a_failure_and_the_heart_stays(repo):
 
     with pytest.raises(WishlistError, match="remove refused"):
         unwishlist_film(repo, WishlistGateway(FakePrices({}), Sticky(listed=["366474905"])), fid, D)
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+def test_un_wishlisting_a_film_with_two_store_ids_removes_the_product_the_wishlist_holds(repo):
+    """Task 9's deferred finding, real since amendment 1.4: the heart can come through a store
+    id the drawer does not link to, and removing only the drawer's pick left the film on
+    CheapCharts — so the next click read it back and refused, forever."""
+    fid = _film(repo, "Two Products", 1960, "111")
+    repo.set_external_id(fid, "itunes", "555", D)
+    repo.mark_wishlisted(fid, D)
+    account = FakeAccount(listed=["555"])
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
+    assert account.calls == [("read",), ("remove", "555")]
+    assert account.listed == [] and repo.wishlisted_film_ids() == set()
+
+
+def test_un_wishlisting_a_film_with_two_store_ids_removes_both_when_both_are_listed(repo):
+    fid = _film(repo, "Two Products", 1960, "111")
+    repo.set_external_id(fid, "itunes", "555", D)
+    repo.mark_wishlisted(fid, D)
+    account = FakeAccount(listed=["111", "555"])
+    unwishlist_film(repo, WishlistGateway(FakePrices({}), account), fid, D)
+    assert account.calls == [("read",), ("remove", "111"), ("remove", "555")]
+    assert account.listed == [] and repo.wishlisted_film_ids() == set()
+
+
+def test_a_second_product_the_api_refuses_to_remove_is_a_failure_and_the_heart_stays(repo):
+    """Each removal must be accepted: a film still on the wishlist under its other product is
+    still on the wishlist."""
+    fid = _film(repo, "Two Products", 1960, "111")
+    repo.set_external_id(fid, "itunes", "555", D)
+    repo.mark_wishlisted(fid, D)
+
+    class Sticky(FakeAccount):
+        def remove_item(self, itunes_id):
+            self.calls.append(("remove", itunes_id))
+            return itunes_id != "555"
+
+    with pytest.raises(WishlistError, match="remove refused"):
+        unwishlist_film(repo, WishlistGateway(FakePrices({}), Sticky(listed=["111", "555"])), fid, D)
     assert repo.wishlisted_film_ids() == {fid}
 
 

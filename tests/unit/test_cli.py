@@ -992,6 +992,106 @@ def test_cheapcharts_wishlist_reads_the_account_and_reports_the_hearts(config_di
     assert repo.wishlisted_film_ids() == {fid}
 
 
+def _wishlist_credentials(config_dir) -> None:
+    (config_dir / "credentials.toml").write_text(
+        '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
+    )
+
+
+# The real read's shape: no `status` key, and `movies` beside the other item types.
+def _read_answer(*store_ids: str) -> dict:
+    return {
+        "results": {"ebooks": [], "movies": [{"idInStore": i, "initialPriceValue": 9.99} for i in store_ids], "tv": []},
+        "responseTimestamp": "2026-09-20 18:30:00",
+    }
+
+
+def _unplaced_film(config_dir, tt: str = "tt9000001"):
+    """A film movie-brain knows by IMDb id and holds no store id for — Scarlet Street's case."""
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.database import Repository
+
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("Scarlet Street", 1945, "Fritz Lang", ""))
+    repo.set_external_id(fid, "imdb", tt, date(2026, 9, 19))
+    return repo, fid
+
+
+@responses.activate
+def test_cheapcharts_wishlist_resolve_is_a_dry_run_that_names_the_film_and_stores_nothing(config_dir, monkeypatch):
+    from movie_brain.infrastructure.cheapcharts import ACCOUNT_URL, DETAIL_URL, WISHLIST_URL, Pacer
+
+    monkeypatch.setattr("movie_brain.cli.Pacer", lambda: Pacer(0))
+    repo, fid = _unplaced_film(config_dir)
+    _wishlist_credentials(config_dir)
+    responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": {"sessionToken": "tok-1"}})
+    responses.post(WISHLIST_URL, json=_read_answer("555"))
+    responses.get(DETAIL_URL, json={"results": {"movies": {"imdbId": "tt9000001"}}})
+    result = runner.invoke(app, ["cheapcharts", "wishlist", "--resolve"])
+    assert result.exit_code == 0, result.output
+    assert "Scarlet Street (1945) ← store id 555" in result.output
+    assert "1 held no store id here · 1 resolved" in result.output
+    assert "dry run — re-run with --resolve --apply to store the ids" in result.output
+    assert repo.itunes_ids_for(fid) == [] and repo.wishlisted_film_ids() == set()
+    assert "someone@example.test" not in result.output and "tok-1" not in result.output
+    assert "9.99" not in result.output  # never a price
+
+
+@responses.activate
+def test_cheapcharts_wishlist_resolve_apply_stores_the_store_id_and_hearts_the_film(config_dir, monkeypatch):
+    from movie_brain.infrastructure.cheapcharts import ACCOUNT_URL, DETAIL_URL, WISHLIST_URL, Pacer
+
+    monkeypatch.setattr("movie_brain.cli.Pacer", lambda: Pacer(0))
+    repo, fid = _unplaced_film(config_dir)
+    _wishlist_credentials(config_dir)
+    responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": {"sessionToken": "tok-1"}})
+    responses.post(WISHLIST_URL, json=_read_answer("555", "556"))
+    responses.get(DETAIL_URL, json={"results": {"movies": {"imdbId": "tt9000001"}}})
+    responses.get(DETAIL_URL, json={"results": {"movies": {"title": "no mapping"}}})
+    result = runner.invoke(app, ["cheapcharts", "wishlist", "--resolve", "--apply"])
+    assert result.exit_code == 0, result.output
+    assert "2 films on CheapCharts · 2 held no store id here · 1 resolved" in result.output
+    assert "1 without an IMDb id · 1 known here" in result.output
+    assert "dry run" not in result.output
+    assert repo.itunes_ids_for(fid) == ["555"] and repo.wishlisted_film_ids() == {fid}
+
+
+def test_cheapcharts_wishlist_apply_without_resolve_exits_2(config_dir):
+    from movie_brain.infrastructure.database import Repository
+
+    Repository(config_dir / "movie-brain.db")
+    result = runner.invoke(app, ["cheapcharts", "wishlist", "--apply"])
+    assert result.exit_code == 2 and "--resolve" in result.output
+
+
+@responses.activate
+def test_the_hearts_line_names_the_unmatched_films_only_when_there_are_some(config_dir, monkeypatch):
+    """The start-up hint amendment 1.4 adds: it says how many wishlist films movie-brain cannot
+    place and names the command that places them — and says nothing when there are none."""
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.cheapcharts import ACCOUNT_URL, WISHLIST_URL, Pacer
+    from movie_brain.infrastructure.database import Repository
+
+    monkeypatch.setattr("movie_brain.cli.Pacer", lambda: Pacer(0))
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("The Leopard", 1963, "Luchino Visconti", ""))
+    repo.set_external_id(fid, "itunes", "273058482", date(2026, 9, 19))
+    _wishlist_credentials(config_dir)
+    responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": {"sessionToken": "tok-1"}})
+    responses.post(WISHLIST_URL, json=_read_answer("273058482", "555"))
+    responses.post(WISHLIST_URL, json=_read_answer("273058482"))
+    unplaced = runner.invoke(app, ["cheapcharts", "wishlist"])
+    assert unplaced.exit_code == 0, unplaced.output
+    assert "1 not matched — movie-brain cheapcharts wishlist --resolve" in unplaced.output
+    placed = runner.invoke(app, ["cheapcharts", "wishlist"])
+    assert placed.exit_code == 0, placed.output
+    assert "not matched" not in placed.output
+
+
 def test_cheapcharts_wishlist_without_credentials_exits_2_and_names_the_file(config_dir):
     from movie_brain.infrastructure.database import Repository
 
@@ -1087,6 +1187,8 @@ def test_dashboard_refreshes_hearts_on_a_successful_start(config_dir, monkeypatc
     result = runner.invoke(app, ["dashboard"])
     assert result.exit_code == 0, result.output
     assert "wishlist: 2 films on CheapCharts · 1 known here" in result.output
+    # The one film the read could not place, and the command that places it (amendment 1.4).
+    assert "· 1 not matched — movie-brain cheapcharts wishlist --resolve" in result.output
     assert repo.wishlisted_film_ids() == {fid}
     assert cap.wishlist is not None  # a gateway, not None — hearts really were refreshed through it
     assert cap.ran is True
