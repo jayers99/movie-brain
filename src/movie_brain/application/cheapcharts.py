@@ -108,9 +108,10 @@ def resolve_itunes_ids(
     *,
     apply: bool = False,
     limit: int | None = None,
+    retry_misses: bool = False,
     log: Callable[[str], None] = _stderr,
 ) -> ResolveReport:
-    targets = repo.films_needing_itunes_id(limit)
+    targets = repo.films_needing_itunes_id(limit, retry_misses=retry_misses)
     scanned = resolved = by_imdb = by_search = unmatched = ambiguous = held = failed = 0
     for batch in _batches(targets, MAX_IMDB_IDS):
         try:
@@ -150,12 +151,17 @@ def resolve_itunes_ids(
                     log(f"  #{target.film_id} {target.title!r} ({target.year}): {verdict}")
                     unmatched += verdict == "unmatched"
                     ambiguous += verdict == "ambiguous"
+                    # An ANSWER with nothing in it is remembered; a failed call (above) is not.
+                    if apply:
+                        repo.mark_store_asked(target.film_id, today)
                     continue
                 source = "search"
             holder = repo.film_id_for_external(ITUNES_AUTHORITY, product.itunes_id)
             if holder is not None and holder != target.film_id:
                 log(f"  #{target.film_id} {target.title!r}: itunes {product.itunes_id} already held by #{holder}")
                 held += 1
+                if apply:
+                    repo.mark_store_asked(target.film_id, today)
                 continue
             log(f"  #{target.film_id} {target.title!r} ({target.year}) → itunes {product.itunes_id} (by {source})")
             if apply:

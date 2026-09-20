@@ -10,6 +10,7 @@ from pathlib import Path
 import requests
 
 from movie_brain.application.availability import TmdbStepResult, tmdb_step
+from movie_brain.application.catch_up import CatchUpReport
 from movie_brain.application.keying import KeyStepResult, key_films
 from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, promote_top_n
 from movie_brain.domain.models import merge_yearless
@@ -45,6 +46,7 @@ class SyncResult:
     tmdb_first_checked: int = 0
     tmdb_reviewed: int = 0  # films the resolver sent to a durable A/B/C review row
     omdb_unkeyed: int = 0  # films skipped by the OMDb loop for holding no IMDb id (never title-searched)
+    catch_up: CatchUpReport | None = None  # the chain at the tail (credits, vectors, store ids, trailers)
 
 
 def _resolve_imdb_id(
@@ -89,8 +91,16 @@ def sync(
     config_dir: Path | None = None,
     notifier: Callable[[str, str], None] | None = None,
     fetcher: CandidateFetcher | None = None,
+    skip_catalog: bool = False,
+    catch_up: Callable[[Repository, TmdbClient | None], CatchUpReport | None] | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> SyncResult:
+    """`skip_catalog` is the AFTER-ADD mode (owner ruling 2026-09-20: a film gets its full
+    enrichment when it is added): a verb that has just created films runs everything a sync does
+    to a new film — keying, OMDb, the provider first-check, the catch-up chain — without walking
+    Criterion, promoting Metacritic titles or starting the weekly provider refresh. `catch_up` is
+    the chain itself (`application/catch_up.py`), handed in by the CLI so that nothing here builds
+    a CheapCharts client or loads a model; it runs last, under its own tripwire."""
     session = session or requests.Session()
     known = [f for _, f in repo.current_films(SOURCE)]
     full_walk = False
@@ -99,6 +109,8 @@ def sync(
         if not known:
             log("no stored catalog — run once without --ratings-only first")
             return SyncResult(1, False, 0, 0, False, False)
+    elif skip_catalog:
+        pass
     else:
         try:
             token = fetch_token(session)
@@ -138,7 +150,7 @@ def sync(
         fetcher, cache = session_fetcher(config_dir, tmdb_client, omdb_client)
 
     mc_promoted = 0
-    if not ratings_only and config_dir is not None:
+    if not ratings_only and not skip_catalog and config_dir is not None:
         try:
             n = int(repo.get_meta(MC_TOP_N_KEY) or DEFAULT_TOP_N)
             promote = promote_top_n(
@@ -211,9 +223,16 @@ def sync(
         log("no TMDB token — skipping availability step")
     else:
         try:
-            tmdb = tmdb_step(repo, tmdb_client, today, log=log)
+            tmdb = tmdb_step(repo, tmdb_client, today, weekly=not skip_catalog, log=log)
         except Exception as exc:  # noqa: BLE001 — one source failing must never break the others
             log(f"TMDB availability step failed: {exc}")
+
+    caught_up = None
+    if catch_up is not None and not ratings_only:
+        try:
+            caught_up = catch_up(repo, tmdb_client)
+        except Exception as exc:  # noqa: BLE001 — the chain must never change the sync's outcome
+            log(f"catch-up chain failed: {exc}")
 
     if notifier is not None:
         try:
@@ -242,4 +261,5 @@ def sync(
         tmdb.first_checked,
         keyed.reviewed,
         unkeyed,
+        caught_up,
     )

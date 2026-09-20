@@ -231,3 +231,19 @@ def test_tmdb_step_skips_an_unregistrable_provider_and_keeps_the_rest(repo, toda
     assert _listing_sources(repo, fid) == {"max"}
     assert 991 not in repo.provider_map()
     assert any("991" in m for m in messages)
+
+
+def test_the_after_add_mode_first_checks_new_films_but_never_starts_the_weekly_refresh(repo, today):
+    """`weekly=False` (owner ruling 2026-09-20, sync's after-add mode): a verb that has just added
+    a film gives it its listings at once, and must not set off the whole catalogue's refresh — nor
+    write the stamp that would make the next real sync skip it."""
+    from movie_brain.application.availability import META_REFRESHED_AT
+
+    fid = _seed_first_check_film(repo, today)
+    providers = TmdbProviders(flatrate=(1899,), rent=(), buy=(), link="https://x", payload="{}", names={1899: "HBO Max"})
+    result = tmdb_step(repo, _StubTmdbClient(providers), today, weekly=False, log=lambda _: None)
+    assert _listing_sources(repo, fid) == {"max"} and result.first_checked == 1
+    assert result.refreshed == 0 and repo.get_meta(META_REFRESHED_AT) is None
+
+    result = tmdb_step(repo, _StubTmdbClient(providers), today, log=lambda _: None)  # a real sync still refreshes
+    assert repo.get_meta(META_REFRESHED_AT) == today.isoformat()

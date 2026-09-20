@@ -258,6 +258,53 @@ def run_full(ctx):
     _run(ctx, force_full=True)
 
 
+def _chain(ctx, fail=False):
+    from movie_brain.application.catch_up import CatchUpReport
+
+    def chain(repo, tmdb):
+        ctx.setdefault("chain_runs", []).append(repo.summary("criterion")["rated"])
+        if fail:
+            raise RuntimeError("chain exploded")
+        return CatchUpReport()
+
+    return chain
+
+
+@when("I sync with a catch-up chain")
+def run_with_chain(ctx):
+    _run(ctx, catch_up=_chain(ctx))
+
+
+@when("I sync with a catch-up chain that fails")
+def run_with_failing_chain(ctx):
+    _run(ctx, catch_up=_chain(ctx, fail=True))
+
+
+@when("I sync with --ratings-only and a catch-up chain")
+def run_ro_with_chain(ctx):
+    _run(ctx, ratings_only=True, catch_up=_chain(ctx))
+
+
+@when("I run the after-add enrichment with a catch-up chain")
+def run_after_add(ctx):
+    _run(ctx, skip_catalog=True, catch_up=_chain(ctx))
+
+
+@then(parsers.parse("the catch-up chain ran once, after {n:d} films had OMDb ratings"))
+def chain_ran(ctx, n):
+    assert ctx.get("chain_runs") == [n]
+
+
+@then("the catch-up chain never ran")
+def chain_never(ctx):
+    assert "chain_runs" not in ctx
+
+
+@then("the sync result carries the catch-up report")
+def result_carries(ctx):
+    assert ctx["result"].catch_up is not None
+
+
 @when("I sync with --ratings-only")
 def run_ro(ctx):
     _run(ctx, ratings_only=True)

@@ -83,6 +83,41 @@ Feature: Daily sync
     And Criterion was never contacted
     And 1 films have OMDb ratings
 
+  Scenario: The catch-up chain runs at the tail of a sync, after identity, ratings and availability
+    Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)"
+    And OMDb knows every film
+    And the resolver keys every film
+    When I sync with a catch-up chain
+    Then the exit code is 0
+    And the catch-up chain ran once, after 2 films had OMDb ratings
+    And the sync result carries the catch-up report
+
+  Scenario: A catch-up chain that blows up never changes the sync's outcome
+    Given the Criterion catalog has films "Trio (1950)" and "Quartet (1948)"
+    And OMDb knows every film
+    And the resolver keys every film
+    When I sync with a catch-up chain that fails
+    Then the exit code is 0
+    And 2 films have OMDb ratings
+
+  Scenario: --ratings-only runs no catch-up
+    Given the repository already holds "Trio (1950)" walked 2 days ago
+    And "Trio (1950)" is already keyed to imdb "tt0037800"
+    And OMDb knows every film
+    When I sync with --ratings-only and a catch-up chain
+    Then the exit code is 0
+    And the catch-up chain never ran
+
+  Scenario: Enriching after an add skips Criterion but keys, rates and catches up
+    Given the repository already holds "Trio (1950)" walked 2 days ago
+    And OMDb knows every film
+    And the resolver keys every film
+    When I run the after-add enrichment with a catch-up chain
+    Then the exit code is 0
+    And Criterion was never contacted
+    And 1 films have OMDb ratings
+    And the catch-up chain ran once, after 1 films had OMDb ratings
+
   Scenario: --ratings-only without a stored catalog fails
     When I sync with --ratings-only
     Then the exit code is 1

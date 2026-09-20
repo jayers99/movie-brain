@@ -41,6 +41,33 @@ Feature: Resolving the CheapCharts product page for a film
     Then the film "Vertigo" still holds no itunes id
     And the report counts 1 unmatched
 
+  Scenario: A film CheapCharts had nothing for is remembered, and not asked about again
+    Given CheapCharts knows no imdb mapping for "tt0052357"
+    When I resolve cheapcharts ids with apply
+    And I resolve cheapcharts ids with apply
+    Then the second run scanned 0 films
+    And CheapCharts was asked about "tt0052357" 1 time
+
+  Scenario: A dry run remembers nothing
+    Given CheapCharts knows no imdb mapping for "tt0052357"
+    When I resolve cheapcharts ids without applying
+    And I resolve cheapcharts ids with apply
+    Then the second run scanned 1 films
+
+  Scenario: Retrying the misses asks about a remembered film again, and finds what Apple now sells
+    Given CheapCharts knows no imdb mapping for "tt0052357"
+    When I resolve cheapcharts ids with apply
+    And CheapCharts maps "tt0052357" to itunes id "284815525"
+    And I resolve cheapcharts ids with apply, retrying the misses
+    Then the film "Vertigo" holds itunes id "284815525"
+
+  Scenario: A failed lookup is not a miss, and is asked again
+    Given CheapCharts cannot be reached
+    When I resolve cheapcharts ids with apply
+    And CheapCharts can be reached again
+    And I resolve cheapcharts ids with apply
+    Then the second run scanned 1 films
+
   Scenario: A store year far from the original is refused when nothing corroborates it
     Given CheapCharts knows no imdb mapping for "tt0052357"
     And a CheapCharts search for "Vertigo" returns "Vertigo" (2013) as itunes id "284815525"
