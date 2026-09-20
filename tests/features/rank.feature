@@ -94,6 +94,19 @@ Feature: Tier ranker — place owned films into five tiers against anchors
     And I save the list as "Mine"
     Then the list "my-owned-tiers" has 7 entries
 
+  Scenario: A re-save with the name box left empty keeps the name I gave the list
+    Given a started session
+    When I answer better, better
+    And I save the list as "Mine"
+    And I save the list with no name
+    Then the list "my-owned-tiers" is named "Mine"
+
+  Scenario: A first save with no name takes the default name
+    Given a started session
+    When I answer better, better
+    And I save the list with no name
+    Then the list "my-owned-tiers" is named "My Ranking"
+
   Scenario: Saving refuses a slug a list file owns
     Given a started session
     And a list file "my-owned-tiers.tsv" exists

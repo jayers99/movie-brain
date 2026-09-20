@@ -256,6 +256,17 @@ def save(ctx, name):
     save_list(ctx["repo"], SRC, name, TODAY, ctx["lists_dir"])
 
 
+@when("I save the list with no name")
+def save_unnamed(ctx):
+    ctx["lists_dir"].mkdir(exist_ok=True)
+    save_list(ctx["repo"], SRC, "  ", TODAY, ctx["lists_dir"])  # what the page sends for an empty box
+
+
+@then(parsers.parse('the list "{slug}" is named "{name}"'))
+def list_named(ctx, slug, name):
+    assert ctx["repo"].film_list(slug).name == name
+
+
 @then(parsers.parse('the list "{slug}" has {n:d} entries'))
 def list_has(ctx, slug, n):
     assert len(ctx["repo"].list_entries(slug)) == n

@@ -517,7 +517,10 @@ def save_list(repo: Repository, source: str, name: str | None, today: date, list
         (Placed(fid, tier, facts[fid][0], facts[fid][2]) for fid, (tier, _) in placed.items() if fid in facts),
         order,
     )
-    list_name = (name or "").strip() or DEFAULT_LIST_NAME[source]
+    # An empty name box means "leave the name alone", never "rename it back to the default":
+    # the default only names a list that has no name yet.
+    stored = repo.film_list(slug)
+    list_name = (name or "").strip() or (stored.name if stored else DEFAULT_LIST_NAME[source])
     repo.upsert_film_list(ListMeta(slug, list_name, "me", today.year, None, True), today)
     repo.replace_list_entries(slug, entries)
     repo.set_rank_session_list(s.id, slug)
