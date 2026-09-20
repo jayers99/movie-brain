@@ -1,6 +1,6 @@
 # Task brief — "Wishlist it" (backlog 3, the remaining half)
 
-**Version 1.0 — FROZEN 2026-09-19.** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
+**Version 1.1 — amended 2026-09-19 during the build (1.0 frozen the same day).** Everything that depends on CheapCharts is proven against your real account; the on-screen parts are simulated in the preview you approved. A second cold read-back by a fresh agent reconstructed the intent correctly; its findings are folded in below. From here the brief changes only by amendment (1.1, 1.2 …): the original decision stays, with what changed and who authorised it. First trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`: upstream half only; the build process is unchanged; your hands-on test comes before any merge.
 
 ## Your page
 
@@ -92,3 +92,19 @@
 - Probe: `scripts/discovery/cheapcharts_wishlist_probe.py` (`read` writes nothing; `add` / `remove` write to the real wishlist).
 
 **Recovery.** State lives in this brief, [trial-log.md](trial-log.md) and the memory note `price-watch-trial`. Nothing is built; no branch exists yet. August's reasoning, where still relevant: `docs/superpowers/specs/2026-08-29-on-sale-canon-acquisition-design.md` (its §4 "join problem" and §6 browser rules are both overturned).
+
+## Amendments
+
+**1.1 — 2026-09-19, by the builder, under the execution authority (none of these is visible on screen or touches the account beyond what 1.0 approved).** New agent defaults:
+
+| Decision | Whose |
+|---|---|
+| A click is believed only when CheapCharts reads it back: after add + set-target the wishlist is read, the hearts are replaced from it, and the film is marked only if the read holds it. If that read fails, an ACCEPTED add is believed; a refused one is not | agent default — 1.0's "treat already-on-the-wishlist as fine" could not be built as written, because the API's answer for that case was never observed. A refused add no longer stops the click; the set-target call and the read-back decide |
+| The table is `cheapcharts_wishlist` (migration 027); a film holding several store ids is hearted by any of them, and the button wishlists the same product the CheapCharts link opens | agent default |
+| Errors from the account carry our own wording only, never the API's text — the login answer holds the account's email | agent default |
+| With no usable `[cheapcharts]` section, the dashboard starts with the last known hearts and says "wishlist: off"; the button still shows, and a click ends in the ordinary failure line | agent default |
+| `movie-brain cheapcharts wishlist` has no dry run: it never writes to the account, and its one local write is the same refresh every dashboard start performs | agent default |
+| Calls to CheapCharts are paced 1.5 s apart on a clock, shared between the price read and the account, so a dashboard idle for an hour does not wait before its first call | agent default |
+| One click at a time: a second click anywhere waits for the first to finish | agent default |
+
+Format note for the record: `priceHdEvolution` entries are `date:±price` where the sign is the DIRECTION of the change, not part of the price; the oldest entry has no sign (read from the public endpoint 2026-09-19, no account involved).
