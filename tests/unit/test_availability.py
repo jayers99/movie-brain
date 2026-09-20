@@ -321,3 +321,47 @@ def test_a_failed_lookup_never_revives_a_service_the_film_had_already_left(repo,
     with repo._conn() as c:
         rows = c.execute("SELECT source, last_seen FROM listings WHERE film_id = ? ORDER BY source", (b,)).fetchall()
     assert [(r["source"], r["last_seen"]) for r in rows] == [("criterion", week2.isoformat()), ("max", today.isoformat())]
+
+
+class _GoneTmdbClient(_FlakyTmdbClient):
+    """TMDB answers 404 for the ids in `gone` — the movie record was deleted."""
+
+    def __init__(self, providers: TmdbProviders, gone: set[int]) -> None:
+        super().__init__(providers)
+        self.gone = gone
+
+    def watch_providers(self, tmdb_id: int) -> TmdbProviders:
+        if tmdb_id in self.gone:
+            response = requests.Response()
+            response.status_code = 404
+            raise requests.HTTPError("404 Client Error: Not Found", response=response)
+        return super().watch_providers(tmdb_id)
+
+
+def test_a_film_tmdb_no_longer_knows_is_an_answer_not_weather(repo, today):
+    """A 404 on the providers call means TMDB deleted the record: nowhere to watch it, by TMDB's
+    account. It must not be carried forward for ever as "no answer" (backlog 13's open end) — the
+    film is stamped as checked, its listings go stale like any dropped service, and it is said once."""
+    _, b, providers = _seed_two_films_on_max(repo, today)
+    week2 = today + timedelta(days=8)
+    messages: list[str] = []
+    result = tmdb_step(repo, _GoneTmdbClient(providers, gone={604}), week2, log=messages.append)
+    assert _service_names(repo, b, week2) == set()
+    with repo._conn() as c:
+        checked = c.execute("SELECT providers_checked_at FROM tmdb WHERE film_id = ?", (b,)).fetchone()[0]
+    assert checked == week2.isoformat()
+    assert result.refreshed == 2
+    assert any("604" in m and "no longer" in m for m in messages)
+
+
+def test_five_deleted_records_in_a_row_do_not_stop_the_refresh(repo, today):
+    """404s are answers, so they never count toward the consecutive-failure tripwire."""
+    for n in range(6):
+        fid = repo.upsert_film(Film(f"Gone {n}", 1950 + n, None, f"https://mc/gone-{n}"))
+        repo.set_external_id(fid, "tmdb", str(700 + n), today)
+        repo.upsert_tmdb(fid, found=True, looked_up=today)
+    providers = TmdbProviders(flatrate=(), rent=(), buy=(), link="https://x", payload="{}")
+    from movie_brain.application.availability import META_REFRESHED_AT
+
+    tmdb_step(repo, _GoneTmdbClient(providers, gone=set(range(700, 706))), today, log=lambda _: None)
+    assert repo.get_meta(META_REFRESHED_AT) == today.isoformat()
