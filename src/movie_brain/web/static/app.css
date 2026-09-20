@@ -72,6 +72,7 @@ tbody tr.departed td { color:var(--muted); }
 .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
 .icon-wish { color:#c2410c; font-size:13px; margin-left:2px; }
 #drawer p.links .wish-done { color:#c2410c; }
+#drawer p.links .wish-failed { color:var(--muted); }
 .svc-more { display:inline; }
 .svc-more > summary { display:inline; cursor:pointer; color:var(--muted); list-style:none; }
 .svc-more > summary::-webkit-details-marker { display:none; }

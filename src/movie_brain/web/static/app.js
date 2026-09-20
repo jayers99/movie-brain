@@ -761,7 +761,11 @@
     // Four or five paced calls to CheapCharts: 5-10 s. The button says so and cannot be clicked twice.
     b.disabled = true; b.textContent = 'Reaching CheapCharts…';
     const r = await fetch(`/api/films/${id}/wishlist`, { method: 'POST' }).catch(() => null);
-    if (!r || !r.ok) { b.disabled = false; b.textContent = WISH_BUTTON; return; }
+    if (!r || !r.ok) {
+      // One line whatever went wrong — offline, a refused password, no price history — and nothing is marked.
+      slot.innerHTML = '<span class="wish-failed">Couldn\'t reach CheapCharts. <button class="wish-button">Try again</button></span>';
+      return;
+    }
     // Patch in place, as the toggles do: re-opening the drawer would desync closeDrawer()'s history bookkeeping.
     slot.innerHTML = '<span class="wish-done">♥ Wishlisted</span>';
     const film = state.films.find((f) => f.id === id);
