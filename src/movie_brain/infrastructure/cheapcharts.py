@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -22,6 +23,10 @@ import requests
 API_BASE = "https://buster.cheapcharts.de/v1/gptapi/"
 PRICES_URL = API_BASE + "Prices.php"
 SEARCH_URL = API_BASE + "Search.php"
+# The website's own API (one level above the GPT API). DetailData is public — only a Referer.
+ACCOUNT_API = "https://buster.cheapcharts.de/v1/"
+DETAIL_URL = ACCOUNT_API + "DetailData.php"
+TIMEOUT_S = 30
 REFERER = "https://www.cheapcharts.com/"
 COUNTRY = "us"
 STORE = "itunes"
@@ -35,6 +40,47 @@ class RateLimited(Exception):
     """CheapCharts refused for rate reasons. A caller should stop, not retry the next film —
     the resolver is self-checkpointing, so stopping costs nothing but the run."""
 
+
+class Pacer:
+    """At least `delay_s` between calls, measured on a clock: a dashboard that last called
+    CheapCharts an hour ago does not wait, a click's five calls in a row each do. One Pacer is
+    shared by the public client and the account, because they are one host."""
+
+    def __init__(
+        self,
+        delay_s: float = DELAY_S,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self.delay_s = delay_s
+        self._sleep = sleep
+        self._clock = clock
+        self._last: float | None = None
+
+    def wait(self) -> None:
+        if self._last is not None:
+            remaining = self.delay_s - (self._clock() - self._last)
+            if remaining > 0:
+                self._sleep(remaining)
+        self._last = self._clock()
+
+
+def parse_evolution(text: str) -> list[Decimal]:
+    """Every price in a `priceHdEvolution` string: `~`-joined `YYYY-MM-DD:±price`, newest first.
+    The sign is the DIRECTION of the change (`-` a drop, `+` a rise; the oldest entry has none),
+    never part of the price. Unreadable entries are skipped, never guessed."""
+    prices: list[Decimal] = []
+    for entry in text.split("~"):
+        _, sep, raw = entry.partition(":")
+        if not sep:
+            continue
+        try:
+            price = Decimal(raw.strip().lstrip("+-"))
+        except InvalidOperation:
+            continue
+        if price.is_finite() and price > 0:
+            prices.append(price)
+    return prices
 
 
 def product_url(itunes_id: str) -> str:
@@ -67,10 +113,12 @@ class CheapChartsClient:
         *,
         delay_s: float = DELAY_S,
         sleep: Callable[[float], None] = time.sleep,
+        pacer: Pacer | None = None,
     ) -> None:
         self.session = session or requests.Session()
         self.delay_s = delay_s
         self._sleep = sleep
+        self._pacer = pacer
         self._requested = False
 
     def products_by_imdb(self, imdb_ids: Sequence[str]) -> dict[str, Product]:
@@ -139,11 +187,29 @@ class CheapChartsClient:
             )
         return products
 
+    def lowest_price(self, itunes_id: str) -> Decimal | None:
+        """The product's lowest price EVER, computed from its full history — never taken from
+        `priceHdIsLowest`, so the number is ours. HD history first; a film with no HD history
+        uses the SD one; None when there is no history at all (or no such product)."""
+        data = self._get(
+            DETAIL_URL, {"store": STORE, "country": COUNTRY, "itemType": "movies", "idInStore": itunes_id}
+        )
+        movie = (data.get("results") or {}).get("movies")
+        if not isinstance(movie, dict):
+            return None
+        for field in ("priceHdEvolution", "priceSdEvolution"):
+            prices = parse_evolution(str(movie.get(field) or ""))
+            if prices:
+                return min(prices)
+        return None
+
     def _get(self, url: str, params: dict[str, str]) -> dict[str, Any]:
-        if self._requested:
+        if self._pacer is not None:
+            self._pacer.wait()
+        elif self._requested:
             self._sleep(self.delay_s)
         self._requested = True
-        resp = self.session.get(url, params=params, headers={"Referer": REFERER}, timeout=30)
+        resp = self.session.get(url, params=params, headers={"Referer": REFERER}, timeout=TIMEOUT_S)
         if resp.status_code == 429:
             raise RateLimited(url)
         resp.raise_for_status()
