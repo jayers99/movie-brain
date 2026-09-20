@@ -1,4 +1,6 @@
-from datetime import date
+from datetime import date, timedelta
+
+import requests
 
 from movie_brain.application.availability import queue_review_once, record_tmdb_match, tmdb_step
 from movie_brain.domain.models import Film, OmdbRating, ReviewEntry, TmdbProviders
@@ -247,3 +249,75 @@ def test_the_after_add_mode_first_checks_new_films_but_never_starts_the_weekly_r
 
     result = tmdb_step(repo, _StubTmdbClient(providers), today, log=lambda _: None)  # a real sync still refreshes
     assert repo.get_meta(META_REFRESHED_AT) == today.isoformat()
+
+
+class _FlakyTmdbClient:
+    """`watch_providers` fails for the TMDB ids in `failing` and answers `providers` otherwise."""
+
+    def __init__(self, providers: TmdbProviders, failing: set[int] | None = None) -> None:
+        self.providers = providers
+        self.failing = failing or set()
+
+    def watch_providers(self, tmdb_id: int) -> TmdbProviders:
+        if tmdb_id in self.failing:
+            raise requests.ConnectionError("TMDB weather")
+        return self.providers
+
+
+def _seed_two_films_on_max(repo, day: date) -> tuple[int, int, TmdbProviders]:
+    """Two keyed films, both streaming on Max after one clean full refresh on `day`."""
+    a = _seed_first_check_film(repo, day)
+    b = repo.upsert_film(Film("Trio", 1950, None, "https://mc/trio"))
+    repo.set_external_id(b, "tmdb", "604", day)
+    repo.upsert_tmdb(b, found=True, looked_up=day)
+    providers = TmdbProviders(flatrate=(1899,), rent=(), buy=(), link="https://x", payload="{}", names={1899: "HBO Max"})
+    tmdb_step(repo, _FlakyTmdbClient(providers), day, log=lambda _: None)
+    return a, b, providers
+
+
+def _service_names(repo, film_id: int, day: date) -> set[str]:
+    return {str(s["name"]) for s in repo.get_view(film_id, day).services}
+
+
+def _transitions(repo, film_id: int) -> int:
+    with repo._conn() as c:
+        return int(
+            c.execute("SELECT COUNT(*) FROM availability_transitions WHERE film_id = ?", (film_id,)).fetchone()[0]
+        )
+
+
+def test_a_film_whose_lookup_failed_in_a_completed_refresh_stays_on_its_services(repo, today):
+    """Backlog 13: one scattered failure never aborts the pass, so the stamp advances — and the
+    failed film's listings, not re-seen, must not read as departed. A failed lookup is not
+    evidence that the film left the service."""
+    a, b, providers = _seed_two_films_on_max(repo, today)
+    max_name = repo.movie_service("max").name
+    week2 = today + timedelta(days=8)
+    tmdb_step(repo, _FlakyTmdbClient(providers, failing={604}), week2, log=lambda _: None)
+    assert _service_names(repo, a, week2) == {max_name}
+    assert _service_names(repo, b, week2) == {max_name}
+
+
+def test_a_film_whose_lookup_failed_last_week_is_not_a_new_arrival_this_week(repo, today):
+    """The second half of backlog 13: the failed film's next successful check found it exactly
+    where it always was, so no `availability_transitions` row ("New on:") may fire."""
+    _, b, providers = _seed_two_films_on_max(repo, today)
+    tmdb_step(repo, _FlakyTmdbClient(providers, failing={604}), today + timedelta(days=8), log=lambda _: None)
+    tmdb_step(repo, _FlakyTmdbClient(providers), today + timedelta(days=16), log=lambda _: None)
+    assert _transitions(repo, b) == 0
+
+
+def test_a_failed_lookup_never_revives_a_service_the_film_had_already_left(repo, today):
+    """Carry-forward keeps what was CURRENT current — a row that went stale in an earlier, answered
+    refresh stays stale, and a Criterion row (fed by the catalog walk's own frontier) is never touched."""
+    _, b, providers = _seed_two_films_on_max(repo, today)
+    week2 = today + timedelta(days=8)
+    repo.record_listing(b, "criterion", "https://criterion/trio", week2)  # as recent as the stamp
+    gone = TmdbProviders(flatrate=(), rent=(), buy=(), link="https://x", payload="{}")
+    tmdb_step(repo, _FlakyTmdbClient(gone), week2, log=lambda _: None)  # Max dropped it
+    week3 = today + timedelta(days=16)
+    tmdb_step(repo, _FlakyTmdbClient(gone, failing={604}), week3, log=lambda _: None)
+    assert _service_names(repo, b, week3) == set()
+    with repo._conn() as c:
+        rows = c.execute("SELECT source, last_seen FROM listings WHERE film_id = ? ORDER BY source", (b,)).fetchall()
+    assert [(r["source"], r["last_seen"]) for r in rows] == [("criterion", week2.isoformat()), ("max", today.isoformat())]

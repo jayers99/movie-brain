@@ -217,6 +217,8 @@ def _refresh_pass(
             return refreshed, True
         except requests.RequestException as exc:
             log(f"TMDB providers failed for film {film_id}: {exc}")
+            # No answer is not a departure: keep what was current, current (backlog 13).
+            repo.carry_listings_forward(film_id, today)
             consecutive += 1
             continue
         consecutive = 0
