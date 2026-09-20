@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wishlist it — three mock-ups</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Colours, fonts, pills and the drawer are copied from the real dashboard (static/app.css). */
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3e3; --accent:#b3261e; --chip:#f2f2f2; --chip-on:#1b1b1b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 28px 80px; background:#ecebe7; color:var(--fg); font:14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  .intro { max-width:1180px; margin:0 auto 18px; font-size:17px; line-height:1.55; }
+  .intro h1 { font-size:26px; margin:0 0 6px; }
+  .intro p { margin:6px 0; }
+  .note { background:#fff6d6; border:1px solid #e2cf86; border-radius:8px; padding:10px 14px; margin-top:10px; }
+  .variant { max-width:1180px; margin:26px auto 0; }
+  .variant > h2 { font-size:21px; margin:0 0 4px; }
+  .variant > p.what { font-size:16px; margin:0 0 10px; color:#333; }
+  .rec { background:#ffe08a; border-radius:20px; padding:1px 10px; font-size:13px; font-weight:600; margin-left:8px; vertical-align:2px; }
+  .window { display:grid; grid-template-columns:1fr 470px; background:var(--bg); border:1px solid #cfcfcf; border-radius:10px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,.08); min-height:330px; }
+  .list { border-right:1px solid var(--line); }
+  .list .head { padding:8px 14px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; }
+  table { border-collapse:collapse; width:100%; }
+  td { padding:7px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
+  tr.sel td { background:#f6f6f6; }
+  td.yr { width:60px; color:var(--muted); }
+  td a { color:inherit; text-decoration:none; font-weight:500; }
+  .badge-lists { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-wish { background:#fff1e0; color:#a4520b; border:1px solid #a4520b; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .icon-wish { color:#c2410c; font-size:13px; vertical-align:0; }
+  .drawer { padding:16px 20px; position:relative; }
+  .drawer h3 { margin:0 0 4px; font-size:20px; }
+  .drawer .meta { color:var(--muted); margin:0 0 10px; }
+  .drawer .ratings { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:12px 0; color:var(--muted); }
+  .drawer p { margin:6px 0; }
+  .drawer p.links a { margin-right:8px; color:#1a56db; text-decoration:none; }
+  button.wl { font:inherit; border:1px solid var(--chip-on); background:var(--bg); border-radius:6px; padding:4px 12px; cursor:pointer; }
+  button.wl:hover { background:var(--chip); }
+  button.wl[disabled] { opacity:.6; cursor:default; }
+  button.wl.inline { padding:1px 9px; font-size:13px; }
+  .done { color:#a4520b; font-weight:500; }
+  .quiet { color:var(--muted); }
+  .panel { max-width:1180px; margin:30px auto 0; background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:16px 20px; font-size:17px; line-height:1.55; }
+  .panel h2 { font-size:21px; margin:0 0 8px; }
+  .panel table td { cursor:default; font-size:16px; vertical-align:top; }
+  .st { font-size:13px; padding:1px 8px; border-radius:4px; white-space:nowrap; }
+  .st.d { background:#cfe8d2; } .st.u { background:#f6c9c9; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>"Wishlist it" — three mock-ups of your design</h1>
+  <p>Your design, as I understood it: a small <b>wishlisted</b> mark on the film's row, after the list count — nothing at all on other rows. In the drawer of a film that is not wishlisted, one button. Click it, and the film goes onto your CheapCharts wishlist at <b>one dollar above its lowest price ever</b>, and the mark appears on the row.</p>
+  <p><b>These are clickable.</b> Click any row to open that film; click the button and watch the row. The looks are copied from your real dashboard. All prices are real, read from CheapCharts today.</p>
+  <div class="note"><b>Two honest limits.</b> The click here is pretend — nothing is sent anywhere. And no row starts out wishlisted, because I cannot see your real CheapCharts wishlist yet.</div>
+</div>
+
+<div class="variant" id="v1">
+  <h2>1 · Plain words</h2>
+  <p class="what">The mark is the word <b>wishlisted</b>. The button says exactly what you said. The price shows up only after the click.</p>
+  <div class="window"><div class="list"></div><div class="drawer"></div></div>
+</div>
+
+<div class="variant" id="v2">
+  <h2>2 · The numbers, before you click <span class="rec">Recommended</span></h2>
+  <p class="what">Same mark. The drawer shows today's price and the lowest ever, and the button names the target — so you see what will be set before you set it. Recommended because the target is money, and two of the awkward films below go wrong silently without it.</p>
+  <div class="window"><div class="list"></div><div class="drawer"></div></div>
+</div>
+
+<div class="variant" id="v3">
+  <h2>3 · An icon, in the links row</h2>
+  <p class="what">The mark is a small heart, no word. The button sits in the row of links you already have, next to CheapCharts. No prices anywhere.</p>
+  <div class="window"><div class="list"></div><div class="drawer"></div></div>
+</div>
+
+<div class="panel">
+  <h2>Three awkward films — click them in each mock-up</h2>
+  <table>
+    <tr><td><b>Do the Right Thing</b></td><td>Lowest ever is $2.99 — once, in August 2025. It has been $4.99 <b>thirty-two times</b>. "Lowest plus a dollar" sets the target at $3.99, which it has reached once in its life. Mock-up 2 lets you see this before clicking; 1 and 3 set it silently.</td></tr>
+    <tr><td><b>Performance.</b></td><td>It is $4.99 <b>right now</b> — its lowest ever. The target would be $5.99, which is above today's price.</td></tr>
+    <tr><td><b>La Dolce Vita</b></td><td>Apple does not sell it. There is nothing to wishlist. Mock-ups 1 and 3 show nothing at all; mock-up 2 says so.</td></tr>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>What is real today, and what is not</h2>
+  <table>
+    <tr><td>Today's price, the lowest ever, and the target</td><td><span class="st d">demonstrated</span></td><td>read from CheapCharts today for every film shown</td></tr>
+    <tr><td>The button really adding the film to your wishlist</td><td><span class="st u">unresolved</span></td><td>CheapCharts needs your logged-in session, and I never log in. Your standing rule: you add one film by hand while I watch what the browser sends. If that can be repeated, the button works as drawn. If not, the fallback you approved in August: the button opens the film's CheapCharts page with the target already on screen, and you press Add there.</td></tr>
+    <tr><td>The mark on films you wishlisted <i>before</i> today</td><td><span class="st u">unresolved</span></td><td>needs one read of your wishlist from your own browser</td></tr>
+  </table>
+</div>
+
+<script>
+const FILMS = [
+  { id:'leopard', title:'The Leopard', year:1963, lists:3, now:14.99, low:4.99, lowTimes:14 },
+  { id:'nashville', title:'Nashville', year:1975, lists:2, now:14.99, low:4.99, lowTimes:31 },
+  { id:'dtrt', title:'Do the Right Thing', year:1989, lists:2, now:14.99, low:2.99, lowTimes:1, usual:4.99, usualTimes:32 },
+  { id:'performance', title:'Performance.', year:1970, lists:1, now:4.99, low:4.99, lowTimes:4 },
+  { id:'dolce', title:'La Dolce Vita', year:1960, lists:3, now:null },
+];
+const money = n => '$' + n.toFixed(2);
+const target = f => Math.round((f.low + 1) * 100) / 100;
+
+function setup(root, variant) {
+  const state = { sel:'leopard', wished:new Set(), busy:false };
+  const list = root.querySelector('.list'), drawer = root.querySelector('.drawer');
+
+  function mark(f) {
+    if (!state.wished.has(f.id)) return '';
+    if (variant === 3) return ' <span class="icon-wish" title="On your CheapCharts wishlist">♥</span>';
+    const tip = variant === 2 ? ` title="Wishlisted at ${money(target(f))}"` : '';
+    return ` <span class="badge-wish"${tip}>wishlisted</span>`;
+  }
+  function renderList() {
+    list.innerHTML = '<div class="head">5 of 231 films in your buy queue</div><table>' + FILMS.map(f =>
+      `<tr data-id="${f.id}" class="${f.id === state.sel ? 'sel' : ''}"><td><a>${f.title}</a> <span class="badge-lists">${f.lists} list${f.lists === 1 ? '' : 's'}</span>${mark(f)}</td><td class="yr">${f.year}</td></tr>`).join('') + '</table>';
+    list.querySelectorAll('tr').forEach(tr => tr.onclick = () => { state.sel = tr.dataset.id; render(); });
+  }
+  function button(f, label, cls) {
+    return `<button class="wl ${cls || ''}" ${state.busy ? 'disabled' : ''}>${state.busy ? 'Reaching CheapCharts…' : label}</button>`;
+  }
+  function renderDrawer() {
+    const f = FILMS.find(x => x.id === state.sel), sold = f.now !== null, wished = state.wished.has(f.id);
+    let buy = '', links = `<a>TMDB ↗</a>${sold ? '<a>CheapCharts ↗</a>' : ''}`;
+    if (variant === 1) {
+      buy = sold ? `<p class="meta">Buy on: Apple TV Store (iTunes)</p><p>${wished ? `<span class="done">Wishlisted on CheapCharts at ${money(target(f))} ✓</span>` : button(f, 'CheapCharts: wishlist it')}</p>` : '';
+    } else if (variant === 2) {
+      if (!sold) buy = '<p class="meta quiet">Not sold on Apple — nothing to wishlist.</p>';
+      else {
+        const atLow = f.now <= f.low;
+        const hist = f.usual ? `lowest ever ${money(f.low)} (once) · usually ${money(f.usual)} on sale (${f.usualTimes} times)` : `lowest ever ${money(f.low)} (${f.lowTimes} times)`;
+        buy = `<p class="meta">Buy on: Apple TV Store · <b>${money(f.now)}</b> now${atLow ? ' — <b>its lowest ever</b>' : ''} · ${hist}</p>`
+            + `<p>${wished ? `<span class="done">Wishlisted at ${money(target(f))} ✓</span> · <a style="color:#1a56db">open on CheapCharts ↗</a>` : button(f, `Wishlist at ${money(target(f))}`)}</p>`;
+      }
+    } else {
+      buy = sold ? '<p class="meta">Buy on: Apple TV Store (iTunes)</p>' : '';
+      if (sold) links += wished ? ' <span class="done">♥ Wishlisted</span>' : ' ' + button(f, '♡ Wishlist it', 'inline');
+    }
+    drawer.innerHTML = `<h3>${f.title}</h3><p class="meta">${f.year}</p>
+      <div class="ratings">IMDb · Metacritic · Rotten Tomatoes &nbsp;·&nbsp; On lists: ${f.lists}</div>
+      ${buy}<p class="links">${links}</p>`;
+    const b = drawer.querySelector('button.wl');
+    if (b) b.onclick = () => { state.busy = true; render(); setTimeout(() => { state.busy = false; state.wished.add(f.id); render(); }, 900); };
+  }
+  function render() { renderList(); renderDrawer(); }
+  render();
+}
+[1, 2, 3].forEach(n => setup(document.querySelector('#v' + n + ' .window'), n));
+</script>
+</body>
+</html>

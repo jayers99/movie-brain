@@ -43,9 +43,16 @@ from movie_brain.application.repair_keys import (
 from movie_brain.application.review import resolve_review
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
+from movie_brain.application.wishlist import (
+    WishlistError,
+    WishlistGateway,
+    refresh_wishlist,
+    resolve_unknown_wishlist,
+)
 from movie_brain.domain.models import ServiceMeta
-from movie_brain.infrastructure.cheapcharts import CheapChartsClient
-from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
+from movie_brain.infrastructure.cheapcharts import CheapChartsAccount, CheapChartsClient, Pacer
+from movie_brain.infrastructure.config import Config, load_api_key, load_config, load_tmdb_token
+from movie_brain.infrastructure.credentials import load_credentials
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.embeddings import SemanticUnavailable, SentenceTransformerEmbedder
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE, archive_dir, archived_pages
@@ -56,7 +63,12 @@ if TYPE_CHECKING:
     from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
 
 app = typer.Typer(
-    name="movie-brain", help="Personal film brain: Criterion listings, OMDb ratings, my ratings.", no_args_is_help=True
+    name="movie-brain",
+    help="Personal film brain: Criterion listings, OMDb ratings, my ratings.",
+    no_args_is_help=True,
+    # A crash's traceback would otherwise print every frame's locals — including a loaded
+    # credentials tuple or a login answer sitting in a wishlist verb's own frame.
+    pretty_exceptions_show_locals=False,
 )
 export_app = typer.Typer(help="Export data.")
 app.add_typer(export_app, name="export")
@@ -107,6 +119,54 @@ def _repo() -> Repository:
         raise typer.Exit(2) from exc
 
 
+def _wishlist_gateway(cfg: Config) -> WishlistGateway | None:
+    """The CheapCharts account behind "Wishlist it", or None when `credentials.toml` has no
+    usable [cheapcharts] section. One Pacer for both clients: they are one host."""
+    creds = load_credentials(cfg, "cheapcharts")
+    if creds is None:
+        return None
+    pacer = Pacer()
+    return WishlistGateway(CheapChartsClient(pacer=pacer), CheapChartsAccount(*creds, pacer=pacer))
+
+
+def _refresh_hearts(repo: Repository, gateway: WishlistGateway) -> str:
+    """Read the wishlist, replace the hearts, and word the outcome. Raises WishlistError.
+
+    A wishlist film movie-brain holds no store id for matches nothing and shows no heart at all
+    — silently, until the owner noticed by hand (amendment 1.4) — so the line says how many and
+    names the verb that places them. The refresh itself never resolves: it would add minutes to
+    a dashboard start."""
+    report = refresh_wishlist(repo, gateway.account, date.today())
+    line = f"wishlist: {report.on_cheapcharts} films on CheapCharts · {report.known} known here"
+    unmatched = report.on_cheapcharts - report.known
+    if unmatched > 0:
+        line += f" · {unmatched} not matched — movie-brain cheapcharts wishlist --resolve"
+    return line
+
+
+def _resolve_unknown(repo: Repository, gateway: WishlistGateway, *, apply: bool) -> str:
+    """`--resolve`: give the wishlist films movie-brain cannot place their store id, naming each
+    one it would place, and word the outcome. Raises WishlistError."""
+    report = resolve_unknown_wishlist(repo, gateway, date.today(), apply=apply)
+    for film in report.resolved:
+        console.print(
+            f"{film.title} ({film.year or '?'}) ← store id {film.itunes_id}",
+            markup=False,
+            highlight=False,
+            soft_wrap=True,
+        )
+    line = (
+        f"wishlist: {report.on_cheapcharts} films on CheapCharts · {report.unknown} held no store id here · "
+        f"{len(report.resolved)} resolved · {report.not_in_catalogue} not in the catalogue · "
+        f"{report.no_imdb} without an IMDb id · {report.known} known here"
+    )
+    if report.rate_limited:
+        line += " · RATE-LIMITED, stopped early — run it again"
+    if not apply:
+        line += "\ndry run — re-run with --resolve --apply to store the ids"
+    return line
+
+
 @app.command("sync")
 def sync_cmd(
     full: Annotated[bool, typer.Option("--full", help="Force a complete catalog re-walk.")] = False,
@@ -150,12 +210,26 @@ def dashboard(
     from movie_brain.web.app import create_app
 
     embedder = SentenceTransformerEmbedder() if SentenceTransformerEmbedder.available() else None
+    repo = _repo()
+    gateway = _wishlist_gateway(load_config())
     console.print(f"movie-brain dashboard → http://{host}:{port}")
     console.print(
         "semantic search: "
         + ("on (loads the model on the first meaning query)" if embedder else "off — uv sync --extra semantic")
     )
-    create_app(_repo(), embedder=embedder).run(host=host, port=port, debug=False)
+    # Hearts are refreshed on every start. CheapCharts being down never stops the dashboard.
+    if gateway is None:
+        console.print("wishlist: off — no [cheapcharts] login in credentials.toml", markup=False)
+    else:
+        try:
+            console.print(_refresh_hearts(repo, gateway), soft_wrap=True, markup=False)
+        except WishlistError as exc:
+            console.print(
+                f"wishlist: couldn't read your CheapCharts wishlist ({exc}) — showing the last known hearts",
+                soft_wrap=True,
+                markup=False,
+            )
+    create_app(repo, embedder=embedder, wishlist=gateway).run(host=host, port=port, debug=False)
 
 
 @app.command("import-legacy")
@@ -1183,6 +1257,54 @@ def cheapcharts_resolve_cmd(
         f"held: {report.held} · failed: {report.failed}"
         + (" · RATE-LIMITED, stopped early" if report.rate_limited else "")
     )
+
+
+@cheapcharts_app.command("wishlist")
+def cheapcharts_wishlist_cmd(
+    resolve: Annotated[
+        bool, typer.Option("--resolve", help="Give the wishlist films I hold no store id for one.")
+    ] = False,
+    apply: Annotated[
+        bool, typer.Option("--apply", help="With --resolve: store the store ids (default: dry-run).")
+    ] = False,
+) -> None:
+    """Read my CheapCharts wishlist and refresh the dashboard's hearts from it.
+
+    Logs in with the [cheapcharts] section of <config_dir>/credentials.toml, reads the wishlist,
+    and replaces the local hearts wholesale: a film bought or removed on CheapCharts loses its
+    heart, one added there by hand gains it. Reads the account, never writes to it; the only
+    write is the local mirror, which the dashboard refreshes the same way every time it starts —
+    so the bare verb has no dry run. Prints counts only, never a price or anything from the account.
+
+    `--resolve` places the wishlist films movie-brain holds no store id for: it asks CheapCharts
+    which IMDb id each unplaced product carries and joins on that exact id, so the film gets its
+    store id, its heart and its button. One paced call per unplaced film. Dry-run by default:
+    `--resolve` alone still runs the ordinary refresh above and asks CheapCharts about every
+    unplaced film, but stores no store id — a rate-limited dry run stores nothing and starts over
+    from the beginning next time. Only with `--apply` is a stored id never asked about again, so
+    a rate-limited `--apply` run simply resumes.
+    """
+    if apply and not resolve:
+        err.print("--apply only makes sense with --resolve", markup=False)
+        raise typer.Exit(2)
+    cfg = load_config()
+    gateway = _wishlist_gateway(cfg)
+    if gateway is None:
+        err.print(f"no [cheapcharts] username/password in {cfg.credentials_file}", markup=False)
+        raise typer.Exit(2)
+    try:
+        console.print(
+            _resolve_unknown(_repo(), gateway, apply=apply) if resolve else _refresh_hearts(_repo(), gateway),
+            soft_wrap=True,
+            markup=False,
+        )
+    except WishlistError as exc:
+        err.print(
+            f"wishlist: couldn't read your CheapCharts wishlist ({exc}) — keeping the last known hearts",
+            soft_wrap=True,
+            markup=False,
+        )
+        raise typer.Exit(1) from exc
 
 
 @enrich_app.command("credits")

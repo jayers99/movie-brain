@@ -195,6 +195,7 @@ _ONE_ROW_TABLES = (
     "film_embedding",
     "unseen",
     "rank_mark",
+    "cheapcharts_wishlist",
 )  # film_id PRIMARY KEY tables
 
 
@@ -313,7 +314,7 @@ SELECT f.id, f.title, f.year,
        COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director,
        l.url, o.language, o.imdb, o.rt,
        COALESCE(mc.score, o.metacritic) AS metacritic, x.value AS mc_slug, o.found,
-       (SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'itunes') AS itunes_id,
+       (SELECT MIN(value) FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'itunes') AS itunes_id,
        (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
        COALESCE(l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source), 0) AS departed,
        (l.film_id IS NOT NULL) AS criterion
@@ -502,6 +503,10 @@ def _rank_mark_ids(c: sqlite3.Connection) -> set[int]:
     return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM rank_mark")}
 
 
+def _wishlisted_ids(c: sqlite3.Connection) -> set[int]:
+    return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM cheapcharts_wishlist")}
+
+
 def _revisit_by_film(c: sqlite3.Connection) -> dict[int, str | None]:
     return {int(r["film_id"]): r["note"] for r in c.execute("SELECT film_id, note FROM needs_revisit")}
 
@@ -548,6 +553,7 @@ def _row_to_view(
     unseen: bool = False,
     rank_marked: bool = False,
     old_rating: dict[str, object] | None = None,
+    wishlisted: bool = False,
     revisit: tuple[bool, str | None] = (False, None),
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
@@ -581,6 +587,7 @@ def _row_to_view(
         unseen=unseen,
         rank_marked=rank_marked,
         old_rating=old_rating,
+        wishlisted=wishlisted,
         needs_revisit=revisit[0],
         revisit_note=revisit[1],
         audit=audit[0],
@@ -1872,6 +1879,17 @@ class Repository:
             row = c.execute("SELECT kind FROM films WHERE id = ?", (film_id,)).fetchone()
             return "movie" if row is None else str(row["kind"])
 
+    def film_title_year(self, film_id: int) -> tuple[str, int | None] | None:
+        """One LIVE film's name, for a line of printed report. None when there is no such film
+        or a human hid it (`_NOT_DISPOSED`) — which is what keeps a disposed film from ever
+        being the target of a write. `get_view` answers the same question by building the whole
+        read model, which is catalogue-wide work for two columns."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT f.title, f.year FROM films f WHERE f.id = ? AND " + _NOT_DISPOSED, (film_id,)
+            ).fetchone()
+            return None if row is None else (str(row["title"]), row["year"])
+
     def stale_omdb_years(self) -> list[tuple[int, str, int | None, int]]:
         """Non-Criterion films whose OMDb payload was fetched under a different year than films.year."""
         with self._conn() as c:
@@ -2556,6 +2574,91 @@ class Repository:
             c.execute("DELETE FROM rank_mark WHERE film_id = ?", (film_id,))
             return False
 
+    # cheapcharts_wishlist ("Wishlist it", brief 2026-09-19-price-watch) ----------
+    def wishlisted_film_ids(self) -> set[int]:
+        with self._conn() as c:
+            return _wishlisted_ids(c)
+
+    def mark_wishlisted(self, film_id: int, today: date) -> bool | None:
+        """The button's write: idempotent, None when the film does not exist. A heart also comes
+        off when a wishlist read no longer holds the film (`replace_wishlist`), or through the
+        un-wishlist button's own write, `unmark_wishlisted`, below."""
+        with self._conn() as c:
+            if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
+                return None
+            c.execute(
+                "INSERT OR IGNORE INTO cheapcharts_wishlist (film_id, added_on) VALUES (?, ?)",
+                (film_id, today.isoformat()),
+            )
+            return True
+
+    def unmark_wishlisted(self, film_id: int) -> None:
+        """The un-wishlist button's write once CheapCharts has accepted the removal.
+        Idempotent. Every other heart removal is `replace_wishlist`'s."""
+        with self._conn() as c:
+            c.execute("DELETE FROM cheapcharts_wishlist WHERE film_id = ?", (film_id,))
+
+    def replace_wishlist(self, itunes_ids: Iterable[str], today: date) -> int:
+        """The wishlist read's write: the local hearts become exactly the films holding one of
+        these store ids — a film bought or removed on CheapCharts loses its heart, one added there
+        by hand gains it, one that stays keeps its date. Ids no film holds are simply not ours.
+        A tombstoned film keeps its `external_ids` row (collectors never delete) but is excluded
+        here — it has no read model of its own to show a heart on. Returns how many films are
+        hearted now."""
+        wanted = set(itunes_ids)
+        with self._conn() as c:
+            film_ids = {
+                int(r["film_id"])
+                for r in c.execute(
+                    "SELECT e.film_id, e.value FROM external_ids e JOIN films f ON f.id = e.film_id "
+                    "WHERE e.authority = 'itunes' AND " + _NOT_DISPOSED
+                )
+                if str(r["value"]) in wanted
+            }
+            current = _wishlisted_ids(c)
+            c.executemany("DELETE FROM cheapcharts_wishlist WHERE film_id = ?", [(f,) for f in current - film_ids])
+            c.executemany(
+                "INSERT INTO cheapcharts_wishlist (film_id, added_on) VALUES (?, ?)",
+                [(f, today.isoformat()) for f in sorted(film_ids - current)],
+            )
+            return len(film_ids)
+
+    def itunes_ids_held(self) -> set[str]:
+        """Every store id a LIVE film holds — what the wishlist resolver (amendment 1.4) already
+        knows, so a wishlist entry outside this set is one that showed no heart. A tombstoned
+        film keeps its `external_ids` row and shows no heart, so its id is deliberately absent."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT e.value FROM external_ids e JOIN films f ON f.id = e.film_id "
+                "WHERE e.authority = 'itunes' AND " + _NOT_DISPOSED
+            )
+            return {str(r["value"]) for r in rows}
+
+    def itunes_ids_for(self, film_id: int) -> list[str]:
+        """EVERY store id this film holds, sorted. `itunes` is a claim authority and may repeat —
+        since amendment 1.4 the wishlist's own product and the store lookup's can be two ids of
+        one film — so the click verbs act on all of them, while `itunes_id_for` below stays the
+        single pick the drawer links to."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT value FROM external_ids WHERE film_id = ? AND authority = 'itunes' ORDER BY value",
+                (film_id,),
+            )
+            return [str(r["value"]) for r in rows]
+
+    def itunes_id_for(self, film_id: int) -> str | None:
+        """The store id behind this film's CheapCharts link. `itunes` is a claim authority and
+        may repeat; MIN(value) is the same deterministic scalar pick `_VIEW_SQL`'s `itunes_id`
+        subquery makes, so the wishlisted product is always the one the drawer links to — an
+        unordered single-row SELECT picked whichever row the query plan happened to return
+        first, which is not guaranteed to agree across two separately-planned queries."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT MIN(value) AS value FROM external_ids WHERE film_id = ? AND authority = 'itunes'",
+                (film_id,),
+            ).fetchone()
+            return None if row is None or row["value"] is None else str(row["value"])
+
     # the pool (ranking-pool spec §4.1, P1) ---------------------------------------
     _POOL_SQL = (
         "SELECT f.id FROM films f "
@@ -2962,6 +3065,8 @@ class Repository:
                         kept[table] = {"marked_on": loser_row["marked_on"], "note": loser_row["note"]}
                     elif table == "rank_mark":
                         kept[table] = {"marked_on": loser_row["marked_on"]}
+                    elif table == "cheapcharts_wishlist":
+                        kept[table] = {"added_on": loser_row["added_on"]}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -3385,6 +3490,7 @@ class Repository:
             ow = _owned_ids(c)
             un = _unseen_ids(c)
             rm = _rank_mark_ids(c)
+            wi = _wishlisted_ids(c)
             old = _old_rating_by_film(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
@@ -3401,6 +3507,7 @@ class Repository:
                     unseen=r["id"] in un,
                     rank_marked=r["id"] in rm,
                     old_rating=old.get(r["id"]),
+                    wishlisted=r["id"] in wi,
                     revisit=(r["id"] in rv, rv.get(r["id"])),
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
@@ -3427,6 +3534,7 @@ class Repository:
                 unseen=row["id"] in _unseen_ids(c),
                 rank_marked=row["id"] in _rank_mark_ids(c),
                 old_rating=_old_rating_by_film(c).get(row["id"]),
+                wishlisted=row["id"] in _wishlisted_ids(c),
                 revisit=(row["id"] in rv, rv.get(row["id"])),
                 audit=au.get(row["id"], (None, None)),
                 criterion_option=_service_option(c, 'criterion'),

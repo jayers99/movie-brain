@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -12,6 +13,13 @@ from movie_brain.application.rank import RankError
 from movie_brain.application.ratings import rate_film
 from movie_brain.application.search import run_search
 from movie_brain.application.sync import SOURCE
+from movie_brain.application.wishlist import (
+    NotForSale,
+    WishlistError,
+    WishlistGateway,
+    unwishlist_film,
+    wishlist_film,
+)
 from movie_brain.domain.audit import VERDICTS
 from movie_brain.domain.filters import CHIPS, thresholds
 from movie_brain.infrastructure.database import Repository
@@ -32,6 +40,7 @@ def create_app(
     today: Callable[[], date] = date.today,
     embedder: Embedder | None = None,
     lists_dir: Path = LISTS_DIR,
+    wishlist: WishlistGateway | None = None,
 ) -> Flask:
     app = Flask(__name__)
     # Stage 4 of the bar (Plan C). The index is built lazily on the first semantic query and
@@ -40,6 +49,10 @@ def create_app(
     # function scope; a closure over `index` would otherwise resolve to that view function).
     vector_index = VectorIndex(repo, embedder) if embedder is not None else None
     RANK_SOURCE = "owned"  # v1 (tier-ranker spec D7); read by the rank routes AND the film detail
+    UNREACHABLE = "Couldn't reach CheapCharts."  # the brief's one failure line, whatever went wrong
+    # One click at a time: a click is four or five paced calls to one account, and the dev
+    # server is threaded.
+    wishlist_lock = threading.Lock()
 
     @app.get("/")
     def index() -> str:
@@ -85,6 +98,40 @@ def create_app(
         if watchlisted is None:
             return jsonify({"error": "not found"}), 404
         return jsonify({"watchlisted": watchlisted}), 200
+
+    @app.post("/api/films/<int:film_id>/wishlist")
+    def post_wishlist(film_id: int) -> tuple[Response, int]:
+        if wishlist is None:  # no credentials file: the same line as any other failure
+            app.logger.warning("wishlist click failed: no [cheapcharts] login configured")
+            return jsonify({"error": UNREACHABLE}), 502
+        try:
+            with wishlist_lock:
+                wishlist_film(repo, wishlist, film_id, today())
+        except LookupError:
+            return jsonify({"error": "not found"}), 404
+        except NotForSale:
+            return jsonify({"error": "not for sale"}), 409
+        except WishlistError as exc:
+            # The screen says one thing whatever happened; the terminal names the reason, which
+            # is OUR wording by construction — never the API's text, a token, an email or a price.
+            app.logger.warning("wishlist click failed: %s", exc)
+            return jsonify({"error": UNREACHABLE}), 502
+        return jsonify({"wishlisted": True}), 200
+
+    @app.delete("/api/films/<int:film_id>/wishlist")
+    def delete_wishlist(film_id: int) -> tuple[Response, int]:
+        if wishlist is None:
+            app.logger.warning("wishlist click failed: no [cheapcharts] login configured")
+            return jsonify({"error": UNREACHABLE}), 502
+        try:
+            with wishlist_lock:
+                unwishlist_film(repo, wishlist, film_id, today())
+        except LookupError:
+            return jsonify({"error": "not found"}), 404
+        except WishlistError as exc:
+            app.logger.warning("wishlist click failed: %s", exc)
+            return jsonify({"error": UNREACHABLE}), 502
+        return jsonify({"wishlisted": False}), 200
 
     @app.post("/api/films/<int:film_id>/revisit")
     def toggle_revisit(film_id: int) -> tuple[Response, int]:

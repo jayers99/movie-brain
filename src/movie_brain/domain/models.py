@@ -352,6 +352,9 @@ class FilmView:
     # signal, not a rating; the `oldratings` verbs are the only writers. Fetched for the whole view in
     # one query; when a film holds two rows the latest rental wins.
     old_rating: dict[str, object] | None = None
+    # On my CheapCharts wishlist (migration 027). The drawer's "Wishlist it" button and the
+    # wholesale wishlist read are the only writers; the list itself lives on CheapCharts.
+    wishlisted: bool = False
     audit: dict[str, object] | None = None  # {score, reasons:[{code, detail}]} from audit_flags; None = not a suspect
     verdict: dict[str, object] | None = None  # latest audit_verdict row; the dashboard endpoint is its only writer
     # verdict["reasons"] is a comma-joined sorted string (asymmetric with audit["reasons"] above, a list of dicts)

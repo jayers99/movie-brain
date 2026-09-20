@@ -47,7 +47,7 @@ def clear_lang(page: Page) -> None:
 
 def test_language_filter_defaults_to_any(dash: Page):
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
-    assert count(dash) == 8  # every seeded film: nothing is filtered by default
+    assert count(dash) == 10  # every seeded film: nothing is filtered by default
     assert "lang=" not in dash.url  # the default is implicit, not encoded
     set_langs(dash, ["Spanish"])
     assert count(dash) == 1
@@ -58,7 +58,7 @@ def test_language_filter_defaults_to_any(dash: Page):
     assert count(dash) == 1
     clear_lang(dash)
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
-    assert count(dash) == 8
+    assert count(dash) == 10
     assert "lang=" not in dash.url
 
 
@@ -83,7 +83,7 @@ def test_clear_resets_every_control(dash: Page):
     dash.click("#chips-clear")
 
     assert dash.url.split("?")[-1] in ("", dash.url)  # nothing left to encode
-    assert count(dash) == 8
+    assert count(dash) == 10
     expect(dash.locator('.chip[data-group="owned"]')).to_have_text("Owned")
     expect(dash.locator("#f-title")).to_have_value("")
     expect(dash.locator("#f-imdb-min")).to_have_value("")
@@ -100,7 +100,7 @@ def test_any_heads_the_list_then_english(dash: Page):
     assert labels[1] == "English"  # the owner's own language pinned just under it
     assert labels[2:] == sorted(labels[2:]) and "English" not in labels[2:]
     expect(dash.locator("#f-lang-any")).to_be_checked()  # Any is the default selection
-    assert count(dash) == 8
+    assert count(dash) == 10
     dash.click("header h1")  # close the panel so the input shows the selection again
     expect(dash.locator("#f-lang-input")).to_have_value("Any")
     dash.click("#f-lang-input")  # reopen
@@ -144,17 +144,18 @@ def test_rating_columns_show_metacritic_then_rt_then_imdb(dash: Page):
 
 def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Page):
     clear_lang(dash)
-    assert count(dash) == 8  # everything off by default: all eight seeded films, Golf included
+    assert count(dash) == 10  # everything off by default: all ten seeded films, Golf included
     # mc desc: Alpha 92, then the Echo/Bravo mc-70 tie breaks on rt (60 vs 50, against title
     # order); missing values sort after present ones at each level, so imdb-only Foxtrot
     # follows, then the unrated Charlie/Delta by title.
     assert first_titles(dash, 6) == ["Alpha", "Echo", "Bravo", "Foxtrot", "Charlie", "Delta"]
-    # the header counts the whole catalogue (8 seeded films); "reachable" is the market test —
-    # 5 on Criterion now + buyable Hotel; departed Foxtrot and listing-less Golf are not
-    expect(dash.locator("#count-films")).to_have_text("8")
-    expect(dash.locator("#count-reachable")).to_have_text("6")
+    # the header counts the whole catalogue (10 seeded films); "reachable" is the market test —
+    # 7 on Criterion now (Kilo/November added for "Wishlist it") + buyable Hotel; departed
+    # Foxtrot and listing-less Golf are not
+    expect(dash.locator("#count-films")).to_have_text("10")
+    expect(dash.locator("#count-reachable")).to_have_text("8")
     expect(dash.locator("#count-owned")).to_have_text("1")
-    expect(dash.locator("#count-showing")).to_have_text("Showing 8 of 8")
+    expect(dash.locator("#count-showing")).to_have_text("Showing 10 of 10")
     expect(dash.locator("#films tbody tr").first.locator(".c-title a")).to_have_attribute("href", "https://c/alpha")
 
 
@@ -192,27 +193,27 @@ def test_criterion_chip_has_four_on_states(dash: Page):
 def test_chips_stack_with_and(dash: Page):
     clear_lang(dash)
     cycle(dash, "rated")  # Unrated by me
-    assert count(dash) == 5  # Bravo, Charlie, Delta, Golf, Hotel
+    assert count(dash) == 7  # Bravo, Charlie, Delta, Golf, Hotel, Kilo, November
     cycle(dash, "criterion")  # Criterion (on)
-    assert count(dash) == 3  # Bravo, Charlie, Delta — Golf and Hotel have no Criterion listing
+    assert count(dash) == 5  # Bravo, Charlie, Delta, Kilo, November — Golf and Hotel have no Criterion listing
     expect(dash.locator('.chip[data-group="rated"]')).to_have_class(re.compile("active"))
     dash.click("#chips-clear")
-    assert count(dash) == 8
+    assert count(dash) == 10
 
 
 def test_each_chip_alone(dash: Page):
     clear_lang(dash)
     expected = {
-        "reachable": ("reach", 1, 6),  # 5 on Criterion now + buyable Hotel
+        "reachable": ("reach", 1, 8),  # 7 on Criterion now + buyable Hotel
         "unreachable": ("reach", 2, 2),  # departed Foxtrot, listing-less Golf
-        "unrated": ("rated", 1, 5),  # Bravo, Charlie, Delta, Golf, Hotel
+        "unrated": ("rated", 1, 7),  # Bravo, Charlie, Delta, Golf, Hotel, Kilo, November
         "mine": ("rated", 2, 2),  # Alpha 9, Foxtrot 7 (Echo's 0 is not "mine")
-        "criterion": ("criterion", 1, 5),
+        "criterion": ("criterion", 1, 7),
         "leaving": ("criterion", 2, 1),  # Alpha
         "criterion_new": ("criterion", 3, 1),  # Delta, first seen on the Channel today
         "not_criterion": ("criterion", 4, 3),  # departed Foxtrot, discovery Golf, buyable Hotel
         "owned": ("owned", 1, 1),
-        "not_owned": ("owned", 2, 7),
+        "not_owned": ("owned", 2, 9),
     }
     for key, (group, clicks, n) in expected.items():
         dash.click("#chips-clear")
@@ -710,7 +711,7 @@ def test_reachable_chip_is_the_market_test(dash):
     cycle(dash, "reach")  # Not reachable
     assert sorted(t.split()[0] for t in dash.locator("#films tbody tr").all_inner_texts()) == ["Foxtrot", "Golf"]
     cycle(dash, "reach")  # off
-    assert count(dash) == 8
+    assert count(dash) == 10
 
 
 def test_legacy_scope_criterion_url_maps_onto_the_criterion_chip(page, server):
@@ -1103,7 +1104,7 @@ def test_cast_link_closes_the_drawer_and_searches_the_exact_name(dash: Page):
     dash.go_back()  # the open-drawer entry is still behind the search: Back reopens the film
     _settled(dash)
     expect(dash.locator("#search")).to_have_value("")
-    assert count(dash) == 8  # the stale search filter must not survive the walk back
+    assert count(dash) == 10  # the stale search filter must not survive the walk back
     expect(dash.locator("#drawer h2")).to_contain_text("Alpha")
 
 

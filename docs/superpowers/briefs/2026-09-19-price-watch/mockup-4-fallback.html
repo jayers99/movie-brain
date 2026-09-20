@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Wishlist it — the fallback, two ways</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Colours, fonts, pills and the drawer are copied from the real dashboard (static/app.css). */
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3e3; --accent:#b3261e; --chip:#f2f2f2; --chip-on:#1b1b1b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 28px 90px; background:#ecebe7; color:var(--fg); font:14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  .intro, .panel, .variant { max-width:1180px; margin-left:auto; margin-right:auto; }
+  .intro { font-size:17px; line-height:1.55; }
+  .intro h1 { font-size:26px; margin:0 0 6px; }
+  .intro p { margin:6px 0; }
+  .note { background:#fff6d6; border:1px solid #e2cf86; border-radius:8px; padding:10px 14px; margin-top:10px; }
+  .variant { margin-top:28px; }
+  .variant > h2 { font-size:21px; margin:0 0 4px; }
+  .variant > p.what { font-size:16px; margin:0 0 10px; color:#333; }
+  .rec { background:#ffe08a; border-radius:20px; padding:1px 10px; font-size:13px; font-weight:600; margin-left:8px; vertical-align:2px; }
+  .window { display:grid; grid-template-columns:1fr 470px; background:var(--bg); border:1px solid #cfcfcf; border-radius:10px; overflow:hidden; box-shadow:0 2px 10px rgba(0,0,0,.08); min-height:360px; position:relative; }
+  .list { border-right:1px solid var(--line); }
+  .list .head { padding:8px 14px; border-bottom:1px solid var(--line); color:var(--muted); font-size:12px; }
+  table { border-collapse:collapse; width:100%; }
+  td { padding:7px 14px; border-bottom:1px solid var(--line); cursor:pointer; }
+  tr.sel td { background:#f6f6f6; }
+  td.yr { width:60px; color:var(--muted); }
+  td a { color:inherit; text-decoration:none; font-weight:500; }
+  .badge-lists { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .icon-wish { color:#c2410c; font-size:13px; margin-left:2px; }
+  .drawer { padding:16px 20px; }
+  .drawer h3 { margin:0 0 4px; font-size:20px; }
+  .drawer .meta { color:var(--muted); margin:0 0 10px; }
+  .drawer .ratings { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:12px 0; color:var(--muted); }
+  .drawer p { margin:6px 0; }
+  .drawer p.links a { margin-right:8px; color:#1a56db; text-decoration:none; }
+  button.wl { font:inherit; font-size:13px; border:1px solid var(--chip-on); background:var(--bg); border-radius:6px; padding:1px 9px; cursor:pointer; margin-right:4px; }
+  button.wl:hover { background:var(--chip); }
+  button.wl[disabled] { opacity:.6; cursor:default; }
+  button.linkish { font:inherit; font-size:13px; border:0; background:none; color:#c2410c; font-weight:500; cursor:pointer; padding:0; }
+  button.linkish:hover { text-decoration:underline; }
+  .ask { color:var(--fg); }
+  .err { color:var(--accent); }
+  .pretend { color:var(--muted); font-size:12px; font-style:italic; margin-left:6px; }
+  .toast { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); background:#1b1b1b; color:#fff; padding:8px 14px; border-radius:6px; font-size:14px; white-space:nowrap; }
+  .panel { margin-top:30px; background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:16px 20px; font-size:17px; line-height:1.55; }
+  .panel h2 { font-size:21px; margin:0 0 8px; }
+  .panel td { cursor:default; font-size:16px; vertical-align:top; }
+  .panel ol { margin:6px 0 0 1.2em; padding:0; } .panel li { margin:5px 0; }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>"Wishlist it" — the fallback, two ways</h1>
+  <p>The button cannot add the film for you silently, so it does the next best thing: it works out the target, <b>copies it to your clipboard</b>, and <b>opens the film's CheapCharts page</b>. You press the star there and paste. The only open question is <b>when the heart appears</b>.</p>
+  <div class="note"><b>This preview is real where it can be.</b> Clicking the button <i>really</i> copies the real target price and <i>really</i> opens the real CheapCharts page in a new tab — so you can try the whole motion, paste included. No price is ever shown on this page: that is your rule. One row is rigged to fail, to show you the wording; it is marked pretend.</div>
+</div>
+
+<div class="variant" id="vA">
+  <h2>A · The heart appears at once <span class="rec">Recommended</span></h2>
+  <p class="what">One click, heart on the row, done — exactly the motion you described. If you did not finish the add on CheapCharts, click <b>♥ Wishlisted</b> in the drawer to take the heart off again. Recommended because you said simplicity wins.</p>
+  <div class="window"><div class="list"></div><div class="drawer"></div></div>
+</div>
+
+<div class="variant" id="vB">
+  <h2>B · It asks you first</h2>
+  <p class="what">Same click. When you come back, the drawer asks "Did you add it?" The heart appears only when you say yes. The heart is never wrong, but every film costs one more click.</p>
+  <div class="window"><div class="list"></div><div class="drawer"></div></div>
+</div>
+
+<div class="panel">
+  <h2>Try this</h2>
+  <ol>
+    <li>In A, click <b>The Leopard</b>, then <b>♡ Wishlist it</b>. A CheapCharts tab opens. Press the star there and paste (⌘V) into the price box — it should read 5.99. Come back and look at the row.</li>
+    <li>In B, do the same with <b>Nashville</b>, then answer the question in the drawer.</li>
+    <li>Click <b>Mulholland Dr.</b> in either one — it is rigged to fail, so you can read the failure wording.</li>
+    <li>In A, click <b>♥ Wishlisted</b> on a film you just hearted, to see how a heart comes off.</li>
+  </ol>
+</div>
+
+<script>
+const BASE = [
+  { id:'leopard', title:'The Leopard', year:1963, lists:3, itunes:'273058482', target:'5.99' },
+  { id:'nashville', title:'Nashville', year:1975, lists:2, itunes:'366474905', target:'5.99' },
+  { id:'dtrt', title:'Do the Right Thing', year:1989, lists:2, itunes:'282538466', target:'3.99' },
+  { id:'mulholland', title:'Mulholland Dr.', year:2001, lists:4, itunes:'1753833311', fails:true },
+  { id:'bigsleep', title:'The Big Sleep', year:1946, lists:4, owned:true },
+  { id:'dolce', title:'La Dolce Vita', year:1960, lists:3 },
+];
+function copyText(text) {
+  const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select(); let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  ta.remove();
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
+  return ok;
+}
+function setup(root, variant) {
+  const films = BASE.map(f => ({ ...f }));
+  const state = { sel:'leopard', toast:'' };
+  const list = root.querySelector('.list'), drawer = root.querySelector('.drawer');
+  function toast(msg) { state.toast = msg; render(); setTimeout(() => { if (state.toast === msg) { state.toast = ''; render(); } }, 3500); }
+  function renderList() {
+    list.innerHTML = '<div class="head">6 films</div><table>' + films.map(f =>
+      `<tr data-id="${f.id}" class="${f.id === state.sel ? 'sel' : ''}"><td><a>${f.title}</a> <span class="badge-lists">${f.lists} lists</span>`
+      + (f.owned ? ' <span class="badge-owned">owned</span>' : '')
+      + (f.wished ? ' <span class="icon-wish" title="On your CheapCharts wishlist">♥</span>' : '')
+      + (f.fails ? '<span class="pretend">rigged to fail — pretend</span>' : '')
+      + `</td><td class="yr">${f.year}</td></tr>`).join('') + '</table>';
+    list.querySelectorAll('tr').forEach(tr => tr.onclick = () => { state.sel = tr.dataset.id; render(); });
+  }
+  function renderDrawer() {
+    const f = films.find(x => x.id === state.sel), sold = !!f.itunes;
+    let links = '<a>TMDB ↗</a>' + (sold ? '<a>CheapCharts ↗</a>' : '');
+    if (f.wished) links += variant === 'A' ? ' <button class="linkish" data-act="unwish" title="Take the heart off">♥ Wishlisted</button>' : ' <span style="color:#c2410c;font-weight:500">♥ Wishlisted</span>';
+    else if (f.error) links += ' <span class="err">Couldn\'t reach CheapCharts.</span> <button class="wl" data-act="go">Try again</button>';
+    else if (f.asking) links += ' <span class="ask">Did you add it?</span> <button class="wl" data-act="yes">Yes</button><button class="wl" data-act="no">No</button>';
+    else if (sold && !f.owned) links += ' <button class="wl" data-act="go">♡ Wishlist it</button>';
+    drawer.innerHTML = `<h3>${f.title}</h3><p class="meta">${f.year}</p>
+      <div class="ratings">IMDb · Metacritic · Rotten Tomatoes &nbsp;·&nbsp; On lists: ${f.lists}</div>
+      ${f.owned ? '<p>Owned on Apple TV ↗</p>' : sold ? '<p class="meta">Buy on: Apple TV Store (iTunes)</p>' : ''}<p class="links">${links}</p>`
+      + (state.toast ? `<div class="toast">${state.toast}</div>` : '');
+    drawer.querySelectorAll('button[data-act]').forEach(b => b.onclick = () => act(f, b.dataset.act));
+  }
+  function act(f, what) {
+    if (what === 'go') {
+      if (f.fails) { f.error = true; render(); return; }
+      copyText(f.target);
+      window.open('https://www.cheapcharts.com/us/itunes/movies/' + f.itunes, '_blank', 'noopener');
+      if (variant === 'A') { f.wished = true; toast('Target price copied — press the star on CheapCharts and paste.'); }
+      else { f.asking = true; toast('Target price copied — press the star on CheapCharts and paste.'); }
+    } else if (what === 'yes') { f.asking = false; f.wished = true; render(); }
+    else if (what === 'no') { f.asking = false; render(); }
+    else if (what === 'unwish') { f.wished = false; toast('Heart removed. Your CheapCharts wishlist was not changed.'); }
+  }
+  function render() { renderList(); renderDrawer(); }
+  render();
+}
+setup(document.querySelector('#vA .window'), 'A');
+setup(document.querySelector('#vB .window'), 'B');
+</script>
+</body>
+</html>

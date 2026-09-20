@@ -153,7 +153,9 @@
     const title = link + (f.departed ? ' <span class="badge-gone" title="No longer on the Criterion Channel">gone</span>' : '')
       + (listCount > 0 ? ` <span class="badge-lists" title="on ${listCount} curated list${listCount === 1 ? '' : 's'}">${listCount} list${listCount === 1 ? '' : 's'}</span>` : '')
       + (f.owned ? ' <span class="badge-owned" title="Owned on Apple TV">owned</span>' : '')
-      + oldBadge(f) + watchBadge;
+      + oldBadge(f) + watchBadge
+      // On my CheapCharts wishlist — always the last mark on the row, and never a price.
+      + (f.wishlisted ? ' <span class="icon-wish" title="On your CheapCharts wishlist">♥</span>' : '');
     return `<tr data-id="${f.id}"${f.departed ? ' class="departed"' : ''}>
       <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
@@ -551,6 +553,22 @@
     }
     return '';
   }
+  // "Wishlist it" (brief 2026-09-19-price-watch). One slot in the links row, after the CheapCharts
+  // link: the done mark, or the button — shown only for a film the Apple store sells (it holds a
+  // store id, hence a direct CheapCharts page) that I do not own. Anything else: nothing, no message.
+  // The click is reversible (brief 1.2, the owner's ruling at delivery): the "♥ Wishlisted" mark
+  // IS the button, one click taking the film back off again.
+  const WISH_BUTTON = '♡ Wishlist it';
+  const WISH_DONE = '<button class="wish-button wish-done" title="Remove from your CheapCharts wishlist">♥ Wishlisted</button>';
+  function wishSlotHtml(d) {  // the slot's resting content for this film's state
+    if (d.wishlisted) return WISH_DONE;
+    if (!d.cheapcharts_url || d.owned) return '';
+    return `<button class="wish-button">${WISH_BUTTON}</button>`;
+  }
+  function wishHtml(d) {
+    const inner = wishSlotHtml(d);
+    return inner ? ` <span class="wish" data-id="${d.id}">${inner}</span>` : '';
+  }
   function detailHtml(d) {
     const p = d.payload || {};
     const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '';
@@ -633,7 +651,7 @@
         ${d.tmdb_url ? ` <a class="criterion tmdb-link" href="${esc(d.tmdb_url)}" target="_blank" rel="noopener">TMDB ↗</a>` : ''}
         ${d.cheapcharts_url
           ? ` <a class="criterion cheapcharts-link" href="${esc(d.cheapcharts_url)}" target="_blank" rel="noopener">CheapCharts ↗</a>`
-          : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}</p>
+          : buyable ? ` <a class="criterion cheapcharts-link" href="https://www.cheapcharts.com/us/search;q=${encodeURIComponent(d.title)};t=all" target="_blank" rel="noopener">Find on CheapCharts ↗</a>` : ''}${wishHtml(d)}</p>
       ${renderAudit(d)}
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
@@ -743,6 +761,31 @@
     b.setAttribute('aria-pressed', String(unseen));
     const film = state.films.find((f) => f.id === Number(b.dataset.id));
     if (film) film.unseen = unseen;
+  });
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.wish-button'); if (!b || b.disabled) return;
+    const slot = b.closest('.wish'); const id = Number(slot.dataset.id);
+    const film = state.films.find((f) => f.id === id);
+    // The mark is the un-wishlist button (brief 1.2: the click is reversible). "Try again" sits in
+    // the same slot and repeats whichever action failed, remembered on the slot.
+    if (!b.closest('.wish-failed')) slot.dataset.action = b.classList.contains('wish-done') ? 'remove' : 'add';
+    const removing = slot.dataset.action === 'remove';
+    // Adding paces four or five calls to CheapCharts (5-10 s); removing is two. A "Try again"
+    // click starts inside .wish-failed; swap the WHOLE slot to a fresh busy button first, so the
+    // stale failure text never shows beside it, and so it cannot be clicked twice.
+    slot.innerHTML = '<button class="wish-button" disabled>Reaching CheapCharts…</button>';
+    const r = await fetch(`/api/films/${id}/wishlist`, { method: removing ? 'DELETE' : 'POST' }).catch(() => null);
+    if (!r || !r.ok) {
+      // One line whatever went wrong — offline, a refused password, no price history — a failed
+      // add marks nothing, and a failed removal changes nothing: the heart it already had stays.
+      slot.innerHTML = '<span class="wish-failed">Couldn\'t reach CheapCharts. <button class="wish-button">Try again</button></span>';
+      return;
+    }
+    // Patch in place, as the toggles do: re-opening the drawer would desync closeDrawer()'s history bookkeeping.
+    const wishlisted = !removing;
+    if (film) { film.wishlisted = wishlisted; applyFilters(); }
+    // An owned film gets no add button: its slot simply empties.
+    slot.innerHTML = wishSlotHtml({ ...(film || {}), id, wishlisted });
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.tier-pick'); if (!b || b.getAttribute('aria-current') === 'true') return;
