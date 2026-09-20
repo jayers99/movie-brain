@@ -1,5 +1,6 @@
 import json
 
+import responses
 from typer.testing import CliRunner
 
 from movie_brain.application.cheapcharts import RecheckReport, ResolveReport
@@ -964,3 +965,57 @@ def test_lists_import_refuses_a_ranker_slug(config_dir, tmp_path):
     r = runner.invoke(app, ["lists", "import", str(f)])
     assert r.exit_code == 2
     assert "ranker" in r.output
+
+
+@responses.activate
+def test_cheapcharts_wishlist_reads_the_account_and_reports_the_hearts(config_dir, monkeypatch):
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.cheapcharts import ACCOUNT_URL, WISHLIST_URL, Pacer
+    from movie_brain.infrastructure.database import Repository
+
+    monkeypatch.setattr("movie_brain.cli.Pacer", lambda: Pacer(0))
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("The Leopard", 1963, "Luchino Visconti", ""))
+    repo.set_external_id(fid, "itunes", "273058482", date(2026, 9, 19))
+    (config_dir / "credentials.toml").write_text(
+        '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
+    )
+    responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": {"sessionToken": "tok-1"}})
+    responses.post(
+        WISHLIST_URL, json={"status": "success", "results": {"movies": [{"idInStore": 273058482}, {"idInStore": 5}]}}
+    )
+    result = runner.invoke(app, ["cheapcharts", "wishlist"])
+    assert result.exit_code == 0, result.output
+    assert "2 films on CheapCharts" in result.output and "1 known here" in result.output
+    assert "someone@example.test" not in result.output and "tok-1" not in result.output
+    assert repo.wishlisted_film_ids() == {fid}
+
+
+def test_cheapcharts_wishlist_without_credentials_exits_2_and_names_the_file(config_dir):
+    from movie_brain.infrastructure.database import Repository
+
+    Repository(config_dir / "movie-brain.db")
+    result = runner.invoke(app, ["cheapcharts", "wishlist"])
+    assert result.exit_code == 2 and "credentials.toml" in result.output
+
+
+@responses.activate
+def test_cheapcharts_wishlist_unreachable_exits_1_and_keeps_the_hearts(config_dir, monkeypatch):
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.cheapcharts import Pacer
+    from movie_brain.infrastructure.database import Repository
+
+    monkeypatch.setattr("movie_brain.cli.Pacer", lambda: Pacer(0))
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("The Leopard", 1963, "Luchino Visconti", ""))
+    repo.mark_wishlisted(fid, date(2026, 9, 19))
+    (config_dir / "credentials.toml").write_text(
+        '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
+    )
+    result = runner.invoke(app, ["cheapcharts", "wishlist"])  # nothing registered: ConnectionError
+    assert result.exit_code == 1 and "last known hearts" in result.output
+    assert repo.wishlisted_film_ids() == {fid}

@@ -217,3 +217,15 @@ def test_every_remote_failure_becomes_the_one_wishlist_error_and_marks_nothing(r
         wishlist_film(repo, WishlistGateway(FakePrices({"282538466": Decimal("2.99")}), Failing()), fid, D)
     assert repo.wishlisted_film_ids() == set()
     assert str(exc.value) == type(boom).__name__  # the class name only — never a message that could carry a secret
+
+
+def test_merge_moves_the_heart_survivor_wins(repo):
+    a, b = _film(repo, "Alpha", 1950), _film(repo, "Alpha", 1951)
+    repo.mark_wishlisted(b, D)
+    repo.merge_film(b, a, D)
+    assert repo.wishlisted_film_ids() == {a}
+    c, d = _film(repo, "Beta", 1960), _film(repo, "Beta", 1961)
+    repo.mark_wishlisted(c, D)
+    repo.mark_wishlisted(d, D)
+    report = repo.merge_film(d, c, D)
+    assert report.dropped.get("cheapcharts_wishlist") == 1 and repo.wishlisted_film_ids() == {a, c}
