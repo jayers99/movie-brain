@@ -199,6 +199,7 @@ _ONE_ROW_TABLES = (
     "rank_mark",
     "cheapcharts_wishlist",
     "film_trailer",
+    "store_lookup",
 )  # film_id PRIMARY KEY tables
 
 
@@ -1238,16 +1239,19 @@ class Repository:
             for r in rows
         ]
 
-    def films_needing_itunes_id(self, limit: int | None = None) -> list[ItunesTarget]:
-        """Films holding an IMDb id and no iTunes one — the CheapCharts resolver's worklist.
-        A stored id is never re-fetched, which is what makes the backfill self-checkpointing:
-        interrupt it at any point and the next run resumes where it stopped."""
+    def films_needing_itunes_id(self, limit: int | None = None, *, retry_misses: bool = False) -> list[ItunesTarget]:
+        """Films holding an IMDb id and no iTunes one that CheapCharts has not been asked about —
+        the resolver's worklist. A stored id is never re-fetched and a MISS is remembered
+        (`store_lookup`, migration 029), which is what makes the run self-checkpointing AND cheap
+        enough to follow every sync: only films added since are asked. `retry_misses` asks the
+        remembered ones again — Apple starts selling films it did not."""
         sql = (
             "SELECT f.id, f.title, f.year, f.director, x.value AS imdb_id FROM films f "
             "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'imdb' "
             "WHERE " + _NOT_DISPOSED + _IS_MOVIE +
             " AND NOT EXISTS (SELECT 1 FROM external_ids i WHERE i.film_id = f.id AND i.authority = 'itunes')"
-            " ORDER BY f.id"
+            + ("" if retry_misses else " AND NOT EXISTS (SELECT 1 FROM store_lookup s WHERE s.film_id = f.id)")
+            + " ORDER BY f.id"
         )
         if limit is not None:
             sql += " LIMIT ?"
@@ -1257,6 +1261,15 @@ class Repository:
             ItunesTarget(int(r["id"]), str(r["title"]), r["year"], r["director"], str(r["imdb_id"]))
             for r in rows
         ]
+
+    def mark_store_asked(self, film_id: int, today: date) -> None:
+        """CheapCharts was asked about this film and had no confirmed product for it."""
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO store_lookup (film_id, asked_on) VALUES (?, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET asked_on = excluded.asked_on",
+                (film_id, today.isoformat()),
+            )
 
     def films_holding_itunes_id(self, limit: int | None = None, after: int | None = None) -> list[ItunesTarget]:
         """Films holding BOTH an IMDb id and an iTunes one — the audit worklist of
@@ -3135,6 +3148,8 @@ class Repository:
                         kept[table] = {"added_on": loser_row["added_on"]}
                     elif table == "film_trailer":
                         kept[table] = {"film_id": loser_id}
+                    elif table == "store_lookup":
+                        kept[table] = {"asked_on": loser_row["asked_on"]}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",

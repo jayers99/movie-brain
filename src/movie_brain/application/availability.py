@@ -156,9 +156,12 @@ def tmdb_step(
     client: TmdbClient,
     today: date,
     *,
+    weekly: bool = True,
     log: Callable[[str], None] = _stderr,
 ) -> TmdbStepResult:
-    """Provider passes only — keying moved to `application.keying.key_films` (thumbprint T5)."""
+    """Provider passes only — keying moved to `application.keying.key_films` (thumbprint T5).
+    `weekly=False` (sync's after-add mode) stops after the first-check pass: a verb that has just
+    added a few films must never start the whole catalogue's weekly refresh."""
     refreshed = 0
     pmap = repo.provider_map()
     # Watchlist pass — every run, gate or no gate: the whole point is ≤1-day lag
@@ -175,7 +178,8 @@ def tmdb_step(
     if fc_aborted:
         return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed, first_checked=first_checked)
     stamp = repo.get_meta(META_REFRESHED_AT)
-    if stamp is not None and 0 <= (today - date.fromisoformat(stamp)).days <= REFRESH_DAYS:
+    fresh = stamp is not None and 0 <= (today - date.fromisoformat(stamp)).days <= REFRESH_DAYS
+    if fresh or not weekly:
         return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed, first_checked=first_checked)
     refreshed, full_aborted = _refresh_pass(
         repo, client, repo.films_for_provider_refresh(skip_checked_on=today), pmap, today, log

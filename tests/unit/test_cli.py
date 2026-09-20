@@ -1243,3 +1243,87 @@ def test_enrich_trailers_is_dry_run_by_default_and_prints_the_report(config_dir,
     assert r.exit_code == 0, r.output
     assert calls["apply"] is True and calls["refresh"] is True and calls["limit"] == 5
     assert "dry run" not in r.output
+
+
+# ---- a film gets its full enrichment when it is added (owner ruling 2026-09-20) ----
+
+
+def _capture_sync(monkeypatch, calls):
+    from movie_brain.application.catch_up import CatchUpReport
+    from movie_brain.application.enrich import EnrichReport
+
+    def fake_sync(repo, api_key, today, **kw):
+        calls.append(kw)
+        return SyncResult(0, False, 10, 2, False, False, catch_up=CatchUpReport(credits=EnrichReport(2, 2)))
+
+    monkeypatch.setattr("movie_brain.cli.sync", fake_sync)
+
+
+def test_sync_hands_over_the_catch_up_chain_and_prints_its_line(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    r = runner.invoke(app, ["sync"])
+    assert r.exit_code == 0, r.output
+    assert callable(calls[0]["catch_up"]) and not calls[0].get("skip_catalog")
+    assert "caught up — credits: 2 · vectors: skipped" in r.output
+
+
+def test_owned_import_that_creates_films_enriches_them_at_once(config_dir, monkeypatch):
+    import movie_brain.cli as cli
+    from movie_brain.application.owned import OwnedReport
+
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    monkeypatch.setattr(cli, "import_owned", lambda repo, cfg, today, **kw: OwnedReport(0, 870, 600, 3, 20, 3))
+    r = runner.invoke(app, ["owned", "import"])
+    assert r.exit_code == 0, r.output
+    assert len(calls) == 1 and calls[0]["skip_catalog"] is True and callable(calls[0]["catch_up"])
+    assert calls[0].get("notifier") is None  # an add never fires the watchlist alert
+    assert "enriching the 3 new films" in r.output and "caught up —" in r.output
+
+
+def test_owned_import_that_creates_nothing_runs_no_enrichment(config_dir, monkeypatch):
+    import movie_brain.cli as cli
+    from movie_brain.application.owned import OwnedReport
+
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    monkeypatch.setattr(cli, "import_owned", lambda repo, cfg, today, **kw: OwnedReport(0, 870, 600, 0, 20, 3))
+    r = runner.invoke(app, ["owned", "import"])
+    assert r.exit_code == 0 and calls == []
+
+
+def test_an_add_without_an_omdb_key_says_so_and_still_succeeds(config_dir, monkeypatch):
+    import movie_brain.cli as cli
+    from movie_brain.application.owned import OwnedReport
+
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    monkeypatch.setattr(cli, "import_owned", lambda repo, cfg, today, **kw: OwnedReport(0, 870, 600, 3, 20, 3))
+    r = runner.invoke(app, ["owned", "import"])
+    assert r.exit_code == 0 and calls == []
+    assert "not enriched" in r.output and "OMDb key" in r.output
+
+
+def test_enrich_all_is_the_same_enrichment_by_hand(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    r = runner.invoke(app, ["enrich", "all"])
+    assert r.exit_code == 0, r.output
+    assert calls[0]["skip_catalog"] is True and "caught up —" in r.output
+
+
+def test_review_resolve_create_enriches_the_film_it_made_and_other_actions_do_not(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    monkeypatch.setattr("movie_brain.cli.resolve_review", lambda repo, rid, **kw: "created film #9")
+    r = runner.invoke(app, ["review", "resolve", "7", "--create"])
+    assert r.exit_code == 0, r.output
+    assert len(calls) == 1 and calls[0]["skip_catalog"] is True and "enriching the 1 new film…" in r.output
+    r = runner.invoke(app, ["review", "resolve", "7", "--dismiss"])
+    assert r.exit_code == 0 and len(calls) == 1

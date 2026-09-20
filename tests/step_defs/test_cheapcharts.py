@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
+import requests
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.cheapcharts import recheck_itunes_ids, resolve_itunes_ids
@@ -21,9 +22,12 @@ class FakeCheapCharts:
     imdb_batches: list[list[str]] = field(default_factory=list)
     searches: list[str] = field(default_factory=list)
     refuse_after: int | None = None
+    down: bool = False
 
     def products_by_imdb(self, imdb_ids):
         ids = list(imdb_ids)
+        if self.down:
+            raise requests.ConnectionError("cheapcharts down")
         assert len(ids) <= MAX_IMDB_IDS, f"batch of {len(ids)} exceeds the API cap"
         if self.refuse_after is not None and len(self.imdb_batches) >= self.refuse_after:
             raise RateLimited("prices")
@@ -115,6 +119,36 @@ def run_dry(repo, cheapcharts, today, result):
 @when("I resolve cheapcharts ids with apply")
 def run_apply(repo, cheapcharts, today, result):
     result["report"] = resolve_itunes_ids(repo, cheapcharts, today, apply=True, log=lambda _m: None)
+
+
+@when("I resolve cheapcharts ids with apply, retrying the misses")
+def run_apply_retry(repo, cheapcharts, today, result):
+    result["report"] = resolve_itunes_ids(repo, cheapcharts, today, apply=True, retry_misses=True, log=lambda _m: None)
+
+
+@when(parsers.parse('CheapCharts maps "{tt}" to itunes id "{itunes_id}"'))
+def maps_imdb_later(cheapcharts, tt, itunes_id):
+    maps_imdb(cheapcharts, tt, itunes_id)
+
+
+@given("CheapCharts cannot be reached")
+def cc_down(cheapcharts):
+    cheapcharts.down = True
+
+
+@when("CheapCharts can be reached again")
+def cc_up(cheapcharts):
+    cheapcharts.down = False
+
+
+@then(parsers.parse("the second run scanned {n:d} films"))
+def second_scanned(result, n):
+    assert result["report"].scanned == n
+
+
+@then(parsers.parse('CheapCharts was asked about "{tt}" {n:d} time'))
+def asked_times(cheapcharts, tt, n):
+    assert sum(tt in batch for batch in cheapcharts.imdb_batches) == n
 
 
 @when("I recheck cheapcharts ids with apply")

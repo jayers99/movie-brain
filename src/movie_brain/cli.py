@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
@@ -11,6 +12,7 @@ from rich.table import Table
 
 from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
+from movie_brain.application.catch_up import CatchUpReport, catch_up
 from movie_brain.application.cheapcharts import recheck_itunes_ids, resolve_itunes_ids
 from movie_brain.application.embed import embed_films
 from movie_brain.application.enrich import enrich_credits
@@ -169,6 +171,44 @@ def _resolve_unknown(repo: Repository, gateway: WishlistGateway, *, apply: bool)
     return line
 
 
+def _catch_up_chain() -> Callable[[Repository, TmdbClient | None], CatchUpReport]:
+    """The chain sync runs at its tail (application/catch_up.py), built here so the application
+    layer never constructs a CheapCharts client or loads the embedding model itself."""
+    embedder = SentenceTransformerEmbedder() if SentenceTransformerEmbedder.available() else None
+
+    def chain(repo: Repository, tmdb: TmdbClient | None) -> CatchUpReport:
+        return catch_up(
+            repo, date.today(), tmdb=tmdb, cheapcharts=CheapChartsClient(), itunes=ItunesLookup(),
+            embedder=embedder, log=_plain,
+        )
+
+    return chain
+
+
+def _enrich_after_add(repo: Repository, created: int | None) -> None:
+    """A film gets its FULL enrichment when it is added (owner ruling 2026-09-20): everything a
+    sync does to a new film — keying, OMDb, the provider first-check, then credits, vectors, store
+    ids and trailers — without walking Criterion or starting the weekly provider refresh. Every
+    step is a worklist, so this also picks up whatever an earlier interrupted run left behind.
+    Never changes the calling verb's exit code. `created=None` is `enrich all`, run by hand."""
+    if created == 0:
+        return
+    cfg = load_config()
+    api_key = load_api_key(cfg)
+    if not api_key:
+        console.print(f"new films not enriched — no OMDb key: set OMDB_API_KEY or write {cfg.key_file}")
+        return
+    if created is not None:
+        console.print(f"enriching the {created} new film{'' if created == 1 else 's'}…")
+    result = sync(
+        repo, api_key, date.today(), skip_catalog=True, tmdb_token=load_tmdb_token(cfg),
+        config_dir=cfg.config_dir, catch_up=_catch_up_chain(),
+    )
+    console.print(f"keyed: {result.tmdb_matched} · looked up: {result.looked_up} · review: {result.tmdb_reviewed}")
+    if result.catch_up is not None:
+        console.print(f"caught up — {result.catch_up.line()}")
+
+
 @app.command("sync")
 def sync_cmd(
     full: Annotated[bool, typer.Option("--full", help="Force a complete catalog re-walk.")] = False,
@@ -194,12 +234,15 @@ def sync_cmd(
         tmdb_token=load_tmdb_token(cfg),
         config_dir=cfg.config_dir,
         notifier=notify,
+        catch_up=_catch_up_chain(),
     )
     console.print(
         f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk} · "
         f"availability refreshed: {result.tmdb_refreshed} · promoted: {result.mc_promoted} · "
         f"keyed: {result.tmdb_matched} · review: {result.tmdb_reviewed}"
     )
+    if result.catch_up is not None:
+        console.print(f"caught up — {result.catch_up.line()}")
     raise typer.Exit(result.exit_code)
 
 
@@ -352,8 +395,9 @@ def owned_import() -> None:
     token, key = load_tmdb_token(cfg), load_api_key(cfg)
     tmdb = TmdbClient(token) if token else None
     fetcher, cache = session_fetcher(cfg.config_dir, tmdb, OmdbClient(key) if key else None)
+    repo = _repo()
     try:
-        report = import_owned(_repo(), cfg.config_dir, date.today(), fetcher=fetcher, tmdb=tmdb)
+        report = import_owned(repo, cfg.config_dir, date.today(), fetcher=fetcher, tmdb=tmdb)
     finally:
         if cache is not None:
             cache.save()  # the session cache, never the fixture
@@ -362,6 +406,7 @@ def owned_import() -> None:
         f"already: {report.already_owned} · review: {report.review_open} · "
         f"resolved: {report.resolved_to_existing} · keyed: {report.keyed}"
     )
+    _enrich_after_add(repo, report.created)
     raise typer.Exit(report.exit_code)
 
 
@@ -458,6 +503,8 @@ def lists_create_cmd(
     # the scorecard is read as a file as often as on a terminal, and an 80-column wrap would
     # break the two-line-per-entry block the owner scans.
     console.print(scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
+    if apply:
+        _enrich_after_add(repo, report.created)
     raise typer.Exit(report.exit_code)
 
 
@@ -540,6 +587,8 @@ def oldratings_create_cmd(
         if cache is not None:
             cache.save()
     console.print(old_ratings.scorecard(report.rows), markup=False, highlight=False, soft_wrap=True)
+    if apply:
+        _enrich_after_add(repo, sum(1 for row in report.rows if row.kind == "created"))
     raise typer.Exit(report.exit_code)
 
 
@@ -1130,9 +1179,10 @@ def review_resolve(
     client = TmdbClient(token) if token else None
     if eval_csv is None:
         eval_csv = Path(__file__).resolve().parents[2] / "scripts" / "eval" / "thumbprint_eval_v1.csv"
+    repo = _repo()
     try:
         outcome = resolve_review(
-            _repo(),
+            repo,
             review_id,
             today=date.today(),
             film_id=film,
@@ -1152,6 +1202,8 @@ def review_resolve(
         err.print(str(exc))
         raise typer.Exit(1) from exc
     console.print(f"review {review_id}: {outcome}")
+    if create:
+        _enrich_after_add(repo, 1)
 
 
 @audit_app.command("run")
@@ -1210,8 +1262,14 @@ def cheapcharts_resolve_cmd(
     after: Annotated[
         int | None, typer.Option("--after", help="With --recheck: resume after this film id.")
     ] = None,
+    retry_misses: Annotated[
+        bool, typer.Option("--retry-misses", help="Also ask again about films CheapCharts had nothing for.")
+    ] = False,
 ) -> None:
     """Resolve each film's CheapCharts product page and store the iTunes id its link needs.
+
+    A film CheapCharts had nothing for is remembered and not asked about again — Apple does start
+    selling films it did not, so `--retry-misses` asks the remembered ones again (about an hour).
 
     Asks CheapCharts by IMDb id, five films per call, and falls back to a title search only
     where their IMDb index has a hole — a search answer is believed only when the shared
@@ -1250,7 +1308,7 @@ def cheapcharts_resolve_cmd(
         )
         return
     report = resolve_itunes_ids(
-        _repo(), CheapChartsClient(), date.today(), apply=apply, limit=limit, log=_plain
+        _repo(), CheapChartsClient(), date.today(), apply=apply, limit=limit, retry_misses=retry_misses, log=_plain
     )
     console.print(
         f"scanned: {report.scanned} · resolved: {report.resolved} "
@@ -1331,6 +1389,19 @@ def enrich_credits_cmd(
         + (" · ABORTED" if report.aborted else "")
         + ("" if apply else "   (dry run — nothing written)")
     )
+
+
+@enrich_app.command("all")
+def enrich_all_cmd() -> None:
+    """Everything a new film needs, for every film still missing any of it: keying, OMDb, the
+    provider first-check, then credits, search vectors, store ids and trailers.
+
+    This is what runs by itself at the tail of every sync and after every verb that creates films
+    (owned import, lists create, oldratings create, review resolve --create); the verb exists for
+    the day one of those was interrupted. It never walks Criterion and never starts the weekly
+    provider refresh.
+    """
+    _enrich_after_add(_repo(), None)
 
 
 @enrich_app.command("trailers")
