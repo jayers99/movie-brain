@@ -19,6 +19,11 @@ Second trial of the version 2 process. Upstream half only. The deliberate change
 | # | What | Kind |
 |---|---|---|
 | 1 | Story 6 as he saw it said "press Owned again: the mark is back". The real chip is three-way, so the second press is Not owned, not off. Reworded at the freeze; the behaviour he approved is unchanged. | implementation defect in the preview — caught by the read-back, before any build |
+| 2 | On the real dashboard BFI: Film Noir is an UNORDERED list, so it sorts by Metacritic and Out of the Past's neighbour is The Postman Always Rings Twice — not Pursued, as every story says. The mock-up showed the list in file order. The behaviour is unaffected (the tests run the stories word for word on an ordered list), but a story that names a real ORDER has to be checked against the real sort, exactly like a real film or a real control. Found while taking the delivery screenshots. | implementation defect in the preview — caught at delivery, harmless |
+
+## Delivery, 2026-09-20
+
+Built test-first on `feature/STORY-24-find-my-row` (c58d256): 19 new Playwright tests — the six stories under their own names plus the brief's defaults — the three guard tests that passed before the feature existed were each proven by removing their guard; whole suite 1,599 passed, ruff and mypy clean. Walked on a scratch copy of the live data; screenshots `delivery-story-*.png` beside this file. Interruptions during the build: **0**. Unverified: Safari (only Chromium was driven); a window narrower than about 1,100 px; how the grey mark reads on his own screen.
 
 ## Probes used, and whether each changed a decision
 
