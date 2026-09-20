@@ -599,6 +599,16 @@
     const inner = wishSlotHtml(d);
     return inner ? ` <span class="wish" data-id="${d.id}">${inner}</span>` : '';
   }
+  // The trailer link (brief 2026-09-20-trailer-link): FIRST in the links row, so it sits in the same
+  // spot on every film whatever other links the film has. No ↗ — it does not leave the page (and a
+  // BUTTON dressed as a link, so there is no href to land in the URL or to ⌘-click into a new tab). A film
+  // with no stored trailer gets a grey YouTube SEARCH link in its place, which opens a new tab: a
+  // search result is never played inside movie-brain (that is where reviews and reactions come from).
+  const trailerSearchUrl = (d) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${d.title} ${d.year ?? ''} trailer`.replace(/\s+/g, ' '))}`;
+  const trailerSearchHtml = (d) => `<a class="criterion trailer-search" href="${esc(trailerSearchUrl(d))}" target="_blank" rel="noopener">Find a trailer on YouTube ↗</a>`;
+  function trailerLinkHtml(d) {
+    return (d.trailers || []).length ? '<button class="trailer-link">▶ Trailer</button>' : trailerSearchHtml(d);
+  }
   function detailHtml(d) {
     const p = d.payload || {};
     const poster = p.Poster && p.Poster !== 'N/A' ? `<img class="poster" src="${esc(p.Poster)}" alt="">` : '';
@@ -684,7 +694,7 @@
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
       ${streaming ? `<p class="meta">Also streaming on: ${streaming}</p>` : ''}
       ${buyable ? `<p class="meta">Buy on: ${buyable}</p>` : ''}
-      <p class="links">${d.url ? `<a class="criterion criterion-link" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
+      <p class="links">${trailerLinkHtml(d)}${d.url ? ` <a class="criterion criterion-link" href="${esc(d.url)}" target="_blank" rel="noopener">Open on Criterion ↗</a>` : ''}
         ${d.tmdb_url ? ` <a class="criterion tmdb-link" href="${esc(d.tmdb_url)}" target="_blank" rel="noopener">TMDB ↗</a>` : ''}
         ${d.cheapcharts_url
           ? ` <a class="criterion cheapcharts-link" href="${esc(d.cheapcharts_url)}" target="_blank" rel="noopener">CheapCharts ↗</a>`
@@ -696,13 +706,127 @@
   let drawerSeq = 0;
   let drawerOpenPushed = false; // true once the currently-open drawer got its own pushState entry
   let drawnFilm = null;         // the film whose details are on screen — where a failed step falls back to
+  let drawnDetail = null;       // …and its detail payload: what the trailer window plays from
   // The one close choke point (direct close, popstate close, person links): the redraw is what
   // turns the white row into the mark.
   function hideDrawer() {
+    closeTrailer();  // Back while a trailer is up must not leave it orphaned over the list
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
-    state.openFilm = null; drawnFilm = null; openIndex = null;
+    state.openFilm = null; drawnFilm = null; drawnDetail = null; openIndex = null;
     renderRows();
   }
+  // ---- The trailer window (brief 2026-09-20-trailer-link) ----
+  // Plays the film's STORED trailers (`enrich trailers` looked them up; nothing is fetched here) in
+  // play order: the videos TMDB types as a trailer, on YouTube, then Apple's own store preview.
+  // Over the whole browser window, playing at once, never in the URL or history. Whatever fails —
+  // YouTube's onError (removed, embedding refused), its script not loading, a player that never
+  // becomes READY (seen in rehearsal: YouTube sat on a broken video and reported nothing; an advert
+  // plays AFTER ready, so it cannot trip this), Apple's file erroring — falls through to the next
+  // source, and past the last one the window says so. YouTube's script is injected on the FIRST
+  // trailer, never at page load: the dashboard must not need YouTube to boot.
+  const trailerEl = $('#trailer'), trailerScreen = $('#trailer-screen');
+  const trailerCfg = { readyMs: 8000 };
+  let trailer = null;      // { d, list, i, seq, failed } while the window is up
+  let ytPlayer = null, ytTimer = null, ytApi = null;
+  function loadYouTube() {
+    ytApi = ytApi || new Promise((resolve, reject) => {
+      if (window.YT && window.YT.Player) return resolve();
+      window.onYouTubeIframeAPIReady = resolve;  // fires once per page: set BEFORE the script goes in
+      const el = document.createElement('script');
+      el.src = 'https://www.youtube.com/iframe_api';
+      el.onerror = () => { ytApi = null; el.remove(); reject(new Error('youtube unreachable')); };  // the next trailer retries
+      document.head.appendChild(el);
+    });
+    return ytApi;
+  }
+  function dropPlayer() {
+    clearTimeout(ytTimer); ytTimer = null;
+    if (ytPlayer) { try { ytPlayer.destroy(); } catch { /* already gone */ } ytPlayer = null; }
+    const v = trailerScreen.querySelector('video');
+    if (v) { v.pause(); v.removeAttribute('src'); v.load(); }  // or the download carries on behind a closed window
+    trailerScreen.innerHTML = '';
+  }
+  function closeTrailer() {
+    if (!trailer) return;
+    trailer = null; dropPlayer(); trailerEl.hidden = true;
+  }
+  function playTrailer(i) {
+    const run = trailer; if (!run) return;
+    dropPlayer();
+    run.i = i;
+    const seq = ++run.seq, { d, list } = run, src = list[i];
+    // Every callback below may arrive late — after a close, a switch, a fall-through — and must then
+    // do nothing: `live` is the token. A failure marks its source and moves to the first source that
+    // has not failed, so Apple failing after a hand-made switch goes BACK to a working YouTube.
+    // Deferred, because YouTube calls onError from inside the player a fall-through destroys.
+    const live = () => trailer === run && run.seq === seq;
+    const fail = (every) => setTimeout(() => {
+      if (!live()) return;
+      list.forEach((t, k) => { if (k === i || (every && t.source === 'youtube')) run.failed.add(k); });
+      const k = list.findIndex((_, j) => !run.failed.has(j));
+      playTrailer(k >= 0 ? k : list.length);
+    }, 0);
+    $('#trailer-frame').className = src && src.source === 'apple' ? 'apple' : '';
+    $('#trailer-title').textContent = `${d.title}${d.year ? ` (${d.year})` : ''}`;
+    $('#trailer-what').textContent = !src ? '' : src.source === 'apple' ? `— ${src.name}` : `— ${src.name} · YouTube`;
+    const yt = list.findIndex((t, k) => t.source === 'youtube' && !run.failed.has(k));
+    const apple = list.findIndex((t, k) => t.source === 'apple' && !run.failed.has(k));
+    $('#trailer-sources').innerHTML = src && yt >= 0 && apple >= 0
+      ? `<button data-i="${src.source === 'youtube' ? i : yt}"${src.source === 'youtube' ? ' class="on"' : ''}>YouTube</button><button data-i="${apple}"${src.source === 'apple' ? ' class="on"' : ''}>Apple</button>` : '';
+    if (!src) {
+      trailerScreen.innerHTML = `<div class="trailer-sorry"><div>This trailer won't play here.</div>${trailerSearchHtml(d)}</div>`;
+      return;
+    }
+    if (src.source === 'apple') {
+      if (!/^https:\/\//.test(src.ref)) return void fail();
+      const v = document.createElement('video');
+      v.controls = true; v.autoplay = true; v.playsInline = true;
+      v.addEventListener('error', () => fail());
+      v.src = src.ref;
+      trailerScreen.appendChild(v);
+      return;
+    }
+    // The clock starts with the SOURCE, not the player: `iframe_api` is only a loader for a second
+    // script, and if that one never arrives neither `onerror` nor ready ever fires. No API by then
+    // means YouTube is unreachable — skip every YouTube source, not 8 s of black for each.
+    let built = false;
+    ytTimer = setTimeout(() => fail(!built), trailerCfg.readyMs);
+    loadYouTube().then(() => {
+      if (!live()) return;
+      built = true;
+      const slot = document.createElement('div');
+      trailerScreen.appendChild(slot);
+      ytPlayer = new window.YT.Player(slot, { videoId: src.ref, host: 'https://www.youtube-nocookie.com', width: '100%', height: '100%',
+        playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
+        events: { onReady: (e) => { if (!live()) return; clearTimeout(ytTimer); ytTimer = null; e.target.playVideo(); }, onError: () => fail() } });
+    }, () => fail(true));
+  }
+  // Only for the film whose details are ON SCREEN: right after ↓ the white row has moved but the
+  // new film's details (and trailers) have not arrived — T must not play the previous film's.
+  function openTrailer() {
+    const d = drawnDetail, list = d && d.trailers || [];
+    if (drawer.hidden || trailer || !list.length || state.openFilm !== drawnFilm) return;
+    trailer = { d, list, i: 0, seq: 0, failed: new Set() }; trailerEl.hidden = false;
+    playTrailer(0);
+  }
+  body.addEventListener('click', (e) => { if (e.target.closest('.trailer-link')) openTrailer(); });
+  $('#trailer-close').addEventListener('click', closeTrailer);
+  trailerEl.addEventListener('click', (e) => { if (e.target === trailerEl || e.target.classList.contains('trailer-hint')) closeTrailer(); });
+  $('#trailer-sources').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && trailer) playTrailer(Number(b.dataset.i)); });
+  // CAPTURE phase, ahead of every other key handler on the page: while a trailer is up Esc closes
+  // IT and not the drawer, and ↑ ↓ do not step the drawer underneath. Otherwise T plays the open
+  // film's trailer — plain T only, and never while typing.
+  document.addEventListener('keydown', (e) => {
+    if (trailer) {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeTrailer(); }
+      else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopImmediatePropagation(); }
+      return;
+    }
+    if ((e.key !== 't' && e.key !== 'T') || drawer.hidden || e.metaKey || e.altKey || e.ctrlKey) return;
+    if (e.target.matches('input, textarea, select')) return;
+    e.preventDefault(); openTrailer();
+  }, true);
+
   // Person links (drawer spec D4). Close WITHOUT walking history back: closeDrawer() would call
   // history.back(), and the popstate handler then re-reads state from the previous URL, wiping
   // the query set here (spec §4's ordering hazard). Pushing a fresh entry instead leaves the
@@ -738,7 +862,8 @@
     }
     const d = await r.json();
     if (seq !== drawerSeq) return;
-    body.innerHTML = detailHtml(d);
+    closeTrailer();  // a redraw (popstate, a step that was in flight) never happens under an open trailer
+    body.innerHTML = detailHtml(d); drawnDetail = d;
     drawer.hidden = false; backdrop.hidden = false; drawer.scrollTop = 0;
     state.openFilm = id; state.mark = id; drawnFilm = id;
     const at = state.filtered.findIndex((f) => f.id === id);
@@ -974,7 +1099,7 @@
     if (state.openFilm != null) openDrawer(state.openFilm, 'keep'); else closeDrawer(true);
   });
 
-  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm, 'keep'); } };
+  window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, trailer: trailerCfg, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm, 'keep'); } };
 
   // ---- boot ----
   async function boot() {

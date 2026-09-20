@@ -66,7 +66,7 @@ button.info { border:0; background:none; cursor:pointer; font-size:16px; }
 #drawer-close { position:absolute; top:10px; right:12px; border:0; background:none; font-size:18px; cursor:pointer; }
 #drawer .step-hint { position:absolute; top:14px; right:44px; color:var(--muted); font-size:12px; }
 #drawer img.poster { max-width:200px; float:right; margin:0 0 12px 12px; }
-#drawer h2 { margin:0 0 4px; padding-right:180px; }  /* a long title must not run under the step hint and ✕ */
+#drawer h2 { margin:0 0 4px; padding-right:250px; }  /* a long title must not run under the step hint and ✕ */
 #drawer .meta { color:var(--muted); margin-bottom:10px; }
 #drawer dl { display:grid; grid-template-columns:max-content 1fr; gap:4px 12px; margin:12px 0; }
 #drawer dt { color:var(--muted); }
@@ -129,3 +129,22 @@ input.revisit-note { display:block; width:100%; max-width:320px; font:inherit; p
 .cast-more[open] > summary .when-open { display:inline; }
 #drawer ul.cast-full { margin:4px 0 0; padding:0; list-style:none; columns:2; column-gap:24px; }
 #drawer ul.cast-full li { break-inside:avoid; margin:1px 0; }
+
+/* The trailer link and its window (brief 2026-09-20-trailer-link). The window covers the WHOLE
+   browser window, above the drawer (6) and the toast (7). */
+#drawer p.links a.trailer-search { color:var(--muted); }
+#drawer p.links button.trailer-link { background:none; border:0; padding:0; margin-right:6px; font:inherit; color:LinkText; text-decoration:underline; cursor:pointer; }
+#trailer { position:fixed; inset:0; z-index:20; background:rgba(0,0,0,.82); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+#trailer[hidden] { display:none; }
+#trailer-frame { position:relative; width:min(1280px, 92vw, calc((100vh - 130px) * 16 / 9)); }
+#trailer-frame.apple { width:min(960px, 92vw, calc((100vh - 130px) * 16 / 9)); }  /* Apple's previews are 640 px wide */
+#trailer-screen { position:relative; width:100%; aspect-ratio:16 / 9; background:#000; border-radius:6px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.6); }
+#trailer-screen iframe, #trailer-screen video, #trailer-screen > div { position:absolute; inset:0; width:100%; height:100%; border:0; }
+#trailer-screen .trailer-sorry { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; color:#ddd; font-size:17px; }
+#trailer-screen .trailer-sorry a { color:#9ec1ff; }
+#trailer-caption { display:flex; justify-content:space-between; align-items:baseline; gap:16px; color:#e8e8e8; font-size:15px; padding:10px 2px 0; }
+#trailer-what { color:#b8b8b8; }
+#trailer-sources button { font:inherit; font-size:13px; color:#b8b8b8; background:none; border:1px solid #666; border-radius:999px; padding:1px 10px; margin-left:4px; cursor:pointer; }
+#trailer-sources button.on { color:#111; background:#e8e8e8; border-color:#e8e8e8; }
+#trailer-close { position:absolute; top:-38px; right:-4px; border:0; background:none; color:#fff; font-size:24px; cursor:pointer; }
+#trailer .trailer-hint { color:#9a9a9a; font-size:13px; margin-top:10px; }

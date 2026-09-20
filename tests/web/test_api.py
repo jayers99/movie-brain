@@ -119,6 +119,7 @@ def test_summary_and_config(client):
         "prose": 0,
         "old_ratings_linked": 0,
         "old_ratings": 0,
+        "trailers": 0,
     }
     cfg = client.get("/api/config").get_json()
     assert cfg["canned_thresholds"] == {
@@ -339,6 +340,17 @@ def test_detail_carries_credits_overview_and_the_tmdb_link(client, repo):
         "writers": [],
     }
     assert "credits" not in client.get("/api/films").get_json()[0]  # detail-only (spec D10)
+
+
+def test_detail_carries_the_stored_trailers_and_the_list_does_not(client, repo):
+    from movie_brain.domain.trailers import APPLE, APPLE_NAME, YOUTUBE, Trailer
+
+    fid = client.get("/api/films").get_json()[0]["id"]
+    assert client.get(f"/api/films/{fid}").get_json()["trailers"] == []  # never looked up
+    picks = [Trailer(YOUTUBE, "trlr0000001", "Official Trailer"), Trailer(APPLE, "https://video-ssl.itunes.apple.com/x.m4v", APPLE_NAME)]
+    repo.write_trailers(fid, 1, "900000001", picks, date(2026, 9, 20))
+    assert client.get(f"/api/films/{fid}").get_json()["trailers"] == [t.to_dict() for t in picks]
+    assert "trailers" not in client.get("/api/films").get_json()[0]  # detail-only
 
 
 def test_detail_of_an_unenriched_film_has_null_credits(client):

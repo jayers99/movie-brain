@@ -34,6 +34,7 @@ from movie_brain.domain.models import (
     ServiceMeta,
     TieredEntry,
     TmdbCredits,
+    TrailerTarget,
     YearBackfillTarget,
     film_key,
 )
@@ -56,6 +57,7 @@ from movie_brain.domain.search import (
     trigram_query,
 )
 from movie_brain.domain.thumbprint import edition_label, title_norm
+from movie_brain.domain.trailers import Trailer
 from movie_brain.domain.watch import apple_tv_url, best_source, watch_url
 from movie_brain.infrastructure.cheapcharts import product_url
 
@@ -196,6 +198,7 @@ _ONE_ROW_TABLES = (
     "unseen",
     "rank_mark",
     "cheapcharts_wishlist",
+    "film_trailer",
 )  # film_id PRIMARY KEY tables
 
 
@@ -218,6 +221,8 @@ _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = 
 # namespace and the providers endpoint is movie-only, so a series must never enter a TMDB
 # keying worklist — it would be matched against /search/movie and mis-keyed.
 _IS_MOVIE = " AND f.kind = 'movie'"
+
+_TRAILERS_STALE = "(t.film_id IS NULL OR t.tmdb_id IS NOT x.tmdb_id OR t.itunes_id IS NOT x.itunes_id) AND "
 
 # One id per film for identity authorities; claim authorities may repeat (migration 012).
 KEY_AUTHORITIES: frozenset[str] = frozenset({"tmdb", "imdb"})
@@ -1297,6 +1302,67 @@ class Repository:
                 (new, film_id, authority, old),
             )
             return cur.rowcount > 0
+
+    # trailers (trailer-link brief, migration 028) ------------------------------
+    def films_needing_trailers(self, limit: int | None = None, *, refresh: bool = False) -> list[TrailerTarget]:
+        """Live movies holding a TMDB or a store id whose `film_trailer` row is missing, or was
+        made under a DIFFERENT tmdb or store id than the film now holds (`IS NOT`, because a film
+        with no store id must compare equal to a row looked up with none). `refresh` selects
+        every such film: YouTube loses videos and TMDB gains them. The row is stamped under the
+        store id the drawer's own links point at (`MIN(value)`), but the target carries EVERY store
+        product the film holds: a removed product has no preview, and its re-listing may."""
+        sql = (
+            "SELECT f.id, f.title, x.tmdb_id, x.itunes_ids FROM films f JOIN ("
+            "  SELECT film_id, MIN(CASE WHEN authority = 'tmdb' THEN CAST(value AS INTEGER) END) AS tmdb_id, "
+            "         MIN(CASE WHEN authority = 'itunes' THEN value END) AS itunes_id, "
+            "         GROUP_CONCAT(CASE WHEN authority = 'itunes' THEN value END) AS itunes_ids "
+            "  FROM external_ids WHERE authority IN ('tmdb', 'itunes') GROUP BY film_id"
+            ") x ON x.film_id = f.id "
+            "LEFT JOIN film_trailer t ON t.film_id = f.id WHERE "
+            + ("" if refresh else _TRAILERS_STALE)
+            + _NOT_DISPOSED + _IS_MOVIE
+            # A refresh asks the longest-unasked first, so `--refresh --limit N` run twice covers 2N
+            # films and an interrupted refresh carries on instead of starting over.
+            + (" ORDER BY t.fetched_on IS NOT NULL, t.fetched_on, f.id" if refresh else " ORDER BY f.id")
+        )
+        if limit is not None:
+            sql += " LIMIT ?"
+        with self._conn() as c:
+            rows = c.execute(sql, (limit,) if limit is not None else ()).fetchall()
+        return [
+            TrailerTarget(
+                int(r["id"]), str(r["title"]),
+                int(r["tmdb_id"]) if r["tmdb_id"] is not None else None,
+                tuple(sorted(str(r["itunes_ids"]).split(","))) if r["itunes_ids"] else (),
+            )
+            for r in rows
+        ]
+
+    def write_trailers(
+        self, film_id: int, tmdb_id: int | None, itunes_id: str | None, trailers: Sequence[Trailer], today: date
+    ) -> None:
+        with self._conn() as c:
+            c.execute(
+                "INSERT INTO film_trailer (film_id, tmdb_id, itunes_id, trailers, fetched_on) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(film_id) DO UPDATE SET tmdb_id = excluded.tmdb_id, itunes_id = excluded.itunes_id, "
+                "trailers = excluded.trailers, fetched_on = excluded.fetched_on",
+                (film_id, tmdb_id, itunes_id, json.dumps([t.to_dict() for t in trailers]), today.isoformat()),
+            )
+
+    def film_trailers(self, film_id: int) -> list[dict[str, str]]:
+        """The stored play order, `[]` for a film never looked up — detail-only, never on a list view."""
+        with self._conn() as c:
+            row = c.execute("SELECT trailers FROM film_trailer WHERE film_id = ?", (film_id,)).fetchone()
+        stored: list[dict[str, str]] = json.loads(row["trailers"]) if row is not None else []
+        return stored
+
+    def trailer_count(self) -> int:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT COUNT(*) FROM film_trailer t JOIN films f ON f.id = t.film_id "
+                "WHERE t.trailers != '[]' AND " + _NOT_DISPOSED
+            ).fetchone()
+            return int(row[0])
 
     # credits (power search, Plan A) -----------------------------------------
     def films_needing_credits(self, limit: int | None = None) -> list[CreditsTarget]:
@@ -3067,6 +3133,8 @@ class Repository:
                         kept[table] = {"marked_on": loser_row["marked_on"]}
                     elif table == "cheapcharts_wishlist":
                         kept[table] = {"added_on": loser_row["added_on"]}
+                    elif table == "film_trailer":
+                        kept[table] = {"film_id": loser_id}
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -3564,4 +3632,5 @@ class Repository:
             "prose": self.prose_count(),
             "old_ratings_linked": self.old_rating_summary()[0],
             "old_ratings": self.old_rating_summary()[1],
+            "trailers": self.trailer_count(),
         }
