@@ -65,3 +65,20 @@ First trial of the version 2 process. Upstream half only. Times are rough, read 
 |---|---|
 | Outcome map | the outcome is already on record in your own words (08-29 handoff) |
 | Visual-feel alternatives | too early — structure first |
+
+## Scorecard — build, delivery and hands-on test (2026-09-19 evening → 2026-09-20)
+
+Filled in by the builder; the cells marked *yours* are for you.
+
+| Measure | Value |
+|---|---|
+| Your total active minutes, upstream (shaping) | *yours* — the rows above suggest roughly 45–60, of which about 20 bought nothing (the browser-watching exercise) |
+| Your total active minutes, build → merge | *yours* — you read one delivery message, gave three corrections, ran two commands and tested by hand |
+| Questions put to you during the build (kickoff → first delivery) | **0** — seven tasks, a final review and a fix wave ran without one |
+| Interruptions after delivery | **1** — "please run the read-only probe and paste the redacted shape" (the permission check would not let me run anything that logs in). Tag: *yours* |
+| Corrections by kind | changed preference or misunderstood intent: **1** (no un-wishlist — correction 6, yours to tag) · implementation defect: **2** (every wishlist read failed against the real service — 7; a wishlisted film with no store id showed nothing — 8) · both defects caught by your hands-on test, none by 1,546 tests and four reviews |
+| What the hands-on test cost and bought | about 25 minutes of yours; it found the only two defects that mattered, both invisible to every automated check because the checks shared the brief's wrong sentence or never pictured the state |
+| Brief amendments | 1.1 (build defaults) · 1.2 (reversible, yours) · 1.3 (read before write; real answer shapes) · 1.4 (`cheapcharts wishlist --resolve`) |
+| Commits on the branch | 15, merged 2026-09-20 |
+
+**What the trial says about the process (the builder's reading — argue with it).** The upstream half did its job: zero build-time questions, and the one thing you overruled at delivery (no un-wishlist) was a line you approved by reading, never by using — the same failure as correction 4, so the rule stands: *anything you must agree to goes in the clickable thing*, including what is left out. The expensive misses were not about intent at all. Both came from treating a sentence in the brief as a fact about the outside world: "answers carry `status`" was seen on three calls and written as if seen on four, and "most films will show no button" was never followed to "so a wishlisted film shows nothing". Two cheap rules would have caught both before your time was spent: (1) every fixture for an external answer is captured from a real, redacted answer — the brief must say which calls' answers were actually seen; (2) before delivery, walk every state a real row can be in (wishlisted × has store id × owned) against the real data on the scratch copy, not only the states the acceptance table names. A third observation: the hands-on test on a scratch copy of real data, with the real account, is where this feature became correct — it should be scheduled as the main verification step for anything that talks to an outside service, not as a formality after the tests pass.
