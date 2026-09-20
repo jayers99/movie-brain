@@ -1,4 +1,4 @@
-""""Wishlist it" (brief 2026-09-19-price-watch): put a film on the owner's CheapCharts wishlist at
+"""Wishlist it (brief 2026-09-19-price-watch): put a film on the owner's CheapCharts wishlist at
 its lowest price ever plus one dollar, and mirror which films are there so the row can show a
 heart. The wishlist itself stays on CheapCharts — it alerts his phone and makes buying easy.
 

@@ -758,8 +758,10 @@
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.wish-button'); if (!b || b.disabled) return;
     const slot = b.closest('.wish'); const id = Number(slot.dataset.id);
-    // Four or five paced calls to CheapCharts: 5-10 s. The button says so and cannot be clicked twice.
-    b.disabled = true; b.textContent = 'Reaching CheapCharts…';
+    // Four or five paced calls to CheapCharts: 5-10 s. A "Try again" click starts inside
+    // .wish-failed; swap the WHOLE slot to a fresh busy button first, so the stale failure text
+    // never shows beside it, and so it cannot be clicked twice.
+    slot.innerHTML = '<button class="wish-button" disabled>Reaching CheapCharts…</button>';
     const r = await fetch(`/api/films/${id}/wishlist`, { method: 'POST' }).catch(() => null);
     if (!r || !r.ok) {
       // One line whatever went wrong — offline, a refused password, no price history — and nothing is marked.

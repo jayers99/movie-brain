@@ -202,11 +202,13 @@ class CheapChartsClient:
     def lowest_price(self, itunes_id: str) -> Decimal | None:
         """The product's lowest price EVER, computed from its full history — never taken from
         `priceHdIsLowest`, so the number is ours. HD history first; a film with no HD history
-        uses the SD one; None when there is no history at all (or no such product)."""
+        uses the SD one; None when there is no history at all (or no such product, or `results`
+        comes back in a shape we've never seen — isinstance-guarded so no exception escapes)."""
         data = self._get(
             DETAIL_URL, {"store": STORE, "country": COUNTRY, "itemType": "movies", "idInStore": itunes_id}
         )
-        movie = (data.get("results") or {}).get("movies")
+        results = data.get("results")
+        movie = results.get("movies") if isinstance(results, dict) else None
         if not isinstance(movie, dict):
             return None
         for field in ("priceHdEvolution", "priceSdEvolution"):
@@ -225,7 +227,12 @@ class CheapChartsClient:
         if resp.status_code == 429:
             raise RateLimited(url)
         resp.raise_for_status()
-        data: dict[str, Any] = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:
+            raise CheapChartsError("answer was not JSON") from None
+        if not isinstance(data, dict):
+            raise CheapChartsError("answer was not a JSON object")
         return data
 
 
@@ -250,9 +257,17 @@ class CheapChartsAccount:
         self._token: str | None = None
 
     def wishlist_ids(self) -> list[str]:
-        """The iTunes ids of every film on the wishlist, in CheapCharts' order."""
+        """The iTunes ids of every film on the wishlist, in CheapCharts' order. `results` not an
+        object, or a missing/non-list `movies` inside it, is a shape the API has never been
+        observed to send — refused rather than read as an empty wishlist, which
+        `replace_wishlist`'s wholesale replace would turn into erasing every real heart."""
         data = self._wishlist("getShortItemList_v2")
-        movies = (data.get("results") or {}).get("movies") or []
+        results = data.get("results")
+        if not isinstance(results, dict):
+            raise CheapChartsError("unexpected answer shape")
+        movies = results.get("movies")
+        if not isinstance(movies, list):
+            raise CheapChartsError("unexpected answer shape")
         return [str(m["idInStore"]) for m in movies if isinstance(m, dict) and m.get("idInStore")]
 
     def add_item(self, itunes_id: str) -> bool:
@@ -299,7 +314,12 @@ class CheapChartsAccount:
                 "appEntity": "cc_main_website",
             },
         )
-        token = (data.get("additionalInfo") or {}).get("sessionToken") if data.get("status") == "success" else None
+        if data.get("status") != "success":
+            raise CheapChartsError("login refused")
+        info = data.get("additionalInfo")
+        if not isinstance(info, dict):
+            raise CheapChartsError("unexpected answer shape")
+        token = info.get("sessionToken")
         if not isinstance(token, str) or not token:
             raise CheapChartsError("login refused")
         self._token = token

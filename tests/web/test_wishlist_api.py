@@ -159,6 +159,17 @@ def test_acceptance_cheapcharts_unreachable_or_password_refused_marks_nothing(re
 
 
 @responses.activate
+def test_acceptance_a_reshaped_detaildata_answer_is_the_one_failure_line(repo):
+    """A `DetailData` shape the API has never sent (F2) must not surface as a 500 — it ends as
+    the drawer's one ordinary failure line, and marks nothing."""
+    fid = _film(repo, "Do the Right Thing", 1989, DTRT)
+    responses.get(DETAIL_URL, json={"results": ["not", "a", "dict"]})
+    r = _real_client(repo).post(f"/api/films/{fid}/wishlist")
+    assert r.status_code == 502 and r.get_json() == {"error": "Couldn't reach CheapCharts."}
+    assert repo.wishlisted_film_ids() == set()
+
+
+@responses.activate
 def test_acceptance_owned_and_unsold_films_never_reach_cheapcharts(repo):
     big_sleep = _film(repo, "The Big Sleep", 1946, "290555722")
     repo.mark_owned(big_sleep, D)

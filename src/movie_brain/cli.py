@@ -46,7 +46,7 @@ from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, pa
 from movie_brain.application.wishlist import WishlistError, WishlistGateway, refresh_wishlist
 from movie_brain.domain.models import ServiceMeta
 from movie_brain.infrastructure.cheapcharts import CheapChartsAccount, CheapChartsClient, Pacer
-from movie_brain.infrastructure.config import load_api_key, load_config, load_tmdb_token
+from movie_brain.infrastructure.config import Config, load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.credentials import load_credentials
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.embeddings import SemanticUnavailable, SentenceTransformerEmbedder
@@ -58,7 +58,12 @@ if TYPE_CHECKING:
     from movie_brain.infrastructure.thumbprint_fetch import CandidateCache, CandidateFetcher
 
 app = typer.Typer(
-    name="movie-brain", help="Personal film brain: Criterion listings, OMDb ratings, my ratings.", no_args_is_help=True
+    name="movie-brain",
+    help="Personal film brain: Criterion listings, OMDb ratings, my ratings.",
+    no_args_is_help=True,
+    # A crash's traceback would otherwise print every frame's locals — including a loaded
+    # credentials tuple or a login answer sitting in a wishlist verb's own frame.
+    pretty_exceptions_show_locals=False,
 )
 export_app = typer.Typer(help="Export data.")
 app.add_typer(export_app, name="export")
@@ -109,10 +114,10 @@ def _repo() -> Repository:
         raise typer.Exit(2) from exc
 
 
-def _wishlist_gateway() -> WishlistGateway | None:
+def _wishlist_gateway(cfg: Config) -> WishlistGateway | None:
     """The CheapCharts account behind "Wishlist it", or None when `credentials.toml` has no
     usable [cheapcharts] section. One Pacer for both clients: they are one host."""
-    creds = load_credentials(load_config(), "cheapcharts")
+    creds = load_credentials(cfg, "cheapcharts")
     if creds is None:
         return None
     pacer = Pacer()
@@ -169,7 +174,7 @@ def dashboard(
 
     embedder = SentenceTransformerEmbedder() if SentenceTransformerEmbedder.available() else None
     repo = _repo()
-    gateway = _wishlist_gateway()
+    gateway = _wishlist_gateway(load_config())
     console.print(f"movie-brain dashboard → http://{host}:{port}")
     console.print(
         "semantic search: "
@@ -1223,9 +1228,10 @@ def cheapcharts_wishlist_cmd() -> None:
     write is the local mirror, which the dashboard refreshes the same way every time it starts —
     so there is no dry run. Prints counts only, never a price or anything from the account.
     """
-    gateway = _wishlist_gateway()
+    cfg = load_config()
+    gateway = _wishlist_gateway(cfg)
     if gateway is None:
-        err.print(f"no [cheapcharts] username/password in {load_config().credentials_file}", markup=False)
+        err.print(f"no [cheapcharts] username/password in {cfg.credentials_file}", markup=False)
         raise typer.Exit(2)
     try:
         console.print(_refresh_hearts(_repo(), gateway))

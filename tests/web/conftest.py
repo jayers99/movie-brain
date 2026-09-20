@@ -34,7 +34,7 @@ class FakeAccount:
         self.targets: dict[str, Decimal] = {ECHO_ITUNES: Decimal("5.99")}
 
     def add_item(self, itunes_id: str) -> bool:
-        time.sleep(0.4)  # long enough for "Reaching CheapCharts…" to be seen
+        time.sleep(1.0)  # long enough for "Reaching CheapCharts…" to be seen under load (2026-09-19 flake)
         if itunes_id == DELTA_ITUNES:
             raise WishlistError("down")
         return True

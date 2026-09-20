@@ -21,7 +21,7 @@ from movie_brain.infrastructure.cheapcharts import (
 from movie_brain.infrastructure.config import Config
 from movie_brain.infrastructure.credentials import load_credentials
 
-# Do the Right Thing's real shape, shortened: $2.99 exactly once, $4.99 again and again.
+# Do the Right Thing's real shape, SHORTENED for the test: $2.99 appears exactly once.
 DTRT_HD = "2026-08-12:+14.99~2026-08-04:-4.99~2025-08-26:+7.99~2025-08-26:-2.99~2025-08-20:+14.99~2019-02-19:9.99"
 
 
@@ -69,6 +69,25 @@ def test_lowest_price_stops_on_a_429():
     responses.get(DETAIL_URL, status=429)
     with pytest.raises(RateLimited):
         CheapChartsClient().lowest_price("1")
+
+
+@responses.activate
+def test_get_raises_our_own_wording_on_a_non_json_or_non_object_answer():
+    """An unexpected JSON shape must raise a CheapChartsError, never an AttributeError or
+    TypeError — either of which would abort dashboard startup (only WishlistError is caught
+    there)."""
+    responses.get(DETAIL_URL, body="<html>maintenance</html>", status=200)
+    with pytest.raises(CheapChartsError, match="not JSON"):
+        CheapChartsClient(delay_s=0).lowest_price("1")
+    responses.replace(responses.GET, DETAIL_URL, json=["not", "an", "object"], status=200)
+    with pytest.raises(CheapChartsError, match="not a JSON object"):
+        CheapChartsClient(delay_s=0).lowest_price("1")
+
+
+@responses.activate
+def test_lowest_price_returns_none_rather_than_raising_on_a_reshaped_results():
+    responses.get(DETAIL_URL, json={"results": ["not", "a", "dict"]})
+    assert CheapChartsClient(delay_s=0).lowest_price("1") is None
 
 
 def test_pacer_waits_only_the_remainder_since_the_last_call():
@@ -137,6 +156,8 @@ def test_placeholder_or_half_filled_credentials_count_as_missing(config_dir):
     assert load_credentials(config, "cheapcharts") is None
     config.credentials_file.write_text("not toml [")
     assert load_credentials(config, "cheapcharts") is None
+    config.credentials_file.write_bytes(b"\xff\xfe not valid utf-8")  # UnicodeDecodeError, a ValueError subclass
+    assert load_credentials(config, "cheapcharts") is None
 
 
 @responses.activate
@@ -163,8 +184,33 @@ def test_login_sends_the_sha256_digest_never_the_plain_password_and_reads_the_wi
 @responses.activate
 def test_an_empty_wishlist_reads_as_no_films():
     responses.post(ACCOUNT_URL, json=LOGIN_OK)
-    responses.post(WISHLIST_URL, json={"status": "success", "results": {}})
+    responses.post(WISHLIST_URL, json={"status": "success", "results": {"movies": []}})
     assert _account().wishlist_ids() == []
+
+
+@responses.activate
+def test_a_wishlist_read_with_no_movies_key_is_refused_not_read_as_empty():
+    """A wholesale replace on `wishlist_ids() == []` would wipe every heart — so a `results`
+    with no `movies` list inside it must be a refusal, never a silent empty wishlist."""
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"status": "success", "results": {}})
+    with pytest.raises(CheapChartsError, match="unexpected answer shape"):
+        _account().wishlist_ids()
+
+
+@responses.activate
+def test_a_wishlist_read_with_a_non_object_results_is_refused():
+    responses.post(ACCOUNT_URL, json=LOGIN_OK)
+    responses.post(WISHLIST_URL, json={"status": "success", "results": ["not", "a", "dict"]})
+    with pytest.raises(CheapChartsError, match="unexpected answer shape"):
+        _account().wishlist_ids()
+
+
+@responses.activate
+def test_a_login_with_a_non_object_additional_info_is_refused():
+    responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": ["not", "a", "dict"]})
+    with pytest.raises(CheapChartsError, match="unexpected answer shape"):
+        _account().wishlist_ids()
 
 
 @responses.activate

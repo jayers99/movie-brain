@@ -314,7 +314,7 @@ SELECT f.id, f.title, f.year,
        COALESCE(f.director, NULLIF(json_extract(o.payload, '$.Director'), 'N/A')) AS director,
        l.url, o.language, o.imdb, o.rt,
        COALESCE(mc.score, o.metacritic) AS metacritic, x.value AS mc_slug, o.found,
-       (SELECT value FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'itunes') AS itunes_id,
+       (SELECT MIN(value) FROM external_ids e WHERE e.film_id = f.id AND e.authority = 'itunes') AS itunes_id,
        (o.film_id IS NULL) AS pending, l.leaving_date, l.first_seen, r.score,
        COALESCE(l.last_seen < (SELECT MAX(last_seen) FROM listings WHERE source = l.source), 0) AS departed,
        (l.film_id IS NOT NULL) AS criterion
@@ -2584,12 +2584,17 @@ class Repository:
         """The wishlist read's write: the local hearts become exactly the films holding one of
         these store ids — a film bought or removed on CheapCharts loses its heart, one added there
         by hand gains it, one that stays keeps its date. Ids no film holds are simply not ours.
-        Returns how many films are hearted now."""
+        A tombstoned film keeps its `external_ids` row (collectors never delete) but is excluded
+        here — it has no read model of its own to show a heart on. Returns how many films are
+        hearted now."""
         wanted = set(itunes_ids)
         with self._conn() as c:
             film_ids = {
                 int(r["film_id"])
-                for r in c.execute("SELECT film_id, value FROM external_ids WHERE authority = 'itunes'")
+                for r in c.execute(
+                    "SELECT e.film_id, e.value FROM external_ids e JOIN films f ON f.id = e.film_id "
+                    "WHERE e.authority = 'itunes' AND " + _NOT_DISPOSED
+                )
                 if str(r["value"]) in wanted
             }
             current = _wishlisted_ids(c)
@@ -2602,13 +2607,16 @@ class Repository:
 
     def itunes_id_for(self, film_id: int) -> str | None:
         """The store id behind this film's CheapCharts link. `itunes` is a claim authority and
-        may repeat; this is the same scalar pick `_VIEW_SQL` makes, so the wishlisted product is
-        the one the drawer links to."""
+        may repeat; MIN(value) is the same deterministic scalar pick `_VIEW_SQL`'s `itunes_id`
+        subquery makes, so the wishlisted product is always the one the drawer links to — an
+        unordered single-row SELECT picked whichever row the query plan happened to return
+        first, which is not guaranteed to agree across two separately-planned queries."""
         with self._conn() as c:
             row = c.execute(
-                "SELECT value FROM external_ids WHERE film_id = ? AND authority = 'itunes'", (film_id,)
+                "SELECT MIN(value) AS value FROM external_ids WHERE film_id = ? AND authority = 'itunes'",
+                (film_id,),
             ).fetchone()
-            return None if row is None else str(row["value"])
+            return None if row is None or row["value"] is None else str(row["value"])
 
     # the pool (ranking-pool spec §4.1, P1) ---------------------------------------
     _POOL_SQL = (

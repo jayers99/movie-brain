@@ -47,6 +47,7 @@ def test_a_failed_click_says_so_offers_try_again_and_marks_nothing(dash: Page):
     expect(_row(dash, "Delta").locator(".icon-wish")).to_have_count(0)
     retry.click()  # the same click again: busy, then the same line (Delta's fake never recovers)
     expect(body.locator("p.links button.wish-button").first).to_have_text("Reaching CheapCharts…")
+    expect(body).not_to_contain_text("Couldn't reach CheapCharts.")  # busy: the stale failure text is gone
     expect(body.locator("p.links .wish-failed")).to_contain_text("Couldn't reach CheapCharts.")
     expect(_row(dash, "Delta").locator(".icon-wish")).to_have_count(0)
 
@@ -77,7 +78,10 @@ def test_an_owned_film_and_a_film_apple_does_not_sell_get_no_button_and_no_messa
 
 
 def test_only_wishlisted_rows_carry_anything_new(dash: Page):
-    hearts = dash.locator("#films tbody .icon-wish")
-    # Echo is seeded; Charlie joins it only if the click test already ran in this session.
-    assert hearts.count() in (1, 2)
+    # Echo is seeded; Charlie joins it only if the click test already ran in this session — so
+    # every hearted row must be one of the two, and Echo must always be among them.
+    hearted_rows = dash.locator("#films tbody .icon-wish").locator("xpath=ancestor::tr[1]")
+    texts = hearted_rows.all_text_contents()
+    assert texts and all(("Echo" in t) or ("Charlie" in t) for t in texts)
+    assert any("Echo" in t for t in texts)
     expect(_row(dash, "Bravo").locator(".icon-wish")).to_have_count(0)

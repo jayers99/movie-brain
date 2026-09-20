@@ -1020,3 +1020,98 @@ def test_cheapcharts_wishlist_unreachable_exits_1_and_keeps_the_hearts(config_di
     result = runner.invoke(app, ["cheapcharts", "wishlist"])  # nothing registered: ConnectionError
     assert result.exit_code == 1 and "last known hearts" in result.output
     assert repo.wishlisted_film_ids() == {fid}
+
+
+class _DashboardCapture:
+    """What the dashboard verb handed to `create_app`, and whether it reached `.run`."""
+
+    def __init__(self) -> None:
+        self.wishlist: object = "unset"
+        self.ran = False
+
+
+def _patch_dashboard(monkeypatch) -> _DashboardCapture:
+    """Stub `movie_brain.web.app.create_app` so `dashboard()` never binds a real port — its
+    `.run(**kw)` is a no-op. `dashboard()` imports `create_app` LOCALLY on every call, so
+    patching the attribute on `movie_brain.web.app` is what that import picks up. Semantic
+    search is turned off too: real, and irrelevant to the wishlist lines under test."""
+    cap = _DashboardCapture()
+
+    class StubApp:
+        def run(self, **kw: object) -> None:
+            cap.ran = True
+
+    def fake_create_app(repo, embedder=None, wishlist=None, **kw: object) -> StubApp:
+        cap.wishlist = wishlist
+        return StubApp()
+
+    monkeypatch.setattr("movie_brain.web.app.create_app", fake_create_app)
+    monkeypatch.setattr("movie_brain.cli.SentenceTransformerEmbedder.available", lambda: False)
+    return cap
+
+
+def test_dashboard_without_credentials_prints_the_off_line_and_passes_no_gateway(config_dir, monkeypatch):
+    from movie_brain.infrastructure.database import Repository
+
+    Repository(config_dir / "movie-brain.db")
+    cap = _patch_dashboard(monkeypatch)
+    result = runner.invoke(app, ["dashboard"])
+    assert result.exit_code == 0, result.output
+    assert "movie-brain dashboard → http://127.0.0.1:5556" in result.output
+    assert "semantic search:" in result.output
+    assert "wishlist: off — no [cheapcharts] login in credentials.toml" in result.output
+    assert "[cheapcharts]" in result.output  # Rich markup, not swallowed as a style tag
+    assert cap.wishlist is None
+    assert cap.ran is True  # the dashboard still starts
+
+
+@responses.activate
+def test_dashboard_refreshes_hearts_on_a_successful_start(config_dir, monkeypatch):
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.cheapcharts import ACCOUNT_URL, WISHLIST_URL, Pacer
+    from movie_brain.infrastructure.database import Repository
+
+    monkeypatch.setattr("movie_brain.cli.Pacer", lambda: Pacer(0))
+    cap = _patch_dashboard(monkeypatch)
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("The Leopard", 1963, "Luchino Visconti", ""))
+    repo.set_external_id(fid, "itunes", "273058482", date(2026, 9, 19))
+    (config_dir / "credentials.toml").write_text(
+        '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
+    )
+    responses.post(ACCOUNT_URL, json={"status": "success", "additionalInfo": {"sessionToken": "tok-1"}})
+    responses.post(
+        WISHLIST_URL, json={"status": "success", "results": {"movies": [{"idInStore": 273058482}, {"idInStore": 5}]}}
+    )
+    result = runner.invoke(app, ["dashboard"])
+    assert result.exit_code == 0, result.output
+    assert "wishlist: 2 films on CheapCharts · 1 known here" in result.output
+    assert repo.wishlisted_film_ids() == {fid}
+    assert cap.wishlist is not None  # a gateway, not None — hearts really were refreshed through it
+    assert cap.ran is True
+
+
+@responses.activate
+def test_dashboard_keeps_the_last_known_hearts_when_cheapcharts_is_unreachable(config_dir, monkeypatch):
+    from datetime import date
+
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.cheapcharts import Pacer
+    from movie_brain.infrastructure.database import Repository
+
+    monkeypatch.setattr("movie_brain.cli.Pacer", lambda: Pacer(0))
+    cap = _patch_dashboard(monkeypatch)
+    repo = Repository(config_dir / "movie-brain.db")
+    fid = repo.create_film(Film("The Leopard", 1963, "Luchino Visconti", ""))
+    repo.mark_wishlisted(fid, date(2026, 9, 19))
+    (config_dir / "credentials.toml").write_text(
+        '[cheapcharts]\nusername = "someone@example.test"\npassword = "hunter2"\n'
+    )
+    result = runner.invoke(app, ["dashboard"])  # nothing registered: ConnectionError
+    assert result.exit_code == 0, result.output  # CheapCharts being down never stops the dashboard
+    assert "wishlist: couldn't reach CheapCharts — showing the last known hearts" in result.output
+    assert repo.wishlisted_film_ids() == {fid}  # kept, not wiped
+    assert cap.wishlist is not None  # a gateway, not None
+    assert cap.ran is True  # the dashboard still starts

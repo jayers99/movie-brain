@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 import requests
+import responses
 
 from movie_brain.application.wishlist import (
     NotForSale,
@@ -16,7 +17,7 @@ from movie_brain.application.wishlist import (
 )
 from movie_brain.domain.models import Film
 from movie_brain.domain.wishlist import target_price
-from movie_brain.infrastructure.cheapcharts import CheapChartsError, RateLimited
+from movie_brain.infrastructure.cheapcharts import DETAIL_URL, CheapChartsClient, CheapChartsError, RateLimited
 
 D = date(2026, 9, 19)
 
@@ -77,6 +78,18 @@ def test_itunes_id_for_reads_the_stored_store_id(repo):
     assert repo.itunes_id_for(a) == "282538466" and repo.itunes_id_for(b) is None
 
 
+def test_itunes_id_for_and_the_drawer_link_name_the_same_id_when_a_film_holds_two(repo):
+    """`itunes_id_for` and `_VIEW_SQL`'s `itunes_id` subquery must be the same deterministic
+    scalar pick, or the wishlisted product and the drawer's link could silently disagree."""
+    from movie_brain.infrastructure.cheapcharts import product_url
+
+    fid = _film(repo, "A", 1950, "9")
+    repo.set_external_id(fid, "itunes", "10", D)
+    picked = repo.itunes_id_for(fid)
+    assert picked is not None
+    assert repo.get_view(fid, D).cheapcharts_url == product_url(picked)
+
+
 def test_a_click_adds_the_film_at_lowest_plus_one_and_marks_it(repo):
     dtrt = _film(repo, "Do the Right Thing", 1989, "282538466")
     account = FakeAccount()
@@ -108,6 +121,19 @@ def test_no_price_history_at_all_fails_and_marks_nothing(repo):
     assert account.calls == [] and repo.wishlisted_film_ids() == set()
 
 
+@responses.activate
+def test_a_reshaped_detaildata_answer_ends_as_wishlist_error_not_a_crash(repo):
+    """`lowest_price` swallows a `results` shape it has never seen and returns None (F2b) —
+    proving here that the click still ends as the ONE WishlistError, through the ordinary
+    no-price-history path, and marks nothing."""
+    fid = _film(repo, "Do the Right Thing", 1989, "282538466")
+    responses.get(DETAIL_URL, json={"results": ["not", "a", "dict"]})
+    account = FakeAccount()
+    with pytest.raises(WishlistError):
+        wishlist_film(repo, WishlistGateway(CheapChartsClient(delay_s=0), account), fid, D)
+    assert account.calls == [] and repo.wishlisted_film_ids() == set()
+
+
 def test_an_already_wishlisted_film_is_left_alone(repo):
     """The button never shows on it; the route still must not touch a hand-set target."""
     fid = _film(repo, "The Leopard", 1963, "273058482")
@@ -126,6 +152,15 @@ def test_replace_wishlist_is_wholesale_and_keeps_the_date_of_a_film_that_stays(r
     with repo._conn() as c:
         rows = dict(c.execute("SELECT film_id, added_on FROM cheapcharts_wishlist").fetchall())
     assert rows == {stays: "2026-09-01", arrives: "2026-09-19"}
+
+
+def test_replace_wishlist_never_hearts_a_tombstoned_film(repo):
+    """A tombstoned film keeps its external_ids row (collectors never delete) but must never be
+    hearted or counted — it has no read model of its own to show a heart on."""
+    gone = _film(repo, "Ghost", 1958, "42")
+    repo.tombstone_film(gone, D)
+    assert repo.replace_wishlist(["42"], D) == 0
+    assert repo.wishlisted_film_ids() == set()
 
 
 def test_a_film_holding_two_store_ids_is_hearted_by_either(repo):

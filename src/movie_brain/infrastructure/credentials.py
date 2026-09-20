@@ -20,7 +20,7 @@ def load_credentials(config: Config, site: str) -> tuple[str, str] | None:
         return None
     try:
         section = tomllib.loads(path.read_text()).get(site)
-    except (tomllib.TOMLDecodeError, OSError):
+    except (ValueError, OSError):  # ValueError covers tomllib.TOMLDecodeError AND UnicodeDecodeError
         return None
     if not isinstance(section, dict):
         return None
