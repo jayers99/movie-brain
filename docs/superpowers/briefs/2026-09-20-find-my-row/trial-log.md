@@ -39,3 +39,5 @@ Built test-first on `feature/STORY-24-find-my-row` (c58d256): 19 new Playwright 
 ## Outcome
 
 Merged to main 2026-09-20 (18ce2be) after his hands-on test, with no change requests. One mock-up round, one read-back, zero interruptions, zero corrections from him after delivery. His minutes and his verdict on stories-first are still to be asked for.
+
+Amendment 1.1 (story 7, one click switches films) merged 2026-09-20 (98a939c) after his second hands-on test, again with no change requests. Total for the feature: one mock-up round, one read-back, one follow-up from use, zero interruptions.
