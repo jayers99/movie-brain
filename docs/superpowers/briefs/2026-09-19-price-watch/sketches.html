@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Price watch — three rough sketches</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --ink:#1b1b1b; --soft:#666; --line:#9a9a9a; --paper:#f4f2ec; --box:#fff; --mark:#ffe08a; --ok:#cfe8d2; --sim:#ffe9b8; --unk:#f6c9c9; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#ececec; --soft:#a8a8a8; --line:#6b6b6b; --paper:#1f2125; --box:#2a2d33; --mark:#6b5a1e; --ok:#21472b; --sim:#5a4718; --unk:#5a2424; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:28px 28px 60px; background:var(--paper); color:var(--ink); font:18px/1.55 "Avenir Next", Verdana, system-ui, sans-serif; }
+  h1 { font-size:30px; margin:0 0 6px; }
+  h2 { font-size:22px; margin:0 0 10px; }
+  h3 { font-size:17px; margin:18px 0 6px; letter-spacing:.04em; text-transform:uppercase; color:var(--soft); }
+  p.lead { max-width:60em; margin:6px 0 22px; color:var(--soft); }
+  .cols { display:grid; grid-template-columns:repeat(3, minmax(300px, 1fr)); gap:22px; align-items:start; }
+  @media (max-width:1100px) { .cols { grid-template-columns:1fr; } }
+  .opt { border:2px dashed var(--line); border-radius:10px; padding:18px; background:transparent; }
+  .opt.rec { border-style:solid; border-width:3px; }
+  .tag { display:inline-block; font-size:14px; padding:2px 9px; border-radius:20px; border:1px solid var(--line); margin-left:6px; vertical-align:middle; }
+  .tag.rec { background:var(--mark); border-color:transparent; font-weight:600; }
+  .wire { border:1.5px solid var(--line); background:var(--box); border-radius:6px; padding:12px; margin:10px 0; font-size:16px; }
+  .wire .bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { border:1.5px solid var(--line); border-radius:16px; padding:1px 11px; font-size:15px; }
+  .chip.on { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .row { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px dotted var(--line); }
+  .row:first-of-type { border-top:0; }
+  .row b { font-weight:600; }
+  .price { white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .badge { font-size:14px; padding:1px 8px; border-radius:4px; border:1px solid var(--line); margin-left:6px; white-space:nowrap; }
+  .badge.buy { background:var(--ok); border-color:transparent; font-weight:600; }
+  .sect { font-size:14px; letter-spacing:.06em; text-transform:uppercase; color:var(--soft); margin:14px 0 2px; }
+  .btn { display:inline-block; border:1.5px solid var(--ink); border-radius:6px; padding:3px 12px; margin-top:10px; font-size:15px; font-weight:600; }
+  ul { margin:6px 0 0 1.1em; padding:0; } li { margin:4px 0; }
+  .st { font-size:14px; padding:1px 8px; border-radius:4px; margin-right:6px; white-space:nowrap; }
+  .st.d { background:var(--ok); } .st.s { background:var(--sim); } .st.u { background:var(--unk); }
+  table { border-collapse:collapse; width:100%; max-width:70em; margin-top:8px; font-size:17px; }
+  td, th { text-align:left; padding:8px 10px; border-top:1px solid var(--line); vertical-align:top; }
+  th { font-size:14px; letter-spacing:.05em; text-transform:uppercase; color:var(--soft); border-top:0; }
+  .panel { border:1.5px solid var(--line); border-radius:10px; padding:18px; margin-top:26px; background:var(--box); }
+  code { font-size:15px; }
+</style>
+</head>
+<body>
+
+<h1>Price watch — three rough sketches</h1>
+<p class="lead">Rough on purpose: boxes, no styling. The question is only <b>where this lives</b>. Every film, price and date below is real — read today from your database and from CheapCharts. Pick one, combine parts, say "none of these", or say "keep what exists".</p>
+
+<div class="cols">
+
+  <!-- A -->
+  <div class="opt">
+    <h2>A · Inside the table you already have</h2>
+    <div class="wire">
+      <div class="bar">
+        <span class="chip">Reachable</span><span class="chip">Rated</span><span class="chip">Owned</span><span class="chip on">On a list</span><span class="chip on">Buy: at its low</span>
+      </div>
+      <div class="row"><span><b>Performance</b> · 1970</span><span class="price">$4.99 <span class="badge buy">at its low</span></span></div>
+      <div class="row"><span style="color:var(--soft)">of the ten films I read today, one is at its low — this chip is usually nearly empty</span><span></span></div>
+    </div>
+    <div class="wire">
+      <div class="sect">Film drawer · The Leopard</div>
+      <div class="row"><span>Buy on Apple</span><span class="price">$14.99 · low $4.99 (14 times)</span></div>
+      <span class="btn">Watch at $4.99 on CheapCharts ↗</span>
+    </div>
+    <h3>What it means</h3>
+    <ul>
+      <li>A new three-way chip: off → at its low → worth watching.</li>
+      <li>One film at a time, from the drawer.</li>
+      <li>No new page. Smallest change to what you see.</li>
+    </ul>
+  </div>
+
+  <!-- B -->
+  <div class="opt rec">
+    <h2>B · Its own Buy Queue page <span class="tag rec">Recommended</span></h2>
+    <div class="wire">
+      <div class="sect">Buy now — at its low today</div>
+      <div class="row"><span><b>Performance</b> · 1970</span><span class="price">$4.99 <span class="badge buy">buy ↗</span></span></div>
+
+      <div class="sect">Set a watch — ranked by canon score</div>
+      <div class="row"><span>☐ <b>Mulholland Dr.</b></span><span class="price">$19.99 → $7.99</span></div>
+      <div class="row"><span>☐ <b>The Leopard</b></span><span class="price">$14.99 → $4.99</span></div>
+      <div class="row"><span>☐ <b>Letter from an Unknown Woman</b></span><span class="price">$9.99 → $4.99</span></div>
+      <div class="row"><span>☐ <b>Trouble in Paradise</b></span><span class="price">$14.99 → $4.99</span></div>
+      <div class="row"><span>☑ <b>Nashville</b> <span class="badge">already watching — made up: I cannot see your wishlist yet</span></span><span class="price">$14.99 → $4.99</span></div>
+      <span class="btn">Send 4 ticked films to CheapCharts</span>
+
+      <div class="sect">Not sold on Apple</div>
+      <div class="row"><span>La Dolce Vita · Napoleon (1927) · A Matter of Life and Death</span><span></span></div>
+    </div>
+    <h3>What it means</h3>
+    <ul>
+      <li>A second page, like the ranker. The table stays as it is.</li>
+      <li>Built for the job you described: look up the floor, enter it as the target — done for many films in one go.</li>
+      <li>"Not sold on Apple" is shown, not hidden.</li>
+    </ul>
+  </div>
+
+  <!-- C -->
+  <div class="opt">
+    <h2>C · No new screen — a report, and your phone</h2>
+    <div class="wire" style="font-family:ui-monospace, Menlo, monospace; font-size:14.5px; white-space:pre-wrap;">$ movie-brain prices refresh
+122 films priced · 109 not sold on Apple
+
+BUY NOW
+  Performance (1970)            $4.99   low $4.99
+
+SET A WATCH                     now     target
+  Mulholland Dr.                $19.99  $7.99
+  The Leopard                   $14.99  $4.99
+  Letter from an Unknown Woman  $9.99   $4.99
+  …</div>
+    <div class="wire">
+      <div class="sect">Film drawer · The Leopard</div>
+      <div class="row"><span>Buy on Apple</span><span class="price">$14.99 · low $4.99</span></div>
+    </div>
+    <h3>What it means</h3>
+    <ul>
+      <li>You run one command and read a list. You enter targets on CheapCharts yourself, with the number in front of you.</li>
+      <li>CheapCharts' phone alert stays the only "screen".</li>
+      <li>Least to build. Nothing automated.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>What is real today, and what is not</h2>
+  <table>
+    <tr><th>Behaviour in the sketches</th><th>Status</th><th>What I checked</th></tr>
+    <tr><td>Current price, and the price before it</td><td><span class="st d">demonstrated</span></td><td>comes free on the lookup call the app already makes</td></tr>
+    <tr><td>Historical low, and how often it was hit</td><td><span class="st d">demonstrated</span></td><td>one extra call per film; ten films read today. About 4 minutes for the whole queue</td></tr>
+    <tr><td>"Not sold on Apple"</td><td><span class="st d">demonstrated</span></td><td>of 191 unpriced candidates asked today, 91 are sold, 10 were sold once and since removed, 90 never</td></tr>
+    <tr><td>"Already watching" badge</td><td><span class="st u">unresolved</span></td><td>needs a read of your CheapCharts wishlist inside your own logged-in browser. I never log in</td></tr>
+    <tr><td>"Send to CheapCharts" button</td><td><span class="st u">unresolved</span></td><td>your standing rule: you add one film by hand while I watch the network call; only then can it be repeated. <b>Agreed fallback if it cannot:</b> a link per film that opens its CheapCharts page with the target on screen</td></tr>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>One awkward case to react to</h2>
+  <p style="margin:0 0 8px"><b>Do the Right Thing</b> costs $14.99 today. Its lowest price ever is <b>$2.99 — and it was hit exactly once</b> in 115 price changes. Your rule from August is "target = the exact historical low, no slack", based on ten films that all returned to their low again and again.</p>
+  <p style="margin:0">With that rule, this film's watch is set at $2.99 — and may never fire. Mulholland Dr. is similar: $7.99, once.</p>
+</div>
+
+<div class="panel">
+  <h2>Found while looking</h2>
+  <ul>
+    <li>Your buy queue today is <b>231 films</b>: on a list, not owned, not rated, not streaming on a service you have.</li>
+    <li>Only 31 of them had a known store page — because the lookup has not been run since the noir, comedy and other new lists went in. After today's read: <b>about 122 are sold on Apple, about 109 are not</b> (9 of those have no IMDb id yet, so they are unknown rather than absent).</li>
+    <li><b>Performance</b> (1970) is at its $4.99 low right now — it dropped on 15 September.</li>
+  </ul>
+</div>
+
+</body>
+</html>
