@@ -116,6 +116,57 @@ Feature: Old ratings — my 2004-08 stars linked to films as a watching signal, 
     Then the scorecard says row 1 is "BLOCKED"
     And row 1 is stored unlinked
 
+  Scenario: A hand create mints a row the resolver cannot read, under TMDB's own title
+    Given the old ratings
+      | stars | title             | year | rented     |
+      | 4     | Teh Glas Orchrad  | 1962 | 2004-06-01 |
+    And TMDB knows "tt9000009" as film 909 "The Glass Orchard" (1961)
+    When I import the old ratings with apply
+    And I hand-create row 1 as "tt9000009" with apply
+    Then row 1 is linked to "The Glass Orchard" by "created"
+    And the film "The Glass Orchard" holds imdb "tt9000009"
+    And 1 film was created
+
+  Scenario: A hand create dry run mints nothing
+    Given the old ratings
+      | stars | title             | year | rented     |
+      | 4     | Teh Glas Orchrad  | 1962 | 2004-06-01 |
+    And TMDB knows "tt9000009" as film 909 "The Glass Orchard" (1961)
+    When I import the old ratings with apply
+    And I hand-create row 1 as "tt9000009"
+    Then the hand create says "would-create"
+    And no film was created
+    And row 1 is stored unlinked
+
+  Scenario: A hand create links instead of twinning when a film already holds the id
+    Given the old ratings
+      | stars | title             | year | rented     |
+      | 4     | Habor Lihgts      | 1972 | 2004-06-01 |
+    When I import the old ratings with apply
+    And I hand-create row 1 as "tt9000002" with apply
+    Then row 1 is linked to "Harbour Lights" by "hand"
+    And no film was created
+
+  Scenario: A hand create is vetoed by a look-alike the ids cannot see
+    Given the old ratings
+      | stars | title             | year | rented     |
+      | 4     | Teh Glas Orchrad  | 1962 | 2004-06-01 |
+    And TMDB knows "tt9000009" as film 909 "The Glass Orchard" (1961)
+    When I import the old ratings with apply
+    And a film "The Glass Orchard" (1961) holding no ids arrives
+    And I hand-create row 1 as "tt9000009" with apply
+    Then the hand create says "blocked"
+    And row 1 is stored unlinked
+    And no film was created
+
+  Scenario: A hand create never mints a film I rated three stars or fewer
+    Given the old ratings
+      | stars | title             | year | rented     |
+      | 3     | Teh Glas Orchrad  | 1962 | 2004-06-01 |
+    And TMDB knows "tt9000009" as film 909 "The Glass Orchard" (1961)
+    When I import the old ratings with apply
+    Then hand-creating row 1 as "tt9000009" is refused
+
   Scenario: A hand link, a cleared link, and a merge that re-points the row
     Given the old ratings
       | stars | title             | year | rented     |

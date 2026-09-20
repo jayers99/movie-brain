@@ -24,11 +24,14 @@ every row rather than trusting the import's verdict. Nothing here touches `my_ra
 
 from __future__ import annotations
 
+import re
 import sys
 from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
+
+import requests
 
 from movie_brain.application.lists import (
     KEYED_OK,
@@ -50,7 +53,7 @@ from movie_brain.domain.models import Film, ListEntry, OldRating
 from movie_brain.domain.thumbprint import Verdict
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.thumbprint_fetch import CandidateFetcher
-from movie_brain.infrastructure.tmdb import TmdbClient
+from movie_brain.infrastructure.tmdb import AuthError, TmdbClient
 
 DEFAULT_SOURCE = "ntc"
 MINT_MIN_STARS = 4  # O5: a film worth rewatching has to exist; a film to avoid does not
@@ -263,6 +266,82 @@ def link_row(repo: Repository, source: str, line: int, film_id: int | None, toda
             raise LinkError(f"film #{film_id} does not exist or is tombstoned")
     repo.link_old_rating(source, line, target, "hand" if target is not None else None, today)
     return target
+
+
+_TT = re.compile(r"tt\d{7,}")
+
+
+def create_by_hand(
+    repo: Repository,
+    source: str,
+    line: int,
+    tt: str,
+    today: date,
+    *,
+    tmdb: TmdbClient | None,
+    apply: bool = False,
+    log: Callable[[str], None] = _stderr,
+) -> RowOutcome:
+    """The hand CREATING path (spec §6 deferred it; built 2026-09-20 for the four 4★ rows the
+    resolver cannot read): the owner supplies the IMDb id of one unlinked row.
+
+    The id settles WHICH work the row names — never whether the catalog already holds it, so
+    the gates run unchanged: gate 1 and gate 2b through `find_holder` (a holder is LINKED, by
+    "hand", never twinned) and gate 3 over the row's own forms plus TMDB's titles. The film is
+    minted under TMDB's title and year, because the row's title is the very thing that could not
+    be read, and is born keyed. `MINT_MIN_STARS` holds here too: 1-3★ never mint (O5).
+    A refusal to even try raises `LinkError`; everything after that is a `RowOutcome`.
+    """
+    row = next((r for r in repo.old_ratings(source) if r.line == line), None)
+    if row is None:
+        raise LinkError(f"no old rating {source}#{line}")
+    if row.film_id is not None:
+        raise LinkError(f"{source}#{line} is already linked to film #{row.film_id} — clear it first")
+    if row.stars < MINT_MIN_STARS:
+        raise LinkError(f"{source}#{line} is {row.stars}★ — only {MINT_MIN_STARS}★ and better mint a film")
+    if not _TT.fullmatch(tt):
+        raise LinkError(f"{tt!r} is not an IMDb id (tt1234567)")
+    if tmdb is None:
+        raise LinkError("no TMDB client — gate 2b cannot run, so creation would be unguarded")
+
+    film_rows = repo.films_for_matching()
+    catalog = _catalog(repo, film_rows)
+    holder, label = find_holder(repo, tmdb, Verdict("match", tt, "id supplied by hand", ()), log)
+    if label == "tmdb lookup failed":
+        return RowOutcome(row, "error", "gate 2b: tmdb lookup failed — holder unknown")
+    if holder is None and label.startswith("tombstoned"):
+        return RowOutcome(row, "blocked", f"tombstoned-holder  {label}")
+    if holder is not None:
+        if apply:
+            repo.link_old_rating(source, line, holder, "hand", today)
+        return RowOutcome(row, "linked", f"{_film_label(catalog, holder)}  via {label}  [id supplied by hand]", holder)
+
+    try:
+        tmdb_id = tmdb.find_by_imdb(tt)
+        facts = tmdb.movie_facts(tmdb_id) if tmdb_id is not None else None
+    except (requests.RequestException, AuthError) as exc:
+        return RowOutcome(row, "error", f"tmdb lookup failed for {tt}: {exc}")
+    if tmdb_id is None or facts is None:
+        return RowOutcome(row, "blocked", f"TMDB does not know {tt} as a film")
+    film = Film(facts.title, facts.year, None, "")
+    wanted = f"{tt} {facts.title!r} ({facts.year or '-'})"
+    titles = [t for t in (facts.title, facts.original_title) if t]
+    hits = corpus_veto(build_candidate_index(film_rows), entry_forms(row.title) + titles)
+    if hits:
+        return RowOutcome(row, "blocked", f"corpus-veto  {_veto_label(hits)}  wanted {wanted}")
+    if film.key in repo.tombstoned_keys():
+        return RowOutcome(row, "blocked", f"tombstoned-holder  key {film.key!r} is tombstoned")
+    if not apply:
+        return RowOutcome(row, "would-create", f"{wanted}  [id supplied by hand]")
+
+    film_id = repo.create_film(film)
+    if film_id is None:
+        clash = repo.canonical_film_id(repo.film_id_by_key(film.key) or 0)
+        return RowOutcome(row, "blocked", f"key-collision  {film.key!r} is held by {_film_label(catalog, clash)}")
+    repo.link_old_rating(source, line, film_id, "created", today)
+    status = _key_new_film(repo, tmdb, film_id, tt, tmdb_id, today, log)
+    keyed = status if status in KEYED_OK else f"{status} (the next sync retries)"
+    return RowOutcome(row, "created", f"#{film_id} {wanted}  {keyed}  [id supplied by hand]", film_id)
 
 
 _ORDER = ("linked", "created", "would-create", "absent", "unresolved", "blocked", "error")

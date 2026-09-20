@@ -9,7 +9,7 @@ from datetime import date
 
 import requests
 
-from movie_brain.domain.models import ReviewEntry
+from movie_brain.domain.models import ReviewEntry, TmdbProviders
 from movie_brain.infrastructure.database import TMDB_REFRESH_STAMP, Repository, TmdbMatchTarget, service_slug
 from movie_brain.infrastructure.tmdb import AuthError, TmdbClient, watch_link
 
@@ -190,6 +190,15 @@ def tmdb_step(
     return TmdbStepResult(refreshed=refreshed, watchlist_refreshed=wl_refreshed, first_checked=first_checked)
 
 
+def _failed_lookup(
+    repo: Repository, film_id: int, today: date, exc: Exception, consecutive: int, log: Callable[[str], None]
+) -> int:
+    """No answer is not a departure: keep what was current, current (backlog 13)."""
+    log(f"TMDB providers failed for film {film_id}: {exc}")
+    repo.carry_listings_forward(film_id, today)
+    return consecutive + 1
+
+
 def _refresh_pass(
     repo: Repository,
     client: TmdbClient,
@@ -215,11 +224,17 @@ def _refresh_pass(
         except AuthError as exc:
             log(f"TMDB rejected the token: {exc}")
             return refreshed, True
+        except requests.HTTPError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                consecutive = _failed_lookup(repo, film_id, today, exc, consecutive, log)
+                continue
+            # A 404 is an ANSWER: TMDB deleted the record, so by its account the film is nowhere.
+            # Stamp it checked and write no listing — its rows go stale like any dropped service.
+            # Treated as weather it would be carried forward for ever (backlog 13's open end).
+            log(f"TMDB no longer knows id {numeric_tmdb_id} (film {film_id}) — recorded as nowhere to watch")
+            providers = TmdbProviders(flatrate=(), rent=(), buy=(), link=None, payload="{}")
         except requests.RequestException as exc:
-            log(f"TMDB providers failed for film {film_id}: {exc}")
-            # No answer is not a departure: keep what was current, current (backlog 13).
-            repo.carry_listings_forward(film_id, today)
-            consecutive += 1
+            consecutive = _failed_lookup(repo, film_id, today, exc, consecutive, log)
             continue
         consecutive = 0
         # C2: flatrate, free and ads all mean "I can watch this" — union them rather than

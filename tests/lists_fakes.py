@@ -59,6 +59,7 @@ class StubTmdb:
         self.raises = raises
         # `key_film` reads TMDB's own release year through `movie_year` before writing.
         self.years = years or {}
+        self.facts = {}
         self.calls = []
 
     def find_by_imdb(self, tt):
@@ -71,3 +72,9 @@ class StubTmdb:
         if self.raises:
             raise requests.ConnectionError("offline")
         return self.years.get(tid)
+
+    def movie_facts(self, tid):
+        """TMDB's own title and year for an id — what the old-ratings hand create mints under."""
+        if self.raises:
+            raise requests.ConnectionError("offline")
+        return self.facts[tid]
