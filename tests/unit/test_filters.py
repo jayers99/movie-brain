@@ -54,6 +54,7 @@ def test_chip_names_are_stable():
         "not_owned",
         "multi_list",
         "rewatch",
+        "shop",
     )
 
 
@@ -195,4 +196,52 @@ def test_a_film_on_no_list_scores_zero_and_is_not_canon():
     assert canon_score(v) == 0.0
     assert is_canon(v) is False
 
+
+# ---- shop: films worth buying (brief docs/superpowers/briefs/2026-09-20-shop-chip/brief.md) ----
+
+ITUNES = "https://www.cheapcharts.com/us/itunes/movies/1"
+MINE = {"name": "HBO Max", "subscribed": True, "kind": "svod", "quality": 1, "has_apple_app": True}
+
+
+def candidate(**kw) -> FilmView:
+    """Not owned, not rated, for sale on Apple, on no service of mine — and, as almost every real
+    candidate does, carrying the Apple store row, which is itself `subscribed`."""
+    base: dict[str, object] = dict(criterion=False, services=[STORE], cheapcharts_url=ITUNES)
+    base.update(kw)
+    return view(**base)
+
+
+def test_shop_is_a_film_i_could_buy_and_cannot_otherwise_watch():
+    assert matches(candidate(), ["shop"], TODAY)
+
+
+def test_the_subscribed_apple_store_row_is_not_a_service_i_watch_on():
+    assert matches(candidate(services=[STORE]), ["shop"], TODAY)
+
+
+def test_a_service_i_do_not_have_does_not_take_a_film_out_of_shop():
+    assert matches(candidate(services=[STORE, SVOD]), ["shop"], TODAY)  # MUBI: not subscribed
+
+
+def test_a_departed_criterion_film_is_back_in_shop():
+    assert matches(candidate(criterion=True, departed=True), ["shop"], TODAY)
+
+
+@pytest.mark.parametrize(
+    "why,film",
+    [
+        ("owned", candidate(owned=True)),
+        ("rated, 0 included", candidate(my_rating=0)),
+        ("on a service I have", candidate(services=[STORE, MINE])),
+        ("on the Criterion Channel now", candidate(criterion=True, departed=False)),
+        ("no store id — a TMDB store listing alone is not for sale", candidate(cheapcharts_url=None)),
+        ("already on my wishlist: decided", candidate(wishlisted=True)),
+    ],
+)
+def test_shop_leaves_out(why, film):
+    assert not matches(film, ["shop"], TODAY), why
+
+
+def test_my_old_stars_are_not_a_rating_for_shop():
+    assert matches(candidate(old_rating={"stars": 1, "rented_on": "2005-01-01"}), ["shop"], TODAY)
 

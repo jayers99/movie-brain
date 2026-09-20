@@ -61,6 +61,12 @@
     multi_list: (f) => (f.lists || []).length >= state.cfg.canned_thresholds.multi_list,
     // Loved then, not judged since (old-ratings spec O7): a pending request a rating today serves.
     rewatch: (f) => f.old_rating != null && f.old_rating.stars === 5 && f.my_rating == null,
+    // A film worth buying (mirrors domain/filters.py::shop): not owned, not rated, on no streaming
+    // service I have, holding a store id — and not yet wishlisted, so a film leaves the list the
+    // moment it is wishlisted. Raw fields only: the Apple store row is itself `subscribed`, so the
+    // svod check is load-bearing.
+    shop: (f) => !f.owned && f.my_rating == null && f.cheapcharts_url != null && !f.wishlisted
+      && !((f.criterion && !f.departed) || (f.services || []).some((s) => s.kind === 'svod' && s.subscribed)),
   };
 
   // ---- filtering / sorting ----
@@ -109,8 +115,19 @@
     if (c === 0) c = byTitle(a, b);
     return dir === 'asc' ? c : -c;
   }
+  // Where the open film sits in the shown list — re-found BY ID on every filter pass (a film's
+  // object is replaced when it is patched) and KEPT when the film drops out, so ↑ ↓ can carry on
+  // from the gap it left: wishlist a film under Shop, or rate one under Unrated, and the next ↓
+  // opens the film that took its place. null = the open film was never in the list.
+  let openIndex = null;
+  function trackOpenIndex() {
+    const i = state.openFilm == null ? -1 : state.filtered.findIndex((f) => f.id === state.openFilm);
+    if (i >= 0) openIndex = i;
+    else if (openIndex != null) openIndex = Math.min(openIndex, state.filtered.length);
+  }
   function applyFilters() {
     state.filtered = state.films.filter(rowMatches).sort(compare);
+    trackOpenIndex();
     tbody.dataset.count = state.filtered.length;
     $('#count-showing').textContent = `Showing ${state.filtered.length} of ${state.films.length}`;
     renderRows();
@@ -675,7 +692,7 @@
   // turns the white row into the mark.
   function hideDrawer() {
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
-    state.openFilm = null; drawnFilm = null;
+    state.openFilm = null; drawnFilm = null; openIndex = null;
     renderRows();
   }
   // Person links (drawer spec D4). Close WITHOUT walking history back: closeDrawer() would call
@@ -716,6 +733,8 @@
     body.innerHTML = detailHtml(d);
     drawer.hidden = false; backdrop.hidden = false; drawer.scrollTop = 0;
     state.openFilm = id; state.mark = id; drawnFilm = id;
+    const at = state.filtered.findIndex((f) => f.id === id);
+    openIndex = at >= 0 ? at : null;
     renderRows();
     if (mode === 'push') { syncUrl(true); drawerOpenPushed = true; }
     else if (mode === 'keep') drawerOpenPushed = false;
@@ -733,16 +752,18 @@
   function moveDrawerTo(i) {
     const next = state.filtered[i];
     if (!next || next.id === state.openFilm) return;
-    state.openFilm = next.id; state.mark = next.id;
+    state.openFilm = next.id; state.mark = next.id; openIndex = i;
     revealRow(i);
     renderRows();
     openDrawer(next.id, 'step');
   }
-  // ↑ ↓: the previous / next film of the list exactly as it is shown. Does nothing at either end,
-  // or when the open film is not in the shown list.
+  // ↑ ↓: the previous / next film of the list exactly as it is shown. Does nothing at either end.
+  // When the open film has LEFT the list (see openIndex), ↓ opens the film now in its place and ↑
+  // the one before it; a film that was never in the list leaves the arrows quiet.
   function stepDrawer(dir) {
     const i = state.filtered.findIndex((f) => f.id === state.openFilm);
     if (i >= 0) moveDrawerTo(i + dir);
+    else if (openIndex != null) moveDrawerTo(dir > 0 ? openIndex : openIndex - 1);
   }
   // The index of the film row showing through the dim at a point, or -1. Only the TOPMOST thing
   // under the backdrop counts: a row scrolled beneath the sticky header is not showing, and the
