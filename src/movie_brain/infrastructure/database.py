@@ -701,6 +701,22 @@ class Repository:
             frontier = None if row is None else str(row["value"])
             return self._write_listing(c, film_id, source, url, seen.isoformat(), frontier)
 
+    def carry_listings_forward(self, film_id: int, seen: date) -> int:
+        """A provider lookup that FAILED is not evidence the film left anything: re-stamp the film's
+        TMDB-fed listings that were current before this batch, firing no transition (backlog 13).
+        Without it a pass that completes around a scattered failure advances the refresh stamp past
+        the film's untouched rows — they read as departed for a week, and the next successful check
+        fires a false arrival. The predicate is `_SERVICES_SQL`'s currency test, so exactly the rows
+        shown as current are the rows kept current; a row already stale stays stale."""
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE listings SET last_seen = ? WHERE film_id = ? AND source != 'criterion' "
+                "AND last_seen >= COALESCE((SELECT value FROM meta WHERE key = ?), "
+                "(SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = listings.source))",
+                (seen.isoformat(), film_id, TMDB_REFRESH_STAMP),
+            )
+            return int(cur.rowcount)
+
     def watchlist_transitions_on(self, day: date) -> list[tuple[str, str]]:
         with self._conn() as c:
             rows = c.execute(
