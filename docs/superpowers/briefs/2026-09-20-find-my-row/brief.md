@@ -1,6 +1,6 @@
 # Task brief — "Find my row" (backlog 24)
 
-**Version 1.0 — frozen 2026-09-20.** You chose variant C on the mock-up [mockup-1.html](mockup-1.html) ("Good work. Option C looks great."). A cold read-back by a fresh agent reconstructed the intent correctly and found 18 things, all folded in below; one of them corrects story 6 (see the note under the stories). From here the brief changes only by amendment (1.1, 1.2 …). *Where the mock-up and this brief disagree, the brief wins.* Second trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`. The one thing this trial changes on purpose: **the stories come first** — first on this page, first on the mock-up page, and each one can be walked in the mock-up with one click. The stories you keep become the automated tests, word for word.
+**Version 1.1 — amended 2026-09-20 after your first use (story 7, below; 1.0 frozen the same day).** You chose variant C on the mock-up [mockup-1.html](mockup-1.html) ("Good work. Option C looks great."). A cold read-back by a fresh agent reconstructed the intent correctly and found 18 things, all folded in below; one of them corrects story 6 (see the note under the stories). From here the brief changes only by amendment (1.1, 1.2 …). *Where the mock-up and this brief disagree, the brief wins.* Second trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`. The one thing this trial changes on purpose: **the stories come first** — first on this page, first on the mock-up page, and each one can be walked in the mock-up with one click. The stories you keep become the automated tests, word for word.
 
 ## Your page
 
@@ -16,6 +16,7 @@ All six happen on your real *BFI: Film Noir* list. **You chose variant C, so all
 | 4 | **I scroll away and come back.** With the mark on Out of the Past I scroll up to M at the top of the list, then back down. The mark is still there. | B C |
 | 5 | **I step through films without closing.** With the drawer open on Out of the Past I press ↓. The drawer changes to Pursued, the white row moves down with it, and the list scrolls to keep it in view. ↑ goes back. | C |
 | 6 | **The awkward one: my marked film leaves the list.** The mark is on Pursued, which I do not own. I press the Owned chip. Pursued drops out of the list, so no row is marked — and nothing jumps. I click the chip round to off again: the mark is back on Pursued. | B C |
+| 7 | **One click switches films** *(amendment 1.1 — your words after using it: "it takes two clicks where it should take one")*. The drawer is open on Out of the Past. I click another film's row in the grey behind it. The drawer changes to that film at once and the white row moves there — no closing, no second click. | added after delivery |
 
 *Story 6, corrected after the read-back:* the mock-up's Owned chip had two states; the real one has three (off → Owned → Not owned → off), so "press Owned again" became "click the chip round to off". Pursued is in fact back, and marked, one click earlier, under Not owned. And "nothing jumps" means movie-brain never moves the list; when a list gets shorter than where you were, the browser itself pulls you up to its end, as today.
 
@@ -73,6 +74,16 @@ All six happen on your real *BFI: Film Noir* list. **You chose variant C, so all
 | State: a separate `state.mark`; a row is white when `id === state.openFilm` AND the drawer is showing (`readUrl` sets `openFilm` before the drawer exists); `hideDrawer` is the one close choke point and redraws rows; a step sets `openFilm` at once, computes the next step from it, and rewrites the URL with `replaceState` (guarded — Safari throws past 100 calls in 30 s) leaving `drawerOpenPushed` alone — `openDrawer(id, false)` must NOT be reused for a step, it would break the Back button | not visible |
 | Step scrolling is arithmetic (`index × ROW_H` against the header's height), because the target row may not be in the DOM | not visible |
 | Tests: a separate ~80-film server fixture on one ordered list, with M first and Out of the Past / Pursued side by side deep enough (index ≥ 30) to be evicted from the DOM; never grow the shared 10-film `seed()`. Story 4 asserts the row really left the DOM. Story 1 asserts real paint — a screenshot pixel of the open row is white while its neighbour is dimmed — not just z-index numbers | not visible |
+
+**Amendment 1.1 (2026-09-20, authorised by your request; the behaviour is your choice, the rest are agent defaults, none previewed — a follow-up from use gets light ceremony):**
+
+| Decision | Whose |
+|---|---|
+| A click on another film's dimmed row switches the drawer to it instead of closing | your choice |
+| A switch behaves exactly like a ↑ ↓ step: the film is replaced in the browser history, so one Back / ✕ / Esc still closes the drawer however many films were clicked through | agent default — name at delivery |
+| Anywhere in the row counts: under the dim a title link or a rating box is just the row (it switches; it does not open Criterion or take a rating) | agent default — name at delivery |
+| Every other click on the grey still closes: the page header, the chips, the column headers (even with rows scrolled beneath them), empty space, and the white row itself | agent default |
+| The mouse pointer turns into a hand over a dimmed row, and nowhere else on the grey — the one hint that rows are now live. Dimmed rows do not light up on hover | agent default — name at delivery |
 
 **Taste boundaries.** Hard: standing dashboard preferences — filled means active, no glyphs, nothing else on the page moves. Preference: the mark's exact grey and bar width.
 

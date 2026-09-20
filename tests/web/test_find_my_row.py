@@ -206,7 +206,7 @@ def test_story_5_the_list_scrolls_to_keep_the_white_row_in_view(noir: Page):
     box, wrap = lit.bounding_box(), noir.locator("#table-wrap").bounding_box()
     assert box is not None and wrap is not None
     assert box["y"] + box["height"] <= wrap["y"] + wrap["height"] + 1  # wholly inside the window
-    head = noir.locator("#films thead").bounding_box()
+    head = noir.locator("#films thead tr.filters th").first.bounding_box()  # the th is what sticks, not the thead
     assert head is not None and box["y"] >= head["y"] + head["height"] - 1  # and below the sticky header
 
 
@@ -360,3 +360,65 @@ def test_the_drawer_starts_at_its_top_for_each_film(noir: Page):
     noir.keyboard.press("ArrowDown")
     expect(noir.locator("#drawer h2")).to_contain_text("Pursued")
     assert noir.evaluate("document.querySelector('#drawer').scrollTop") == 0
+
+
+# ---- story 7 (brief amendment 1.1): one click switches films ----
+
+
+def click_dimmed_row(page: Page, title: str) -> None:
+    """A real mouse click on the row's title cell, left of the drawer — it lands on the dim, as the owner's does."""
+    box = row(page, title).locator("td.c-title").bounding_box()
+    assert box is not None and box["x"] + 30 < 1440 - 760
+    page.mouse.click(box["x"] + 30, box["y"] + box["height"] / 2)
+
+
+def test_story_7_one_click_on_another_row_switches_the_drawer(noir: Page):
+    open_film(noir, "Out of the Past")
+    click_dimmed_row(noir, "Pursued")
+    expect(noir.locator("#drawer h2")).to_contain_text("Pursued")
+    expect(noir.locator("#drawer")).to_be_visible()
+    expect(row(noir, "Pursued")).to_have_class("lit edge")
+    expect(noir.locator("#films tbody tr.lit")).to_have_count(1)
+
+
+def test_one_back_closes_the_drawer_however_many_films_were_clicked_through(noir: Page):
+    open_film(noir, "Out of the Past")
+    click_dimmed_row(noir, "Pursued")
+    expect(noir.locator("#drawer h2")).to_contain_text("Pursued")
+    fid = row(noir, "Pursued").get_attribute("data-id")
+    noir.wait_for_function("(id) => new URLSearchParams(location.search).get('film') === id", arg=fid)
+    noir.go_back()
+    expect(noir.locator("#drawer")).to_be_hidden()
+    assert "film=" not in noir.url
+    expect(row(noir, "Pursued")).to_have_class("marked")
+
+
+def test_a_click_on_the_dim_away_from_any_row_still_closes_the_drawer(noir: Page):
+    open_film(noir, "Out of the Past")
+    head = noir.locator("#films thead tr.filters th").first.bounding_box()  # the th is what sticks, not the thead
+    assert head is not None
+    noir.mouse.click(head["x"] + 30, head["y"] + 10)  # the sticky header, with rows scrolled beneath it
+    expect(noir.locator("#drawer")).to_be_hidden()
+    expect(row(noir, "Out of the Past")).to_have_class("marked")
+
+
+def test_the_dim_shows_a_pointer_over_a_row_and_nowhere_else(noir: Page):
+    open_film(noir, "Out of the Past")
+    box = row(noir, "Pursued").locator("td.c-title").bounding_box()
+    assert box is not None
+    noir.mouse.move(box["x"] + 30, box["y"] + 10)
+    assert noir.evaluate("getComputedStyle(document.querySelector('#drawer-backdrop')).cursor") == "pointer"
+    noir.mouse.move(box["x"] + 30, 10)  # the page header
+    assert noir.evaluate("getComputedStyle(document.querySelector('#drawer-backdrop')).cursor") != "pointer"
+
+
+def test_a_click_on_a_dimmed_title_link_switches_films_and_opens_no_page(dash: Page):
+    dash.locator("#films tbody tr", has_text="Bravo").first.locator(".c-year").click()
+    expect(dash.locator("#drawer h2")).to_contain_text("Bravo")
+    link = dash.locator("#films tbody tr", has_text="Alpha").first.locator("td.c-title a").bounding_box()
+    assert link is not None
+    pages = len(dash.context.pages)
+    dash.mouse.click(link["x"] + 5, link["y"] + link["height"] / 2)
+    expect(dash.locator("#drawer h2")).to_contain_text("Alpha")
+    assert len(dash.context.pages) == pages
+    dash.keyboard.press("Escape")
