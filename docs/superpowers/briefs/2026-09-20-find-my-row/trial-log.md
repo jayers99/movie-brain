@@ -21,6 +21,7 @@ Second trial of the version 2 process. Upstream half only. The deliberate change
 |---|---|---|
 | 1 | Story 6 as he saw it said "press Owned again: the mark is back". The real chip is three-way, so the second press is Not owned, not off. Reworded at the freeze; the behaviour he approved is unchanged. | implementation defect in the preview — caught by the read-back, before any build |
 | 2 | On the real dashboard BFI: Film Noir is an UNORDERED list, so it sorts by Metacritic and Out of the Past's neighbour is The Postman Always Rings Twice — not Pursued, as every story says. The mock-up showed the list in file order. The behaviour is unaffected (the tests run the stories word for word on an ordered list), but a story that names a real ORDER has to be checked against the real sort, exactly like a real film or a real control. Found while taking the delivery screenshots. | implementation defect in the preview — caught at delivery, harmless |
+| 3 | After his first minutes of real use: a click on another film's row behind the open drawer closed the drawer, so switching films took two clicks. "It takes two clicks where it should take one." Once the white row made the list behind the drawer feel alive, the dead rows around it became the next thing in the way. Built as amendment 1.1 (story 7) with no preview — a follow-up from use. | new opportunity — the welcome kind of rework; no mock-up would have surfaced it, because every mock-up walk-through closed the drawer between films |
 
 ## Delivery, 2026-09-20
 

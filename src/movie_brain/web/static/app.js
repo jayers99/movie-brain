@@ -728,17 +728,29 @@
     if (top < wrap.scrollTop) wrap.scrollTop = top;
     else if (top + ROW_H > wrap.scrollTop + view) wrap.scrollTop = top + ROW_H - view;
   }
-  // ↑ ↓ with the drawer open: the previous / next film of the list exactly as it is shown. The
-  // white row moves at once; drawerSeq lets only the last film's details be drawn. Does nothing
-  // at either end, or when the open film is not in the shown list.
-  function stepDrawer(dir) {
-    const i = state.filtered.findIndex((f) => f.id === state.openFilm);
-    const next = i < 0 ? undefined : state.filtered[i + dir];
-    if (!next) return;
+  // Move the open drawer to row i of the shown list without closing it (↑ ↓, or a click on a
+  // dimmed row). The white row moves at once; drawerSeq lets only the last film's details be drawn.
+  function moveDrawerTo(i) {
+    const next = state.filtered[i];
+    if (!next || next.id === state.openFilm) return;
     state.openFilm = next.id; state.mark = next.id;
-    revealRow(i + dir);
+    revealRow(i);
     renderRows();
     openDrawer(next.id, 'step');
+  }
+  // ↑ ↓: the previous / next film of the list exactly as it is shown. Does nothing at either end,
+  // or when the open film is not in the shown list.
+  function stepDrawer(dir) {
+    const i = state.filtered.findIndex((f) => f.id === state.openFilm);
+    if (i >= 0) moveDrawerTo(i + dir);
+  }
+  // The index of the film row showing through the dim at a point, or -1. Only the TOPMOST thing
+  // under the backdrop counts: a row scrolled beneath the sticky header is not showing, and the
+  // white row is pointer-events:none, so both read as "no row" and a click there closes.
+  function dimmedRowAt(x, y) {
+    const under = document.elementsFromPoint(x, y).find((el) => el !== backdrop);
+    const tr = under && under.closest('#films tbody tr[data-id]');
+    return tr ? state.filtered.findIndex((f) => f.id === +tr.dataset.id) : -1;
   }
   // fromPopstate=true: the URL already changed (browser back/forward already happened) — just
   // reflect it in the DOM, never touch history again (that's what caused the re-push bug).
@@ -770,7 +782,16 @@
     openDrawer(+tr.dataset.id);
   });
   $('#drawer-close').addEventListener('click', () => closeDrawer());
-  backdrop.addEventListener('click', () => closeDrawer());
+  // One click on another film's row switches the drawer to it (owner request 2026-09-20: it used
+  // to close, and the film took a second click). Anywhere in the row counts — a title link or a
+  // rating box under the dim is just the row. Any other click on the dim closes, as before.
+  backdrop.addEventListener('click', (e) => {
+    const i = dimmedRowAt(e.clientX, e.clientY);
+    if (i >= 0) moveDrawerTo(i); else closeDrawer();
+  });
+  backdrop.addEventListener('mousemove', (e) => {
+    backdrop.style.cursor = dimmedRowAt(e.clientX, e.clientY) >= 0 ? 'pointer' : '';
+  });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.watch-toggle'); if (!b) return;
     const r = await fetch(`/api/films/${b.dataset.id}/watchlist`, { method: 'POST' });
