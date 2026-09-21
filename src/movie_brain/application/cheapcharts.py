@@ -73,6 +73,7 @@ class RecheckReport:
     failed: int = 0
     rate_limited: bool = False
     last_film_id: int | None = None
+    dropped: int = 0  # removed ids taken off films that also hold a live product
 
 
 def _batches(targets: Sequence[ItunesTarget], size: int) -> list[Sequence[ItunesTarget]]:
@@ -212,7 +213,7 @@ def recheck_itunes_ids(
     backfill uses. A confirmed re-listing REPLACES the dead id in place, one UPDATE, and the
     old id is only ever printed here — never retired to a flag (owner ruling 2026-09-07)."""
     targets = repo.films_holding_itunes_id(limit, after)
-    scanned = live = replaced = dead = unknown = held = failed = 0
+    scanned = live = replaced = dead = unknown = held = failed = dropped = 0
     last_film_id: int | None = None
     for batch in _batches(targets, MAX_IMDB_IDS):
         try:
@@ -229,6 +230,33 @@ def recheck_itunes_ids(
             scanned += 1
             last_film_id = target.film_id
             assert target.itunes_id is not None  # films_holding_itunes_id always fills this
+            stored = [v for a, v in repo.external_ids_all(target.film_id) if a == ITUNES_AUTHORITY]
+            if len(stored) > 1:
+                # Several store ids (a merge, or `wishlist --resolve`): the by-IMDb answer speaks
+                # for ONE product, so each is asked about by its own id. A removed one beside a
+                # live one is dropped — otherwise MIN(value) can link the drawer to the dead
+                # product (Dial M for Murder, The Petrified Forest, The General, 2026-09-20).
+                try:
+                    state = {v: client.is_removed(v) for v in stored}
+                except RateLimited:
+                    return _rate_limited(scanned, live, replaced, dead, unknown, held, failed, last_film_id, log)
+                except requests.RequestException as exc:
+                    log(f"  #{target.film_id} {target.title!r}: CheapCharts product lookup failed: {exc}")
+                    failed += 1
+                    continue
+                alive = [v for v in stored if state[v] is False]
+                gone = [v for v in stored if state[v] is True]
+                if alive:
+                    for value in gone:
+                        log(
+                            f"  #{target.film_id} {target.title!r}: itunes {value} (removed) dropped — "
+                            f"the film also holds live {', '.join(alive)}"
+                        )
+                        if apply:
+                            repo.drop_external_claim(target.film_id, ITUNES_AUTHORITY, value)
+                        dropped += 1
+                    live += 1
+                    continue
             product = found.get(target.imdb_id)
             if product is None:
                 log(f"  #{target.film_id} {target.title!r}: CheapCharts no longer knows this imdb id")
@@ -264,11 +292,17 @@ def recheck_itunes_ids(
                 continue
             holder = repo.film_id_for_external(ITUNES_AUTHORITY, confirmed.itunes_id)
             if holder == target.film_id:
-                # This film already holds the confirmed id under a second `itunes` row (a
-                # merge can leave a survivor with more than one) — it is live, not a
-                # replacement, and there's nothing to write.
-                log(f"  #{target.film_id} {target.title!r}: itunes {confirmed.itunes_id} already held by this film")
-                live += 1
+                # This film already holds the confirmed re-listing under a second `itunes` row (a
+                # merge, or `wishlist --resolve`, leaves a film with more than one). The removed id
+                # is then a replacement that has already happened: drop it, or MIN(value) keeps
+                # linking the drawer to a product Apple has pulled (Dial M for Murder, 2026-09-20).
+                log(
+                    f"  #{target.film_id} {target.title!r}: itunes {target.itunes_id} (removed) dropped — "
+                    f"the film already holds its re-listing {confirmed.itunes_id}"
+                )
+                if apply:
+                    repo.drop_external_claim(target.film_id, ITUNES_AUTHORITY, target.itunes_id)
+                replaced += 1
                 continue
             if holder is not None:
                 log(f"  #{target.film_id} {target.title!r}: itunes {confirmed.itunes_id} already held by #{holder}")
@@ -281,4 +315,6 @@ def recheck_itunes_ids(
             if apply:
                 repo.replace_external_id(target.film_id, ITUNES_AUTHORITY, target.itunes_id, confirmed.itunes_id)
             replaced += 1
-    return RecheckReport(scanned, live, replaced, dead, unknown, held, failed, last_film_id=last_film_id)
+    return RecheckReport(
+        scanned, live, replaced, dead, unknown, held, failed, last_film_id=last_film_id, dropped=dropped
+    )

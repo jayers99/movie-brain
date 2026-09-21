@@ -21,6 +21,7 @@ class FakeCheapCharts:
     by_title: dict[str, list[Product]] = field(default_factory=dict)
     imdb_batches: list[list[str]] = field(default_factory=list)
     searches: list[str] = field(default_factory=list)
+    removed: dict[str, bool] = field(default_factory=dict)
     refuse_after: int | None = None
     down: bool = False
 
@@ -37,6 +38,10 @@ class FakeCheapCharts:
     def search(self, title, limit=5):
         self.searches.append(title)
         return self.by_title.get(title, [])
+
+    def is_removed(self, itunes_id):
+        """None = CheapCharts has nothing to say about this product."""
+        return self.removed.get(itunes_id)
 
 
 @pytest.fixture
@@ -78,6 +83,12 @@ def no_imdb_mapping(cheapcharts, tt):
 @given(parsers.parse('CheapCharts maps "{tt}" to a REMOVED itunes id "{itunes_id}"'))
 def maps_imdb_removed(cheapcharts, tt, itunes_id):
     cheapcharts.by_imdb[tt] = Product(itunes_id=itunes_id, title="Vertigo (1958)", year=1958, imdb_id=tt, removed=True)
+
+
+@given(parsers.parse('CheapCharts says product "{itunes_id}" is {state}'))
+def product_state(cheapcharts, itunes_id, state):
+    assert state in ("removed", "live")
+    cheapcharts.removed[itunes_id] = state == "removed"
 
 
 @given(parsers.parse('a CheapCharts search for "{query}" returns "{title}" ({year:d}) as itunes id "{itunes_id}"'))
@@ -248,6 +259,11 @@ def marked_rate_limited(result):
 @then(parsers.parse("the report counts {n:d} replaced"))
 def counts_replaced(result, n):
     assert result["report"].replaced == n
+
+
+@then(parsers.parse("the report counts {n:d} dropped"))
+def report_dropped(result, n):
+    assert result["report"].dropped == n
 
 
 @then(parsers.parse("the report counts {n:d} dead"))

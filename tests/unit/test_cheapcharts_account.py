@@ -375,3 +375,18 @@ def test_remove_item_sends_buymovies_and_reports_a_refusal_instead_of_raising():
     assert q["action"] == ["removeItem"] and q["itemType"] == ["buymovies"] and q["idInStore"] == ["282538466"]
     assert q["country"] == ["us"] and q["store"] == ["itunes"]
     assert account.remove_item("282538466") is False  # e.g. already gone: the caller's call
+
+
+@responses.activate
+def test_is_removed_reads_the_marker_cheapcharts_puts_on_a_pulled_products_title():
+    """Shape taken from a real DetailData answer (2026-09-20), ids invented: the marker is a
+    prefix on `title`, exactly as on the price call."""
+    gone = {"results": {"movies": {"title": "[❌Removed from iTunes] The Glass Orchard", "idInStore": "111"}}}
+    live = {"results": {"movies": {"title": "The Glass Orchard", "idInStore": "222"}}}
+    responses.get(DETAIL_URL, json=gone)
+    responses.get(DETAIL_URL, json=live)
+    responses.get(DETAIL_URL, json={"results": {"movies": []}})
+    client = CheapChartsClient(delay_s=0)
+    assert client.is_removed("111") is True
+    assert client.is_removed("222") is False
+    assert client.is_removed("333") is None   # no such product: nothing is known, nothing is dropped

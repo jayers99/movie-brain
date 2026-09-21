@@ -167,15 +167,47 @@ Feature: Resolving the CheapCharts product page for a film
     Then the report counts 1 scanned
     And CheapCharts was never asked about "tt0052357"
 
-  Scenario: A recheck confirming an id the film already holds writes nothing
+  Scenario: A recheck drops a removed id when the film already holds its confirmed re-listing
     Given the film "Vertigo" already holds itunes id "284815525"
     And the film "Vertigo" already holds itunes id "999"
     And CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
     And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
     When I recheck cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "999"
+    And the film "Vertigo" holds exactly one itunes id
+    And the report counts 1 replaced
+
+  Scenario: A film holding a removed product beside a live one loses the removed one, whatever the IMDb index says
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts maps "tt0052357" to itunes id "999"
+    And CheapCharts says product "284815525" is removed
+    And CheapCharts says product "999" is live
+    When I recheck cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "999"
+    And the film "Vertigo" holds exactly one itunes id
+    And the report counts 1 dropped
+    And CheapCharts was never searched
+
+  Scenario: Two live editions of one film are both kept
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts maps "tt0052357" to itunes id "999"
+    And CheapCharts says product "284815525" is live
+    And CheapCharts says product "999" is live
+    When I recheck cheapcharts ids with apply
     Then the film "Vertigo" holds every itunes id "284815525" and "999"
+    And the report counts 0 dropped
     And the report counts 1 live
-    And the report counts 0 replaced
+
+  Scenario: A recheck without apply leaves the removed id beside its re-listing
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    When I recheck cheapcharts ids without applying
+    Then the film "Vertigo" holds every itunes id "284815525" and "999"
+    And the report counts 1 replaced
 
   Scenario: A recheck without apply changes nothing
     Given the film "Vertigo" already holds itunes id "284815525"
