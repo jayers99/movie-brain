@@ -373,3 +373,86 @@ def recheck_itunes_ids(
     return RecheckReport(
         scanned, live, replaced, dead, unknown, held, failed, last_film_id=last_film_id, dropped=dropped
     )
+
+
+@dataclass(frozen=True)
+class AuditReport:
+    """`cheapcharts audit`: every STORED id put to the check a new search answer has to pass.
+    Read-only. `suspects` are for a human: CheapCharts' own filing can be the thing that is wrong
+    (it answers Final Reckoning's IMDb id with Dead Reckoning's page), so nothing is ever removed
+    on its say-so."""
+
+    scanned: int = 0
+    agree: int = 0
+    suspects: int = 0
+    unverified: int = 0
+    unknown: int = 0
+    removed: int = 0
+    failed: int = 0
+    rate_limited: bool = False
+    last_film_id: int | None = None
+    misfiled: int = 0  # another IMDb id but the film's own director: most likely CheapCharts' slip
+
+
+def audit_itunes_ids(
+    repo: Repository,
+    client: CheapChartsClient,
+    *,
+    limit: int | None = None,
+    after: int | None = None,
+    log: Callable[[str], None] = _stderr,
+) -> AuditReport:
+    """Ask CheapCharts what each stored product is filed under and name the ones that are not
+    this film (`_refusal`, the rule a search answer passes since 2026-09-20 — ids stored before
+    it never met it, and September's Grandma's Boy mix-up was exactly this). One paced call per
+    stored id; writes nothing; `after` resumes a rate-limited run."""
+    scanned = agree = suspects = unverified = unknown = removed = failed = misfiled = 0
+    last_film_id: int | None = None  # the last film whose EVERY id was asked — safe to resume after
+    current: int | None = None
+    for target in repo.stored_itunes_ids(limit, after):
+        assert target.itunes_id is not None
+        if target.film_id != current:
+            last_film_id, current = current, target.film_id
+        try:
+            filing = client.filing(target.itunes_id)
+        except RateLimited:
+            hint = f" — resume with --after {last_film_id}" if last_film_id is not None else ""
+            log(f"CheapCharts is rate-limiting — stopping{hint}.")
+            return AuditReport(
+                scanned, agree, suspects, unverified, unknown, removed, failed, rate_limited=True,
+                last_film_id=last_film_id, misfiled=misfiled,
+            )
+        except requests.RequestException as exc:
+            log(f"  #{target.film_id} {target.title!r}: CheapCharts product lookup failed: {exc}")
+            failed += 1
+            scanned += 1
+            continue
+        scanned += 1
+        who = f"#{target.film_id} {target.title!r} ({target.year or '-'}) [{target.director or '-'}]"
+        if filing is None:
+            log(f"  {who}: itunes {target.itunes_id} — CheapCharts does not know this product")
+            unknown += 1
+        else:
+            removed += filing.removed
+            why = _refusal(target, filing)
+            if why is None:
+                agree += 1
+            elif filing.imdb_id is None and "no director" in why:
+                unverified += 1
+            else:
+                by = ", ".join(filing.directors) or "-"
+                gone = " (removed)" if filing.removed else ""
+                # Another IMDb id, yet credited to this film's own director: far more often
+                # CheapCharts' filing slip (it files Dead Reckoning under Final Reckoning's id) than
+                # a wrong product. Still printed, under a quieter label.
+                same_director = bool(
+                    target.director and _names(target.director) & {d.casefold() for d in filing.directors}
+                )
+                label = "misfiled?" if filing.imdb_id is not None and same_director else "SUSPECT"
+                log(f"  {label} {who}: itunes {target.itunes_id}{gone} is {filing.title!r} by {by} — {why}")
+                misfiled += label == "misfiled?"
+                suspects += label == "SUSPECT"
+    return AuditReport(
+        scanned, agree, suspects, unverified, unknown, removed, failed, last_film_id=current, misfiled=misfiled
+    )
+

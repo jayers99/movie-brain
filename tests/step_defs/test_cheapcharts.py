@@ -6,7 +6,7 @@ import pytest
 import requests
 from pytest_bdd import given, parsers, scenarios, then, when
 
-from movie_brain.application.cheapcharts import recheck_itunes_ids, resolve_itunes_ids
+from movie_brain.application.cheapcharts import audit_itunes_ids, recheck_itunes_ids, resolve_itunes_ids
 from movie_brain.domain.models import Film
 from movie_brain.infrastructure.cheapcharts import MAX_IMDB_IDS, Product, ProductFiling, RateLimited
 
@@ -23,6 +23,8 @@ class FakeCheapCharts:
     searches: list[str] = field(default_factory=list)
     removed: dict[str, bool] = field(default_factory=dict)
     filings: dict[str, ProductFiling] = field(default_factory=dict)
+    filing_calls: int = 0
+    refuse_filing_after: int | None = None
     refuse_after: int | None = None
     down: bool = False
 
@@ -43,6 +45,9 @@ class FakeCheapCharts:
     def filing(self, itunes_id):
         """Unless a step says otherwise a product is filed under the Background film's own id —
         the ordinary case, where the search found the right page."""
+        self.filing_calls += 1
+        if self.refuse_filing_after is not None and self.filing_calls > self.refuse_filing_after:
+            raise RateLimited("detail")
         return self.filings.get(itunes_id, ProductFiling("tt0052357", ()))
 
     def is_removed(self, itunes_id):
@@ -96,9 +101,19 @@ def filed_under(cheapcharts, itunes_id, tt):
     cheapcharts.filings[itunes_id] = ProductFiling(tt, ())
 
 
+@given(parsers.parse('CheapCharts files product "{itunes_id}" under imdb id "{tt}", directed by "{name}"'))
+def filed_under_with_director(cheapcharts, itunes_id, tt, name):
+    cheapcharts.filings[itunes_id] = ProductFiling(tt, (name,))
+
+
 @given(parsers.parse('CheapCharts files product "{itunes_id}" under no imdb id, directed by "{name}"'))
 def filed_without_imdb(cheapcharts, itunes_id, name):
     cheapcharts.filings[itunes_id] = ProductFiling(None, (name,))
+
+
+@given(parsers.parse("CheapCharts stops answering product lookups after {n:d}"))
+def filing_refuses_after(cheapcharts, n):
+    cheapcharts.refuse_filing_after = n
 
 
 @given(parsers.parse('CheapCharts says product "{itunes_id}" is {state}'))
@@ -193,6 +208,18 @@ def run_recheck_apply_after(repo, cheapcharts, today, films, result, title):
     result["report"] = recheck_itunes_ids(
         repo, cheapcharts, today, apply=True, after=films[title], log=lambda _m: None
     )
+
+
+@when("I audit the stored cheapcharts ids")
+def run_audit(repo, cheapcharts, result):
+    result["lines"] = []
+    result["report"] = audit_itunes_ids(repo, cheapcharts, log=result["lines"].append)
+
+
+@when(parsers.parse('I audit the stored cheapcharts ids after "{title}"'))
+def run_audit_after(repo, cheapcharts, films, result, title):
+    result["lines"] = []
+    result["report"] = audit_itunes_ids(repo, cheapcharts, after=films[title], log=result["lines"].append)
 
 
 # Then ----------------------------------------------------------------------
@@ -312,3 +339,30 @@ def holds_every_itunes(repo, films, title, a, b):
 @then("CheapCharts was never searched")
 def never_searched(cheapcharts):
     assert cheapcharts.searches == []
+
+
+@then(parsers.parse("the audit counts {scanned:d} scanned and {suspect:d} suspect"))
+def audit_counts(result, scanned, suspect):
+    assert (result["report"].scanned, result["report"].suspects) == (scanned, suspect)
+
+
+@then(parsers.parse("the audit counts {n:d} unverified"))
+def audit_unverified(result, n):
+    assert result["report"].unverified == n
+
+
+@then(parsers.parse('the audit names "{title}" with itunes id "{itunes_id}"'))
+def audit_names(result, title, itunes_id):
+    assert any(title in line and itunes_id in line for line in result["lines"]), result["lines"]
+
+
+@then(parsers.parse('the audit is rate limited and resumes after "{title}"'))
+def audit_resume(result, films, title):
+    assert result["report"].rate_limited is True
+    assert result["report"].last_film_id == films[title]
+
+
+@then(parsers.parse("the audit counts {n:d} misfiled"))
+def audit_misfiled(result, n):
+    assert result["report"].misfiled == n
+
