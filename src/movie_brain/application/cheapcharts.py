@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 import sys
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -107,8 +108,18 @@ def _confirm(target: ItunesTarget, products: list[Product]) -> tuple[Product | N
 _NAME_SPLIT = re.compile(r"\s*(?:,|&|\band\b)\s*")
 
 
-def _names(text: str) -> set[str]:
-    return {n.strip().casefold() for n in _NAME_SPLIT.split(text) if n.strip()}
+def _name_key(name: str) -> frozenset[str] | None:
+    """One person's name as a bag of accent-folded, case-folded words, so `François Truffaut`
+    is `Francois Truffaut` and `Yeo Siew Hua` is `Siew Hua Yeo`. None for a name that says
+    nothing comparable — Apple's literal `Unknown`, or a credit in another script (`박찬욱`)."""
+    folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().casefold()
+    words = frozenset(re.findall(r"[a-z]+", folded))
+    return words if words and words != {"unknown"} else None
+
+
+def _names(text: str) -> set[frozenset[str]]:
+    keys = (_name_key(n) for n in _NAME_SPLIT.split(text))
+    return {k for k in keys if k is not None}
 
 
 def _refusal(target: ItunesTarget, filing: ProductFiling | None) -> str | None:
@@ -121,9 +132,10 @@ def _refusal(target: ItunesTarget, filing: ProductFiling | None) -> str | None:
         return "product unknown to CheapCharts"
     if filing.imdb_id is not None:
         return None if filing.imdb_id == target.imdb_id else f"filed under {filing.imdb_id}, not {target.imdb_id}"
-    if not target.director or not filing.directors:
+    mine = _names(target.director or "")
+    theirs = {k for k in (_name_key(d) for d in filing.directors) if k is not None}
+    if not mine or not theirs:
         return "no imdb filing and no director to compare"
-    mine, theirs = _names(target.director), {d.casefold() for d in filing.directors}
     return None if mine & theirs else f"directed by {', '.join(filing.directors)}"
 
 
@@ -446,7 +458,7 @@ def audit_itunes_ids(
                 # CheapCharts' filing slip (it files Dead Reckoning under Final Reckoning's id) than
                 # a wrong product. Still printed, under a quieter label.
                 same_director = bool(
-                    target.director and _names(target.director) & {d.casefold() for d in filing.directors}
+                    _names(target.director or "") & {k for k in map(_name_key, filing.directors) if k is not None}
                 )
                 label = "misfiled?" if filing.imdb_id is not None and same_director else "SUSPECT"
                 log(f"  {label} {who}: itunes {target.itunes_id}{gone} is {filing.title!r} by {by} — {why}")
