@@ -135,6 +135,12 @@ Feature: Tier ranker — place owned films into five tiers against anchors
     Then the session needs an anchor for tier 3
     And there is no pair
 
+  Scenario: A tombstoned anchor stops serving pairs until swapped
+    Given a started session
+    When "Eight" is tombstoned
+    Then the session needs an anchor for tier 3
+    And there is no pair
+
   Scenario: A corrupt verdict log is skipped, not fatal
     Given a started session
     When the current candidate's log is forced illegal with four "worse" verdicts

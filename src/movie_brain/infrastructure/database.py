@@ -3109,6 +3109,12 @@ class Repository:
             # A tombstone is a resolution, same as a merge is for its loser: drop any
             # needs_revisit flag rather than leaving it to haunt the (now-hidden) film.
             c.execute("DELETE FROM needs_revisit WHERE film_id = ?", (film_id,))
+            # A hidden film leaves the ranker exactly as an unseen one does (`set_unseen`): left in
+            # place it kept its tier, was served as the other side of an order pair, and was
+            # written into the saved list. An anchor seat it held empties on the next read.
+            c.execute("DELETE FROM rank_placement WHERE film_id = ?", (film_id,))
+            c.execute("DELETE FROM rank_comparison WHERE film_id = ?", (film_id,))
+            self._purge_order_rows(c, film_id)
             c.execute(
                 "INSERT INTO film_disposition (film_id, kind, survivor_id, note, created_at) "
                 "VALUES (?, 'tombstoned', NULL, ?, ?)",

@@ -491,3 +491,22 @@ def test_clear_served_marks_keeps_pending_requests_and_drops_served_ones(repo):
     assert repo.clear_served_marks(sid, (1, 2)) == 2
     assert repo.rank_mark_film_ids() == {b, d, e}      # b awaits its order, d awaits the Tiers tab, e is a plain pool ticket
     assert repo.clear_served_marks(sid, (1, 2)) == 0
+
+
+def test_tombstoning_removes_the_film_from_placements_the_order_and_every_verdict_naming_it(repo):
+    """A tombstoned film is hidden everywhere, so it must leave the ranker exactly as an unseen one
+    does — otherwise it keeps its tier, is served as the OTHER side of an order pair, and is
+    written into the saved list."""
+    sid, (a, b, c, d) = _order_session(repo)
+    repo.insert_ordered(sid, 1, a, 0, D)
+    repo.insert_ordered(sid, 1, b, 1, D)
+    repo.insert_ordered(sid, 1, c, 2, D)
+    repo.append_order_comparison(sid, 1, d, b, "better", D)   # d mid-search, against b
+    repo.append_comparison(sid, b, a, 1, "worse", D)          # b's own tiering verdict
+    repo.defer_order_film(sid, b, "2026-09-13")
+    repo.tombstone_film(b, D)
+    assert b not in repo.rank_placements(sid)
+    assert repo.rank_order(sid, 1) == [a, c]
+    assert repo.order_verdicts_for(sid, d) == []
+    assert repo.verdicts_for(sid, b) == []
+    assert repo.order_deferrals(sid) == {}

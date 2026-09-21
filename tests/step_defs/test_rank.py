@@ -308,6 +308,11 @@ def drawer_unseen(ctx):
     ctx["repo"].set_unseen(ctx["last_candidate"], True, TODAY)
 
 
+@when(parsers.parse('"{title}" is tombstoned'))
+def title_tombstoned(ctx, title):
+    ctx["repo"].tombstone_film(_id(ctx, title), TODAY)
+
+
 @when(parsers.parse('"{title}" is marked unseen from the drawer'))
 def title_marked_unseen(ctx, title):
     ctx["repo"].set_unseen(_id(ctx, title), True, TODAY)
