@@ -164,7 +164,9 @@ def session_state(repo: Repository, source: str, today: date) -> dict[str, objec
     queue = _queue(repo, s)
     # An anchor marked unseen from the drawer still occupies a NULL-or-not slot; treat it as
     # missing too (§4.6) so the tier stops serving pairs against a film that is out of the pool.
-    needs = [t for t in range(1, TIERS + 1) if anchors[t] is None or anchors[t] in unseen_ids]
+    # A tombstoned anchor is the same case: hidden everywhere, it cannot be what a pair is asked against.
+    gone = unseen_ids | repo.disposed_film_ids()
+    needs = [t for t in range(1, TIERS + 1) if anchors[t] is None or anchors[t] in gone]
     pair: dict[str, object] | None = None
     corrupt: list[int] = []
     while queue and not needs:
