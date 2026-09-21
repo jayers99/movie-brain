@@ -309,3 +309,29 @@ Feature: Resolving the CheapCharts product page for a film
     Then the audit counts 1 scanned and 0 suspect
     And the audit counts 1 misfiled
 
+  Scenario Outline: A director credited in another spelling is still the same director
+    Given the film "Vertigo" is directed by "<ours>"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts files product "999" under no imdb id, directed by "<theirs>"
+    When I audit the stored cheapcharts ids
+    Then the audit counts 1 scanned and 0 suspect
+
+    Examples:
+      | ours              | theirs            |
+      | François Truffaut | Francois Truffaut |
+      | Yeo Siew Hua      | Siew Hua Yeo      |
+      | Josef von Sternberg | Josef Von Sternberg |
+
+  Scenario Outline: A director CheapCharts cannot name proves nothing either way
+    Given the film "Vertigo" is directed by "Park Chan-wook"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts files product "999" under no imdb id, directed by "<theirs>"
+    When I audit the stored cheapcharts ids
+    Then the audit counts 1 scanned and 0 suspect
+    And the audit counts 1 unverified
+
+    Examples:
+      | theirs  |
+      | Unknown |
+      | 박찬욱   |
+
