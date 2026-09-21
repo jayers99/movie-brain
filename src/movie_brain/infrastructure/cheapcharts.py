@@ -113,6 +113,15 @@ class Product:
     removed: bool = False  # Apple has pulled this product; title has had REMOVED_MARKER stripped
 
 
+@dataclass(frozen=True)
+class ProductFiling:
+    """What CheapCharts files one product under: the work's IMDb id (None when their index has no
+    mapping for it) and the directors it credits."""
+
+    imdb_id: str | None
+    directors: tuple[str, ...]
+
+
 def _itunes_id_from_url(url: str) -> str | None:
     """Last path segment of `.../us/itunes/movies/284815525?utm_source=…` — the utm campaign
     params CheapCharts adds are dropped, never stored."""
@@ -211,6 +220,24 @@ class CheapChartsClient:
         results = data.get("results")
         movie = results.get("movies") if isinstance(results, dict) else None
         return movie if isinstance(movie, dict) else None
+
+    def filing(self, itunes_id: str) -> ProductFiling | None:
+        """The IMDb id and the directors CheapCharts files THIS product under — what lets a
+        title-search answer be checked against the film it is about to be stored on (a search
+        result carries no director, and two films of one title and year are common: The Stranger
+        2022, twice). `directors` is a list of objects; a product with none carries the name in
+        `artist`. None when there is no such product."""
+        movie = self._detail(itunes_id)
+        if movie is None:
+            return None
+        imdb_id = str(movie.get("imdbId") or "")
+        raw = movie.get("directors")
+        names = [str(d.get("name") or "") for d in raw if isinstance(d, dict)] if isinstance(raw, list) else []
+        if not any(names):
+            names = re.split(r"\s*(?:,|&)\s*", str(movie.get("artist") or ""))
+        return ProductFiling(
+            imdb_id if _IMDB_ID_RE.fullmatch(imdb_id) else None, tuple(n.strip() for n in names if n.strip())
+        )
 
     def is_removed(self, itunes_id: str) -> bool | None:
         """Has Apple pulled THIS product? The by-IMDb call only ever speaks for the one product

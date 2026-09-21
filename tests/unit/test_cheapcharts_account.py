@@ -15,6 +15,7 @@ from movie_brain.infrastructure.cheapcharts import (
     CheapChartsClient,
     CheapChartsError,
     Pacer,
+    ProductFiling,
     RateLimited,
     WishlistItem,
     parse_evolution,
@@ -390,3 +391,20 @@ def test_is_removed_reads_the_marker_cheapcharts_puts_on_a_pulled_products_title
     assert client.is_removed("111") is True
     assert client.is_removed("222") is False
     assert client.is_removed("333") is None   # no such product: nothing is known, nothing is dropped
+
+
+@responses.activate
+def test_filing_reads_the_imdb_id_and_the_directors_a_product_is_filed_under():
+    """Shapes from real DetailData answers (2026-09-20), ids and names invented: `directors` is a
+    list of objects; a product with none carries the name in `artist`; `imdbId` may be absent."""
+    full = {"results": {"movies": {"title": "The Glass Orchard", "imdbId": "tt9000009",
+                                   "directors": [{"id": 1, "name": "Ana Reyes"}, {"id": 2, "name": "Bo Lind"}],
+                                   "artist": "Ana Reyes & Bo Lind"}}}
+    bare = {"results": {"movies": {"title": "The Glass Orchard", "artist": "Ana Reyes & Bo Lind"}}}
+    responses.get(DETAIL_URL, json=full)
+    responses.get(DETAIL_URL, json=bare)
+    responses.get(DETAIL_URL, json={"results": {"movies": []}})
+    client = CheapChartsClient(delay_s=0)
+    assert client.filing("1") == ProductFiling("tt9000009", ("Ana Reyes", "Bo Lind"))
+    assert client.filing("2") == ProductFiling(None, ("Ana Reyes", "Bo Lind"))
+    assert client.filing("3") is None
