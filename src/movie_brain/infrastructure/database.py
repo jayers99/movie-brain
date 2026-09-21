@@ -1318,6 +1318,38 @@ class Repository:
             for r in rows
         ]
 
+    def stored_itunes_ids(self, limit: int | None = None, after: int | None = None) -> list[ItunesTarget]:
+        """EVERY stored store id of every live film holding an IMDb id, one row per (film, id) —
+        the worklist of `cheapcharts audit`. Unlike the recheck's worklist nothing is grouped:
+        a film holding two products is asked about both. The director falls back to the TMDB
+        Director credit, because 1,470 id-holding films carry no `films.director` (discovery
+        films) and the audit's last resort is a director comparison."""
+        sql = (
+            "SELECT f.id, f.title, f.year, COALESCE(f.director, (SELECT group_concat(p.name, ', ') "
+            "FROM film_credit c JOIN person p ON p.id = c.person_id "
+            "WHERE c.film_id = f.id AND c.kind = 'crew' AND c.job = 'Director')) AS director, "
+            "i.value AS imdb_id, x.value AS itunes_id FROM films f "
+            "JOIN external_ids i ON i.film_id = f.id AND i.authority = 'imdb' "
+            "JOIN external_ids x ON x.film_id = f.id AND x.authority = 'itunes' "
+            "WHERE " + _NOT_DISPOSED
+        )
+        params: list[object] = []
+        if after is not None:
+            sql += " AND f.id > ?"
+            params.append(after)
+        sql += " ORDER BY f.id, x.value"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
+        with self._conn() as c:
+            rows = c.execute(sql, params).fetchall()
+        return [
+            ItunesTarget(
+                int(r["id"]), str(r["title"]), r["year"], r["director"], str(r["imdb_id"]), str(r["itunes_id"])
+            )
+            for r in rows
+        ]
+
     def drop_external_claim(self, film_id: int, authority: str, value: str) -> bool:
         """Remove ONE claim row — `replace_external_id`'s sibling for the case where the
         replacement is already held by the same film, so there is nothing to swap the dead value

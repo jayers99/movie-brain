@@ -120,6 +120,8 @@ class ProductFiling:
 
     imdb_id: str | None
     directors: tuple[str, ...]
+    title: str = ""  # marker stripped — what the audit prints beside a suspect
+    removed: bool = False
 
 
 def _itunes_id_from_url(url: str) -> str | None:
@@ -235,8 +237,13 @@ class CheapChartsClient:
         names = [str(d.get("name") or "") for d in raw if isinstance(d, dict)] if isinstance(raw, list) else []
         if not any(names):
             names = re.split(r"\s*(?:,|&)\s*", str(movie.get("artist") or ""))
+        title = str(movie.get("title") or "")
+        removed = title.startswith(REMOVED_MARKER)
         return ProductFiling(
-            imdb_id if _IMDB_ID_RE.fullmatch(imdb_id) else None, tuple(n.strip() for n in names if n.strip())
+            imdb_id if _IMDB_ID_RE.fullmatch(imdb_id) else None,
+            tuple(n.strip() for n in names if n.strip()),
+            title[len(REMOVED_MARKER) :].strip() if removed else title,
+            removed,
         )
 
     def is_removed(self, itunes_id: str) -> bool | None:

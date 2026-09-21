@@ -256,3 +256,56 @@ Feature: Resolving the CheapCharts product page for a film
     When I recheck cheapcharts ids without applying
     Then the film "Vertigo" holds itunes id "284815525"
     And the report counts 1 replaced
+
+  Scenario: The audit names a stored id CheapCharts files under another film, and writes nothing
+    Given the film "Vertigo" already holds itunes id "999"
+    And CheapCharts files product "999" under imdb id "tt7777777"
+    When I audit the stored cheapcharts ids
+    Then the audit counts 1 scanned and 1 suspect
+    And the audit names "Vertigo" with itunes id "999"
+    And the film "Vertigo" holds itunes id "999"
+
+  Scenario: The audit passes a stored id filed under the film's own IMDb id
+    Given the film "Vertigo" already holds itunes id "999"
+    When I audit the stored cheapcharts ids
+    Then the audit counts 1 scanned and 0 suspect
+
+  Scenario: The audit checks every id of a film holding two
+    Given the film "Vertigo" already holds itunes id "111"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts files product "999" under imdb id "tt7777777"
+    When I audit the stored cheapcharts ids
+    Then the audit counts 2 scanned and 1 suspect
+
+  Scenario: A stored id with no IMDb filing and no director to compare is unverified, not a suspect
+    Given the film "Vertigo" already holds itunes id "999"
+    And CheapCharts files product "999" under no imdb id, directed by "Alfred Hitchcock"
+    When I audit the stored cheapcharts ids
+    Then the audit counts 1 scanned and 0 suspect
+    And the audit counts 1 unverified
+
+  Scenario: The audit resumes after a film id
+    Given the film "Vertigo" already holds itunes id "999"
+    And a film "Rear Window" (1954) holding imdb id "tt0047396"
+    And the film "Rear Window" already holds itunes id "111"
+    And CheapCharts files product "111" under imdb id "tt0047396"
+    When I audit the stored cheapcharts ids after "Vertigo"
+    Then the audit counts 1 scanned and 0 suspect
+
+  Scenario: A rate-limited audit resumes after the last film it finished, never half-way through one
+    Given a film "Rear Window" (1954) holding imdb id "tt0047396"
+    And the film "Vertigo" already holds itunes id "999"
+    And the film "Rear Window" already holds itunes id "111"
+    And the film "Rear Window" already holds itunes id "222"
+    And CheapCharts stops answering product lookups after 2
+    When I audit the stored cheapcharts ids
+    Then the audit is rate limited and resumes after "Vertigo"
+
+  Scenario: A stored id filed under another IMDb id but credited to the film's own director is only a misfiling
+    Given the film "Vertigo" is directed by "Alfred Hitchcock"
+    And the film "Vertigo" already holds itunes id "999"
+    And CheapCharts files product "999" under imdb id "tt7777777", directed by "Alfred Hitchcock"
+    When I audit the stored cheapcharts ids
+    Then the audit counts 1 scanned and 0 suspect
+    And the audit counts 1 misfiled
+

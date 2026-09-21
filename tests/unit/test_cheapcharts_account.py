@@ -405,6 +405,14 @@ def test_filing_reads_the_imdb_id_and_the_directors_a_product_is_filed_under():
     responses.get(DETAIL_URL, json=bare)
     responses.get(DETAIL_URL, json={"results": {"movies": []}})
     client = CheapChartsClient(delay_s=0)
-    assert client.filing("1") == ProductFiling("tt9000009", ("Ana Reyes", "Bo Lind"))
-    assert client.filing("2") == ProductFiling(None, ("Ana Reyes", "Bo Lind"))
+    assert client.filing("1") == ProductFiling("tt9000009", ("Ana Reyes", "Bo Lind"), "The Glass Orchard")
+    assert client.filing("2") == ProductFiling(None, ("Ana Reyes", "Bo Lind"), "The Glass Orchard")
     assert client.filing("3") is None
+
+
+@responses.activate
+def test_filing_strips_the_removed_marker_and_says_so():
+    gone = {"results": {"movies": {"title": "[❌Removed from iTunes] The Glass Orchard", "imdbId": "tt9000009"}}}
+    responses.get(DETAIL_URL, json=gone)
+    assert CheapChartsClient(delay_s=0).filing("1") == ProductFiling("tt9000009", (), "The Glass Orchard", True)
+

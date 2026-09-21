@@ -13,7 +13,7 @@ from rich.table import Table
 from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.application.catch_up import CatchUpReport, catch_up
-from movie_brain.application.cheapcharts import recheck_itunes_ids, resolve_itunes_ids
+from movie_brain.application.cheapcharts import audit_itunes_ids, recheck_itunes_ids, resolve_itunes_ids
 from movie_brain.application.embed import embed_films
 from movie_brain.application.enrich import enrich_credits
 from movie_brain.application.export import write_csv
@@ -1336,6 +1336,33 @@ def cheapcharts_resolve_cmd(
         f"unmatched: {report.unmatched} · ambiguous: {report.ambiguous} · "
         f"held: {report.held} · failed: {report.failed}"
         + (" · RATE-LIMITED, stopped early" if report.rate_limited else "")
+    )
+
+
+@cheapcharts_app.command("audit")
+def cheapcharts_audit_cmd(
+    limit: Annotated[int | None, typer.Option("--limit", min=1, help="Stop after N stored ids.")] = None,
+    after: Annotated[int | None, typer.Option("--after", help="Resume after this film id.")] = None,
+) -> None:
+    """Ask CheapCharts what every STORED store id is filed under and name the ones that are not the
+    film holding them. Read-only, one paced call per id (about an hour for the catalogue). A
+    SUSPECT is for a human eye — CheapCharts' own filing can be what is wrong — so nothing is
+    removed here."""
+    report = audit_itunes_ids(_repo(), CheapChartsClient(), limit=limit, after=after, log=_plain)
+    console.print(
+        f"scanned: {report.scanned} · agree: {report.agree} · SUSPECT: {report.suspects} · "
+        f"misfiled?: {report.misfiled} · "
+        f"unverified: {report.unverified} · unknown: {report.unknown} · removed: {report.removed} · "
+        f"failed: {report.failed}"
+        + (
+            (
+                f" · RATE-LIMITED, stopped early — resume with --after {report.last_film_id}"
+                if report.last_film_id is not None
+                else " · RATE-LIMITED, stopped early"
+            )
+            if report.rate_limited
+            else ""
+        )
     )
 
 
