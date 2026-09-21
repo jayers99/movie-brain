@@ -2443,3 +2443,17 @@ def test_migration_025_rebuilds_rank_placement_keeping_rows_keys_and_check(tmp_p
     assert fks == {"rank_session", "films"}
     assert conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 25
     conn.close()
+
+
+def test_drop_external_claim_removes_one_claim_row_and_refuses_a_key_authority(repo):
+    import pytest
+
+    fid = repo.upsert_film(Film("Vertigo", 1958, None, "https://x/vertigo"))
+    repo.set_external_id(fid, "imdb", "tt0052357", date(2026, 9, 20))
+    repo.set_external_id(fid, "itunes", "111", date(2026, 9, 20))
+    repo.set_external_id(fid, "itunes", "999", date(2026, 9, 20))
+    assert repo.drop_external_claim(fid, "itunes", "111") is True
+    assert repo.drop_external_claim(fid, "itunes", "111") is False
+    assert repo.external_ids_all(fid) == [("imdb", "tt0052357"), ("itunes", "999")]
+    with pytest.raises(ValueError):
+        repo.drop_external_claim(fid, "imdb", "tt0052357")

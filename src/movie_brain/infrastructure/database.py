@@ -1318,6 +1318,20 @@ class Repository:
             for r in rows
         ]
 
+    def drop_external_claim(self, film_id: int, authority: str, value: str) -> bool:
+        """Remove ONE claim row — `replace_external_id`'s sibling for the case where the
+        replacement is already held by the same film, so there is nothing to swap the dead value
+        for (written for `cheapcharts resolve --recheck`). Claim authorities only: tmdb/imdb are
+        the work's identity and are never dropped here. Returns True when a row went."""
+        if authority in KEY_AUTHORITIES:
+            raise ValueError(f"{authority} is a key authority — it is re-keyed, never dropped")
+        with self._conn() as c:
+            cur = c.execute(
+                "DELETE FROM external_ids WHERE film_id = ? AND authority = ? AND value = ?",
+                (film_id, authority, value),
+            )
+            return cur.rowcount > 0
+
     def replace_external_id(self, film_id: int, authority: str, old: str, new: str) -> bool:
         """Swap one existing claim's value in place — the ONLY path that changes an existing
         claim-authority value (written for `cheapcharts resolve --recheck`). `first_seen` is

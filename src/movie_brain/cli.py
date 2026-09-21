@@ -1313,7 +1313,7 @@ def cheapcharts_resolve_cmd(
         )
         console.print(
             f"scanned: {recheck_report.scanned} · live: {recheck_report.live} · "
-            f"replaced: {recheck_report.replaced} · dead: {recheck_report.dead} · "
+            f"replaced: {recheck_report.replaced} · dropped: {recheck_report.dropped} · dead: {recheck_report.dead} · "
             f"unknown: {recheck_report.unknown} · held: {recheck_report.held} · "
             f"failed: {recheck_report.failed}"
             + (

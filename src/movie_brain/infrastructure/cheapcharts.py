@@ -212,6 +212,16 @@ class CheapChartsClient:
         movie = results.get("movies") if isinstance(results, dict) else None
         return movie if isinstance(movie, dict) else None
 
+    def is_removed(self, itunes_id: str) -> bool | None:
+        """Has Apple pulled THIS product? The by-IMDb call only ever speaks for the one product
+        CheapCharts maps a film to, so a film holding several store ids is asked product by
+        product. The signal is the same title prefix (`REMOVED_MARKER`). None when CheapCharts
+        has nothing on the product — unknown is never treated as removed."""
+        movie = self._detail(itunes_id)
+        if movie is None:
+            return None
+        return str(movie.get("title") or "").startswith(REMOVED_MARKER)
+
     def imdb_id_for(self, itunes_id: str) -> str | None:
         """The IMDb id CheapCharts files this product under — the wishlist's join (amendment
         1.4), as exact as `products_by_imdb` and in the other direction. None when their index
