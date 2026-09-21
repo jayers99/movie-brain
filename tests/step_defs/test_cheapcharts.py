@@ -8,7 +8,7 @@ from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.cheapcharts import recheck_itunes_ids, resolve_itunes_ids
 from movie_brain.domain.models import Film
-from movie_brain.infrastructure.cheapcharts import MAX_IMDB_IDS, Product, RateLimited
+from movie_brain.infrastructure.cheapcharts import MAX_IMDB_IDS, Product, ProductFiling, RateLimited
 
 scenarios("../features/cheapcharts.feature")
 
@@ -22,6 +22,7 @@ class FakeCheapCharts:
     imdb_batches: list[list[str]] = field(default_factory=list)
     searches: list[str] = field(default_factory=list)
     removed: dict[str, bool] = field(default_factory=dict)
+    filings: dict[str, ProductFiling] = field(default_factory=dict)
     refuse_after: int | None = None
     down: bool = False
 
@@ -38,6 +39,11 @@ class FakeCheapCharts:
     def search(self, title, limit=5):
         self.searches.append(title)
         return self.by_title.get(title, [])
+
+    def filing(self, itunes_id):
+        """Unless a step says otherwise a product is filed under the Background film's own id —
+        the ordinary case, where the search found the right page."""
+        return self.filings.get(itunes_id, ProductFiling("tt0052357", ()))
 
     def is_removed(self, itunes_id):
         """None = CheapCharts has nothing to say about this product."""
@@ -83,6 +89,16 @@ def no_imdb_mapping(cheapcharts, tt):
 @given(parsers.parse('CheapCharts maps "{tt}" to a REMOVED itunes id "{itunes_id}"'))
 def maps_imdb_removed(cheapcharts, tt, itunes_id):
     cheapcharts.by_imdb[tt] = Product(itunes_id=itunes_id, title="Vertigo (1958)", year=1958, imdb_id=tt, removed=True)
+
+
+@given(parsers.parse('CheapCharts files product "{itunes_id}" under imdb id "{tt}"'))
+def filed_under(cheapcharts, itunes_id, tt):
+    cheapcharts.filings[itunes_id] = ProductFiling(tt, ())
+
+
+@given(parsers.parse('CheapCharts files product "{itunes_id}" under no imdb id, directed by "{name}"'))
+def filed_without_imdb(cheapcharts, itunes_id, name):
+    cheapcharts.filings[itunes_id] = ProductFiling(None, (name,))
 
 
 @given(parsers.parse('CheapCharts says product "{itunes_id}" is {state}'))

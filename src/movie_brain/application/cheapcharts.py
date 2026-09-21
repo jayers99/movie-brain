@@ -21,6 +21,7 @@ the same film reissued gets a new track id — so it is a claim, and the identit
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -34,6 +35,7 @@ from movie_brain.infrastructure.cheapcharts import (
     MAX_IMDB_IDS,
     CheapChartsClient,
     Product,
+    ProductFiling,
     RateLimited,
 )
 from movie_brain.infrastructure.database import Repository
@@ -102,6 +104,29 @@ def _confirm(target: ItunesTarget, products: list[Product]) -> tuple[Product | N
     return winners[0], "match"
 
 
+_NAME_SPLIT = re.compile(r"\s*(?:,|&|\band\b)\s*")
+
+
+def _names(text: str) -> set[str]:
+    return {n.strip().casefold() for n in _NAME_SPLIT.split(text) if n.strip()}
+
+
+def _refusal(target: ItunesTarget, filing: ProductFiling | None) -> str | None:
+    """Why a title-search answer is NOT this film, or None when it is. A search result carries
+    no director, and two films of one title and year are common (The Stranger 2022, twice; Hope
+    2013 against an undated Hope) — so the product's own filing decides: the same IMDb id is
+    proof, another one is a refusal, and with no IMDb filing only an agreeing director will do.
+    Unverifiable is refused: a miss costs nothing, a wrong link is silent."""
+    if filing is None:
+        return "product unknown to CheapCharts"
+    if filing.imdb_id is not None:
+        return None if filing.imdb_id == target.imdb_id else f"filed under {filing.imdb_id}, not {target.imdb_id}"
+    if not target.director or not filing.directors:
+        return "no imdb filing and no director to compare"
+    mine, theirs = _names(target.director), {d.casefold() for d in filing.directors}
+    return None if mine & theirs else f"directed by {', '.join(filing.directors)}"
+
+
 def resolve_itunes_ids(
     repo: Repository,
     client: CheapChartsClient,
@@ -158,6 +183,21 @@ def resolve_itunes_ids(
                     failed += 1
                     continue
                 product, verdict = _confirm(target, results)
+                if product is not None:
+                    try:
+                        why = _refusal(target, client.filing(product.itunes_id))
+                    except RateLimited:
+                        log("CheapCharts is rate-limiting — stopping; the next run resumes where this one stopped.")
+                        return ResolveReport(
+                            scanned, resolved, by_imdb, by_search, unmatched, ambiguous, held, failed, rate_limited=True
+                        )
+                    except requests.RequestException as exc:
+                        log(f"  #{target.film_id} {target.title!r}: CheapCharts product lookup failed: {exc}")
+                        failed += 1
+                        continue
+                    if why is not None:
+                        log(f"  #{target.film_id} {target.title!r}: search answer {product.itunes_id} refused — {why}")
+                        product, verdict = None, "unmatched"
                 if product is None:
                     log(f"  #{target.film_id} {target.title!r} ({target.year}): {verdict}")
                     # A held IMDb answer the search could not better stays `held`: that is the
@@ -288,6 +328,21 @@ def recheck_itunes_ids(
                 continue
             if confirmed.itunes_id == target.itunes_id:
                 log(f"  #{target.film_id} {target.title!r}: itunes {target.itunes_id} removed, no re-listing found")
+                dead += 1
+                continue
+            try:
+                why = _refusal(target, client.filing(confirmed.itunes_id))
+            except RateLimited:
+                return _rate_limited(scanned, live, replaced, dead, unknown, held, failed, last_film_id, log)
+            except requests.RequestException as exc:
+                log(f"  #{target.film_id} {target.title!r}: CheapCharts product lookup failed: {exc}")
+                failed += 1
+                continue
+            if why is not None:
+                log(
+                    f"  #{target.film_id} {target.title!r}: itunes {target.itunes_id} removed, "
+                    f"re-listing {confirmed.itunes_id} refused — {why}"
+                )
                 dead += 1
                 continue
             holder = repo.film_id_for_external(ITUNES_AUTHORITY, confirmed.itunes_id)

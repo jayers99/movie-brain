@@ -41,6 +41,46 @@ Feature: Resolving the CheapCharts product page for a film
     Then the film "Vertigo" still holds no itunes id
     And the report counts 1 unmatched
 
+  Scenario: A search answer CheapCharts files under another film's IMDb id is refused
+    Given CheapCharts knows no imdb mapping for "tt0052357"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    And CheapCharts files product "999" under imdb id "tt7777777"
+    When I resolve cheapcharts ids with apply
+    Then the film "Vertigo" still holds no itunes id
+    And the report counts 1 unmatched
+
+  Scenario: A search answer with no IMDb filing is believed when the director agrees
+    Given the film "Vertigo" is directed by "Alfred Hitchcock"
+    And CheapCharts knows no imdb mapping for "tt0052357"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    And CheapCharts files product "999" under no imdb id, directed by "Alfred Hitchcock"
+    When I resolve cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "999"
+
+  Scenario: A search answer with no IMDb filing and another director is refused
+    Given the film "Vertigo" is directed by "Alfred Hitchcock"
+    And CheapCharts knows no imdb mapping for "tt0052357"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    And CheapCharts files product "999" under no imdb id, directed by "Someone Else"
+    When I resolve cheapcharts ids with apply
+    Then the film "Vertigo" still holds no itunes id
+
+  Scenario: A search answer nothing can verify is refused, never guessed
+    Given CheapCharts knows no imdb mapping for "tt0052357"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    And CheapCharts files product "999" under no imdb id, directed by "Alfred Hitchcock"
+    When I resolve cheapcharts ids with apply
+    Then the film "Vertigo" still holds no itunes id
+
+  Scenario: A recheck never replaces a removed id with another film's product
+    Given the film "Vertigo" already holds itunes id "284815525"
+    And CheapCharts maps "tt0052357" to a REMOVED itunes id "284815525"
+    And a CheapCharts search for "Vertigo" returns "Vertigo" (1958) as itunes id "999"
+    And CheapCharts files product "999" under imdb id "tt7777777"
+    When I recheck cheapcharts ids with apply
+    Then the film "Vertigo" holds itunes id "284815525"
+    And the report counts 1 dead
+
   Scenario: A film CheapCharts had nothing for is remembered, and not asked about again
     Given CheapCharts knows no imdb mapping for "tt0052357"
     When I resolve cheapcharts ids with apply
