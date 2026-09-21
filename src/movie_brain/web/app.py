@@ -5,6 +5,7 @@ import threading
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import TypeGuard
 
 from flask import Flask, Response, jsonify, render_template, request
 
@@ -25,6 +26,11 @@ from movie_brain.domain.filters import CHIPS, thresholds
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.embeddings import Embedder, VectorIndex
 from movie_brain.infrastructure.listfile import LISTS_DIR
+
+
+def _is_int(value: object) -> TypeGuard[int]:
+    """A real integer: `True` is an `int` to Python, and would otherwise pass as film 1 / tier 1."""
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _json_object() -> dict[str, object]:
@@ -237,7 +243,7 @@ def create_app(
     def rank_verdict() -> Response:
         body = _json_object()
         film_id, anchor_tier = body.get("film_id"), body.get("anchor_tier")
-        if not isinstance(film_id, int) or not isinstance(anchor_tier, int):
+        if not _is_int(film_id) or not _is_int(anchor_tier):
             raise RankError(400, 'body must be JSON {"film_id": int, "anchor_tier": int, "verdict": "better"|"worse"}')
         return jsonify(
             ranker.record_verdict(repo, RANK_SOURCE, film_id, anchor_tier, str(body.get("verdict")), today())
@@ -247,7 +253,7 @@ def create_app(
     def rank_pass() -> Response:
         body = _json_object()
         film_id = body.get("film_id")
-        if not isinstance(film_id, int):
+        if not _is_int(film_id):
             raise RankError(400, 'body must be JSON {"film_id": int, "candidate_unseen": bool, "anchor_unseen": bool}')
         candidate_unseen = bool(body.get("candidate_unseen"))
         anchor_unseen = bool(body.get("anchor_unseen"))
@@ -261,7 +267,7 @@ def create_app(
     def rank_anchor() -> Response:
         body = _json_object()
         tier, film_id = body.get("tier"), body.get("film_id")
-        if not isinstance(tier, int) or not isinstance(film_id, int):
+        if not _is_int(tier) or not _is_int(film_id):
             raise RankError(400, 'body must be JSON {"tier": int, "film_id": int}')
         return jsonify(ranker.swap_anchor(repo, RANK_SOURCE, tier, film_id, today()))
 
@@ -269,7 +275,7 @@ def create_app(
     def rank_move() -> Response:
         body = _json_object()
         film_id, tier = body.get("film_id"), body.get("tier")
-        if not isinstance(film_id, int) or not isinstance(tier, int):
+        if not _is_int(film_id) or not _is_int(tier):
             raise RankError(400, 'body must be JSON {"film_id": int, "tier": int}')
         return jsonify(ranker.move_film(repo, RANK_SOURCE, film_id, tier, today()))
 
@@ -277,7 +283,7 @@ def create_app(
     def rank_rerank() -> Response:
         body = _json_object()
         film_id = body.get("film_id")
-        if not isinstance(film_id, int):
+        if not _is_int(film_id):
             raise RankError(400, 'body must be JSON {"film_id": int}')
         return jsonify(ranker.rerank_film(repo, RANK_SOURCE, film_id, today()))
 
@@ -303,7 +309,7 @@ def create_app(
     def rank_order_verdict() -> Response:
         body = _json_object()
         tier, film_id, other_film_id = body.get("tier"), body.get("film_id"), body.get("other_film_id")
-        if not isinstance(tier, int) or not isinstance(film_id, int) or not isinstance(other_film_id, int):
+        if not _is_int(tier) or not _is_int(film_id) or not _is_int(other_film_id):
             raise RankError(
                 400,
                 'body must be JSON {"tier": int, "film_id": int, "other_film_id": int, "verdict": "better"|"worse"}',
@@ -316,7 +322,7 @@ def create_app(
     def rank_order_pass() -> Response:
         body = _json_object()
         tier, film_id = body.get("tier"), body.get("film_id")
-        if not isinstance(tier, int) or not isinstance(film_id, int):
+        if not _is_int(tier) or not _is_int(film_id):
             raise RankError(400, 'body must be JSON {"tier": int, "film_id": int}')
         return jsonify(ranker.order_pass(repo, RANK_SOURCE, tier, film_id, today()))
 

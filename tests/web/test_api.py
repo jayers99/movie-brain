@@ -532,6 +532,25 @@ def test_rank_routes_reject_a_non_object_body(rank_client, method, url):
     assert r.status_code == 400 and "JSON object" in r.get_json()["error"]
 
 
+@pytest.mark.parametrize(
+    "method,url,body",
+    [
+        ("post", "/api/rank/verdict", {"film_id": True, "anchor_tier": 3, "verdict": "better"}),
+        ("post", "/api/rank/verdict", {"film_id": 1, "anchor_tier": True, "verdict": "better"}),
+        ("post", "/api/rank/pass", {"film_id": True}),
+        ("put", "/api/rank/anchor", {"tier": True, "film_id": 1}),
+        ("post", "/api/rank/move", {"film_id": True, "tier": 2}),
+        ("post", "/api/rank/rerank", {"film_id": True}),
+        ("post", "/api/rank/order/verdict", {"tier": 1, "film_id": True, "other_film_id": 2, "verdict": "better"}),
+        ("post", "/api/rank/order/pass", {"tier": True, "film_id": 1}),
+    ],
+)
+def test_rank_routes_refuse_a_boolean_where_an_id_or_tier_belongs(rank_client, method, url, body):
+    """`True` is an `int` to Python, so `isinstance(x, int)` let it through as film 1 / tier 1."""
+    client, _ = rank_client
+    assert getattr(client, method)(url, json=body).status_code == 400
+
+
 def test_rank_order_needs_a_session_then_serves_the_first_pair_after_a_tier_1_placement(rank_client):
     client, ids = rank_client
     assert client.get("/api/rank/order?tier=1").status_code == 404
