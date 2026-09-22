@@ -287,7 +287,7 @@ def test_drawer_opens_from_info_button_and_restores_url(dash: Page):
     dash.click("#films tbody tr[data-id] .info >> nth=0")
     drawer = dash.locator("#drawer")
     expect(drawer).to_be_visible()
-    expect(drawer.locator("h2")).to_have_text("Alpha ☆⚐")  # star + flag buttons: Alpha isn't watchlisted/flagged
+    expect(drawer.locator("h2")).to_have_text("Alpha ⧉☆⚐")  # copy + star + flag buttons: Alpha isn't watchlisted/flagged
     expect(drawer.locator("pre.raw")).to_contain_text('"Plot": "A plot."')
     expect(drawer.locator("a.criterion-link")).to_have_attribute(
         "href", "https://c/alpha"
@@ -318,14 +318,14 @@ def test_drawer_poster_sits_below_meta_top_aligned_with_plot(dash: Page):
 def test_drawer_opens_on_load_from_url(dash: Page, server: str):
     fid = dash.locator("#films tbody tr[data-id]").first.get_attribute("data-id")
     dash.goto(f"{server}/?film={fid}")
-    expect(dash.locator("#drawer h2")).to_have_text("Alpha ☆⚐")
+    expect(dash.locator("#drawer h2")).to_have_text("Alpha ⧉☆⚐")
     dash.click("#drawer-backdrop", position={"x": 10, "y": 10})
     expect(dash.locator("#drawer")).to_be_hidden()
 
 
 def test_row_click_opens_drawer_but_title_link_does_not(dash: Page):
     dash.click("#films tbody tr[data-id] .c-year >> nth=1")
-    expect(dash.locator("#drawer h2")).to_have_text("Golf ☆⚐")  # second under the default sort: Alpha 92, Golf 88
+    expect(dash.locator("#drawer h2")).to_have_text("Golf ⧉☆⚐")  # second under the default sort: Alpha 92, Golf 88
     dash.click("#drawer-close")
     expect(dash.locator("#drawer")).to_be_hidden()
 
@@ -391,9 +391,9 @@ def test_drawer_race_shows_latest_requested_film(dash: Page):
     )
     dash.click(f'#films tbody tr[data-id="{alpha_id}"] .info')
     dash.click(f'#films tbody tr[data-id="{echo_id}"] .info')
-    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆⚐")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ⧉☆⚐")
     dash.wait_for_timeout(400)  # let the superseded, slow Alpha response land and confirm it's a no-op
-    expect(dash.locator("#drawer h2")).to_have_text("Echo ☆⚐")
+    expect(dash.locator("#drawer h2")).to_have_text("Echo ⧉☆⚐")
 
 
 # ---- empty database: separate server/page fixtures so the seeded `dash`/`server`
@@ -789,6 +789,22 @@ def test_drawer_star_toggles_watchlist(dash):
     dash.wait_for_selector('.watch-toggle:has-text("★")')
     star.click()  # leave the session-scoped seed as we found it
     dash.wait_for_selector('.watch-toggle:has-text("☆")')
+
+
+def test_drawer_copy_button_sits_before_the_star_and_copies_the_title(dash):
+    """Owner request 2026-09-22: a button between the title and the watchlist star that
+    copies the film's title (the title alone, no year) to the clipboard."""
+    clear_lang(dash)
+    dash.context.grant_permissions(["clipboard-read", "clipboard-write"])
+    dash.locator("#films tbody tr", has_text="Charlie").first.click()
+    dash.wait_for_selector("#drawer:not([hidden])")
+    kids = dash.locator("#drawer h2 > *")
+    assert kids.nth(0).get_attribute("class") == "copy-title"  # first thing after the title text
+    assert kids.nth(1).get_attribute("class") == "watch-toggle"
+    dash.locator(".copy-title").click()
+    dash.wait_for_selector('.copy-title:has-text("✓")')  # the button itself says it worked
+    assert dash.evaluate("navigator.clipboard.readText()") == "Charlie"
+    dash.wait_for_selector('.copy-title:not(:has-text("✓"))', timeout=5000)  # and returns to its icon
 
 
 def test_owned_badge_and_chip(dash):

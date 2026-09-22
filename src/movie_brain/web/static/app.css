@@ -91,6 +91,8 @@ tbody tr.departed td { color:var(--muted); }
 .svc-more[open] > summary::after { content:''; }
 .svc-more > summary:hover { text-decoration:underline; }
 .watch-toggle { background: none; border: none; font-size: 1.1em; cursor: pointer; vertical-align: middle; }
+.copy-title { background: none; border: none; font-size: 0.95em; cursor: pointer; vertical-align: middle; color: var(--muted); }
+.copy-title:hover { color: var(--fg); }
 .revisit-toggle { background: none; border: none; font-size: 1.1em; cursor: pointer; vertical-align: middle; }
 .unseen-row { margin: 2px 0 6px; }
 .unseen-toggle, .rank-toggle { margin-left:6px; font-size:12px; }

@@ -679,7 +679,7 @@
     // Move-tier spec M4/M7: the tier row exists only for a film the open session has placed
     // (`rank_tier` is detail-only); a click hands the film to the Order tab, never to a slot.
     const tierRow = d.rank_tier == null ? '' : `<div class="tier-row"><span class="tier-label">Tier</span>${[1, 2, 3, 4, 5].map((t) => `<button class="tier-pick" data-id="${d.id}" data-tier="${t}"${t === d.rank_tier ? ' aria-current="true"' : ''} title="Move to tier ${t}">${t}</button>`).join('')}</div>`;
-    return `<h2>${esc(d.title)} <button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
+    return `<h2>${esc(d.title)} <button class="copy-title" data-title="${esc(d.title)}" title="Copy the title" aria-label="Copy the title">⧉</button><button class="watch-toggle" data-id="${d.id}" title="Toggle watchlist" aria-label="Toggle watchlist">${d.watchlisted ? '★' : '☆'}</button><button class="revisit-toggle" data-id="${d.id}" title="Toggle needs-revisit" aria-label="Toggle needs-revisit">${d.needs_revisit ? '⚑' : '⚐'}</button></h2>
       <div class="unseen-row"><button class="unseen-toggle" data-id="${d.id}" aria-pressed="${d.unseen ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" data-id="${d.id}"${rankToggleAttrs(d.rank_marked, d.awaiting_order, d.rank_tier)}>Rank this</button></div>
       ${tierRow}
       ${d.needs_revisit ? `<input class="revisit-note" data-id="${d.id}" placeholder="what looks wrong?" value="${esc(d.revisit_note || '')}">` : ''}
@@ -945,6 +945,19 @@
   });
   backdrop.addEventListener('mousemove', (e) => {
     backdrop.style.cursor = dimmedRowAt(e.clientX, e.clientY) >= 0 ? 'pointer' : '';
+  });
+  // Copy the title (owner request 2026-09-22): the title alone, no year, so it pastes straight
+  // into a search box elsewhere. The button itself reports success — ✓ for a moment — because
+  // the toast is the dashboard's error voice.
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.copy-title'); if (!b) return;
+    try {
+      await navigator.clipboard.writeText(b.dataset.title);
+      b.textContent = '✓';
+      setTimeout(() => { b.textContent = '⧉'; }, 1200);
+    } catch (err) {
+      toast('Could not copy the title');
+    }
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.watch-toggle'); if (!b) return;
