@@ -68,6 +68,12 @@
   .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
   .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
   .old-stars { letter-spacing:1px; }
+  .badge-gone { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .rank-toggle[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .tier-row { margin:0 0 6px; font-size:12px; } .tier-row .tier-label { margin-left:6px; color:var(--muted); } .tier-pick { margin-left:4px; font-size:12px; min-width:26px; } .tier-pick[aria-current="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #toast { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:var(--accent); color:#fff; padding:8px 14px; border-radius:6px; z-index:7; }
+  table.films thead th.th-watched { cursor:pointer; user-select:none; }
+  table.films thead th.th-watched[data-dir="desc"]::after { content:" ▼"; } table.films thead th.th-watched[data-dir="asc"]::after { content:" ▲"; }
   #backdrop { position:absolute; inset:0; background:rgba(0,0,0,.3); z-index:3; }
   #backdrop.hand { cursor:pointer; }
   #drawer { position:absolute; top:0; right:0; height:100%; width:min(760px, 100%); overflow:auto; background:var(--bg); z-index:6; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
@@ -117,7 +123,7 @@
 <body><div class="page">
 <div class="intro">
   <h1>A viewing log — stories and mock-up, round 1</h1>
-  <p>You asked for an exhaustive record of what you watch: one film, many viewings, each with a <b>date</b>, a <b>simple barometer</b> and maybe a <b>short note</b> — most films watched to be entertained and deserving only the barometer, never a rank or an analysis. Ruled already: <b>the 0–10 stays per film</b>, edited exactly as today; the ranker, the chips, the header counts and the export are untouched. Below: the one question this page decides, then <b>eight stories</b> on your real films, then <b>one mock-up</b> in which the log really works (in the page only — nothing is written anywhere). Press <b>Walk it</b> on a story and the mock-up sets itself up. What you log stays logged while you move between stories, so story 7 shows what you did in stories 1–6.</p>
+  <p>You asked for an exhaustive record of what you watch: one film, many viewings, each with a <b>date</b>, a <b>simple barometer</b> and maybe a <b>short note</b> — most films watched to be entertained and deserving only the barometer, never a rank or an analysis. Ruled already: <b>the 0–10 stays per film</b>, edited exactly as today; the ranker, the chips, the header counts and the export are untouched. Below: the one question this page decides, then <b>ten stories</b> on your real films, then <b>one mock-up</b> in which the log really works (in the page only — nothing is written anywhere). Press <b>Walk it</b> on a story and the mock-up sets itself up. What you log stays logged while you move between stories, so story 7 shows what you did in stories 1–6.</p>
 </div>
 
 <div class="answer">
@@ -151,6 +157,7 @@
     </table>
   </div>
   <div id="backdrop" hidden></div>
+  <div id="toast" hidden></div>
   <aside id="drawer" hidden><button id="drawer-close" aria-label="Close">✕</button><span class="keys">↑ ↓ previous / next film · T trailer</span><div id="drawer-body"></div></aside>
 </div>
 
@@ -158,20 +165,21 @@
   <h2>What you should know before saying yes</h2>
   <ul>
     <li><b>Logging touches one other thing only:</b> a film marked <i>Unseen</i> loses that mark the moment a viewing is logged (stories 5 and 6). The 0–10, the ranker, the Rewatch chip, the watchlist, the wishlist and the header counts do not move. Removing a viewing puts nothing back — the Unseen button is one click away if you want it.</li>
-    <li><b>One line per day.</b> A second click on the barometer the same day changes that day's line; it never makes a second one (story 8). A viewing on another date is another line — change the date on a line to move it (story 4).</li>
-    <li><b>Your 2004–08 rentals show in the same history</b>, greyed, with their stars, and cannot be edited there: <code>oldratings</code> stays their only writer. Today's drawer shows only the LATER of two rentals; the history shows both (Switchblade Sisters, story 2).</li>
+    <li><b>One line per day.</b> A second click on the barometer the same day changes that day's line; it never makes a second one (story 8). A viewing on another date is another line — change the date on a line to move it (story 4). The date box refuses a blank, a future date, or a day this film already has a line for, and puts the old date back with a red toast. The next morning the strip logs a NEW viewing; yesterday's line is edited on the line itself (story 10).</li>
+    <li><b>Your 2004–08 rentals show in the same history</b>, greyed, with their stars, and cannot be edited there: <code>oldratings</code> stays their only writer. Today's drawer shows only the LATER of two rentals; the history shows both (Switchblade Sisters, story 2). Two rental rows with the same date and stars (Love and Anarchy, listed twice in the 2004 file) show as one line.</li>
     <li><b>The "Me, 2004–08" line the drawer shows today goes away</b> — its rental is now a line in the history. The Rewatch chip still reads the stars the same way.</li>
     <li><b>The Watched chip</b> shows every film with at least one logged viewing, newest viewing first, and stacks with the other chips like any of them. The 2004–08 rentals do NOT count as viewings for the chip — they are a different signal with their own chip. Variant 2 adds a column with the date of the last viewing, sortable like the others; the column is empty for every film until you log something.</li>
     <li><b>Nothing is imported.</b> No Apple TV played dates (the export has none), no Letterboxd, no dates invented for the 378 films you have rated — their rating dates are rating dates, not viewing dates. The log starts empty on the day it ships.</li>
     <li><b>Not in this build:</b> moving the 0–10, sealed recall, the notes-versus-critics loop, a rating history, Phase B. The note field is a plain short line — no dictation, no formatting.</li>
-    <li><b>A failed save</b> (the server refuses, the laptop is asleep) shows the red toast the rating box already uses — <i>Could not log the viewing</i> — and the line does not appear; nothing half-saved.</li>
+    <li><b>A failed save</b> (the server refuses, the laptop is asleep) shows the red toast the rating box already uses — <i>Could not log the viewing</i> — and the line does not appear; nothing half-saved. The same for every later change: a date, tag, step or note the server did not keep snaps back to what it holds, a ✕ that failed leaves the line where it was, each with its own toast. A note is at most 200 characters. A reload shows exactly what the server holds — the log lives in the database, never in the browser.</li>
   </ul>
 </div>
 </div>
 
 <script>
-const FILMS = [{"id": 2397, "t": "Modern Times", "y": 1936, "d": "Charles Chaplin", "l": "English", "mc": 96, "rt": 98, "im": 8.5, "r": null, "n": 5, "o": false, "badge": "Criterion Channel", "ov": "A bumbling tramp desires to build a home with a young woman, yet is thwarted time and time again by his lack of experience and habit of being in the wrong place at the wrong time...", "poster": "https://m.media-amazon.com/images/M/MV5BODVkZGFhNGQtYjdiYi00Njc4LWFmYTItNTlmNzJjMTg1ZDc5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, Kanopy, Prime Video, TCM (not subscribed) ⋯ 6 more", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #74, Sight & Sound: 2022 #78, Sight & Sound: 1992 Directors #6, BBC: Comedies #12, List Obsession: Slapstick #39", "crit": true, "old": [], "unseen": false, "trailer": true}, {"id": 668, "t": "I Am Cuba", "y": 1964, "d": "Mikhail Kalatozov", "l": "Spanish, English", "mc": 91, "rt": 100, "im": 8.2, "r": 9, "n": 1, "o": false, "badge": "Criterion Channel", "ov": "A study in contrasts set in and around Havana that explores Cuba's 1959 revolution: a young woman's fascination with the excess of an American-owned casino leads to her downfall in the eyes of her street vendor boyfriend; a tenant farmer revolts the only way he knows how, attacking the land he works; university students gain first-hand knowledge of political upheaval; and, in the hills outside the city, the members of a poor peasant family are patriotically swept up into the burgeoning revolt.", "poster": "https://m.media-amazon.com/images/M/MV5BMGM0OTgwNjItNDViZC00ODI5LWI5MDMtZjNmNGFhN2ZlNDU0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "Kino Film Collection, Kanopy, Hoopla (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #81", "crit": true, "old": [{"stars": 5, "rented_on": "2005-01-12"}], "unseen": false, "trailer": true}, {"id": 1203, "t": "After Hours", "y": 1985, "d": "Martin Scorsese", "l": "English", "mc": 89, "rt": 90, "im": 7.6, "r": 4, "n": 0, "o": false, "badge": null, "ov": "Desperate to escape his mind-numbing routine, uptown Manhattan office worker Paul Hackett ventures downtown for a hookup with a mystery woman.", "poster": "https://m.media-amazon.com/images/M/MV5BMTUxMjEzMzI2MV5BMl5BanBnXkFtZTgwNTU3ODAxMDE@._V1_SX300.jpg", "watch": "Watch on Howdy Amazon Channel (not subscribed) ↗", "also": "Howdy Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [{"stars": 3, "rented_on": "2005-02-07"}], "unseen": false, "trailer": true}, {"id": 3023, "t": "La haine", "y": 1995, "d": "Mathieu Kassovitz", "l": "French, Yiddish", "mc": null, "rt": 96, "im": 8.1, "r": null, "n": 0, "o": false, "badge": "Criterion Channel", "ov": "After a chaotic night of rioting in a marginal suburb of Paris, three young friends, Vinz, Hubert and Saïd, wander around unoccupied waiting for news about the state of health of a mutual friend who has been seriously injured when confronting the police.", "poster": "https://m.media-amazon.com/images/M/MV5BMThlMDA3NDYtZGM2Zi00NmJhLThlYWItZjViZTkzZWU1ZWRiXkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": false, "trailer": true}, {"id": 1477, "t": "Godzilla vs. Gigan", "y": 1972, "d": "Jun Fukuda", "l": "Japanese", "mc": null, "rt": 67, "im": 5.6, "r": null, "n": 0, "o": true, "badge": null, "ov": "Manga artist Gengo Odaka lands a job with the World Children's Land amusement park only to become suspicious of the organization when a garbled message is discovered on tapes. As Gengo and his team investigate, Godzilla and Anguirus quickly decipher the message and begin their own plan of action.", "poster": "https://m.media-amazon.com/images/M/MV5BNmVkNTU3ZmMtMzM2My00MTE0LWJkNjMtNzY0NjhlNTc5NWM4XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 1478, "t": "Godzilla vs. Hedorah", "y": 1971, "d": "Yoshimitsu Banno", "l": "Japanese", "mc": null, "rt": 67, "im": 6.1, "r": null, "n": 0, "o": true, "badge": null, "ov": "An ever evolving alien life-form arrives on a comet from the Dark Gaseous Nebula and proceeds to consume pollution. Spewing mists of sulfuric acid and corrosive sludge, neither humanity nor Godzilla may be able to defeat this toxic menace.", "poster": "https://m.media-amazon.com/images/M/MV5BMWI5YWYxNjgtYTZmOC00YmFlLWJjMGUtMmNiZDk3NGVjOGY0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 1057, "t": "To Be or Not to Be", "y": 1942, "d": "Ernst Lubitsch", "l": "English, German, French", "mc": 86, "rt": 96, "im": 8.1, "r": null, "n": 4, "o": false, "badge": "Criterion Channel", "ov": "During the Nazi occupation of Poland, an acting troupe becomes embroiled in a Polish soldier's efforts to track down a German spy.", "poster": "https://m.media-amazon.com/images/M/MV5BMTA5OTRkZGUtNDhhOS00OThmLTgwZWYtZGZkM2M4YjZhNzc5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #13, Ronald Bergan: The Film Book #27, Sight & Sound: 2022 #114, BBC: Comedies #13", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 4164, "t": "Switchblade Sisters", "y": 1975, "d": "Jack Hill", "l": "English", "mc": null, "rt": 57, "im": 6.5, "r": 9, "n": 2, "o": true, "badge": null, "ov": "The leader of an inner city girl gang is challenged when a new girl moves into the neighborhood.", "poster": "https://m.media-amazon.com/images/M/MV5BMTJlMTFkZjAtNzBhYS00NDI2LTgzNzAtNDdmNzk1ODJlN2U0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "Tubi TV, Cineverse (not subscribed), ARROW (not subscribed), Cineverse Amazon Channel (not subscribed) ⋯ 4 more", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #94, RankerOfHorror: Exploitation Films", "crit": false, "old": [{"stars": 4, "rented_on": "2006-12-15"}, {"stars": 4, "rented_on": "2008-04-11"}], "unseen": false, "trailer": true}, {"id": 2419, "t": "Seven Samurai", "y": 1954, "d": "Akira Kurosawa", "l": "Japanese", "mc": 98, "rt": 100, "im": 8.6, "r": null, "n": 3, "o": false, "badge": "Criterion Channel", "ov": "A samurai answers a village's request for protection after he falls on hard times. The town needs protection from bandits, so the samurai gathers six others to help him teach the people how to defend themselves, and the villagers provide the soldiers with food.", "poster": "https://m.media-amazon.com/images/M/MV5BZjliMWExOTMtZDQ3ZS00NWU3LWIyN2EtMjllNzk3ZTNlYzg4XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, Kanopy, Plex, Plex Channel ⋯ 3 more", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #57, Sight & Sound: 2022 #20, Sight & Sound: 1992 Directors #9", "crit": true, "old": [], "unseen": false, "trailer": true}];
-const TODAY = '2026-09-21', LAST_SAT = '2026-09-19';
+const FILMS = [{"id": 2397, "t": "Modern Times", "y": 1936, "d": "Charles Chaplin", "l": "English", "mc": 96, "rt": 98, "im": 8.5, "r": null, "n": 5, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": null, "ov": "A bumbling tramp desires to build a home with a young woman, yet is thwarted time and time again by his lack of experience and habit of being in the wrong place at the wrong time...", "poster": "https://m.media-amazon.com/images/M/MV5BODVkZGFhNGQtYjdiYi00Njc4LWFmYTItNTlmNzJjMTg1ZDc5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, Kanopy, Prime Video, TCM (not subscribed) ⋯ 6 more", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #74, Sight & Sound: 2022 #78, Sight & Sound: 1992 Directors #6, BBC: Comedies #12, List Obsession: Slapstick #39", "crit": true, "old": [], "unseen": false, "trailer": true}, {"id": 668, "t": "I Am Cuba", "y": 1964, "d": "Mikhail Kalatozov", "l": "Spanish, English", "mc": 91, "rt": 100, "im": 8.2, "r": 9, "n": 1, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": 1, "ov": "A study in contrasts set in and around Havana that explores Cuba's 1959 revolution: a young woman's fascination with the excess of an American-owned casino leads to her downfall in the eyes of her street vendor boyfriend; a tenant farmer revolts the only way he knows how, attacking the land he works; university students gain first-hand knowledge of political upheaval; and, in the hills outside the city, the members of a poor peasant family are patriotically swept up into the burgeoning revolt.", "poster": "https://m.media-amazon.com/images/M/MV5BMGM0OTgwNjItNDViZC00ODI5LWI5MDMtZjNmNGFhN2ZlNDU0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "Kino Film Collection, Kanopy, Hoopla (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #81", "crit": true, "old": [{"stars": 5, "rented_on": "2005-01-12"}], "unseen": false, "trailer": true}, {"id": 1203, "t": "After Hours", "y": 1985, "d": "Martin Scorsese", "l": "English", "mc": 89, "rt": 90, "im": 7.6, "r": 4, "n": 0, "o": false, "badge": null, "gone": true, "rm": false, "tier": null, "ov": "Desperate to escape his mind-numbing routine, uptown Manhattan office worker Paul Hackett ventures downtown for a hookup with a mystery woman.", "poster": "https://m.media-amazon.com/images/M/MV5BMTUxMjEzMzI2MV5BMl5BanBnXkFtZTgwNTU3ODAxMDE@._V1_SX300.jpg", "watch": "Watch on Howdy Amazon Channel (not subscribed) ↗", "also": "Howdy Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [{"stars": 3, "rented_on": "2005-02-07"}], "unseen": false, "trailer": true}, {"id": 3023, "t": "La haine", "y": 1995, "d": "Mathieu Kassovitz", "l": "French, Yiddish", "mc": null, "rt": 96, "im": 8.1, "r": null, "n": 0, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": null, "ov": "After a chaotic night of rioting in a marginal suburb of Paris, three young friends, Vinz, Hubert and Saïd, wander around unoccupied waiting for news about the state of health of a mutual friend who has been seriously injured when confronting the police.", "poster": "https://m.media-amazon.com/images/M/MV5BMThlMDA3NDYtZGM2Zi00NmJhLThlYWItZjViZTkzZWU1ZWRiXkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": false, "trailer": true}, {"id": 1477, "t": "Godzilla vs. Gigan", "y": 1972, "d": "Jun Fukuda", "l": "Japanese", "mc": null, "rt": 67, "im": 5.6, "r": null, "n": 0, "o": true, "badge": null, "gone": false, "rm": false, "tier": null, "ov": "Manga artist Gengo Odaka lands a job with the World Children's Land amusement park only to become suspicious of the organization when a garbled message is discovered on tapes. As Gengo and his team investigate, Godzilla and Anguirus quickly decipher the message and begin their own plan of action.", "poster": "https://m.media-amazon.com/images/M/MV5BNmVkNTU3ZmMtMzM2My00MTE0LWJkNjMtNzY0NjhlNTc5NWM4XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 1478, "t": "Godzilla vs. Hedorah", "y": 1971, "d": "Yoshimitsu Banno", "l": "Japanese", "mc": null, "rt": 67, "im": 6.1, "r": null, "n": 0, "o": true, "badge": null, "gone": false, "rm": false, "tier": null, "ov": "An ever evolving alien life-form arrives on a comet from the Dark Gaseous Nebula and proceeds to consume pollution. Spewing mists of sulfuric acid and corrosive sludge, neither humanity nor Godzilla may be able to defeat this toxic menace.", "poster": "https://m.media-amazon.com/images/M/MV5BMWI5YWYxNjgtYTZmOC00YmFlLWJjMGUtMmNiZDk3NGVjOGY0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 1057, "t": "To Be or Not to Be", "y": 1942, "d": "Ernst Lubitsch", "l": "English, German, French", "mc": 86, "rt": 96, "im": 8.1, "r": null, "n": 4, "o": false, "badge": "Criterion Channel", "gone": false, "rm": true, "tier": null, "ov": "During the Nazi occupation of Poland, an acting troupe becomes embroiled in a Polish soldier's efforts to track down a German spy.", "poster": "https://m.media-amazon.com/images/M/MV5BMTA5OTRkZGUtNDhhOS00OThmLTgwZWYtZGZkM2M4YjZhNzc5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #13, Ronald Bergan: The Film Book #27, Sight & Sound: 2022 #114, BBC: Comedies #13", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 4164, "t": "Switchblade Sisters", "y": 1975, "d": "Jack Hill", "l": "English", "mc": null, "rt": 57, "im": 6.5, "r": 9, "n": 2, "o": true, "badge": null, "gone": false, "rm": false, "tier": 1, "ov": "The leader of an inner city girl gang is challenged when a new girl moves into the neighborhood.", "poster": "https://m.media-amazon.com/images/M/MV5BMTJlMTFkZjAtNzBhYS00NDI2LTgzNzAtNDdmNzk1ODJlN2U0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "Tubi TV, Cineverse (not subscribed), ARROW (not subscribed), Cineverse Amazon Channel (not subscribed) ⋯ 4 more", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #94, RankerOfHorror: Exploitation Films", "crit": false, "old": [{"stars": 4, "rented_on": "2006-12-15"}, {"stars": 4, "rented_on": "2008-04-11"}], "unseen": false, "trailer": true}, {"id": 2053, "t": "Dragon Inn", "y": 1967, "d": "King Hu", "l": "Mandarin", "mc": 100, "rt": 100, "im": 7.4, "r": 9, "n": 1, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": 2, "ov": "China, year 1457. The Minister of Defense is executed, and his children are sentenced to exile by order of the tyrannical Tsao. Fearful of future revenge from the young people, Tsao sends cruel soldiers to murder them, but a brave group of swordsmen can change the course of the battle at the Dragon Inn.", "poster": "https://m.media-amazon.com/images/M/MV5BMjQ3MGJlNzUtMDUzYS00NmY0LTkyN2EtNmM3ODM5YTMzZDY5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #382", "crit": true, "old": [], "unseen": false, "trailer": true}];
+const REAL_TODAY = '2026-09-21', LAST_SAT = '2026-09-19';
+let TODAY = REAL_TODAY;   // story 10 moves it to the next morning
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = (v, suf = '') => v == null ? '—' : v + suf;
@@ -188,7 +196,7 @@ const MONTHS = [
 const FELT = { disliked:"Didn't like", liked:'Liked', unfinished:"Didn't finish" };
 const TAGS = { rewatch:'worth a rewatch', study:'worth deep analysis', compare:'worth comparing' };
 const STEPS = ["Didn't like", 'Liked', 'Worth a rewatch', 'Worth deep analysis', 'Worth comparing'];
-const state = { variant:'C', month:'2', open:null, mark:null, story:null, watchedChip:false };
+const state = { variant:'C', month:'2', open:null, mark:null, story:null, watchedChip:false, sortWatched:null };
 // viewings: { id, film, on, felt, tags:Set, step, note } — page state only; a reload empties it
 let viewings = [], nextId = 1;
 const unseen = new Set(FILMS.filter((f) => f.unseen).map((f) => f.id));
@@ -197,12 +205,16 @@ function lastWatched(f) { const v = viewings.filter((x) => x.film === f.id).map(
 function rows() {
   let r = FILMS.slice().sort(byDefault);
   if (state.watchedChip) r = r.filter((f) => lastWatched(f)).sort((a, b) => lastWatched(b).localeCompare(lastWatched(a)) || byDefault(a, b));
+  if (state.sortWatched) {  // the real compare(): a film with no value sorts LAST in either direction
+    const dir = state.sortWatched === 'asc' ? 1 : -1;
+    r = r.slice().sort((a, b) => { const x = lastWatched(a), y = lastWatched(b); if (x == null && y == null) return byDefault(a, b); if (x == null) return 1; if (y == null) return -1; return dir * x.localeCompare(y) || byDefault(a, b); });
+  }
   return r;
 }
 
 const STORIES = [
   { n:1, title:'A casual watch tonight, in two clicks',
-    text:'I watched <b>Modern Times</b> on the Criterion Channel tonight. I open it and press <b>Liked</b>. A line appears: <i>today · Liked</i>. That is the whole record — no rating, no rank, no note. The rating box stays empty; nothing else on the page changes.',
+    text:'I watched <b>Modern Times</b> on the Criterion Channel tonight. I open it and press <b>Liked</b>. A line appears: <i>today · Liked</i>. That is the whole record — no rating, no rank, no note. The rating box stays empty. The only other thing that moves is the <i>Watched</i> cell on its row (in month view 2), which now says <i>today</i>.',
     coach:'The drawer is open on Modern Times. Press <b>Liked</b> in the Watched row. (In B, press any step.)',
     setup() { openFilm('Modern Times'); } },
   { n:2, title:'A rewatch of a film I rented in 2005',
@@ -222,22 +234,31 @@ const STORIES = [
     coach:'Press <b>Liked</b> on Gigan (oops), then <b>✕</b> on the line. Click <b>Godzilla vs. Hedorah</b> in the dimmed list and log it there. Look at the Unseen button on Gigan afterwards.',
     setup() { openFilm('Godzilla vs. Gigan'); } },
   { n:6, title:'A "have not seen" film gets watched',
-    text:'<b>To Be or Not to Be</b> is marked <i>Unseen</i> (I marked it yesterday). Tonight I watched it. I press <b>Liked</b>: the line appears and the Unseen mark goes out — the ranker will offer it now. The film stays unrated until I type a number in the rating box, as today.',
-    coach:'The Unseen button is lit (red). Press <b>Liked</b> and watch it go out.',
+    text:'<b>To Be or Not to Be</b> is marked <i>Unseen</i> (I marked it yesterday). Tonight I watched it. I press <b>Liked</b>: the line appears and the Unseen mark goes out. This one I had also marked <b>Rank this</b>, so it goes back into the ranker\'s queue; a film I neither own, nor rated 6–10, nor marked is not in the ranker\'s pool, logged or not. The film stays unrated until I type a number, as today.',
+    coach:'The Unseen button is lit (red), and so is Rank this — that mark is why the ranker will offer it. Press <b>Liked</b> and watch Unseen go out.',
     setup() { openFilm('To Be or Not to Be'); } },
   { n:7, title:'What did I watch this month?',
-    text:'I press the new <b>Watched</b> chip. The list is just the films I logged in stories 1–6, most recent viewing first: La haine\'s Saturday line puts it below the ones watched today. <b>2</b> adds a <i>Watched</i> column with each film\'s last date, so the month is visible without opening anything. <b>1</b> has the chip alone.',
-    coach:'Press <b>Watched</b> in the chip row (it is real in this mock-up). Switch between <b>1</b> and <b>2</b> above. Walk stories 1–6 first if the list is empty.',
+    text:'I press the new <b>Watched</b> chip. The list is just the films I logged in stories 1–6, most recent viewing first: La haine\'s Saturday line puts it below the ones watched today. <b>Switchblade Sisters is not there</b>: rented twice, but a rental is the Rewatch chip\'s business — a film joins this list only when I log it. <b>2</b> adds a <i>Watched</i> column with each film\'s last date; its header sorts, and films never logged sort last either way. <b>1</b> has the chip alone. Before anything is logged the chip shows one line: <i>No viewing logged yet.</i>',
+    coach:'Press <b>Watched</b> in the chip row (it is real in this mock-up). Switch between <b>1</b> and <b>2</b> above; click the <i>Watched</i> header to sort. Then open a film and press <b>✕</b> on its only line: its row leaves the list behind the drawer, the drawer stays, and ↓ carries on from the gap (the Shop chip\'s rule). Walk stories 1–6 first if the list is empty.',
     setup() { closeDrawer(); state.watchedChip = true; render(); } },
   { n:8, title:'I change my mind about tonight',
     text:'Back on <b>Modern Times</b> the same evening: I pressed <b>Liked</b> but it was more than that. I press <b>worth a rewatch</b> on the line — the line now says both. In <b>B</b>, pressing another step replaces the first. Either way it is still one line: a second press today never makes a second viewing.',
     coach:'Press <b>worth a rewatch</b> on today\'s line, then press <b>Didn\'t like</b> in the strip: the same line changes. Walk story 1 first if there is no line.',
     setup() { openFilm('Modern Times'); } },
+  { n:9, title:'A film I rated, never logged',
+    text:'<b>Dragon Inn</b>: I gave it a 9 yesterday. I open it. The rating box says 9; the Watched block says <i>Never logged.</i> Nothing invented a viewing from my rating — the 9 is a judgement, not a date. This is how 363 of my 378 rated films will open. If I want last week\'s watch in the log, I press <b>Liked</b> and change the date on the line.',
+    coach:'Look at the rating box and the Watched block. Then, if you like, press <b>Liked</b> and move the date back.',
+    setup() { openFilm('Dragon Inn'); } },
+  { n:10, title:'The morning after',
+    text:'It is <b>2026-09-22</b>. Modern Times\' line from last night reads <i>2026-09-21 · Liked</i> — a date, not <i>today</i> any more. If I press <b>Liked</b> in the strip now, that is a <b>new</b> viewing dated the 22nd, not an edit: the strip only ever edits today\'s line. To change last night\'s verdict I use the buttons on its own line.',
+    coach:'<b>Simulated:</b> the page thinks it is 2026-09-22 until you walk another story. Press <b>Liked</b> in the strip and see a second line appear; press <b>✕</b> on it; then press a tag on last night\'s line instead.',
+    setup() { TODAY = '2026-09-22'; if (!viewings.some((v) => v.film === film('Modern Times').id)) viewings.push({ id:nextId++, film:film('Modern Times').id, on:'2026-09-21', felt:'liked', tags:new Set(), step:2, note:'' }); openFilm('Modern Times'); } },
 ];
 
 function rowHtml(f) {
   const title = esc(f.t)
     + (f.badge ? ` <span class="badge-watch">${esc(f.badge)}</span>` : '')
+    + (f.gone ? ' <span class="badge-gone">gone</span>' : '')
     + (f.n ? ` <span class="badge-lists">${f.n} list${f.n === 1 ? '' : 's'}</span>` : '')
     + (f.o ? ' <span class="badge-owned">owned</span>' : '');
   const cls = state.open != null ? (f.id === state.open ? 'lit' : '') : (f.id === state.mark ? 'marked' : '');
@@ -259,7 +280,7 @@ function lineHtml(v) {
     const dead = v.felt === 'unfinished';
     what = `<b>${FELT[v.felt] || 'Liked'}</b>` + Object.keys(TAGS).map((k) => `<button class="tag ${v.tags.has(k) ? 'on' : ''}" data-vid="${v.id}" data-tag="${k}"${dead ? ' disabled' : ''}>${TAGS[k]}</button>`).join('');
   }
-  return `<li class="viewing ${v.on === TODAY ? 'today' : ''}"><input class="when" type="date" data-vid="${v.id}" value="${v.on}" title="${when}"><span class="sep">·</span>${what}<span class="sep">·</span><input class="note" data-vid="${v.id}" placeholder="a short note" value="${esc(v.note)}"><button class="remove" data-vid="${v.id}" title="Remove this viewing">✕</button></li>`;
+  return `<li class="viewing ${v.on === TODAY ? 'today' : ''}"><input class="when" type="date" data-vid="${v.id}" value="${v.on}" title="${when}"><span class="sep">·</span>${what}<span class="sep">·</span><input class="note" data-vid="${v.id}" maxlength="200" placeholder="a short note" value="${esc(v.note)}"><button class="remove" data-vid="${v.id}" title="Remove this viewing">✕</button></li>`;
 }
 function watchedHtml(f) {
   const mine = viewings.filter((v) => v.film === f.id).sort((a, b) => b.on.localeCompare(a.on) || b.id - a.id);
@@ -271,8 +292,9 @@ function watchedHtml(f) {
 function drawDrawer(f) {
   const critics = [f.im != null ? `IMDb <b>${f.im.toFixed(1)}</b>` : '', f.mc != null ? `Metacritic <b>${f.mc}</b>` : '', f.rt != null ? `Rotten Tomatoes <b>${f.rt}%</b>` : ''].filter(Boolean).join(' · ');
   $('#drawer-body').innerHTML = `<h2>${esc(f.t)} ☆⚐</h2>
-    <div class="unseen-row"><button class="unseen-toggle" data-id="${f.id}" aria-pressed="${unseen.has(f.id) ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" disabled>Rank this</button></div>
-    <div class="meta">${fmt(f.y)} · ${esc(f.d) || '—'}</div>
+    <div class="unseen-row"><button class="unseen-toggle" data-id="${f.id}" aria-pressed="${unseen.has(f.id) ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" aria-pressed="${f.rm ? 'true' : 'false'}" disabled>Rank this</button></div>
+    ${f.tier ? `<div class="tier-row"><span class="tier-label">Tier</span>${[1, 2, 3, 4, 5].map((t) => `<button class="tier-pick" disabled${t === f.tier ? ' aria-current="true"' : ''}>${t}</button>`).join('')}</div>` : ''}
+    <div class="meta">${fmt(f.y)} · ${esc(f.d) || '—'}${f.gone ? ' · <b>Gone from Criterion</b>' : ''}</div>
     <p>${f.poster ? `<img class="poster" src="${esc(f.poster)}" alt="">` : ''}${esc(f.ov)}</p>
     <div class="ratings"><div class="row">My rating: <input class="rating" maxlength="2" value="${f.r ?? ''}"></div>
     ${watchedHtml(f)}
@@ -283,10 +305,11 @@ function drawDrawer(f) {
 }
 function render() {
   const R = rows();
-  $('#tbody').innerHTML = R.length ? R.map(rowHtml).join('') : '<tr class="empty"><td colspan="10">No film has a logged viewing yet — walk stories 1 to 6 first.</td></tr>';
+  $('#tbody').innerHTML = R.length ? R.map(rowHtml).join('') : '<tr class="empty"><td colspan="10">No viewing logged yet.</td></tr>';
   const col = state.month === '2';
   document.querySelectorAll('.th-watched, .td-watched').forEach((el) => el.hidden = !col);
   $('#col-watched').hidden = !col;
+  $('.th-watched').dataset.dir = state.sortWatched || '';
   $('#chip-watched').classList.toggle('active', state.watchedChip);
   document.querySelectorAll('#variants .variant').forEach((b) => b.classList.toggle('active', b.dataset.key === state.variant));
   document.querySelectorAll('#months .variant').forEach((b) => b.classList.toggle('active', b.dataset.key === state.month));
@@ -310,6 +333,8 @@ function rowAt(x, y) {
   return tr ? FILMS.find((f) => f.id === +tr.dataset.id) : null;
 }
 // ---- the log itself (page state only) ----
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 2500); }
+const stepOf = (felt) => felt === 'disliked' ? 1 : 2;   // A/C and B are two views of one line, kept in step
 function todays(filmId) { return viewings.find((v) => v.film === filmId && v.on === TODAY); }
 function log(filmId, patch) {
   let v = todays(filmId);
@@ -317,19 +342,33 @@ function log(filmId, patch) {
   Object.assign(v, patch);
   render();
 }
+function setStep(v, step) {   // B's ladder, written back into A/C's felt + tags
+  v.step = step; v.felt = step === 1 ? 'disliked' : 'liked';
+  v.tags = new Set(step === 3 ? ['rewatch'] : step === 4 ? ['study'] : step === 5 ? ['compare'] : []);
+}
 $('#drawer-body').addEventListener('click', (e) => {
   const f = FILMS.find((x) => x.id === state.open); if (!f) return;
-  const felt = e.target.closest('button.felt'); if (felt) return log(f.id, { felt:felt.dataset.felt, tags:felt.dataset.felt === 'unfinished' ? new Set() : (todays(f.id) || {}).tags || new Set() });
+  const felt = e.target.closest('button.felt');
+  if (felt) { const k = felt.dataset.felt; return log(f.id, { felt:k, step:stepOf(k), tags:k === 'unfinished' ? new Set() : (todays(f.id) || {}).tags || new Set() }); }
   const step = e.target.closest('button.step');
-  if (step) { if (step.dataset.vid) { const v = viewings.find((x) => x.id === +step.dataset.vid); v.step = +step.dataset.step; render(); } else log(f.id, { step:+step.dataset.step }); return; }
-  const tag = e.target.closest('button.tag'); if (tag) { const v = viewings.find((x) => x.id === +tag.dataset.vid); v.tags.has(tag.dataset.tag) ? v.tags.delete(tag.dataset.tag) : v.tags.add(tag.dataset.tag); return render(); }
+  if (step) { if (step.dataset.vid) { setStep(viewings.find((x) => x.id === +step.dataset.vid), +step.dataset.step); render(); } else { log(f.id, {}); setStep(todays(f.id), +step.dataset.step); render(); } return; }
+  const tag = e.target.closest('button.tag'); if (tag) { const v = viewings.find((x) => x.id === +tag.dataset.vid); v.tags.has(tag.dataset.tag) ? v.tags.delete(tag.dataset.tag) : v.tags.add(tag.dataset.tag); v.step = v.tags.has('compare') ? 5 : v.tags.has('study') ? 4 : v.tags.has('rewatch') ? 3 : stepOf(v.felt); return render(); }
   const rm = e.target.closest('button.remove'); if (rm) { viewings = viewings.filter((x) => x.id !== +rm.dataset.vid); return render(); }
   const un = e.target.closest('button.unseen-toggle'); if (un) { unseen.has(f.id) ? unseen.delete(f.id) : unseen.add(f.id); return render(); }
 });
 $('#drawer-body').addEventListener('change', (e) => {
-  const when = e.target.closest('input.when'); if (when && when.value) { viewings.find((x) => x.id === +when.dataset.vid).on = when.value; return render(); }
+  const when = e.target.closest('input.when');
+  if (when) {   // the date box: refused (and put back) when blank, in the future, or on a day this film already has
+    const v = viewings.find((x) => x.id === +when.dataset.vid), d = when.value;
+    if (!d) toast('A viewing needs a date.');
+    else if (d > TODAY) toast("That's in the future.");
+    else if (viewings.some((x) => x.film === v.film && x.id !== v.id && x.on === d)) toast('Already logged on ' + d + '.');
+    else v.on = d;
+    return render();
+  }
   const note = e.target.closest('input.note'); if (note) { viewings.find((x) => x.id === +note.dataset.vid).note = note.value; }
 });
+$('.th-watched').addEventListener('click', () => { state.sortWatched = state.sortWatched === 'desc' ? 'asc' : state.sortWatched === 'asc' ? null : 'desc'; render(); });
 $('#tbody').addEventListener('click', (e) => { if (e.target.closest('input')) return; const tr = e.target.closest('tr[data-id]'); if (tr) openAt(FILMS.find((f) => f.id === +tr.dataset.id)); });
 $('#backdrop').addEventListener('click', (e) => { const f = rowAt(e.clientX, e.clientY); if (f) openAt(f); else closeDrawer(); });
 $('#backdrop').addEventListener('mousemove', (e) => $('#backdrop').classList.toggle('hand', !!rowAt(e.clientX, e.clientY)));
@@ -350,7 +389,7 @@ $('#months').innerHTML = MONTHS.map((v) => `<button class="variant" data-key="${
 $('#stories').addEventListener('click', (e) => {
   const b = e.target.closest('.walk'); if (!b) return;
   const s = STORIES.find((x) => x.n === +b.dataset.n);
-  state.story = s.n; if (s.n !== 7) state.watchedChip = false; s.setup();
+  state.story = s.n; if (s.n !== 7) state.watchedChip = false; if (s.n !== 10) TODAY = REAL_TODAY; s.setup();
   document.querySelector('.window').scrollIntoView({ behavior:'smooth', block:'center' });
 });
 $('#variants').addEventListener('click', (e) => { const b = e.target.closest('.variant'); if (b) { state.variant = b.dataset.key; render(); } });
