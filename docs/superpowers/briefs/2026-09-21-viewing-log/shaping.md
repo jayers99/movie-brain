@@ -33,3 +33,13 @@
 - Branch `feature/STORY-27-viewing-log`: brief 0.9, mock-up round 1, trial log with both gap-check rounds (16 findings: 13 fixed, 3 stories added, 0 declined), `first-viewings.tsv`.
 - The owner has opened the mock-up once; no A/B/C or 1/2 verdict was given and none is needed now.
 - Tomorrow: reshape from §2 and §3, then a new stories page (round 2), then the gap check again at point A.
+
+## 6. Deferred 2026-09-22 — what the day in between left for the next look
+
+The fresh look did not happen on 2026-09-22; the owner is thinking more and will pick the story up later. The day's work was elsewhere, and three things from it bear on the shape:
+
+- **A film the log names may not be in the catalog.** Four 1960s–70s B-movies (The Trip, Blood Feast, The Little Shop of Horrors, The Abominable Dr. Phibes) were added by hand today because no verb creates a film outside a list, an old-ratings row or a review row: resolver verdict (director corroborated) → `create_film` → `key_film` with the confirmed ids → `enrich all`. A viewing event will hit the same gap the first time he logs a film the catalog lacks, so the log needs that path as a verb (a `film add TITLE YEAR DIRECTOR`, born keyed, then the catch-up chain) or the log's own entry form has to resolve-and-mint. Today's four went in as a one-off script; the recipe is in the session, not in the CLI.
+- **"Where I watched it" has a vocabulary now.** `service:` (alias `on:`) is a search-bar field over the service registry as of today, subscribed or not, and a viewing event could carry the same slug (the film's current listings are the likely candidates; Apple purchase and disc are the two that are not services). Not decided — a candidate for the event's optional fields, beside felt and note.
+- **A watch plan preceded the viewings.** The B-movie list arrived as a plain title/year/director file (`lists/b_movies_1960s_1970s.tsv`, untracked, deliberately NOT a curated list) — a personal "want to watch these" set. That is the artefact that comes BEFORE an event, the complement of §1's artefacts that come after. Whether the log's shape has a place for intent (a plan, a syllabus) as well as record is a question for the next look, not an answer.
+
+Everything in §2–§5 stands. Next look still starts from §2–§3.
