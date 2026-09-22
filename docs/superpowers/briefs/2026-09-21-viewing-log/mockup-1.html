@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Viewing log — stories and mock-up, round 1</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Everything inside .window is copied from the real dashboard (static/app.css): colours, row height, the 760px drawer, the 30% black dim. */
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3e3; --accent:#b3261e; --chip:#f2f2f2; --chip-on:#1b1b1b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:22px 20px 80px; background:#ecebe7; color:var(--fg); font:14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  .page { max-width:1500px; margin:0 auto; }
+  .intro { font-size:17px; line-height:1.55; }
+  .intro h1 { font-size:26px; margin:0 0 6px; }
+  .intro p { margin:6px 0; max-width:1050px; }
+  h2.sec { font-size:21px; margin:26px 0 10px; }
+  .answer { background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:14px 18px; font-size:16px; line-height:1.55; margin-top:14px; }
+  .answer h2 { font-size:21px; margin:0 0 8px; }
+  .answer table { border-collapse:collapse; margin:8px 0; }
+  .answer th, .answer td { text-align:left; padding:4px 16px 4px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+
+  .stories { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+  @media (max-width:1200px) { .stories { grid-template-columns:repeat(2, 1fr); } }
+  @media (max-width:700px) { .stories { grid-template-columns:1fr; } }
+  .story { background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:14px 16px 12px; font-size:16px; line-height:1.5; display:flex; flex-direction:column; }
+  .story.current { border-color:#1b1b1b; box-shadow:0 0 0 2px #1b1b1b; }
+  .story h3 { margin:0 0 6px; font-size:18px; }
+  .story h3 .n { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; background:#1b1b1b; color:#fff; font-size:14px; margin-right:8px; vertical-align:2px; }
+  .story p { margin:0 0 10px; flex:1; }
+  .story .foot { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .does { font-size:13px; color:var(--muted); }
+  button.walk { font:inherit; font-size:15px; border:1px solid #1b1b1b; background:#fff; border-radius:6px; padding:3px 12px; cursor:pointer; }
+  button.walk:hover { background:var(--chip); }
+
+  .bar { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin:0 0 10px; font-size:16px; }
+  .bar .lbl { align-self:center; color:var(--muted); font-size:15px; margin-right:2px; }
+  .bar .gap { width:22px; }
+  .variant { font:inherit; border:1px solid #bdbdbd; background:#fff; border-radius:8px; padding:6px 14px; cursor:pointer; text-align:left; }
+  .variant.active { background:#1b1b1b; border-color:#1b1b1b; color:#fff; }
+  .variant small { display:block; font-size:13px; opacity:.75; }
+  .coach { background:#fff6d6; border:1px solid #e2cf86; border-radius:8px; padding:10px 14px; margin:0 0 10px; font-size:17px; line-height:1.5; min-height:48px; }
+
+  .window { position:relative; isolation:isolate; height:78vh; min-height:560px; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border:1px solid #cfcfcf; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+  .top { background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; }
+  .top h1 { margin:0 0 4px; font-size:18px; }
+  #counts span { margin-right:14px; color:var(--muted); }
+  #counts b { color:var(--fg); }
+  .showing { float:right; }
+  #chips { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip, .picker { border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:4px 10px; font:inherit; color:#9a9a9a; }
+  .chip.live { color:var(--fg); cursor:pointer; }
+  .chip.active { background:var(--chip-on); color:#fff; border-color:var(--chip-on); }
+  .table-wrap { flex:1; min-height:0; overflow:auto; }
+  table.films { border-collapse:collapse; width:100%; table-layout:fixed; }
+  col.col-year { width:60px; } col.col-director { width:16%; } col.col-language { width:13%; }
+  col.col-mc, col.col-rt, col.col-imdb { width:64px; } col.col-rating { width:92px; } col.col-watched { width:104px; } col.col-info { width:40px; }
+  table.films thead th { position:sticky; top:0; background:var(--bg); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; white-space:nowrap; }
+  .num { text-align:right !important; }
+  table.films tbody tr { height:36px; cursor:pointer; }
+  table.films tbody tr:hover { background:#fafafa; }
+  table.films tbody td { padding:0 8px; border-bottom:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
+  table.films tbody tr.lit { pointer-events:none; }
+  table.films tbody tr.lit td { position:relative; z-index:5; background:#fff; }
+  table.films tbody tr.marked td { background:#f2f2f2; }
+  table.films tbody tr.marked td:first-child, table.films tbody tr.lit td:first-child { box-shadow:inset 4px 0 0 #1b1b1b; }
+  table.films tbody tr.empty td { text-align:center; color:var(--muted); padding:32px 16px; white-space:normal; }
+  input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1px solid var(--line); border-radius:4px; }
+  button.info { border:0; background:none; cursor:pointer; font-size:16px; }
+  .badge-lists { background:var(--chip); color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .old-stars { letter-spacing:1px; }
+  #backdrop { position:absolute; inset:0; background:rgba(0,0,0,.3); z-index:3; }
+  #backdrop.hand { cursor:pointer; }
+  #drawer { position:absolute; top:0; right:0; height:100%; width:min(760px, 100%); overflow:auto; background:var(--bg); z-index:6; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
+  #drawer-close { position:absolute; top:10px; right:12px; border:0; background:none; font-size:18px; cursor:pointer; }
+  #drawer .keys { position:absolute; top:14px; right:44px; color:var(--muted); font-size:12px; }
+  #drawer h2 { margin:0 0 4px; padding-right:250px; font-size:21px; }
+  #drawer .meta { color:var(--muted); margin-bottom:10px; }
+  #drawer img.poster { max-width:200px; float:right; margin:0 0 12px 12px; }
+  #drawer p { margin:8px 0; }
+  .unseen-row { margin:2px 0 6px; }
+  .unseen-toggle, .rank-toggle { margin-left:6px; font-size:12px; font:inherit; font-size:12px; }
+  .unseen-toggle[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #drawer .ratings { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:12px 0; clear:both; }
+  #drawer .ratings .row { margin:3px 0; }
+  #drawer .ratings .note, #drawer .canon-score { color:var(--muted); }
+  #drawer p.links a { margin-right:6px; color:#0000ee; text-decoration:underline; cursor:pointer; }
+  #drawer .left-out { margin-top:18px; padding:10px 12px; border:1px dashed #cfcfcf; border-radius:8px; color:var(--muted); }
+  [hidden] { display:none !important; }
+
+  /* ---- THE CHANGE: the Watched block inside the ratings block ---- */
+  #drawer .watched { margin:6px 0 2px; }
+  #drawer .watched .strip { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:2px 0 4px; }
+  #drawer .watched .strip .lbl { color:var(--muted); margin-right:2px; }
+  #drawer .watched button.felt, #drawer .watched button.tag, #drawer .watched button.step { font:inherit; font-size:13px; border:1px solid #9a9a9a; background:#fff; border-radius:999px; padding:1px 10px; cursor:pointer; }
+  #drawer .watched button.felt.on, #drawer .watched button.step.on { background:var(--chip-on); color:#fff; border-color:var(--chip-on); }
+  #drawer .watched button.tag { border-style:dashed; color:var(--muted); }
+  #drawer .watched button.tag.on { border-style:solid; background:#e6f4ea; color:#137333; border-color:#137333; }
+  #drawer .watched button.tag[disabled] { opacity:.45; cursor:default; }
+  #drawer .watched ul.viewings { list-style:none; margin:2px 0 0; padding:0; }
+  #drawer .watched ul.viewings li { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:3px 0; }
+  #drawer .watched ul.viewings li.rental { color:var(--muted); }
+  #drawer .watched ul.viewings li.today { background:#fffbe6; border-radius:6px; padding:2px 6px; margin-left:-6px; }
+  #drawer .watched input.when { font:inherit; font-size:13px; border:1px solid var(--line); border-radius:4px; padding:1px 4px; }
+  #drawer .watched input.note { font:inherit; font-size:13px; border:1px solid var(--line); border-radius:4px; padding:1px 6px; width:220px; }
+  #drawer .watched input.note::placeholder { color:#b0b0b0; }
+  #drawer .watched button.remove { border:0; background:none; color:var(--muted); cursor:pointer; font-size:14px; padding:0 4px; }
+  #drawer .watched button.remove:hover { color:var(--accent); }
+  #drawer .watched .sep { color:#c0c0c0; }
+  #drawer .watched .none { color:var(--muted); }
+
+  .panel { margin-top:26px; background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:16px 20px; font-size:16px; line-height:1.55; }
+  .panel h2 { font-size:21px; margin:0 0 8px; }
+  .panel li { margin:5px 0; }
+  .panel table { border-collapse:collapse; margin:8px 0; }
+  .panel th, .panel td { text-align:left; padding:4px 16px 4px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+</style></head>
+<body><div class="page">
+<div class="intro">
+  <h1>A viewing log — stories and mock-up, round 1</h1>
+  <p>You asked for an exhaustive record of what you watch: one film, many viewings, each with a <b>date</b>, a <b>simple barometer</b> and maybe a <b>short note</b> — most films watched to be entertained and deserving only the barometer, never a rank or an analysis. Ruled already: <b>the 0–10 stays per film</b>, edited exactly as today; the ranker, the chips, the header counts and the export are untouched. Below: the one question this page decides, then <b>eight stories</b> on your real films, then <b>one mock-up</b> in which the log really works (in the page only — nothing is written anywhere). Press <b>Walk it</b> on a story and the mock-up sets itself up. What you log stays logged while you move between stories, so story 7 shows what you did in stories 1–6.</p>
+</div>
+
+<div class="answer">
+  <h2>First order of business: what is the barometer?</h2>
+  <p>Your five steps — <i>didn't like → liked → worth a rewatch → worth deep analysis → worth comparing with other films</i> — mix two questions: <b>did I like it?</b> and <b>is it worth more?</b> A film you disliked can still deserve study (After Hours, story 3). So the mock-up offers three shapes, and the barometer buttons in the drawer change with your pick:</p>
+  <table>
+    <tr><th>Variant</th><th>The click that logs a viewing</th><th>Then, on the logged line</th><th>What it cannot say</th></tr>
+    <tr><td><b>A · felt + worth</b></td><td><i>Didn't like</i> or <i>Liked</i></td><td>any of three tags: <i>worth a rewatch</i>, <i>worth deep analysis</i>, <i>worth comparing</i></td><td>—</td></tr>
+    <tr><td><b>B · your ladder</b></td><td>one of the five steps</td><td>another step replaces it</td><td>disliked <i>and</i> worth study</td></tr>
+    <tr><td><b>C · A plus "Didn't finish"</b> <span style="color:var(--muted)">(my pick)</span></td><td><i>Didn't like</i>, <i>Liked</i> or <i>Didn't finish</i></td><td>the same three tags — greyed out on a <i>Didn't finish</i> line</td><td>—</td></tr>
+  </table>
+  <p><b>Why C is my pick:</b> your study notes say an abandoned viewing is data and never a verdict (a bail is a finding, not a rating). C records the bail without pretending it was a judgement. It costs one more button. Say A, B, C, or something else — "none of these" is a fine answer.</p>
+</div>
+
+<h2 class="sec">The stories</h2>
+<div class="stories" id="stories"></div>
+<h2 class="sec">The mock-up</h2>
+<div class="bar"><span class="lbl">Barometer:</span><span id="variants" style="display:contents"></span><span class="gap"></span><span class="lbl">"What did I watch this month?":</span><span id="months" style="display:contents"></span></div>
+<div class="coach" id="coach"></div>
+<div class="window">
+  <div class="top">
+    <h1>movie-brain</h1>
+    <div id="counts"><span><b>5,013</b> films</span><span><b>4,855</b> reachable</span><span><b>856</b> owned</span><span><b>378</b> rated by me</span><span class="showing">this mock-up carries 9 of them</span></div>
+    <div id="chips"><span class="chip">Reachable</span><span class="chip">Rated</span><span class="chip">Criterion</span><span class="chip">Watchlist</span><span class="chip">Owned</span><span class="chip">On a list</span><span class="chip">Rewatch</span><span class="chip">Shop</span><button class="chip live" id="chip-watched" title="Films with a logged viewing, most recent first">Watched</button><span class="picker">All lists ▾</span><span class="chip" style="background:transparent">Clear</span></div>
+  </div>
+  <div class="table-wrap" id="wrap">
+    <table class="films">
+      <colgroup><col><col class="col-year"><col class="col-director"><col class="col-language"><col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-rating"><col class="col-watched" id="col-watched"><col class="col-info"></colgroup>
+      <thead><tr><th>Title</th><th>Year</th><th>Director</th><th>Language</th><th class="num">MC</th><th class="num">RT</th><th class="num">IMDb</th><th class="num">My rating</th><th class="th-watched">Watched</th><th></th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div id="backdrop" hidden></div>
+  <aside id="drawer" hidden><button id="drawer-close" aria-label="Close">✕</button><span class="keys">↑ ↓ previous / next film · T trailer</span><div id="drawer-body"></div></aside>
+</div>
+
+<div class="panel">
+  <h2>What you should know before saying yes</h2>
+  <ul>
+    <li><b>Logging touches one other thing only:</b> a film marked <i>Unseen</i> loses that mark the moment a viewing is logged (stories 5 and 6). The 0–10, the ranker, the Rewatch chip, the watchlist, the wishlist and the header counts do not move. Removing a viewing puts nothing back — the Unseen button is one click away if you want it.</li>
+    <li><b>One line per day.</b> A second click on the barometer the same day changes that day's line; it never makes a second one (story 8). A viewing on another date is another line — change the date on a line to move it (story 4).</li>
+    <li><b>Your 2004–08 rentals show in the same history</b>, greyed, with their stars, and cannot be edited there: <code>oldratings</code> stays their only writer. Today's drawer shows only the LATER of two rentals; the history shows both (Switchblade Sisters, story 2).</li>
+    <li><b>The "Me, 2004–08" line the drawer shows today goes away</b> — its rental is now a line in the history. The Rewatch chip still reads the stars the same way.</li>
+    <li><b>The Watched chip</b> shows every film with at least one logged viewing, newest viewing first, and stacks with the other chips like any of them. The 2004–08 rentals do NOT count as viewings for the chip — they are a different signal with their own chip. Variant 2 adds a column with the date of the last viewing, sortable like the others; the column is empty for every film until you log something.</li>
+    <li><b>Nothing is imported.</b> No Apple TV played dates (the export has none), no Letterboxd, no dates invented for the 378 films you have rated — their rating dates are rating dates, not viewing dates. The log starts empty on the day it ships.</li>
+    <li><b>Not in this build:</b> moving the 0–10, sealed recall, the notes-versus-critics loop, a rating history, Phase B. The note field is a plain short line — no dictation, no formatting.</li>
+    <li><b>A failed save</b> (the server refuses, the laptop is asleep) shows the red toast the rating box already uses — <i>Could not log the viewing</i> — and the line does not appear; nothing half-saved.</li>
+  </ul>
+</div>
+</div>
+
+<script>
+const FILMS = [{"id": 2397, "t": "Modern Times", "y": 1936, "d": "Charles Chaplin", "l": "English", "mc": 96, "rt": 98, "im": 8.5, "r": null, "n": 5, "o": false, "badge": "Criterion Channel", "ov": "A bumbling tramp desires to build a home with a young woman, yet is thwarted time and time again by his lack of experience and habit of being in the wrong place at the wrong time...", "poster": "https://m.media-amazon.com/images/M/MV5BODVkZGFhNGQtYjdiYi00Njc4LWFmYTItNTlmNzJjMTg1ZDc5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, Kanopy, Prime Video, TCM (not subscribed) ⋯ 6 more", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #74, Sight & Sound: 2022 #78, Sight & Sound: 1992 Directors #6, BBC: Comedies #12, List Obsession: Slapstick #39", "crit": true, "old": [], "unseen": false, "trailer": true}, {"id": 668, "t": "I Am Cuba", "y": 1964, "d": "Mikhail Kalatozov", "l": "Spanish, English", "mc": 91, "rt": 100, "im": 8.2, "r": 9, "n": 1, "o": false, "badge": "Criterion Channel", "ov": "A study in contrasts set in and around Havana that explores Cuba's 1959 revolution: a young woman's fascination with the excess of an American-owned casino leads to her downfall in the eyes of her street vendor boyfriend; a tenant farmer revolts the only way he knows how, attacking the land he works; university students gain first-hand knowledge of political upheaval; and, in the hills outside the city, the members of a poor peasant family are patriotically swept up into the burgeoning revolt.", "poster": "https://m.media-amazon.com/images/M/MV5BMGM0OTgwNjItNDViZC00ODI5LWI5MDMtZjNmNGFhN2ZlNDU0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "Kino Film Collection, Kanopy, Hoopla (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #81", "crit": true, "old": [{"stars": 5, "rented_on": "2005-01-12"}], "unseen": false, "trailer": true}, {"id": 1203, "t": "After Hours", "y": 1985, "d": "Martin Scorsese", "l": "English", "mc": 89, "rt": 90, "im": 7.6, "r": 4, "n": 0, "o": false, "badge": null, "ov": "Desperate to escape his mind-numbing routine, uptown Manhattan office worker Paul Hackett ventures downtown for a hookup with a mystery woman.", "poster": "https://m.media-amazon.com/images/M/MV5BMTUxMjEzMzI2MV5BMl5BanBnXkFtZTgwNTU3ODAxMDE@._V1_SX300.jpg", "watch": "Watch on Howdy Amazon Channel (not subscribed) ↗", "also": "Howdy Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [{"stars": 3, "rented_on": "2005-02-07"}], "unseen": false, "trailer": true}, {"id": 3023, "t": "La haine", "y": 1995, "d": "Mathieu Kassovitz", "l": "French, Yiddish", "mc": null, "rt": 96, "im": 8.1, "r": null, "n": 0, "o": false, "badge": "Criterion Channel", "ov": "After a chaotic night of rioting in a marginal suburb of Paris, three young friends, Vinz, Hubert and Saïd, wander around unoccupied waiting for news about the state of health of a mutual friend who has been seriously injured when confronting the police.", "poster": "https://m.media-amazon.com/images/M/MV5BMThlMDA3NDYtZGM2Zi00NmJhLThlYWItZjViZTkzZWU1ZWRiXkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": false, "trailer": true}, {"id": 1477, "t": "Godzilla vs. Gigan", "y": 1972, "d": "Jun Fukuda", "l": "Japanese", "mc": null, "rt": 67, "im": 5.6, "r": null, "n": 0, "o": true, "badge": null, "ov": "Manga artist Gengo Odaka lands a job with the World Children's Land amusement park only to become suspicious of the organization when a garbled message is discovered on tapes. As Gengo and his team investigate, Godzilla and Anguirus quickly decipher the message and begin their own plan of action.", "poster": "https://m.media-amazon.com/images/M/MV5BNmVkNTU3ZmMtMzM2My00MTE0LWJkNjMtNzY0NjhlNTc5NWM4XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 1478, "t": "Godzilla vs. Hedorah", "y": 1971, "d": "Yoshimitsu Banno", "l": "Japanese", "mc": null, "rt": 67, "im": 6.1, "r": null, "n": 0, "o": true, "badge": null, "ov": "An ever evolving alien life-form arrives on a comet from the Dark Gaseous Nebula and proceeds to consume pollution. Spewing mists of sulfuric acid and corrosive sludge, neither humanity nor Godzilla may be able to defeat this toxic menace.", "poster": "https://m.media-amazon.com/images/M/MV5BMWI5YWYxNjgtYTZmOC00YmFlLWJjMGUtMmNiZDk3NGVjOGY0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 1057, "t": "To Be or Not to Be", "y": 1942, "d": "Ernst Lubitsch", "l": "English, German, French", "mc": 86, "rt": 96, "im": 8.1, "r": null, "n": 4, "o": false, "badge": "Criterion Channel", "ov": "During the Nazi occupation of Poland, an acting troupe becomes embroiled in a Polish soldier's efforts to track down a German spy.", "poster": "https://m.media-amazon.com/images/M/MV5BMTA5OTRkZGUtNDhhOS00OThmLTgwZWYtZGZkM2M4YjZhNzc5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #13, Ronald Bergan: The Film Book #27, Sight & Sound: 2022 #114, BBC: Comedies #13", "crit": true, "old": [], "unseen": true, "trailer": true}, {"id": 4164, "t": "Switchblade Sisters", "y": 1975, "d": "Jack Hill", "l": "English", "mc": null, "rt": 57, "im": 6.5, "r": 9, "n": 2, "o": true, "badge": null, "ov": "The leader of an inner city girl gang is challenged when a new girl moves into the neighborhood.", "poster": "https://m.media-amazon.com/images/M/MV5BMTJlMTFkZjAtNzBhYS00NDI2LTgzNzAtNDdmNzk1ODJlN2U0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "Tubi TV, Cineverse (not subscribed), ARROW (not subscribed), Cineverse Amazon Channel (not subscribed) ⋯ 4 more", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #94, RankerOfHorror: Exploitation Films", "crit": false, "old": [{"stars": 4, "rented_on": "2006-12-15"}, {"stars": 4, "rented_on": "2008-04-11"}], "unseen": false, "trailer": true}, {"id": 2419, "t": "Seven Samurai", "y": 1954, "d": "Akira Kurosawa", "l": "Japanese", "mc": 98, "rt": 100, "im": 8.6, "r": null, "n": 3, "o": false, "badge": "Criterion Channel", "ov": "A samurai answers a village's request for protection after he falls on hard times. The town needs protection from bandits, so the samurai gathers six others to help him teach the people how to defend themselves, and the villagers provide the soldiers with food.", "poster": "https://m.media-amazon.com/images/M/MV5BZjliMWExOTMtZDQ3ZS00NWU3LWIyN2EtMjllNzk3ZTNlYzg4XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, Kanopy, Plex, Plex Channel ⋯ 3 more", "buy": "Apple TV Store (iTunes)", "lists": "Cahiers du Cinéma: Ideal Cinematheque #57, Sight & Sound: 2022 #20, Sight & Sound: 1992 Directors #9", "crit": true, "old": [], "unseen": false, "trailer": true}];
+const TODAY = '2026-09-21', LAST_SAT = '2026-09-19';
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v, suf = '') => v == null ? '—' : v + suf;
+const film = (t) => FILMS.find((f) => f.t === t);
+const VARIANTS = [
+  { key:'A', name:'A · Felt + worth', sub:"Didn't like / Liked, then tags" },
+  { key:'B', name:'B · Your ladder', sub:'five steps, one click' },
+  { key:'C', name:"C · A plus Didn't finish", sub:'My pick · a bail is not a verdict' },
+];
+const MONTHS = [
+  { key:'1', name:'1 · Watched chip only', sub:'newest viewing first while it is on' },
+  { key:'2', name:'2 · Chip + Watched column', sub:'My pick · the date is on the row' },
+];
+const FELT = { disliked:"Didn't like", liked:'Liked', unfinished:"Didn't finish" };
+const TAGS = { rewatch:'worth a rewatch', study:'worth deep analysis', compare:'worth comparing' };
+const STEPS = ["Didn't like", 'Liked', 'Worth a rewatch', 'Worth deep analysis', 'Worth comparing'];
+const state = { variant:'C', month:'2', open:null, mark:null, story:null, watchedChip:false };
+// viewings: { id, film, on, felt, tags:Set, step, note } — page state only; a reload empties it
+let viewings = [], nextId = 1;
+const unseen = new Set(FILMS.filter((f) => f.unseen).map((f) => f.id));
+const byDefault = (a, b) => (b.mc ?? -1) - (a.mc ?? -1) || (b.rt ?? -1) - (a.rt ?? -1) || (b.im ?? -1) - (a.im ?? -1) || a.t.localeCompare(b.t);
+function lastWatched(f) { const v = viewings.filter((x) => x.film === f.id).map((x) => x.on).sort(); return v.length ? v[v.length - 1] : null; }
+function rows() {
+  let r = FILMS.slice().sort(byDefault);
+  if (state.watchedChip) r = r.filter((f) => lastWatched(f)).sort((a, b) => lastWatched(b).localeCompare(lastWatched(a)) || byDefault(a, b));
+  return r;
+}
+
+const STORIES = [
+  { n:1, title:'A casual watch tonight, in two clicks',
+    text:'I watched <b>Modern Times</b> on the Criterion Channel tonight. I open it and press <b>Liked</b>. A line appears: <i>today · Liked</i>. That is the whole record — no rating, no rank, no note. The rating box stays empty; nothing else on the page changes.',
+    coach:'The drawer is open on Modern Times. Press <b>Liked</b> in the Watched row. (In B, press any step.)',
+    setup() { openFilm('Modern Times'); } },
+  { n:2, title:'A rewatch of a film I rented in 2005',
+    text:'<b>I Am Cuba</b>: I gave it 5★ when I rented it on 2005-01-12, and a 9 this year. I watched it again tonight. I press <b>Liked</b>, then <b>worth comparing</b>. The history now reads <i>today · Liked · worth comparing</i> above <i>2005-01-12 · rented · ★★★★★</i>. (<b>Switchblade Sisters</b>, rented twice, shows both rentals — today\'s drawer shows only the later one.)',
+    coach:'Press <b>Liked</b>, then the <b>worth comparing</b> tag on the new line. Then click <b>Switchblade Sisters</b> in the dimmed list to see two rentals in one history.',
+    setup() { openFilm('I Am Cuba'); } },
+  { n:3, title:'Disliked, but worth study',
+    text:'<b>After Hours</b>: 3★ in 2005, a 4 this year. I watched it again and still did not enjoy it — but Scorsese\'s night-time New York is worth taking apart. <b>A</b> and <b>C</b> say it: <i>Didn\'t like · worth deep analysis</i>. <b>B</b> cannot: the ladder has one rung for that film. The 4 stays a 4 either way — the log never touches the rating.',
+    coach:'Press <b>Didn\'t like</b>, then <b>worth deep analysis</b>. Now switch to <b>B</b> above and try to say the same thing.',
+    setup() { openFilm('After Hours'); } },
+  { n:4, title:'Watched last Saturday',
+    text:'I saw <b>La haine</b> on Saturday and forgot to log it. I press <b>Liked</b> today, then change the date on the line to <b>2026-09-19</b>. The line moves back to Saturday. Nothing else to do.',
+    coach:'Press <b>Liked</b>, then change the date box on the new line to <b>2026-09-19</b> (last Saturday).',
+    setup() { openFilm('La haine'); } },
+  { n:5, title:'I logged the wrong film',
+    text:'Two Godzillas I own and have never watched: <b>Godzilla vs. Gigan</b> and <b>Godzilla vs. Hedorah</b>. I watched Hedorah but logged Gigan. I press <b>✕</b> on Gigan\'s line — it is gone — and log Hedorah instead. Gigan\'s <i>Unseen</i> mark went out when I logged it and does <b>not</b> come back by itself; the Unseen button is right there.',
+    coach:'Press <b>Liked</b> on Gigan (oops), then <b>✕</b> on the line. Click <b>Godzilla vs. Hedorah</b> in the dimmed list and log it there. Look at the Unseen button on Gigan afterwards.',
+    setup() { openFilm('Godzilla vs. Gigan'); } },
+  { n:6, title:'A "have not seen" film gets watched',
+    text:'<b>To Be or Not to Be</b> is marked <i>Unseen</i> (I marked it yesterday). Tonight I watched it. I press <b>Liked</b>: the line appears and the Unseen mark goes out — the ranker will offer it now. The film stays unrated until I type a number in the rating box, as today.',
+    coach:'The Unseen button is lit (red). Press <b>Liked</b> and watch it go out.',
+    setup() { openFilm('To Be or Not to Be'); } },
+  { n:7, title:'What did I watch this month?',
+    text:'I press the new <b>Watched</b> chip. The list is just the films I logged in stories 1–6, most recent viewing first: La haine\'s Saturday line puts it below the ones watched today. <b>2</b> adds a <i>Watched</i> column with each film\'s last date, so the month is visible without opening anything. <b>1</b> has the chip alone.',
+    coach:'Press <b>Watched</b> in the chip row (it is real in this mock-up). Switch between <b>1</b> and <b>2</b> above. Walk stories 1–6 first if the list is empty.',
+    setup() { closeDrawer(); state.watchedChip = true; render(); } },
+  { n:8, title:'I change my mind about tonight',
+    text:'Back on <b>Modern Times</b> the same evening: I pressed <b>Liked</b> but it was more than that. I press <b>worth a rewatch</b> on the line — the line now says both. In <b>B</b>, pressing another step replaces the first. Either way it is still one line: a second press today never makes a second viewing.',
+    coach:'Press <b>worth a rewatch</b> on today\'s line, then press <b>Didn\'t like</b> in the strip: the same line changes. Walk story 1 first if there is no line.',
+    setup() { openFilm('Modern Times'); } },
+];
+
+function rowHtml(f) {
+  const title = esc(f.t)
+    + (f.badge ? ` <span class="badge-watch">${esc(f.badge)}</span>` : '')
+    + (f.n ? ` <span class="badge-lists">${f.n} list${f.n === 1 ? '' : 's'}</span>` : '')
+    + (f.o ? ' <span class="badge-owned">owned</span>' : '');
+  const cls = state.open != null ? (f.id === state.open ? 'lit' : '') : (f.id === state.mark ? 'marked' : '');
+  const lw = lastWatched(f);
+  return `<tr data-id="${f.id}" class="${cls}"><td>${title}</td><td>${fmt(f.y)}</td><td>${esc(f.d) || '—'}</td><td>${esc(f.l) || '—'}</td>
+    <td class="num">${fmt(f.mc)}</td><td class="num">${fmt(f.rt, '%')}</td><td class="num">${f.im == null ? '—' : f.im.toFixed(1)}</td>
+    <td class="num"><input class="rating" maxlength="2" value="${f.r ?? ''}"></td><td class="td-watched">${lw ? (lw === TODAY ? 'today' : esc(lw)) : ''}</td><td><button class="info">ⓘ</button></td></tr>`;
+}
+function stripHtml(f) {
+  if (state.variant === 'B') return STEPS.map((s, i) => `<button class="step" data-step="${i + 1}">${s}</button>`).join('');
+  const felts = state.variant === 'C' ? ['disliked', 'liked', 'unfinished'] : ['disliked', 'liked'];
+  return felts.map((k) => `<button class="felt" data-felt="${k}">${FELT[k]}</button>`).join('');
+}
+function lineHtml(v) {
+  const when = v.on === TODAY ? 'today' : v.on;
+  let what;
+  if (state.variant === 'B') what = STEPS.map((s, i) => `<button class="step ${v.step === i + 1 ? 'on' : ''}" data-vid="${v.id}" data-step="${i + 1}">${s}</button>`).join('');
+  else {
+    const dead = v.felt === 'unfinished';
+    what = `<b>${FELT[v.felt] || 'Liked'}</b>` + Object.keys(TAGS).map((k) => `<button class="tag ${v.tags.has(k) ? 'on' : ''}" data-vid="${v.id}" data-tag="${k}"${dead ? ' disabled' : ''}>${TAGS[k]}</button>`).join('');
+  }
+  return `<li class="viewing ${v.on === TODAY ? 'today' : ''}"><input class="when" type="date" data-vid="${v.id}" value="${v.on}" title="${when}"><span class="sep">·</span>${what}<span class="sep">·</span><input class="note" data-vid="${v.id}" placeholder="a short note" value="${esc(v.note)}"><button class="remove" data-vid="${v.id}" title="Remove this viewing">✕</button></li>`;
+}
+function watchedHtml(f) {
+  const mine = viewings.filter((v) => v.film === f.id).sort((a, b) => b.on.localeCompare(a.on) || b.id - a.id);
+  const rentals = (f.old || []).slice().reverse().map((o) => `<li class="rental">${esc(o.rented_on || '—')}<span class="sep">·</span>rented<span class="sep">·</span><span class="old-stars">${'★'.repeat(o.stars)}${'☆'.repeat(5 - o.stars)}</span> <span class="none">(2004–08)</span></li>`);
+  const lines = mine.map(lineHtml).concat(rentals);
+  return `<div class="row watched"><div class="strip"><span class="lbl">Watched:</span>${stripHtml(f)}</div>
+    ${lines.length ? `<ul class="viewings">${lines.join('')}</ul>` : '<div class="none">Never logged.</div>'}</div>`;
+}
+function drawDrawer(f) {
+  const critics = [f.im != null ? `IMDb <b>${f.im.toFixed(1)}</b>` : '', f.mc != null ? `Metacritic <b>${f.mc}</b>` : '', f.rt != null ? `Rotten Tomatoes <b>${f.rt}%</b>` : ''].filter(Boolean).join(' · ');
+  $('#drawer-body').innerHTML = `<h2>${esc(f.t)} ☆⚐</h2>
+    <div class="unseen-row"><button class="unseen-toggle" data-id="${f.id}" aria-pressed="${unseen.has(f.id) ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" disabled>Rank this</button></div>
+    <div class="meta">${fmt(f.y)} · ${esc(f.d) || '—'}</div>
+    <p>${f.poster ? `<img class="poster" src="${esc(f.poster)}" alt="">` : ''}${esc(f.ov)}</p>
+    <div class="ratings"><div class="row">My rating: <input class="rating" maxlength="2" value="${f.r ?? ''}"></div>
+    ${watchedHtml(f)}
+    <div class="row">${critics}</div>${f.lists ? `<div class="row">On lists: ${esc(f.lists)}</div>` : ''}</div>
+    ${f.watch ? `<p class="meta">${esc(f.watch)}</p>` : ''}${f.also ? `<p class="meta">Also streaming on: ${esc(f.also)}</p>` : ''}${f.buy ? `<p class="meta">Buy on: <u>${esc(f.buy)}</u></p>` : ''}
+    <p class="links">${f.trailer ? '<a>▶ Trailer</a>' : ''}${f.crit ? '<a>Open on Criterion ↗</a>' : ''}<a>TMDB ↗</a><a>CheapCharts ↗</a></p>
+    <div class="left-out">The rest of the drawer — cast, writer, facts, the audit block — is unchanged and left out of this mock-up. The links here are dead; the Unseen button works.</div>`;
+}
+function render() {
+  const R = rows();
+  $('#tbody').innerHTML = R.length ? R.map(rowHtml).join('') : '<tr class="empty"><td colspan="10">No film has a logged viewing yet — walk stories 1 to 6 first.</td></tr>';
+  const col = state.month === '2';
+  document.querySelectorAll('.th-watched, .td-watched').forEach((el) => el.hidden = !col);
+  $('#col-watched').hidden = !col;
+  $('#chip-watched').classList.toggle('active', state.watchedChip);
+  document.querySelectorAll('#variants .variant').forEach((b) => b.classList.toggle('active', b.dataset.key === state.variant));
+  document.querySelectorAll('#months .variant').forEach((b) => b.classList.toggle('active', b.dataset.key === state.month));
+  document.querySelectorAll('.story').forEach((el) => el.classList.toggle('current', +el.dataset.n === state.story));
+  const s = STORIES.find((x) => x.n === state.story);
+  $('#coach').innerHTML = s ? `<b>Story ${s.n} · barometer ${state.variant} · month view ${state.month}.</b> ${s.coach}` : `<b>Barometer ${state.variant}.</b> Click any film, or press <b>Walk it</b> on a story above.`;
+  const f = FILMS.find((x) => x.id === state.open);
+  if (f) drawDrawer(f);
+}
+function openAt(f) {
+  if (!f) return;
+  state.open = f.id; state.mark = f.id;
+  $('#drawer').hidden = false; $('#backdrop').hidden = false; $('#drawer').scrollTop = 0;
+  render();
+}
+function openFilm(t) { openAt(film(t)); }
+function closeDrawer() { state.open = null; $('#drawer').hidden = true; $('#backdrop').hidden = true; render(); }
+function rowAt(x, y) {
+  const under = document.elementsFromPoint(x, y).find((el) => el.id !== 'backdrop');
+  const tr = under && under.closest('#tbody tr[data-id]');
+  return tr ? FILMS.find((f) => f.id === +tr.dataset.id) : null;
+}
+// ---- the log itself (page state only) ----
+function todays(filmId) { return viewings.find((v) => v.film === filmId && v.on === TODAY); }
+function log(filmId, patch) {
+  let v = todays(filmId);
+  if (!v) { v = { id:nextId++, film:filmId, on:TODAY, felt:'liked', tags:new Set(), step:2, note:'' }; viewings.push(v); unseen.delete(filmId); }
+  Object.assign(v, patch);
+  render();
+}
+$('#drawer-body').addEventListener('click', (e) => {
+  const f = FILMS.find((x) => x.id === state.open); if (!f) return;
+  const felt = e.target.closest('button.felt'); if (felt) return log(f.id, { felt:felt.dataset.felt, tags:felt.dataset.felt === 'unfinished' ? new Set() : (todays(f.id) || {}).tags || new Set() });
+  const step = e.target.closest('button.step');
+  if (step) { if (step.dataset.vid) { const v = viewings.find((x) => x.id === +step.dataset.vid); v.step = +step.dataset.step; render(); } else log(f.id, { step:+step.dataset.step }); return; }
+  const tag = e.target.closest('button.tag'); if (tag) { const v = viewings.find((x) => x.id === +tag.dataset.vid); v.tags.has(tag.dataset.tag) ? v.tags.delete(tag.dataset.tag) : v.tags.add(tag.dataset.tag); return render(); }
+  const rm = e.target.closest('button.remove'); if (rm) { viewings = viewings.filter((x) => x.id !== +rm.dataset.vid); return render(); }
+  const un = e.target.closest('button.unseen-toggle'); if (un) { unseen.has(f.id) ? unseen.delete(f.id) : unseen.add(f.id); return render(); }
+});
+$('#drawer-body').addEventListener('change', (e) => {
+  const when = e.target.closest('input.when'); if (when && when.value) { viewings.find((x) => x.id === +when.dataset.vid).on = when.value; return render(); }
+  const note = e.target.closest('input.note'); if (note) { viewings.find((x) => x.id === +note.dataset.vid).note = note.value; }
+});
+$('#tbody').addEventListener('click', (e) => { if (e.target.closest('input')) return; const tr = e.target.closest('tr[data-id]'); if (tr) openAt(FILMS.find((f) => f.id === +tr.dataset.id)); });
+$('#backdrop').addEventListener('click', (e) => { const f = rowAt(e.clientX, e.clientY); if (f) openAt(f); else closeDrawer(); });
+$('#backdrop').addEventListener('mousemove', (e) => $('#backdrop').classList.toggle('hand', !!rowAt(e.clientX, e.clientY)));
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#chip-watched').addEventListener('click', () => { state.watchedChip = !state.watchedChip; render(); });
+document.addEventListener('keydown', (e) => {
+  if (state.open == null || e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'Escape') return closeDrawer();
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const R = rows(), i = R.findIndex((f) => f.id === state.open) + (e.key === 'ArrowDown' ? 1 : -1);
+  if (i >= 0 && i < R.length) openAt(R[i]);
+});
+
+$('#stories').innerHTML = STORIES.map((s) => `<div class="story" data-n="${s.n}"><h3><span class="n">${s.n}</span>${s.title}</h3><p>${s.text}</p><div class="foot"><span class="does"></span><button class="walk" data-n="${s.n}">Walk it</button></div></div>`).join('');
+$('#variants').innerHTML = VARIANTS.map((v) => `<button class="variant" data-key="${v.key}">${v.name}<small>${v.sub}</small></button>`).join('');
+$('#months').innerHTML = MONTHS.map((v) => `<button class="variant" data-key="${v.key}">${v.name}<small>${v.sub}</small></button>`).join('');
+$('#stories').addEventListener('click', (e) => {
+  const b = e.target.closest('.walk'); if (!b) return;
+  const s = STORIES.find((x) => x.n === +b.dataset.n);
+  state.story = s.n; if (s.n !== 7) state.watchedChip = false; s.setup();
+  document.querySelector('.window').scrollIntoView({ behavior:'smooth', block:'center' });
+});
+$('#variants').addEventListener('click', (e) => { const b = e.target.closest('.variant'); if (b) { state.variant = b.dataset.key; render(); } });
+$('#months').addEventListener('click', (e) => { const b = e.target.closest('.variant'); if (b) { state.month = b.dataset.key; render(); } });
+render();
+</script>
+</body></html>
