@@ -52,3 +52,19 @@ Run 2026-09-21 on a snapshot of cd82765 with a copy of the live database (`scrip
 | 16 | Column "sortable — simulated" did not sort; real sort's empties undescribed (gap-unpictured) | fixed | mock-up header sorts; never-logged films last both ways, in story 7 and the brief |
 
 Agent minutes: 12 · Findings: 16 · Fixed: 13 · Stories added: 3 · Declined: 0 · Not checked: TV.app's played-date property (outside the snapshot); point C checks (nothing built); Seven Samurai was dropped from the mock-up (no story used it).
+
+### Scoped re-check (point A, same day)
+
+Relaunched with `Re-check only findings: 1–16` on a snapshot of ce0d6fc. About 6 agent minutes. **13 of 16 closed.** Three were still open, all mock-up defects in the fix itself, not in the brief:
+
+| # | Still open because | Answer |
+|---|---|---|
+| 3 | B lit *Liked* for C's *Didn't finish*, and *Didn't like* after story 8's tag-then-felt walk: the mock-up stored a step and the felt handler ignored the tags | fixed: B's rung is now DERIVED from felt + tags on every draw, never stored (brief decision row says so); rehearsed both walks |
+| 10 | the mock-up's ↓ after ✕ under Watched went to the top of the list, not the gap | fixed: the mock-up keeps the open film's index like the real `openIndex`; rehearsed: ✕ on the third film, ↓ opens the film that took its place |
+| 13 | the mock-up panel still carried the round-1 wording | fixed: panel matches the brief |
+
+Two seams it also saw, both fixed: the brief's two API rows disagreed on a same-day POST (now: POST on a held date answers 409, the strip's same-day edit is a PUT on today's line); the panel said "the ranker does not move" while story 6 said the film rejoins its queue (now: placements and tiers do not move, a pooled film rejoins the queue).
+
+The spec says the checker never loops, so these three were verified by the builder's own headless rehearsal, not a third run; they are listed here as the diagnostic-checkpoint items and closed. Owner cost across both runs: zero minutes.
+
+**Summary line for the owner:** Checked: 16 findings, 13 fixed, 3 stories added, 0 declined. Not checked: whether TV.app can answer a played date; everything point C covers (nothing is built yet).

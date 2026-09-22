@@ -164,12 +164,12 @@
 <div class="panel">
   <h2>What you should know before saying yes</h2>
   <ul>
-    <li><b>Logging touches one other thing only:</b> a film marked <i>Unseen</i> loses that mark the moment a viewing is logged (stories 5 and 6). The 0–10, the ranker, the Rewatch chip, the watchlist, the wishlist and the header counts do not move. Removing a viewing puts nothing back — the Unseen button is one click away if you want it.</li>
+    <li><b>Logging touches one other thing only:</b> a film marked <i>Unseen</i> loses that mark the moment a viewing is logged (stories 5 and 6). The 0–10, the ranker's placements and tiers, the Rewatch chip, the watchlist, the wishlist and the header counts do not move (a film already in the ranker's pool but skipped as unseen simply rejoins its queue, story 6). Removing a viewing puts nothing back — the Unseen button is one click away if you want it.</li>
     <li><b>One line per day.</b> A second click on the barometer the same day changes that day's line; it never makes a second one (story 8). A viewing on another date is another line — change the date on a line to move it (story 4). The date box refuses a blank, a future date, or a day this film already has a line for, and puts the old date back with a red toast. The next morning the strip logs a NEW viewing; yesterday's line is edited on the line itself (story 10).</li>
     <li><b>Your 2004–08 rentals show in the same history</b>, greyed, with their stars, and cannot be edited there: <code>oldratings</code> stays their only writer. Today's drawer shows only the LATER of two rentals; the history shows both (Switchblade Sisters, story 2). Two rental rows with the same date and stars (Love and Anarchy, listed twice in the 2004 file) show as one line.</li>
     <li><b>The "Me, 2004–08" line the drawer shows today goes away</b> — its rental is now a line in the history. The Rewatch chip still reads the stars the same way.</li>
     <li><b>The Watched chip</b> shows every film with at least one logged viewing, newest viewing first, and stacks with the other chips like any of them. The 2004–08 rentals do NOT count as viewings for the chip — they are a different signal with their own chip. Variant 2 adds a column with the date of the last viewing, sortable like the others; the column is empty for every film until you log something.</li>
-    <li><b>Nothing is imported.</b> No Apple TV played dates (the export has none), no Letterboxd, no dates invented for the 378 films you have rated — their rating dates are rating dates, not viewing dates. The log starts empty on the day it ships.</li>
+    <li><b>Nothing is imported.</b> No Apple TV played dates (today's export asks TV.app for name, year and duration only; whether it would answer a played date was not tried), no Letterboxd, no dates invented for the 378 films you have rated — their rating dates are rating dates, not viewing dates. The log starts empty on the day it ships.</li>
     <li><b>Not in this build:</b> moving the 0–10, sealed recall, the notes-versus-critics loop, a rating history, Phase B. The note field is a plain short line — no dictation, no formatting.</li>
     <li><b>A failed save</b> (the server refuses, the laptop is asleep) shows the red toast the rating box already uses — <i>Could not log the viewing</i> — and the line does not appear; nothing half-saved. The same for every later change: a date, tag, step or note the server did not keep snaps back to what it holds, a ✕ that failed leaves the line where it was, each with its own toast. A note is at most 200 characters. A reload shows exactly what the server holds — the log lives in the database, never in the browser.</li>
   </ul>
@@ -196,7 +196,7 @@ const MONTHS = [
 const FELT = { disliked:"Didn't like", liked:'Liked', unfinished:"Didn't finish" };
 const TAGS = { rewatch:'worth a rewatch', study:'worth deep analysis', compare:'worth comparing' };
 const STEPS = ["Didn't like", 'Liked', 'Worth a rewatch', 'Worth deep analysis', 'Worth comparing'];
-const state = { variant:'C', month:'2', open:null, mark:null, story:null, watchedChip:false, sortWatched:null };
+const state = { variant:'C', month:'2', open:null, mark:null, story:null, watchedChip:false, sortWatched:null, openIndex:null };
 // viewings: { id, film, on, felt, tags:Set, step, note } — page state only; a reload empties it
 let viewings = [], nextId = 1;
 const unseen = new Set(FILMS.filter((f) => f.unseen).map((f) => f.id));
@@ -252,7 +252,7 @@ const STORIES = [
   { n:10, title:'The morning after',
     text:'It is <b>2026-09-22</b>. Modern Times\' line from last night reads <i>2026-09-21 · Liked</i> — a date, not <i>today</i> any more. If I press <b>Liked</b> in the strip now, that is a <b>new</b> viewing dated the 22nd, not an edit: the strip only ever edits today\'s line. To change last night\'s verdict I use the buttons on its own line.',
     coach:'<b>Simulated:</b> the page thinks it is 2026-09-22 until you walk another story. Press <b>Liked</b> in the strip and see a second line appear; press <b>✕</b> on it; then press a tag on last night\'s line instead.',
-    setup() { TODAY = '2026-09-22'; if (!viewings.some((v) => v.film === film('Modern Times').id)) viewings.push({ id:nextId++, film:film('Modern Times').id, on:'2026-09-21', felt:'liked', tags:new Set(), step:2, note:'' }); openFilm('Modern Times'); } },
+    setup() { TODAY = '2026-09-22'; if (!viewings.some((v) => v.film === film('Modern Times').id)) viewings.push({ id:nextId++, film:film('Modern Times').id, on:'2026-09-21', felt:'liked', tags:new Set(), note:'' }); openFilm('Modern Times'); } },
 ];
 
 function rowHtml(f) {
@@ -275,7 +275,7 @@ function stripHtml(f) {
 function lineHtml(v) {
   const when = v.on === TODAY ? 'today' : v.on;
   let what;
-  if (state.variant === 'B') what = STEPS.map((s, i) => `<button class="step ${v.step === i + 1 ? 'on' : ''}" data-vid="${v.id}" data-step="${i + 1}">${s}</button>`).join('');
+  if (state.variant === 'B') what = STEPS.map((s, i) => `<button class="step ${stepFor(v) === i + 1 ? 'on' : ''}" data-vid="${v.id}" data-step="${i + 1}">${s}</button>`).join('');
   else {
     const dead = v.felt === 'unfinished';
     what = `<b>${FELT[v.felt] || 'Liked'}</b>` + Object.keys(TAGS).map((k) => `<button class="tag ${v.tags.has(k) ? 'on' : ''}" data-vid="${v.id}" data-tag="${k}"${dead ? ' disabled' : ''}>${TAGS[k]}</button>`).join('');
@@ -321,7 +321,7 @@ function render() {
 }
 function openAt(f) {
   if (!f) return;
-  state.open = f.id; state.mark = f.id;
+  state.open = f.id; state.mark = f.id; state.openIndex = rows().findIndex((x) => x.id === f.id);
   $('#drawer').hidden = false; $('#backdrop').hidden = false; $('#drawer').scrollTop = 0;
   render();
 }
@@ -334,25 +334,26 @@ function rowAt(x, y) {
 }
 // ---- the log itself (page state only) ----
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 2500); }
-const stepOf = (felt) => felt === 'disliked' ? 1 : 2;   // A/C and B are two views of one line, kept in step
+// A/C and B are two views of one line: B's rung is derived from felt + tags, the highest tag wins; Didn't finish has no rung and reads as Didn't like
+const stepFor = (v) => v.tags.has('compare') ? 5 : v.tags.has('study') ? 4 : v.tags.has('rewatch') ? 3 : v.felt === 'liked' ? 2 : 1;
 function todays(filmId) { return viewings.find((v) => v.film === filmId && v.on === TODAY); }
 function log(filmId, patch) {
   let v = todays(filmId);
-  if (!v) { v = { id:nextId++, film:filmId, on:TODAY, felt:'liked', tags:new Set(), step:2, note:'' }; viewings.push(v); unseen.delete(filmId); }
+  if (!v) { v = { id:nextId++, film:filmId, on:TODAY, felt:'liked', tags:new Set(), note:'' }; viewings.push(v); unseen.delete(filmId); }
   Object.assign(v, patch);
   render();
 }
 function setStep(v, step) {   // B's ladder, written back into A/C's felt + tags
-  v.step = step; v.felt = step === 1 ? 'disliked' : 'liked';
+  v.felt = step === 1 ? 'disliked' : 'liked';
   v.tags = new Set(step === 3 ? ['rewatch'] : step === 4 ? ['study'] : step === 5 ? ['compare'] : []);
 }
 $('#drawer-body').addEventListener('click', (e) => {
   const f = FILMS.find((x) => x.id === state.open); if (!f) return;
   const felt = e.target.closest('button.felt');
-  if (felt) { const k = felt.dataset.felt; return log(f.id, { felt:k, step:stepOf(k), tags:k === 'unfinished' ? new Set() : (todays(f.id) || {}).tags || new Set() }); }
+  if (felt) { const k = felt.dataset.felt; return log(f.id, { felt:k, tags:k === 'unfinished' ? new Set() : (todays(f.id) || {}).tags || new Set() }); }
   const step = e.target.closest('button.step');
   if (step) { if (step.dataset.vid) { setStep(viewings.find((x) => x.id === +step.dataset.vid), +step.dataset.step); render(); } else { log(f.id, {}); setStep(todays(f.id), +step.dataset.step); render(); } return; }
-  const tag = e.target.closest('button.tag'); if (tag) { const v = viewings.find((x) => x.id === +tag.dataset.vid); v.tags.has(tag.dataset.tag) ? v.tags.delete(tag.dataset.tag) : v.tags.add(tag.dataset.tag); v.step = v.tags.has('compare') ? 5 : v.tags.has('study') ? 4 : v.tags.has('rewatch') ? 3 : stepOf(v.felt); return render(); }
+  const tag = e.target.closest('button.tag'); if (tag) { const v = viewings.find((x) => x.id === +tag.dataset.vid); v.tags.has(tag.dataset.tag) ? v.tags.delete(tag.dataset.tag) : v.tags.add(tag.dataset.tag); return render(); }
   const rm = e.target.closest('button.remove'); if (rm) { viewings = viewings.filter((x) => x.id !== +rm.dataset.vid); return render(); }
   const un = e.target.closest('button.unseen-toggle'); if (un) { unseen.has(f.id) ? unseen.delete(f.id) : unseen.add(f.id); return render(); }
 });
@@ -379,7 +380,13 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') return closeDrawer();
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   e.preventDefault();
-  const R = rows(), i = R.findIndex((f) => f.id === state.open) + (e.key === 'ArrowDown' ? 1 : -1);
+  // the real app's rule: while the open film is in the list, step from it; once it has LEFT the list (✕ under Watched),
+  // ↓ opens the film now at its old index (the one that took its place) and ↑ the one before
+  const R = rows(), here = R.findIndex((f) => f.id === state.open);
+  let i;
+  if (here >= 0) i = here + (e.key === 'ArrowDown' ? 1 : -1);
+  else if (state.openIndex == null) return;
+  else { const gap = Math.min(state.openIndex, R.length - 1); i = e.key === 'ArrowDown' ? gap : gap - 1; }
   if (i >= 0 && i < R.length) openAt(R[i]);
 });
 
