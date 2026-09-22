@@ -86,6 +86,8 @@ oldratings_app = typer.Typer(
     help="My 2004-08 ratings as a watching signal: import, create the missing 4-5★ films, hand-link."
 )
 app.add_typer(oldratings_app, name="oldratings")
+films_app = typer.Typer(help="Films by hand: add one the catalog lacks, by its IMDb id.")
+app.add_typer(films_app, name="films")
 repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong TMDB links, fix years.")
 app.add_typer(repair_app, name="repair")
 cheapcharts_app = typer.Typer(help="CheapCharts: resolve each film's direct product page.")
@@ -610,6 +612,30 @@ def oldratings_create_cmd(
     if apply:
         _enrich_after_add(repo, sum(1 for row in report.rows if row.kind == "created"))
     raise typer.Exit(report.exit_code)
+
+
+@films_app.command("add")
+def films_add_cmd(
+    tt: Annotated[str, typer.Argument(help="The IMDb id of the film to add (tt1234567).")],
+    apply: Annotated[bool, typer.Option("--apply", help="Create and key the film (default: dry-run).")] = False,
+) -> None:
+    """Add ONE film by its IMDb id — the hand path for a film no source has brought in.
+
+    The id says which work it is; the same gates every creating path runs decide whether the
+    catalog already holds it. Minted under TMDB's title and year, born keyed, then enriched."""
+    from movie_brain.application import films
+
+    repo = _repo()
+    _fetcher, _cache, tmdb = _resolver_clients()
+    try:
+        outcome = films.add_by_id(repo, tt, date.today(), tmdb=tmdb, apply=apply, log=_plain)
+    except films.AddError as exc:
+        err.print(str(exc))
+        raise typer.Exit(2) from exc
+    console.print(f"{outcome.kind.upper():<13} {outcome.detail}", markup=False, highlight=False, soft_wrap=True)
+    if apply:
+        _enrich_after_add(repo, int(outcome.kind == "created"))
+    raise typer.Exit(outcome.exit_code)
 
 
 @oldratings_app.command("link")
