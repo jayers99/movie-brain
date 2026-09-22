@@ -58,7 +58,7 @@ SEMANTIC_WEIGHT = 5.0  # re-rank mode: one more SUMMED signal, 5 × (1 − dista
 @dataclass(frozen=True)
 class FieldSpec:
     name: str
-    kind: str  # person | character | title | genre | keyword | year | text
+    kind: str  # person | character | title | genre | keyword | year | text | service
     credit_kind: str | None = None  # person fields: 'cast' or 'crew'
     jobs: tuple[str, ...] = ()  # person crew fields: TMDB job names; () = any crew job
 
@@ -88,6 +88,10 @@ FIELDS: dict[str, FieldSpec] = {
     "keyword": FieldSpec("keyword", "keyword"),
     "year": FieldSpec("year", "year"),
     "plot": FieldSpec("plot", "text"),
+    # `service: Kino Film Collection` — films with a CURRENT listing on a registered service,
+    # subscribed or not (owner ruling 2026-09-22: the name is explicit, so an unsubscribed
+    # service like MUBI is as searchable as one he pays for).
+    "service": FieldSpec("service", "service"),
 }
 ALIASES: dict[str, str] = {name: name for name in FIELDS} | {
     "cast": "actor",
@@ -96,6 +100,7 @@ ALIASES: dict[str, str] = {name: name for name in FIELDS} | {
     "music": "composer",
     "kw": "keyword",
     "overview": "plot",
+    "on": "service",
 }
 
 

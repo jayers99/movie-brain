@@ -54,6 +54,24 @@ Feature: Resolving a search into an exact film-id set
     Then the result ids are Beta
     And the correction for "keyword" reads hospitl → hospital
 
+  Scenario: A service names the films it streams today, subscribed or not
+    Given Alpha streams on Kino Film Collection and Beta left it last month
+    When I search for "service: Kino Film Collection"
+    Then the result ids are Alpha
+    And there are no corrections
+
+  Scenario: A service typed loosely is corrected visibly and can be combined with another field
+    Given Alpha streams on Kino Film Collection and Beta left it last month
+    When I search for "on: kino director: hawks"
+    Then the result ids are Alpha
+    And the correction for "service" reads kino → Kino Film Collection
+
+  Scenario: A service only half-named is offered, never guessed
+    Given Alpha streams on Kino Film Collection and Beta left it last month
+    When I search for "service: kino film"
+    Then the result is empty
+    And the suggestions for "service" include Kino Film Collection
+
   Scenario: A year range narrows
     When I search for "year: 1940-1949"
     Then the result ids are Alpha

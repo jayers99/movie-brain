@@ -2201,6 +2201,44 @@ def test_year_with_no_bounds_and_keyword_with_no_values_yield_nothing(repo):
     assert repo.search_films([Filter("keyword", values=())], "") == []
 
 
+def _seed_services(repo):
+    """Alpha on Kino (current) and Criterion (current); Beta on Kino, stale (before the weekly
+    stamp); Gamma on Criterion, departed (older than Criterion's latest last_seen)."""
+    a, b, g = _seed_search(repo)
+    repo.register_provider(500, "Kino Film Collection")
+    repo.record_listing(a, "kino-film-collection", "https://k/a", date(2026, 9, 20))
+    repo.record_listing(b, "kino-film-collection", "https://k/b", date(2026, 9, 1))
+    repo.set_meta("tmdb_providers_refreshed_at", "2026-09-19")
+    repo.record_listing(a, "criterion", "https://c/a", date(2026, 9, 21))
+    repo.record_listing(g, "criterion", "https://c/g", date(2026, 9, 10))
+    return a, b, g
+
+
+def test_service_candidates_name_every_registered_service_weighted_by_current_listings(repo):
+    _seed_services(repo)
+    cands = {c.name: (c.key, c.weight) for c in repo.service_candidates()}
+    assert cands["Kino Film Collection"] == ("kino-film-collection", 1)   # Beta's stale row is not counted
+    assert cands["Criterion Channel"] == ("criterion", 1)                 # Gamma departed
+    assert cands["MUBI"][0] == "mubi"                                     # unsubscribed, still searchable
+
+
+def test_search_films_service_filter_is_current_listings_only(repo):
+    a, b, g = _seed_services(repo)
+    assert [i for i, _ in repo.search_films([Filter("service", values=("kino-film-collection",))], "")] == [a]
+    assert [i for i, _ in repo.search_films([Filter("service", values=("criterion",))], "")] == [a]
+    both = Filter("service", values=("kino-film-collection", "criterion"))
+    assert [i for i, _ in repo.search_films([both], "")] == [a]
+    assert repo.search_films([Filter("service", values=())], "") == []
+
+
+def test_search_films_service_filter_uses_max_last_seen_when_there_is_no_stamp(repo):
+    a, b, g = _seed_services(repo)
+    with sqlite3.connect(repo.db_path) as c:
+        c.execute("DELETE FROM meta WHERE key = 'tmdb_providers_refreshed_at'")
+    # no stamp: a TMDB-fed source is current at its own MAX(last_seen), like _SERVICES_SQL
+    assert [i for i, _ in repo.search_films([Filter("service", values=("kino-film-collection",))], "")] == [a]
+
+
 def test_search_films_freeform_person_hit_never_surfaces_a_disposed_film(repo):
     a, b, g = _seed_search(repo)
     day = date(2026, 9, 6)

@@ -105,6 +105,17 @@ class _Resolver:
             exact = [str(chosen.key)] if chosen else []
         self.filters.append(Filter("keyword", values=tuple(exact)))
 
+    def service(self, term: Term) -> None:
+        # Exact on the registry's name OR slug (case-insensitive), else the keyword ladder:
+        # a correction above CORRECTION_FLOOR is used and shown, below it suggestions and nothing.
+        all_svc = self.repo.service_candidates()
+        typed = term.value.lower().strip()
+        exact = [str(c.key) for c in all_svc if c.name.lower() == typed or str(c.key) == typed]
+        if not exact and not term.exact:
+            chosen = self._pick(term, all_svc)
+            exact = [str(chosen.key)] if chosen else []
+        self.filters.append(Filter("service", values=tuple(exact)))
+
     def title(self, term: Term) -> None:
         # A title term is a substring filter, like the column filter it sits beside; when it
         # matches nothing, the nearest titles are offered but never substituted.
@@ -145,6 +156,7 @@ def run_search(repo: Repository, text: str, index: VectorIndex | None = None) ->
         "genre": resolver.genre,
         "year": resolver.year,
         "text": resolver.text,
+        "service": resolver.service,
     }
     by_field: dict[str, list[Term]] = {}
     for term in parsed.terms:

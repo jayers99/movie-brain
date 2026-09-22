@@ -50,6 +50,14 @@ def corpus(repo, films):
     films.update(Alpha=a, Beta=b, Gamma=g)
 
 
+@given("Alpha streams on Kino Film Collection and Beta left it last month")
+def kino(repo, films):
+    repo.register_provider(500, "Kino Film Collection")   # lands unsubscribed, like every auto-registered provider
+    repo.record_listing(films["Alpha"], "kino-film-collection", "https://k/a", DAY)
+    repo.record_listing(films["Beta"], "kino-film-collection", "https://k/b", date(2026, 8, 1))
+    repo.set_meta("tmdb_providers_refreshed_at", DAY.isoformat())
+
+
 @given("a catalogue with no credits at all")
 def no_credits(repo, films):
     import sqlite3

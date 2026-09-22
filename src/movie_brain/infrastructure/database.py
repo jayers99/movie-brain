@@ -333,14 +333,22 @@ LEFT JOIN metacritic mc ON mc.slug = x.value
 """
 
 
+# "Is this listing row (alias `l`) current?" — the one currency rule, shared by the drawer's
+# option set and the search bar's `service:` filter: Criterion is current at its own latest
+# `last_seen` (the catalog walk stamps every current film each sync), a TMDB-fed source at the
+# weekly refresh stamp, falling back to the source's MAX(last_seen) before the first stamp.
+_LISTING_CURRENT = f"""l.last_seen >= CASE WHEN l.source = 'criterion'
+      THEN (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = 'criterion')
+      ELSE COALESCE(
+      (SELECT value FROM meta WHERE key = '{TMDB_REFRESH_STAMP}'),
+      (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = l.source)) END"""
+
 _SERVICES_SQL = f"""
 SELECT l.film_id, s.name, s.subscribed, s.kind, s.quality, s.has_apple_app, s.search_url, l.url AS listing_url
 FROM listings l
 JOIN movie_service s ON s.slug = l.source
 WHERE l.source != 'criterion'
-  AND l.last_seen >= COALESCE(
-      (SELECT value FROM meta WHERE key = '{TMDB_REFRESH_STAMP}'),
-      (SELECT MAX(last_seen) FROM listings l2 WHERE l2.source = l.source))
+  AND {_LISTING_CURRENT}
 ORDER BY l.film_id, s.subscribed DESC, s.quality DESC, s.has_apple_app DESC, s.name
 """
 
@@ -1718,6 +1726,18 @@ class Repository:
             ).fetchall()
             return [Candidate(str(r["keyword"]), str(r["keyword"]), int(r["n"])) for r in rows]
 
+    def service_candidates(self) -> list[Candidate]:
+        """Every registered service, key = slug, weighted by its CURRENT listings (the same
+        currency rule as `_LISTING_CURRENT`), so a tie between similar names goes to the one
+        that actually streams something."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT s.slug, s.name, "
+                f"(SELECT COUNT(*) FROM listings l WHERE l.source = s.slug AND {_LISTING_CURRENT}) AS n "
+                "FROM movie_service s ORDER BY s.name"
+            ).fetchall()
+            return [Candidate(str(r["slug"]), str(r["name"]), int(r["n"])) for r in rows]
+
     def title_candidates(self) -> list[Candidate]:
         with self._conn() as c:
             rows = c.execute(
@@ -1769,6 +1789,15 @@ class Repository:
                 )
                 genre_params += [f"%,{g},%", g]
             return "(" + " OR ".join(genre_parts) + ")", genre_params
+        if flt.kind == "service":
+            if not flt.values:
+                return "0 = 1", []
+            marks = ",".join("?" * len(flt.values))
+            return (
+                f"EXISTS (SELECT 1 FROM listings l WHERE l.film_id = f.id AND l.source IN ({marks}) "
+                f"AND {_LISTING_CURRENT})",
+                list(flt.values),
+            )
         if flt.kind == "keyword":
             if not flt.values:
                 return "0 = 1", []

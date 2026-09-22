@@ -67,6 +67,12 @@ def test_quoted_text_containing_a_field_token_is_freeform_not_a_field():
     assert q.free == "crew: catering" and q.terms == (Term("title", "brazil", False),)
 
 
+def test_service_field_parses_like_any_other():
+    assert parse_query("service: Kino Film Collection").terms == (Term("service", "Kino Film Collection", False),)
+    q = parse_query("on: kino director: lang")
+    assert q.terms == (Term("service", "kino", False), Term("director", "lang", False))
+
+
 def test_aliases_resolve_to_the_canonical_field():
     q = parse_query("cast: bacall role: vivian dp: hickox kw: whodunit")
     assert [t.field for t in q.terms] == ["actor", "character", "cinematographer", "keyword"]
@@ -120,7 +126,8 @@ def test_fts_words_quotes_each_word_and_drops_short_ones_when_asked():
 
 def test_every_field_has_a_kind_and_every_alias_points_at_a_field():
     assert set(ALIASES.values()) <= set(FIELDS)
-    assert {f.kind for f in FIELDS.values()} <= {"person", "character", "title", "genre", "keyword", "year", "text"}
+    assert {f.kind for f in FIELDS.values()} <= {"person", "character", "title", "genre", "keyword", "year", "text", "service"}
+    assert FIELDS["service"].kind == "service" and ALIASES["on"] == "service"
     assert FIELDS["writer"].jobs == (
         "Screenplay", "Writer", "Story", "Novel", "Original Story", "Dialogue", "Adaptation", "Author", "Book",
         "Short Story", "Theatre Play", "Scenario Writer", "Co-Writer", "Screenstory", "Original Film Writer",
