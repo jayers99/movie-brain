@@ -84,6 +84,46 @@ def test_sentence_transformer_adapter_reports_availability_and_raises_when_absen
         embeddings.SentenceTransformerEmbedder().encode(["x"])
 
 
+def test_sentence_transformer_adapter_loads_the_model_once_under_concurrent_first_queries(monkeypatch):
+    """The dashboard crashed twice on 2026-09-22: five typeahead requests reached the lazy loader
+    while the model was still loading (five 'Loading weights' bars, then the process died with no
+    traceback). Reproduced with the load alone serialised: ONE load, then SIGSEGV inside BERT's
+    first forward with five threads encoding at once — and five concurrent encodes on a warm model
+    were fine. Flask's dev server is threaded, so load AND encode go through one lock."""
+    import sys
+    import threading
+    import time
+    import types
+
+    from movie_brain.infrastructure import embeddings
+
+    constructions = []
+    inside, overlap = [0], [0]  # how many encodes are running right now, and the most ever seen
+
+    class SlowModel:
+        def __init__(self, name):
+            constructions.append(threading.get_ident())
+            time.sleep(0.05)  # long enough for every thread to reach _load before the first returns
+
+        def encode(self, texts, **kw):
+            inside[0] += 1
+            overlap[0] = max(overlap[0], inside[0])
+            time.sleep(0.02)
+            inside[0] -= 1
+            return [[0.0] * EMBED_DIM for _ in texts]
+
+    monkeypatch.setitem(sys.modules, "sentence_transformers", types.SimpleNamespace(SentenceTransformer=SlowModel))
+    monkeypatch.setattr(embeddings.importlib.util, "find_spec", lambda name: object())
+    embedder = embeddings.SentenceTransformerEmbedder()
+    threads = [threading.Thread(target=embedder.encode, args=(["q"],)) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(constructions) == 1
+    assert overlap[0] == 1  # encodes never ran concurrently
+
+
 class _AlwaysUnavailable:
     """An embedder that always fails to load — stands in for a model not cached, offline."""
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib.util
 import logging
 import struct
+import threading
 from collections.abc import Iterable, Sequence
 from typing import Any, Protocol
 
@@ -49,6 +50,14 @@ class SentenceTransformerEmbedder:
     def __init__(self, model_name: str = EMBED_MODEL) -> None:
         self.model_name = model_name
         self._model: Any = None
+        # The dashboard serves requests on threads and the bar fires one per 300 ms pause, so the
+        # first meaning query's ~5 s load is reached by several threads at once. Unserialised,
+        # each built its own SentenceTransformer and the process died (2026-09-22, twice: five
+        # 'Loading weights' bars, no traceback). Serialising the LOAD alone was not enough:
+        # reproduced as one load, then SIGSEGV inside BERT's first forward with five threads
+        # encoding at once — while five concurrent encodes on a warm model were fine. So load
+        # and encode share one lock; a query encodes in ~10 ms, so the queue costs nothing.
+        self._lock = threading.Lock()
 
     @staticmethod
     def available() -> bool:
@@ -56,6 +65,7 @@ class SentenceTransformerEmbedder:
         return importlib.util.find_spec("sentence_transformers") is not None
 
     def _load(self) -> Any:
+        """Called with `_lock` held: a thread that waited on it finds the winner's model."""
         if self._model is None:
             if not self.available():
                 raise SemanticUnavailable("semantic search is not installed — uv sync --extra semantic")
@@ -68,8 +78,9 @@ class SentenceTransformerEmbedder:
         return self._model
 
     def encode(self, texts: Sequence[str]) -> list[list[float]]:
-        model = self._load()
-        vectors = model.encode(list(texts), batch_size=128, normalize_embeddings=True, show_progress_bar=False)
+        with self._lock:
+            model = self._load()
+            vectors = model.encode(list(texts), batch_size=128, normalize_embeddings=True, show_progress_bar=False)
         return [[float(x) for x in v] for v in vectors]
 
 
