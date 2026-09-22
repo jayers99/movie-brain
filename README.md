@@ -6,7 +6,7 @@ Personal film brain: it syncs the Criterion Channel catalog and OMDb ratings int
 
 ## Getting started
 
-1. Install [uv](https://docs.astral.sh/uv/), then install dependencies: `uv sync` (uv provides Python 3.12+).
+1. Install [uv](https://docs.astral.sh/uv/), then install dependencies: `uv sync` (uv provides Python 3.12+). Optional: `ln -sf "$(pwd)/bin/movie-brain" ~/.local/bin/movie-brain` puts a shim on your PATH that runs the project's own `.venv` from any directory, so every `uv run movie-brain …` below can be typed as `movie-brain …`.
 2. Get a free OMDb API key at [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx) and write it to `~/.config/movie-brain/omdb-api-key.txt` (or set the `OMDB_API_KEY` environment variable).
 3. Migrating from criterion-ratings? Run `uv run movie-brain import-legacy` once to bring over your existing films, OMDb payloads, and ratings.
 4. Run your first sync: `uv run movie-brain sync`. The first run walks the full ~3,000-film catalog in a few minutes; OMDb ratings fill in over a few days (see [Sync behavior](#sync-behavior)).

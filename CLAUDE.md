@@ -11,6 +11,7 @@ Personal film brain: Criterion Channel listings + OMDb ratings + my 0–10 ratin
 ## Commands
 
 ```bash
+# `bin/movie-brain` symlinked into ~/.local/bin (README step 1) runs `uv run --project <repo> movie-brain` from any directory, so the `uv run` prefix below is optional on the owner's machine
 uv run movie-brain sync [--full|--ratings-only]      # refresh catalog + OMDb ratings, then the catch-up chain (credits → vectors → store ids → trailers) for whatever films are new — see Enrichment on add below; keys new films via the thumbprint resolver BEFORE the OMDb loop, which fetches by IMDb id only (unkeyed films are skipped, not title-searched); also refreshes weekly availability
 uv run movie-brain metacritic crawl [--pages 10]     # extend the raw browse-page archive (polite, checkpointed)
 uv run movie-brain metacritic match                  # offline: match archive → films, report coverage

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# `movie-brain …` from any directory: runs the project's entry point inside its own uv-managed
+# .venv (uv run's inexact sync, so `uv sync --extra semantic` is preserved).
+# Install once:  ln -sf "$(pwd)/bin/movie-brain" ~/.local/bin/movie-brain
+REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+exec uv run --project "$REPO" movie-brain "$@"
