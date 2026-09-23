@@ -17,6 +17,7 @@ import argparse
 import json
 import os
 import random
+import sqlite3
 import sys
 import time
 from collections.abc import Sequence
@@ -80,11 +81,14 @@ def run_benchmark(repo: Repository, index: VectorIndex | None, queries: list[tup
     return Report(rows, sum(r.hit for r in rows) / n, sum(r.recall10 for r in rows) / n, sum(r.size for r in rows) / n)
 
 
-def _keyword_rows(repo: Repository) -> dict[str, frozenset[int]]:
-    with repo._conn() as c:  # read-only; the script is a tool beside the repository, not a use case
+def _keyword_rows(db_path: Path) -> dict[str, frozenset[int]]:
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
         out: dict[str, set[int]] = {}
-        for r in c.execute("SELECT keyword, film_id FROM film_keyword"):
+        for r in conn.execute("SELECT keyword, film_id FROM film_keyword"):
             out.setdefault(str(r[0]), set()).add(int(r[1]))
+    finally:
+        conn.close()
     return {k: frozenset(v) for k, v in out.items()}
 
 
@@ -119,7 +123,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         report = embed_films(repo, embedder, date.today(), apply=True, log=lambda m: print(m, file=sys.stderr))
         print(f"embedded {report.embedded} with {args.model} in {time.perf_counter() - t0:.0f}s", file=sys.stderr)
     index = VectorIndex(repo, embedder, model=args.model)
-    kw = _keyword_rows(repo)
+    kw = _keyword_rows(args.db)
     picked = pick_keywords(list(kw.items()), args.sample, args.seed, args.min, args.max)
     verbatim = run_benchmark(repo, index, picked)
     variants = [(p, ids) for q, ids in picked if (p := plural(q))]
