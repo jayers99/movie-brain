@@ -1858,6 +1858,46 @@ def test_migration_018_creates_credit_tables_and_trigram_indexes(repo):
         assert c.execute("SELECT rowid FROM person_fts WHERE person_fts MATCH '\"ogar\"'").fetchall() == [(1,)]
 
 
+def test_migration_030_stems_the_prose_index_and_indexes_keywords_with_porter(repo):
+    """The FTS5 tokenizer cannot be altered in place: 030 drops and recreates film_text_fts with
+    Porter and rebuilds it from film_text (the base table is the truth), and gives film_keyword
+    its own standalone Porter index kept in step by triggers — standalone because film_keyword
+    has a composite key and no INTEGER PRIMARY KEY, so its rowids are not VACUUM-stable."""
+    with sqlite3.connect(repo.db_path) as c:
+        sql = {r[0]: r[1] for r in c.execute("SELECT name, sql FROM sqlite_master WHERE name IN ('film_text_fts', 'film_keyword_fts')")}
+        assert "porter" in sql["film_text_fts"] and "porter" in sql["film_keyword_fts"]
+        names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
+        assert {"film_keyword_ai", "film_keyword_ad", "film_text_ai", "film_text_ad", "film_text_au"} <= names
+        assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 30
+        c.execute("INSERT INTO films (guid, title, year, key) VALUES ('g1', 'Groundhog Day', 1993, 'groundhog day (1993)')")
+        fid = c.execute("SELECT id FROM films WHERE title = 'Groundhog Day'").fetchone()[0]
+        c.execute("INSERT INTO film_text (film_id, title, overview, plot) VALUES (?, 'Groundhog Day', NULL, 'finds himself in a time loop')", (fid,))
+        # the plural reaches the singular through the stem
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH '\"loops\"'").fetchall() == [(fid,)]
+        c.execute("INSERT INTO film_keyword (film_id, keyword) VALUES (?, 'time loop')", (fid,))
+        assert c.execute("SELECT film_id FROM film_keyword_fts WHERE film_keyword_fts MATCH '\"time loops\"'").fetchall() == [(fid,)]
+        c.execute("DELETE FROM film_keyword WHERE film_id = ?", (fid,))
+        assert c.execute("SELECT COUNT(*) FROM film_keyword_fts").fetchone()[0] == 0
+
+
+def test_rewriting_credits_and_merging_keep_one_keyword_fts_row_per_keyword(repo):
+    """write_credits DELETEs then re-INSERTs a film's keywords and merge_film moves a loser's
+    with INSERT OR IGNORE + DELETE; both must leave film_keyword_fts exact (an IGNOREd insert
+    fires no trigger, so a keyword the survivor already holds is neither duplicated nor lost)."""
+    day = date(2026, 9, 23)
+    a = repo.create_film(Film("Alpha", 1946, None, ""))
+    b = repo.create_film(Film("Beta", 1946, None, ""))
+    repo.write_credits(a, _credits(cast=(), crew=(), keywords=("film noir", "private investigator")), day)
+    repo.write_credits(a, _credits(cast=(), crew=(), keywords=("film noir", "heist")), day)  # re-enrichment replaces the set
+    repo.write_credits(b, _credits(tmdb_id=911, keywords=("film noir", "vampire")), day)
+    with sqlite3.connect(repo.db_path) as c:
+        rows = lambda: sorted(c.execute("SELECT film_id, keyword FROM film_keyword_fts").fetchall())
+        assert rows() == [(a, "film noir"), (a, "heist"), (b, "film noir"), (b, "vampire")]
+    repo.merge_film(b, a, day, note="twin")
+    with sqlite3.connect(repo.db_path) as c:
+        assert rows() == [(a, "film noir"), (a, "heist"), (a, "vampire")]
+
+
 def _credits(**over):
     base = dict(
         tmdb_id=910, imdb_id="tt0038355", title="The Big Sleep", original_title="The Big Sleep", year=1946, runtime_min=114,

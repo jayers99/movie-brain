@@ -969,8 +969,8 @@ Numbers from `scripts/search_benchmark.py` against copies of the live database (
 |---|---|---|---|---|---|---|---|
 | Baseline (before Task 2) | verbatim | 300 | 1.000 | 0.705 | 37.7 | miss (size=3) | hit, recall@10=0.60 (size=9) |
 | | plural | 282 | 0.319 | 0.083 | 11.3 | | |
-| After migration 030 (Task 2) | verbatim | | | | | | |
-| | plural | | | | | | |
+| After migration 030 (Task 2) | verbatim | 300 | 1.000 | 0.635 | 42.9 | hit, recall@10=1.00 (size=3) | hit, recall@10=0.60 (size=9) |
+| | plural | 282 | 0.546 | 0.168 | 18.0 | | |
 | After Task 3 (stem + ladder) | verbatim | | | | | | |
 | | plural | | | | | | |
 | After Task 4 (meaning adds) | verbatim | | | | | | |
