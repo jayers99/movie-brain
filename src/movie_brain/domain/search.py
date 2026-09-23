@@ -42,6 +42,11 @@ W_TITLE, W_OVERVIEW, W_PLOT, W_PERSON, W_CHARACTER, W_TAG = 10.0, 2.0, 1.0, 5.0,
 # or crew (a camera loader, a location scout). A FIELD (`actor:`) is exact and complete regardless.
 FREEFORM_LEAD_BILLING = 5
 FREEFORM_MAX_BILLING = 10
+# Freeform keyword ladder (search-recall spec D2): the forms Porter cannot unify (dystopian →
+# dystopia) go through the same rank_candidates the `keyword:` field uses, but at a stricter
+# floor — measured: dystopian→dystopia 0.94, time loops→time loop 0.95, vampires→vampire 0.93
+# pass; "dystopian future"→"distant future" sits at exactly 0.80 and is a wrong match.
+FREEFORM_KEYWORD_FLOOR = 0.9
 LENGTH_PENALTY_EXPONENT = 0.35  # in similarity(): plain difflib ratio over-rewards a short query in a long
 # token ('bogrt' inside 'Lena Brogren' scored 0.667 unpenalised); token scores are scaled by
 # (min_len / max_len) ** LENGTH_PENALTY_EXPONENT; equal lengths unpenalised
@@ -245,6 +250,13 @@ def fts_words(text: str, min_len: int = 1) -> str:
     On a trigram table a word shorter than 3 cannot match, so callers pass min_len=3 there."""
     words = [w.strip('"') for w in text.split()]
     return " ".join('"' + w.replace('"', '""') + '"' for w in words if len(w) >= min_len)
+
+
+def fts_phrase(text: str) -> str:
+    """The whole text as ONE FTS5 phrase, so a user's AND / NOT / * are inert and a keyword of
+    several words matches as a sequence. Inner quotes are doubled. Empty for blank text."""
+    text = text.strip()
+    return '"' + text.replace('"', '""') + '"' if text else ""
 
 
 @dataclass(frozen=True)

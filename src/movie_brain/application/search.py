@@ -28,6 +28,7 @@ from movie_brain.domain.search import (
     Candidate,
     Filter,
     Term,
+    fts_phrase,
     norm_genre,
     parse_query,
     parse_year_range,
@@ -98,12 +99,18 @@ class _Resolver:
         self.filters.append(Filter("character", values=tuple(names)))
 
     def keyword(self, term: Term) -> None:
-        all_kw = self.repo.keyword_candidates()
-        exact = [c.name for c in all_kw if c.name.lower() == term.value.lower().strip()]
-        if not exact and not term.exact:
-            chosen = self._pick(term, all_kw)
-            exact = [str(chosen.key)] if chosen else []
-        self.filters.append(Filter("keyword", values=tuple(exact)))
+        # The stemmed index first (`hospitals` finds "hospital", no correction shown), then the
+        # ladder for what Porter cannot unify; the filter value is always an FTS phrase.
+        phrase = fts_phrase(term.value)
+        if phrase and self.repo.keywords_matching(phrase):
+            self.filters.append(Filter("keyword", values=(phrase,)))
+            return
+        values: tuple[str, ...] = ()
+        if not term.exact:
+            chosen = self._pick(term, self.repo.keyword_candidates())
+            if chosen:
+                values = (fts_phrase(str(chosen.key)),)
+        self.filters.append(Filter("keyword", values=values))
 
     def service(self, term: Term) -> None:
         # Exact on the registry's name OR slug (case-insensitive), else the keyword ladder:

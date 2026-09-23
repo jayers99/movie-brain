@@ -50,6 +50,13 @@ def corpus(repo, films):
     films.update(Alpha=a, Beta=b, Gamma=g)
 
 
+@given("Alpha is also tagged dystopia")
+def alpha_dystopia(repo, films):
+    repo.write_credits(films["Alpha"], _credits(910, "Alpha", "A private eye.", ("film noir", "dystopia"),
+                                                 (CastRow(4110, "Humphrey Bogart", "Philip Marlowe", 0),),
+                                                 (CrewRow(2636, "Howard Hawks", "Director", "Directing"),)), DAY)
+
+
 @given("Alpha streams on Kino Film Collection and Beta left it last month")
 def kino(repo, films):
     repo.register_provider(500, "Kino Film Collection")   # lands unsubscribed, like every auto-registered provider

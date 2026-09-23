@@ -971,8 +971,8 @@ Numbers from `scripts/search_benchmark.py` against copies of the live database (
 | | plural | 282 | 0.319 | 0.083 | 11.3 | | |
 | After migration 030 (Task 2) | verbatim | 300 | 1.000 | 0.635 | 42.9 | hit, recall@10=1.00 (size=3) | hit, recall@10=0.60 (size=9) |
 | | plural | 282 | 0.546 | 0.168 | 18.0 | | |
-| After Task 3 (stem + ladder) | verbatim | | | | | | |
-| | plural | | | | | | |
+| After Task 3 (stem + ladder) | verbatim | 300 | 1.000 | 0.623 | 47.8 | hit, recall@10=1.00 (size=4) | hit, recall@10=0.70 (size=75) |
+| | plural | 282 | 1.000 | 0.677 | 27.1 | | |
 | After Task 4 (meaning adds) | verbatim | | | | | | |
 | | plural | | | | | | |
 | mpnet (Task 6) | verbatim | | | | | | |

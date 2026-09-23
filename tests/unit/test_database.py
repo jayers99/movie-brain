@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import CastRow, CrewRow, Film, McTitle, OmdbRating, ReviewEntry, TmdbCredits
-from movie_brain.domain.search import EMBED_MODEL, Filter, trigram_query
+from movie_brain.domain.search import EMBED_MODEL, W_TAG, Filter, trigram_query
 from movie_brain.infrastructure.database import (
     KEY_AUTHORITIES,
     MIGRATIONS_DIR,
@@ -2193,6 +2193,27 @@ def test_search_films_title_keyword_and_plot_filters(repo):
     assert [i for i, _ in repo.search_films([Filter("title", values=("gamm",))], "")] == [g]   # substring, no credits needed
     assert [i for i, _ in repo.search_films([Filter("keyword", values=("hospital",))], "")] == [b]
     assert [i for i, _ in repo.search_films([Filter("text", values=("sternwood",))], "")] == [a]   # plot column, not title
+
+
+def test_keyword_filter_and_freeform_signal_match_through_the_stem(repo):
+    """`keyword: loops` reaches the keyword "time loop"; freeform "vampires" scores films tagged
+    "vampire" at W_TAG; an FTS operator typed by the user is inert (one phrase, never a syntax
+    error); and the ladder covers what Porter cannot: "dystopian" → "dystopia"."""
+    a, b, g = _seed_search(repo)
+    day = date(2026, 9, 23)
+    repo.write_credits(a, _credits(keywords=("time loop", "vampire")), day)
+    repo.write_credits(b, _credits(tmdb_id=911, keywords=("dystopia",)), day)
+    ids = lambda filters, free="": [i for i, _ in repo.search_films(filters, free)]
+    assert ids([Filter("keyword", values=('"loops"',))]) == [a]
+    assert ids([Filter("keyword", values=('"time loops"',))]) == [a]
+    assert ids([Filter("keyword", values=('"loop AND NOT vampire*"',))]) == []   # a phrase, not a query
+    assert repo.keywords_matching('"vampires"') == ["vampire"]
+    assert repo.keywords_matching('"dystopian"') == []                            # Porter has no -ian rule
+    assert repo.keyword_ladder("dystopian") == "dystopia"
+    assert repo.keyword_ladder("dystopian future") is None                       # 0.80 to "distant future" is refused
+    assert dict(repo.search_films([], "vampires"))[a] == pytest.approx(W_TAG)
+    assert dict(repo.search_films([], "dystopian"))[b] == pytest.approx(W_TAG)
+    assert dict(repo.search_films([], "vampire"))[a] == pytest.approx(W_TAG)      # an exact hit is not double-counted by the ladder
 
 
 def test_search_films_freeform_ranks_a_title_hit_above_a_plot_hit_and_reaches_unenriched_titles(repo):

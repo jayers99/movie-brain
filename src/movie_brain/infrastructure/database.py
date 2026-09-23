@@ -42,6 +42,7 @@ from movie_brain.domain.rank import TIERS
 from movie_brain.domain.search import (
     CANDIDATE_LIMIT,
     EMBED_MODEL,
+    FREEFORM_KEYWORD_FLOOR,
     FREEFORM_LEAD_BILLING,
     FREEFORM_MAX_BILLING,
     W_CHARACTER,
@@ -52,8 +53,10 @@ from movie_brain.domain.search import (
     W_TITLE,
     Candidate,
     Filter,
+    fts_phrase,
     fts_words,
     norm_genre,
+    rank_candidates,
     trigram_query,
 )
 from movie_brain.domain.thumbprint import edition_label, title_norm
@@ -1726,6 +1729,23 @@ class Repository:
             ).fetchall()
             return [Candidate(str(r["keyword"]), str(r["keyword"]), int(r["n"])) for r in rows]
 
+    def keywords_matching(self, phrase: str) -> list[str]:
+        """Distinct stored keywords whose stemmed form matches the FTS phrase (migration 030)."""
+        if not phrase:
+            return []
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT keyword FROM film_keyword_fts WHERE film_keyword_fts MATCH ? ORDER BY keyword",
+                (phrase,),
+            ).fetchall()
+            return [str(r[0]) for r in rows]
+
+    def keyword_ladder(self, free: str) -> str | None:
+        """The one keyword the fuzzy ladder would use for a freeform string, at
+        FREEFORM_KEYWORD_FLOOR (stricter than the field's CORRECTION_FLOOR), else None."""
+        ranked = rank_candidates(free, self.keyword_candidates())
+        return str(ranked[0].name) if ranked and ranked[0].score >= FREEFORM_KEYWORD_FLOOR else None
+
     def service_candidates(self) -> list[Candidate]:
         """Every registered service, key = slug, weighted by its CURRENT listings (the same
         currency rule as `_LISTING_CURRENT`), so a tie between similar names goes to the one
@@ -1801,11 +1821,8 @@ class Repository:
         if flt.kind == "keyword":
             if not flt.values:
                 return "0 = 1", []
-            marks = ",".join("?" * len(flt.values))
-            return (
-                f"EXISTS (SELECT 1 FROM film_keyword k WHERE k.film_id = f.id AND lower(k.keyword) IN ({marks}))",
-                [v.lower() for v in flt.values],
-            )
+            parts = ["f.id IN (SELECT film_id FROM film_keyword_fts WHERE film_keyword_fts MATCH ?)"] * len(flt.values)
+            return "(" + " OR ".join(parts) + ")", list(flt.values)
         if flt.kind == "year":
             # A valid range always sets at least one bound; both None means the resolver
             # never parsed one (I2) — treat it exactly like an unresolvable value in ANY
@@ -1885,12 +1902,15 @@ class Repository:
                 c.execute(f"SELECT film_id FROM omdb o WHERE ',' || {omdb} || ',' LIKE ?", (f"%,{g},%",)).fetchall(),
                 W_TAG,
             )
-            add(
-                c.execute(
-                    "SELECT film_id FROM film_keyword WHERE lower(keyword) = ?", (free.lower().strip(),)
-                ).fetchall(),
-                W_TAG,
-            )
+            phrase = fts_phrase(free)
+            tagged = c.execute(
+                "SELECT DISTINCT film_id FROM film_keyword_fts WHERE film_keyword_fts MATCH ?", (phrase,)
+            ).fetchall()
+            if not tagged:  # Porter's blind spot: the ladder, never on top of a stem hit (no double count)
+                chosen = self.keyword_ladder(free)
+                if chosen is not None:
+                    tagged = c.execute("SELECT film_id FROM film_keyword WHERE keyword = ?", (chosen,)).fetchall()
+            add(tagged, W_TAG)
         return scores
 
     def search_films(self, filters: Sequence[Filter], free: str) -> list[tuple[int, float]]:

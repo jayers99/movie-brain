@@ -54,6 +54,16 @@ Feature: Resolving a search into an exact film-id set
     Then the result ids are Beta
     And the correction for "keyword" reads hospitl → hospital
 
+  Scenario: A keyword typed in another form is found through its stem, uncorrected
+    When I search for "keyword: hospitals"
+    Then the result ids are Beta
+    And there are no corrections
+
+  Scenario: A freeform word reaches a keyword Porter cannot stem through the ladder
+    Given Alpha is also tagged dystopia
+    When I search for "dystopian"
+    Then the result ids are Alpha
+
   Scenario: A service names the films it streams today, subscribed or not
     Given Alpha streams on Kino Film Collection and Beta left it last month
     When I search for "service: Kino Film Collection"

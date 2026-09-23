@@ -1,8 +1,10 @@
 from movie_brain.domain.search import (
     ALIASES,
+    CORRECTION_FLOOR,
     EMBED_DIM,
     EMBED_MODEL,
     FIELDS,
+    FREEFORM_KEYWORD_FLOOR,
     MAX_DISTANCE,
     SEMANTIC_WEIGHT,
     Candidate,
@@ -10,6 +12,7 @@ from movie_brain.domain.search import (
     ParsedQuery,
     Term,
     embedding_text,
+    fts_phrase,
     fts_words,
     norm_genre,
     parse_query,
@@ -122,6 +125,16 @@ def test_fts_words_quotes_each_word_and_drops_short_ones_when_asked():
     assert fts_words('hard "boiled" eye') == '"hard" "boiled" "eye"'
     assert fts_words("a to bogart", min_len=3) == '"bogart"'
     assert fts_words("", min_len=3) == ""
+
+
+def test_fts_phrase_wraps_the_whole_value_and_doubles_inner_quotes():
+    assert fts_phrase("time loops") == '"time loops"'
+    assert fts_phrase('say "cheese" AND NOT run*') == '"say ""cheese"" AND NOT run*"'  # operators are inert inside a phrase
+    assert fts_phrase("   ") == ""
+
+
+def test_freeform_keyword_floor_is_stricter_than_the_field_correction_floor():
+    assert FREEFORM_KEYWORD_FLOOR == 0.9 > CORRECTION_FLOOR
 
 
 def test_every_field_has_a_kind_and_every_alias_points_at_a_field():
