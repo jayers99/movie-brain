@@ -508,7 +508,8 @@
     if (input.dataset.busy) return;
     const id = +input.dataset.id;
     const film = state.films.find((f) => f.id === id);
-    const current = film && film.my_rating != null ? String(film.my_rating) : '';
+    const prev = film && film.my_rating != null ? film.my_rating : null;
+    const current = prev != null ? String(prev) : '';
     const parsed = parseScore(input.value);
     if (!parsed.ok) {
       input.classList.add('invalid'); input.value = current;
@@ -521,6 +522,13 @@
       const r = await fetch(`/api/films/${id}/rating`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: parsed.score }) });
       if (!r.ok) throw new Error((await r.json()).error || r.statusText);
       updateFilmLocal(await r.json());
+      if (film) moveOnIfLeft({ film: id, slow: false,
+        label: parsed.score == null ? `Cleared ${film.title}'s rating` : `Rated ${film.title} ${parsed.score}`,
+        undo: async () => {
+          const r2 = await fetch(`/api/films/${id}/rating`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: prev }) }).catch(() => null);
+          if (!r2 || !r2.ok) { toast('Could not save rating'); return false; }
+          updateFilmLocal(await r2.json()); return true;
+        } });
     } catch (err) {
       input.value = current; toast(`Could not save rating: ${err.message}`);
     } finally {
@@ -712,7 +720,7 @@
   function hideDrawer() {
     closeTrailer();  // Back while a trailer is up must not leave it orphaned over the list
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
-    state.openFilm = null; drawnFilm = null; drawnDetail = null; openIndex = null;
+    state.openFilm = null; drawnFilm = null; drawnDetail = null; openIndex = null; movedOn = null;
     renderRows();
   }
   // ---- The trailer window (brief 2026-09-20-trailer-link) ----
@@ -898,6 +906,23 @@
     if (i >= 0) moveDrawerTo(i + dir);
     else if (openIndex != null) moveDrawerTo(dir > 0 ? openIndex : openIndex - 1);
   }
+  // ---- Move on (brief docs/superpowers/briefs/2026-09-24-move-on/brief.md) ----
+  // After a drawer EDIT has landed (a rating, the ★, the ♡ — the three edits a filter reads), if
+  // the open film is no longer in the shown list, take the step ↓ would have taken: to the film
+  // now at its index, or the one before at the end. Called on the edit paths ONLY — never from
+  // applyFilters — so a chip, the search, the list picker, a column filter or Back still leave
+  // the gap (find-my-row story 6). A film that was never in the list (openIndex null) stays put;
+  // an empty list moves nothing. `edit` is what the moved-to drawer's undo line remembers.
+  let movedOn = null;  // { at, film, label, slow, undo } — the last edit that moved the drawer on
+  function moveOnIfLeft(edit) {
+    if (drawer.hidden || openIndex == null) return false;
+    if (state.filtered.some((f) => f.id === state.openFilm)) return false;
+    if (!state.filtered.length) return false;
+    const i = Math.min(openIndex, state.filtered.length - 1);
+    movedOn = { ...edit, at: state.filtered[i].id };
+    moveDrawerTo(i);
+    return true;
+  }
   // The index of the film row showing through the dim at a point, or -1. Only the TOPMOST thing
   // under the backdrop counts: a row scrolled beneath the sticky header is not showing, and the
   // white row is pointer-events:none, so both read as "no row" and a click there closes.
@@ -966,7 +991,18 @@
     const { watchlisted } = await r.json();
     b.textContent = watchlisted ? '★' : '☆';
     const film = state.films.find((f) => f.id === +b.dataset.id);
-    if (film) { film.watchlisted = watchlisted; applyFilters(); }
+    if (film) {
+      film.watchlisted = watchlisted; applyFilters();
+      moveOnIfLeft({ film: film.id, slow: false,
+        label: watchlisted ? `Starred ${film.title}` : `Took ${film.title} off your watchlist`,
+        undo: async () => {
+          const r2 = await fetch(`/api/films/${film.id}/watchlist`, { method: 'POST' }).catch(() => null);
+          if (!r2 || !r2.ok) { toast('Could not update watchlist'); return false; }
+          const j = await r2.json(), f = state.films.find((x) => x.id === film.id);
+          if (f) { f.watchlisted = j.watchlisted; applyFilters(); }
+          return true;
+        } });
+    }
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.revisit-toggle'); if (!b) return;
@@ -1025,6 +1061,17 @@
     if (film) { film.wishlisted = wishlisted; applyFilters(); }
     // An owned film gets no add button: its slot simply empties.
     slot.innerHTML = wishSlotHtml({ ...(film || {}), id, wishlisted });
+    // The slot above was patched while it is still on screen; if the film left the list the
+    // drawer now moves on, and the moved-to drawer's line is how the click is taken back.
+    if (film) moveOnIfLeft({ film: id, slow: true,
+      label: wishlisted ? `Wishlisted ${film.title}` : `Took ${film.title} off your wishlist`,
+      undo: async () => {
+        const r2 = await fetch(`/api/films/${id}/wishlist`, { method: wishlisted ? 'DELETE' : 'POST' }).catch(() => null);
+        if (!r2 || !r2.ok) return false;
+        const f = state.films.find((x) => x.id === id);
+        if (f) { f.wishlisted = !wishlisted; applyFilters(); }
+        return true;
+      } });
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.tier-pick'); if (!b || b.getAttribute('aria-current') === 'true') return;
