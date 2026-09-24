@@ -2205,6 +2205,21 @@ def test_title_hits_reach_a_film_through_its_title_only(repo):
     assert repo.title_hits("") == set()
 
 
+def test_title_hits_are_whole_words_for_enriched_films_and_substrings_only_for_unenriched(repo):
+    """A title hit is a WORD match on the title (the FTS title column): "The Coward" holds
+    "ward" only as a fragment, so it is not a title hit for "ward". The films.title substring
+    reaches only films with no film_text row — never-enriched titles, its purpose in
+    _freeform_scores too."""
+    a, b, g = _seed_search(repo)
+    day = date(2026, 9, 23)
+    coward = repo.create_film(Film("The Coward", 1965, None, ""))
+    repo.write_credits(coward, _credits(tmdb_id=912, title="The Coward", original_title="The Coward", overview="A soldier runs."), day)
+    ward = repo.create_film(Film("Ward", 1980, None, ""))   # no credits: no film_text row
+    hits = repo.title_hits("ward")
+    assert ward in hits and coward not in hits and b not in hits   # Beta's "alpha ward" is prose
+    assert a in repo.title_hits("alpha")   # enriched: through the FTS title column
+
+
 def test_search_films_title_keyword_and_plot_filters(repo):
     a, b, g = _seed_search(repo)
     assert [i for i, _ in repo.search_films([Filter("title", values=("gamm",))], "")] == [g]   # substring, no credits needed

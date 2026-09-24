@@ -1914,18 +1914,20 @@ class Repository:
         return scores
 
     def title_hits(self, free: str) -> set[int]:
-        """The ids the freeform text reaches THROUGH THE TITLE: the title column of
-        film_text_fts (the column-filter form `_filter_sql`'s text branch uses) plus the same
-        films.title substring `_freeform_scores` uses, so never-enriched films count too. Prose
-        never counts. The semantic stage asks this to decide whether meaning may add films
-        (search-recall spec D3 as amended 2026-09-23)."""
+        """The ids the freeform text reaches THROUGH THE TITLE as whole words: the title column
+        of film_text_fts (the column-filter form `_filter_sql`'s text branch uses), so a fragment
+        ("ward" inside "The Coward") never counts. The films.title substring is added only for
+        films with NO film_text row — never-enriched titles the index cannot reach, the same
+        purpose it serves in `_freeform_scores`. Prose never counts. The semantic stage asks this
+        to decide whether meaning may add films (search-recall spec D3 as amended 2026-09-23)."""
         words = fts_words(free)
         if not words:
             return set()
         with self._conn() as c:
             rows = c.execute(
                 "SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH ? "
-                "UNION SELECT id FROM films WHERE lower(title) LIKE ?",
+                "UNION SELECT id FROM films WHERE lower(title) LIKE ? "
+                "AND NOT EXISTS (SELECT 1 FROM film_text t WHERE t.film_id = films.id)",
                 (f"{{title}}: ({words})", f"%{free.lower()}%"),
             ).fetchall()
         return {int(r[0]) for r in rows}

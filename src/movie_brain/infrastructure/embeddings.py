@@ -47,7 +47,7 @@ def unpack(blob: bytes, dim: int = EMBED_DIM) -> list[float]:
 
 
 class SentenceTransformerEmbedder:
-    """all-MiniLM-L6-v2 through sentence-transformers; normalised output; lazy load."""
+    """The configured sentence-transformers model, `EMBED_MODEL`, unless named; normalised output; lazy load."""
 
     def __init__(self, model_name: str = EMBED_MODEL) -> None:
         self.model_name = model_name
