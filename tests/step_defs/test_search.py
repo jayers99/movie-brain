@@ -89,6 +89,11 @@ def delta(repo, films):
     films["Delta"] = d
 
 
+@given("Epsilon is a film titled Ward with no prose")
+def epsilon(repo, films):
+    films["Epsilon"] = repo.create_film(Film("Ward", 1980, None, ""))  # no credits: no prose, no vector
+
+
 @given("the corpus is embedded by meaning")
 def embedded(repo, fake_embedder):
     embed_films(repo, fake_embedder, DAY, apply=True, log=lambda _m: None)

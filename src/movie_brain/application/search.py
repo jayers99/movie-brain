@@ -212,13 +212,15 @@ def _semantic_stage(
     filters: list[Filter],
 ) -> tuple[list[tuple[int, float]], str | None]:
     """Stage 4 (search-recall spec D3–D5, superseding Plan C D16/D18). ONE mode: the nearest
-    SEMANTIC_NEAREST films under SEMANTIC_CEILING always join the result. A word hit keeps its
-    lexical score plus the semantic bonus (D17: summed, a title hit stays first); a film reached
-    by meaning alone carries the bonus and nothing else, and is APPENDED after every word hit
-    rather than merged by score, so meaning never lifts a film past a word. Every meaning-only
-    film must pass every field filter over the whole catalogue (D5). The hint names what
-    meaning did: how many it added, or that it supplied the whole result. A model that cannot
-    load leaves the lexical result untouched."""
+    SEMANTIC_NEAREST films under SEMANTIC_CEILING re-score the word hits and join the result. A
+    word hit keeps its lexical score plus the semantic bonus (D17: summed, a title hit stays
+    first); a film reached by meaning alone carries the bonus and nothing else, and is APPENDED
+    after every word hit rather than merged by score, so meaning never lifts a film past a word.
+    Additions are suppressed when any word hit is a title hit (`Repository.title_hits`; D3 as
+    amended 2026-09-23) — "maltese falcon" returns the film alone. Every meaning-only film must
+    pass every field filter over the whole catalogue (D5). The hint names what meaning did: how
+    many it added, or that it supplied the whole result. A model that cannot load leaves the
+    lexical result untouched."""
     if len(index) == 0:
         return ids, None  # no vectors yet — never load the model for nothing to search
     try:
@@ -229,6 +231,8 @@ def _semantic_stage(
     dist = dict(near)
     present = {i for i, _ in ids}
     extra = [(i, d) for i, d in near if i not in present]
+    if extra and (present & repo.title_hits(free)):
+        extra = []  # a title search wants its film, not ten neighbours by meaning (D3 amended)
     if extra and filters:
         allowed = {i for i, _ in repo.search_films(filters, "")}
         extra = [(i, d) for i, d in extra if i in allowed]

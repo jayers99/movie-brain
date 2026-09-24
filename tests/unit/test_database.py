@@ -2194,6 +2194,17 @@ def test_search_films_genre_matches_omdb_and_tmdb_forms(repo):
     assert repo.search_films([Filter("genre", values=("western",))], "") == []
 
 
+def test_title_hits_reach_a_film_through_its_title_only(repo):
+    """The ids the freeform text reaches THROUGH THE TITLE — the title column of film_text_fts or
+    a films.title substring — never through prose: Beta's overview says "alpha ward", and that
+    must not count as a title hit (it is what lets meaning still add films under a prose hit)."""
+    a, b, g = _seed_search(repo)
+    hits = repo.title_hits("alpha")
+    assert a in hits and b not in hits
+    assert repo.title_hits("sternwood") == set()   # Alpha's plot, not its title
+    assert repo.title_hits("") == set()
+
+
 def test_search_films_title_keyword_and_plot_filters(repo):
     a, b, g = _seed_search(repo)
     assert [i for i, _ in repo.search_films([Filter("title", values=("gamm",))], "")] == [g]   # substring, no credits needed

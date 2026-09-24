@@ -158,6 +158,14 @@ Feature: Resolving a search into an exact film-id set
     And the result is ranked
     And the hints include "1 more by meaning"
 
+  Scenario: A title hit switches the additions off
+    Given Delta is a night-shift caregiver drama with no word in common
+    And Epsilon is a film titled Ward with no prose
+    And the corpus is embedded by meaning
+    When I search by meaning for "ward"
+    Then the result ids are Epsilon then Beta
+    And the hints do not include "1 more by meaning"
+
   Scenario: A field excludes the films meaning would have added
     Given Delta is a night-shift caregiver drama with no word in common
     And the corpus is embedded by meaning
