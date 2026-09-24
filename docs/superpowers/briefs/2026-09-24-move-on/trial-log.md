@@ -8,6 +8,7 @@ Fourth trial of the version 2 process, upstream half; stories first, gap check a
 |---|---|---|
 | 2026-09-23 | asked for the behaviour (the Shop case) | 1 |
 | 2026-09-24 | generalised it to any filter; asked for the best seed shape; pasted the entry prompt | 2–3 |
+| 2026-09-24 | asked to see the page while the gap check was still running; walked it and chose B ("b") | unmeasured |
 
 ## Interruptions (each tagged by you: needed / not needed)
 
@@ -43,4 +44,17 @@ Fourth trial of the version 2 process, upstream half; stories first, gap check a
 
 ## Gap check (point A)
 
-(pending)
+Run on the 0.9 draft (commit 8cdedae), read-only on a snapshot and a database copy; the checker reproduced every name, neighbour and count in the eight stories on the real dashboard before listing what did not hold. He had already asked to see the page and chosen B while it ran, so the fixes below land in the 1.0 freeze rather than before his first look.
+
+| # | Finding (kind) | Answer | Note |
+|---|---|---|---|
+| 1 | Undo of a wishlist landing after a step or a close made the mock-up's drawer jump back or reopen itself (gap-unpictured) | fixed | landing rule written into the brief and the mock-up: the row comes back at once; the drawer goes back only if it is still the drawer that carried the line; walkable from story 6's coach line |
+| 2 | A failed Undo was words only (gap-unpictured) | fixed | the failure state is drawn (same words, Try again where Undo was) and walkable with a "pretend CheapCharts is down" switch on the page, which also fails the ♡ the way the real slot does |
+| 3 | "Only the last edit has an Undo" was a list line, and it is the normal Shop workflow (exclusion-to-walk) | story added | story 9, in the checker's wording |
+| 4 | Story 6 A said one click turns Shop off; on the real dashboard the first click only closes the drawer (story-untrue) | fixed | wording; A is set aside anyway |
+| 5 | "Five to ten seconds" and the Undo's reverse call were uncited (provenance) | fixed / unverifiable | the stories now say "several seconds — an estimate, never timed"; the brief cites where the estimate comes from and says the real timing is measured at delivery by his own click. The duration itself cannot be verified in this trial: no credentials in any check environment, by design |
+| 6 | Story 5 claimed "kept word for word"; the promise is the same, the words are not (story-untrue, low damage) | fixed | now "the same promise, its test re-run unchanged" |
+
+Agent minutes: 35 · Findings: 6 · Fixed: 5 · Stories added: 1 · Declined: 0 · Not checked: any real CheapCharts call (no credentials); Back-button filter changes with a drawer opened from a link; the search box and column filters other than Title as drop-causing edits.
+
+Re-check: pending.

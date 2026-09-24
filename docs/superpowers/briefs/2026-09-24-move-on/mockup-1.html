@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Move on — stories and mock-up, round 1</title>
+<title>Move on — stories and mock-up, round 1 (you chose B)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   /* Everything inside .window is copied from the real dashboard (static/app.css): colours, row height, column widths, the 760px drawer, the 30% black dim, the white row and the grey mark. */
@@ -88,6 +88,7 @@
   #drawer .moved-on { margin:4px 0 10px; padding:6px 10px; background:var(--chip); border-radius:6px; font-size:14px; color:var(--fg); }
   #drawer .moved-on button { font:inherit; border:0; background:none; padding:0; margin-left:8px; color:#1a56db; text-decoration:underline; cursor:pointer; }
   #drawer .moved-on button[disabled] { color:var(--muted); text-decoration:none; cursor:default; }
+  .wish-failed { color:var(--muted); }
   .panel { margin-top:26px; background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:16px 20px; font-size:16px; line-height:1.55; }
   .panel h2 { font-size:21px; margin:0 0 8px; }
   .panel li { margin:5px 0; }
@@ -97,12 +98,12 @@
 <div class="intro">
   <h1>Move on — stories and mock-up, round 1</h1>
   <p>Your rule: <i>when editing a movie in the drawer that caused it to be removed from the current filtered results the selection should automatically move to the next movie in the list</i> — for any filter, not just Shop. Below are <b>eight stories</b> on your real catalogue (a copy from this morning) and <b>one mock-up with three variants</b>. The variants differ in one thing only: where "I change my mind" lives once the drawer has moved on (story 6). Press <b>Walk it</b> on a story and the mock-up sets itself up.</p>
-  <p>The stories you keep become the automated tests, word for word. Pick A, B or C with one word.</p>
+  <p>The stories you keep become the automated tests, word for word. <b>You chose B</b> ("b", 2026-09-24); A and C stay on the page only as the record of what you compared. Story 9 and the "CheapCharts is down" switch were added after the gap check.</p>
 </div>
 <h2 class="sec">The stories</h2>
 <div class="stories" id="stories"></div>
 <h2 class="sec">The mock-up</h2>
-<div class="vbar" id="variants"></div>
+<div class="vbar"><span id="variants" style="display:contents"></span><label style="margin-left:18px;color:var(--muted);font-size:15px;cursor:pointer"><input type="checkbox" id="down"> pretend CheapCharts is down</label></div>
 <div class="coach" id="coach"></div>
 <div class="window">
   <div class="top">
@@ -140,7 +141,7 @@
     <li><b>The drawer moves when the edit lands, not when you press.</b> A star or a rating lands at once. A wishlist click talks to CheapCharts first — five to ten seconds on the real thing, one pretend second here — and the drawer moves on when the answer comes. If you have already pressed ↓ by then, nothing moves: the film now open is still in the list.</li>
     <li><b>A chip cannot be pressed while the drawer is open.</b> The chips, the search box, the list picker and the column filters all sit under the grey; a click there closes the drawer, as today. So the only thing that can ever move the drawer is an edit inside it (story 5).</li>
     <li><b>When the list runs out, the drawer stays.</b> Un-star the only film left and there is nowhere to move: the drawer stays on it, nothing is white, ↑ ↓ are quiet (story 8). It does not close by itself.</li>
-    <li><b>Only in B:</b> the undo line remembers the <i>last</i> edit only, and only in the drawer it moved to. Step, click another row, close, or reload, and the line is gone; the way back is then the chip-off route (A).</li>
+    <li><b>Only in B:</b> the undo line remembers the <i>last</i> edit only, and only in the drawer it moved to (story 9). Step, click another row, close, or reload, and the line is gone; the way back is then the chip-off route (A). Undo lands like the edit did: the row comes back at once, and the drawer goes back to the film only if you are still in the drawer that carried the line — after a step or a close, nothing moves. A failed Undo keeps the line's words and offers Try again.</li>
     <li><b>Only in C:</b> one ↑ reaches the film that left, although the hint beside ✕ still says "previous film". From that film, ↑ goes to the film before the gap and ↓ to the film that took its place, as today.</li>
     <li><b>Nothing here is sent anywhere.</b> The wishlist click is pretend (one second, no CheapCharts); the star and the rating change only this page.</li>
   </ul>
@@ -161,7 +162,7 @@ const PRISTINE = new Map(FILMS.map((f) => [f.id, { w: f.w, r: f.r, s: f.s }]));
 
 const VARIANTS = [
   { key:'A', name:'A · Chip off, the row keeps its mark', sub:'nothing new is built — today\'s route back' },
-  { key:'B', name:'B · An undo line in the drawer that moved on', sub:'Recommended · one click, says what happened' },
+  { key:'B', name:'B · An undo line in the drawer that moved on', sub:'Recommended · your choice, 2026-09-24' },
   { key:'C', name:'C · ↑ goes back to the film that left', sub:'one key, but the hint says "previous film"' },
 ];
 const state = { variant: (location.hash.slice(1) || 'B').toUpperCase(), shop:false, rated:null, watchlist:false, owned:null, list:'', title:'',
@@ -238,9 +239,9 @@ function reveal(i) {
   const wrap = $('#wrap'), top = i * ROW_H, head = $('thead').offsetHeight, view = wrap.clientHeight - head;
   if (top < wrap.scrollTop) wrap.scrollTop = top; else if (top + ROW_H > wrap.scrollTop + view) wrap.scrollTop = top + ROW_H - view;
 }
-function drawDrawer(f) {
+function drawDrawer(f, failed = false) {
   const line = state.variant === 'B' && state.movedOn && state.movedOn.at === f.id
-    ? `<div class="moved-on" id="moved-on">${esc(state.movedOn.label)} ·<button id="undo">Undo</button></div>` : '';
+    ? `<div class="moved-on" id="moved-on">${esc(state.movedOn.label)} ·${failed ? ' <span class="wish-failed">Couldn\'t reach CheapCharts.</span>' : ''}<button id="undo">${failed ? 'Try again' : 'Undo'}</button></div>` : '';
   const other = f.have && f.b ? `<p><u>Watch on <b>${esc(f.b)}</b> ↗</u></p>` : '';
   const wish = f.w ? '<button class="wl done" id="wl">♥ Wishlisted</button>' : (f.it && !f.o ? '<button class="wl" id="wl">♡ Wishlist it</button>' : '');
   $('#drawer-body').innerHTML = `<h2>${esc(f.t)} <button class="watch-toggle" id="star" title="Toggle watchlist">${f.s ? '★' : '☆'}</button><button title="Toggle needs-revisit">⚐</button></h2>${line}
@@ -288,6 +289,7 @@ function afterWrite(memory) {
 }
 // Undo (B): reverse the edit, then go back to the film, back in its place.
 function goBackTo(f) { render(); const i = ROWS.findIndex((x) => x.id === f.id); if (i >= 0) openAt(i); else openById(f.id); }
+// The failed state of the line: the same words, Try again where Undo was (it repeats the reverse call).
 function step(dir) {
   const i = ROWS.findIndex((f) => f.id === state.open);
   if (i >= 0) openAt(i + dir);
@@ -307,13 +309,13 @@ function commitRating(input) {
   if (next === prev) return;
   f.r = next;
   const label = next == null ? `Cleared ${f.t}'s rating` : `Rated ${f.t} ${next}`;
-  const moved = state.open === f.id && afterWrite({ label, undo() { f.r = prev; goBackTo(f); } });
+  const moved = state.open === f.id && afterWrite({ label, undo(b, m) { f.r = prev; landUndo(f, m); } });
   if (!moved) { render(); if (state.open === f.id) drawDrawer(f); }
 }
 
 const STORIES = [
   { n:1, title:'I wishlist under Shop and the drawer moves on',
-    text:'With <b>Shop</b> on (320 films) I open <b>Army of Shadows</b> and press ↓ to <b>Pan\'s Labyrinth</b>. I press <b>♡ Wishlist it</b>. When CheapCharts answers (five to ten seconds on the real thing), Pan\'s Labyrinth leaves the list — it is decided — and the drawer moves on to <b>Summer of Soul</b>, the film that slid up into its place: drawer, white row and mark together. I press ↓ and carry on to <b>Nashville</b>.',
+    text:'With <b>Shop</b> on (320 films) I open <b>Army of Shadows</b> and press ↓ to <b>Pan\'s Labyrinth</b>. I press <b>♡ Wishlist it</b>. When CheapCharts answers (several seconds on the real thing — never timed; a star or a rating lands at once), Pan\'s Labyrinth leaves the list — it is decided — and the drawer moves on to <b>Summer of Soul</b>, the film that slid up into its place: drawer, white row and mark together. I press ↓ and carry on to <b>Nashville</b>.',
     coach:'The drawer is open on Army of Shadows. Press <b>↓</b>, then <b>♡ Wishlist it</b>, and wait a second. Watch the drawer move on to Summer of Soul by itself. Then <b>↓</b> again.',
     setup() { reset(); state.shop = true; render(); openAt(ROWS.indexOf(film('Army of Shadows'))); } },
   { n:2, title:'I rate under Unrated and the drawer moves on',
@@ -333,27 +335,41 @@ const STORIES = [
     coach:'The drawer is closed and the mark is on Pursued. Press <b>Owned</b>: Pursued drops out, nothing is marked, nothing jumps. Press it twice more (Not owned, then off): the mark is back. Then open Pursued and click Owned <i>with the drawer open</i>: the click lands on the grey and closes the drawer.',
     setup() { reset(); state.list = 'noir'; render(); state.mark = film('Pursued').id; render(); reveal(ROWS.indexOf(film('Pursued'))); } },
   { n:6, title:'I change my mind',
-    text:'After story 1 the drawer is on <b>Summer of Soul</b> and Pan\'s Labyrinth is gone from the list. <span class="vA"><b>A</b> — nothing new: I turn Shop off (that click closes the drawer), Pan\'s Labyrinth is back in the full list wearing its ♥, I open it and press <b>♥ Wishlisted</b>.</span><span class="vB"><b>B</b> — the Summer of Soul drawer carries one grey line under its title, "<b>Wishlisted Pan\'s Labyrinth · Undo</b>"; I press Undo, the wishlist click is reversed, and the drawer goes back to Pan\'s Labyrinth, back in its place, white.</span><span class="vC"><b>C</b> — one <b>↑</b> from Summer of Soul reopens Pan\'s Labyrinth, out of the list so nothing is white; I press <b>♥ Wishlisted</b> there and its row comes back, white.</span> <i>Switch between A, B and C above to compare.</i>',
+    text:'After story 1 the drawer is on <b>Summer of Soul</b> and Pan\'s Labyrinth is gone from the list. <span class="vA"><b>A</b> — nothing new: I click the grey to close the drawer, turn Shop off, and Pan\'s Labyrinth is back in the full list wearing its ♥; I open it and press <b>♥ Wishlisted</b>.</span><span class="vB"><b>B</b> — the Summer of Soul drawer carries one grey line under its title, "<b>Wishlisted Pan\'s Labyrinth · Undo</b>"; I press Undo, the wishlist click is reversed, and the drawer goes back to Pan\'s Labyrinth, back in its place, white.</span><span class="vC"><b>C</b> — one <b>↑</b> from Summer of Soul reopens Pan\'s Labyrinth, out of the list so nothing is white; I press <b>♥ Wishlisted</b> there and its row comes back, white.</span> <i>Switch between A, B and C above to compare.</i>',
     coach:'Pan\'s Labyrinth was just wishlisted and the drawer moved on to Summer of Soul.',
     coachBy:{ A:'Pan\'s Labyrinth was just wishlisted and the drawer moved on to Summer of Soul. A builds nothing new: click the grey to close, turn <b>Shop</b> off, find Pan\'s Labyrinth (it wears its ♥, near the top), open it and press <b>♥ Wishlisted</b>.',
-      B:'Pan\'s Labyrinth was just wishlisted and the drawer moved on to Summer of Soul. Look under the title: <b>Wishlisted Pan\'s Labyrinth · Undo</b>. Press <b>Undo</b>.',
+      B:'Pan\'s Labyrinth was just wishlisted and the drawer moved on to Summer of Soul. Look under the title: <b>Wishlisted Pan\'s Labyrinth · Undo</b>. Press <b>Undo</b>. To see it fail, walk the story again, tick <b>pretend CheapCharts is down</b> above, and press Undo: the line keeps its words and offers <b>Try again</b>. To see Undo land after you have moved on, press Undo and then ↓ (or ✕) at once: the row comes back, the drawer does not.',
       C:'Pan\'s Labyrinth was just wishlisted and the drawer moved on to Summer of Soul. Press <b>↑</b> once: Pan\'s Labyrinth opens again, out of the list. Press <b>♥ Wishlisted</b> there.' },
     setup() { reset(); state.shop = true; render(); const f = film("Pan's Labyrinth"); openAt(ROWS.indexOf(f)); f.w = 1; afterWrite(wishMemory(f)); } },
   { n:7, title:'A film that was never in the list stays put',
     text:'With <b>Shop</b> on I open a link to <b>M</b> (it is on the Criterion Channel, so it was never in the Shop list). I press its <b>★</b> to add it to my watchlist. M stays open, nothing moves, and ↑ ↓ stay quiet — as today for a pasted link.',
     coach:'M came from a link; it was never in the Shop list, so no row is white. Press <b>★</b>: nothing moves. ↑ ↓ do nothing.',
     setup() { reset(); state.shop = true; render(); openById(film('M').id); } },
+  { n:9, title:'I wishlist two in a row and change my mind about the first',
+    text:'Under <b>Shop</b> I wishlist <b>Pan\'s Labyrinth</b> and the drawer moves on to <b>Summer of Soul</b>, wearing "Wishlisted Pan\'s Labyrinth · Undo". I wishlist Summer of Soul too; the drawer moves on to <b>Nashville</b> and the line now says "<b>Wishlisted Summer of Soul · Undo</b>". Pan\'s Labyrinth\'s Undo is gone: only the last edit has one. To take Pan\'s Labyrinth back I close the drawer, turn Shop off, find it near the top wearing its ♥, open it and press ♥ Wishlisted.',
+    coach:'The drawer is on Summer of Soul with Pan\'s Labyrinth\'s Undo. Press <b>♡ Wishlist it</b> and wait a second: the drawer moves on to Nashville and the line is now Summer of Soul\'s. Pan\'s Labyrinth\'s Undo is gone.',
+    setup() { STORIES[5].setup(); } },
   { n:8, title:'The list runs out',
     text:'With <b>Watchlist</b> on and "sherlock" typed in the Title filter, the list is one film: <b>Sherlock Jr.</b> I open it and press its <b>★</b>. The list is empty — Showing 0 of 5250 — so there is nowhere to move: the drawer stays on Sherlock Jr., nothing is white, ↑ ↓ are quiet, and its ★ is right there if I change my mind.',
     coach:'One film in the list. Press <b>★</b>: the list behind the drawer is empty and the drawer stays. Press <b>★</b> again to change your mind.',
     setup() { reset(); state.watchlist = true; state.title = 'sherlock'; render(); openAt(0); } },
 ];
+// The reverse call lands like the edit did: the row comes back at once, and the drawer goes back
+// to the film ONLY if it is still the drawer that carried the line — after a step or a close,
+// nothing moves. A failed reverse keeps the line's words and offers Try again in place of Undo.
 function wishMemory(f) {
-  return { label: f.w ? `Wishlisted ${f.t}` : `Took ${f.t} off your wishlist`, async undo(b) {
+  return { label: f.w ? `Wishlisted ${f.t}` : `Took ${f.t} off your wishlist`, async undo(b, m) {
     if (b) { b.disabled = true; b.textContent = 'Reaching CheapCharts…'; }
     await new Promise((r) => setTimeout(r, 1000));
-    f.w = f.w ? 0 : 1; goBackTo(f);
+    if ($('#down').checked) {
+      if (state.open === m.at && $('#drawer').hidden === false) drawDrawer(byId(m.at), true);
+      return;
+    }
+    f.w = f.w ? 0 : 1; landUndo(f, m);
   } };
+}
+function landUndo(f, m) {
+  if (state.open === m.at && !$('#drawer').hidden) goBackTo(f); else { state.movedOn = null; render(); }
 }
 function reset() {
   closeDrawer();
@@ -379,14 +395,18 @@ $('#drawer-body').addEventListener('click', async (e) => {
   const f = byId(state.open); if (!f) return;
   if (e.target.closest('#star')) {
     f.s = !f.s;
-    const moved = afterWrite({ label: f.s ? `Starred ${f.t}` : `Took ${f.t} off your watchlist`, undo() { f.s = !f.s; goBackTo(f); } });
+    const moved = afterWrite({ label: f.s ? `Starred ${f.t}` : `Took ${f.t} off your watchlist`, undo(b, m) { f.s = !f.s; landUndo(f, m); } });
     if (!moved) drawDrawer(f);
     return;
   }
-  if (e.target.closest('#undo')) { const m = state.movedOn; if (m) await m.undo(e.target); return; }
+  if (e.target.closest('#undo')) { const m = state.movedOn; if (m) await m.undo(e.target, m); return; }
   const b = e.target.closest('#wl'); if (!b || b.disabled) return;
   b.disabled = true; b.classList.remove('done'); b.textContent = 'Reaching CheapCharts…';
   setTimeout(() => {
+    if ($('#down').checked) {  // the real slot's failure text: the film stays, nothing is marked
+      if (state.open === f.id) { b.disabled = false; b.outerHTML = '<span class="wish-failed">Couldn\'t reach CheapCharts. <button class="wl" id="wl">Try again</button></span>'; }
+      return;
+    }
     if (state.open !== f.id) { f.w = f.w ? 0 : 1; render(); return; }  // stepped away: the film leaves quietly, as today
     f.w = f.w ? 0 : 1;
     const moved = afterWrite(wishMemory(f));
@@ -403,14 +423,14 @@ document.addEventListener('keydown', (e) => {
 });
 $('#variants').innerHTML = VARIANTS.map((v) => `<button class="variant" data-key="${v.key}">${v.name}<small>${v.sub}</small></button>`).join('');
 $('#variants').addEventListener('click', (e) => { const b = e.target.closest('.variant'); if (!b) return; state.variant = b.dataset.key; history.replaceState(null, '', '#' + state.variant); if (state.open != null) drawDrawer(byId(state.open)); render(); });
-$('#stories').innerHTML = STORIES.map((s) => `<div class="story" data-n="${s.n}"><h3><span class="n">${s.n}</span>${s.title}</h3><p>${s.text}</p>
+$('#stories').innerHTML = [...STORIES].sort((a, b) => a.n - b.n).map((s) => `<div class="story" data-n="${s.n}"><h3><span class="n">${s.n}</span>${s.title}</h3><p>${s.text}</p>
   <div class="foot"><span class="does">${s.coachBy ? 'differs between A, B and C' : 'the same in A, B and C'}</span><button class="walk" data-n="${s.n}">Walk it ▸</button></div></div>`).join('');
 $('#stories').addEventListener('click', (e) => {
   const b = e.target.closest('.walk'); if (!b) return;
   const s = STORIES.find((x) => x.n === +b.dataset.n); state.story = s.n; s.setup(); render();
   document.querySelector('.window').scrollIntoView({ behavior:'smooth', block:'end' });
 });
-$('#carried').textContent = `Real in this mock-up: ${FILMS.length} films — the first 60 of Shop, the first 40 of Unrated by me, all 21 of your watchlist, all 100 of BFI: Film Noir, and M — with their years, directors, scores, lists, owned marks, services, stars and hearts, read from a copy of your database this morning (2026-09-24). Left out: the other ${5250 - FILMS.length} films, the search box, most of the drawer. Nothing here can write anywhere.`;
+$('#carried').textContent = `Real in this mock-up: ${FILMS.length} films — the first 60 of Shop, the first 40 of Unrated by me, all 21 of your watchlist, all 100 of BFI: Film Noir, and M — with their years, directors, scores, lists, owned marks, services, stars and hearts, read from a copy of your database this morning (2026-09-24). Left out: the other ${5250 - FILMS.length} films, the search box, most of the drawer. Nothing here can write anywhere; "pretend CheapCharts is down" only changes what this page pretends.`;
 render();
 window.MOCK = { state, STORIES, film, rows: () => ROWS, openAt, step, afterWrite, byId };
 </script></body></html>
