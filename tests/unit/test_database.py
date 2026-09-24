@@ -1859,22 +1859,24 @@ def test_migration_018_creates_credit_tables_and_trigram_indexes(repo):
         assert c.execute("SELECT rowid FROM person_fts WHERE person_fts MATCH '\"ogar\"'").fetchall() == [(1,)]
 
 
-def test_migration_030_stems_the_prose_index_and_indexes_keywords_with_porter(repo):
-    """The FTS5 tokenizer cannot be altered in place: 030 drops and recreates film_text_fts with
-    Porter and rebuilds it from film_text (the base table is the truth), and gives film_keyword
-    its own standalone Porter index kept in step by triggers — standalone because film_keyword
-    has a composite key and no INTEGER PRIMARY KEY, so its rowids are not VACUUM-stable."""
+def test_migration_030_indexes_keywords_with_porter_and_leaves_the_prose_index_alone(repo):
+    """030 gives film_keyword its own standalone Porter index kept in step by triggers —
+    standalone because film_keyword has a composite key and no INTEGER PRIMARY KEY, so its rowids
+    are not VACUUM-stable. The prose index film_text_fts keeps 018's plain unicode61 (owner
+    decision 2026-09-23: prose Porter widened hits and cost verbatim recall), so it does not stem."""
     with sqlite3.connect(repo.db_path) as c:
         sql = {r[0]: r[1] for r in c.execute("SELECT name, sql FROM sqlite_master WHERE name IN ('film_text_fts', 'film_keyword_fts')")}
-        assert "porter" in sql["film_text_fts"] and "porter" in sql["film_keyword_fts"]
+        assert "porter" in sql["film_keyword_fts"]
+        assert "porter" not in sql["film_text_fts"] and "unicode61" in sql["film_text_fts"]
         names = {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
         assert {"film_keyword_ai", "film_keyword_ad", "film_text_ai", "film_text_ad", "film_text_au"} <= names
         assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] >= 30
         c.execute("INSERT INTO films (guid, title, year, key) VALUES ('g1', 'Groundhog Day', 1993, 'groundhog day (1993)')")
         fid = c.execute("SELECT id FROM films WHERE title = 'Groundhog Day'").fetchone()[0]
         c.execute("INSERT INTO film_text (film_id, title, overview, plot) VALUES (?, 'Groundhog Day', NULL, 'finds himself in a time loop')", (fid,))
-        # the plural reaches the singular through the stem
-        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH '\"loops\"'").fetchall() == [(fid,)]
+        # the prose index does not stem: the plural misses, the exact word hits
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH '\"loops\"'").fetchall() == []
+        assert c.execute("SELECT rowid FROM film_text_fts WHERE film_text_fts MATCH '\"loop\"'").fetchall() == [(fid,)]
         c.execute("INSERT INTO film_keyword (film_id, keyword) VALUES (?, 'time loop')", (fid,))
         assert c.execute("SELECT film_id FROM film_keyword_fts WHERE film_keyword_fts MATCH '\"time loops\"'").fetchall() == [(fid,)]
         c.execute("DELETE FROM film_keyword WHERE film_id = ?", (fid,))
