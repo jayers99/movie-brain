@@ -5,6 +5,7 @@ from datetime import date
 
 import pytest
 
+from movie_brain.application.embed import embed_films
 from movie_brain.domain.models import CastRow, CrewRow, Film, McTitle, OmdbRating, ReviewEntry, TmdbCredits
 from movie_brain.domain.search import EMBED_MODEL, W_TAG, Filter, trigram_query
 from movie_brain.infrastructure.database import (
@@ -2369,6 +2370,21 @@ def test_embedding_worklist_is_prose_films_without_a_row_for_this_model(repo):
         (b, "Beta", None, None, None),
     ]
     assert repo.films_needing_embedding("m1", limit=1)[0].film_id == a
+
+
+def test_embed_films_writes_the_model_and_dim_it_is_given(repo, fake_embedder):
+    a, b, g = _seed_search(repo)
+
+    class Four:
+        def encode(self, texts):
+            return [[1.0, 0.0, 0.0, 0.0] for _ in texts]
+
+    report = embed_films(repo, Four(), date(2026, 9, 23), apply=True, model="tiny", dim=4, log=lambda _: None)
+    assert report.embedded == 2
+    with sqlite3.connect(repo.db_path) as c:
+        assert c.execute("SELECT DISTINCT model, dim, length(vector) FROM film_embedding").fetchall() == [("tiny", 4, 16)]
+    assert [t.film_id for t in repo.films_needing_embedding(EMBED_MODEL)] == [a, b]   # the configured model still wants them
+    assert repo.films_needing_embedding("tiny") == []
 
 
 def test_write_embeddings_stamps_and_removes_from_the_worklist_until_the_prose_changes(repo):

@@ -4,7 +4,9 @@ Dry-run by default: the worklist is counted and logged and the embedder is never
 model load is the slow part, and a dry run has nothing to encode for). `--apply` encodes in
 batches and writes each batch in one transaction, stamping `embedded_on`; stamped films leave
 the worklist, so an interrupted run resumes at the next batch. A film re-enriched after it was
-embedded returns to the worklist (`films_needing_embedding`). Never called from `sync`.
+embedded returns to the worklist (`films_needing_embedding`). Part of the catch-up chain since
+2026-09-20, so a change of `EMBED_MODEL` re-embeds the whole catalogue at the next sync — run it
+by hand first (spec D6).
 """
 
 from __future__ import annotations
@@ -40,6 +42,8 @@ def embed_films(
     apply: bool = False,
     limit: int | None = None,
     batch_size: int = BATCH_SIZE,
+    model: str = EMBED_MODEL,
+    dim: int = EMBED_DIM,
     log: Callable[[str], None] = _stderr,
 ) -> EmbedReport:
     scanned = embedded = skipped = 0
@@ -51,14 +55,14 @@ def embed_films(
             return
         vectors = embedder.encode([text for _, text in batch])
         repo.write_embeddings(
-            [(film_id, pack(v)) for (film_id, _), v in zip(batch, vectors, strict=True)],
-            today, model=EMBED_MODEL, dim=EMBED_DIM,
+            [(film_id, pack(v, dim)) for (film_id, _), v in zip(batch, vectors, strict=True)],
+            today, model=model, dim=dim,
         )
         embedded += len(batch)
         log(f"  embedded {len(batch)} (through #{batch[-1][0]})")
         batch.clear()
 
-    for target in repo.films_needing_embedding(EMBED_MODEL, limit):
+    for target in repo.films_needing_embedding(model, limit):
         text = embedding_text(target.overview, target.plot, target.tagline)
         if text is None:
             skipped += 1

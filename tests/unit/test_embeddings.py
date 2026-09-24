@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import Film
-from movie_brain.domain.search import EMBED_DIM
+from movie_brain.domain.search import EMBED_DIM, EMBED_MODEL
 from movie_brain.infrastructure.embeddings import SemanticUnavailable, VectorIndex, pack, unpack
 
 D = date(2026, 8, 19)
@@ -25,6 +25,15 @@ def test_pack_refuses_the_wrong_dimension():
         pack([1.0, 0.0])
 
 
+def test_pack_and_unpack_take_the_dimension_as_a_parameter():
+    v = [0.5, 0.5, 0.5, 0.5]
+    assert unpack(pack(v, dim=4), dim=4) == pytest.approx(v)
+    with pytest.raises(ValueError):
+        pack(v)  # the default is still EMBED_DIM
+    with pytest.raises(struct.error):
+        unpack(pack(v, dim=4), dim=8)  # a blob of the wrong width never silently reshapes
+
+
 def _unit(*dims: int) -> list[float]:
     v = [0.0] * EMBED_DIM
     for d in dims:
@@ -35,6 +44,15 @@ def _unit(*dims: int) -> list[float]:
 
 def _films(repo, n):
     return [repo.create_film(Film(f"F{i}", 1950 + i, None, "")) for i in range(n)]
+
+
+def test_index_loads_one_models_rows_at_that_models_width(repo, fake_embedder):
+    a, b = _films(repo, 2)
+    repo.write_embeddings([(a, pack([1.0, 0.0, 0.0, 0.0], dim=4))], D, model="tiny", dim=4)
+    repo.write_embeddings([(b, pack(_unit(0)))], D, model=EMBED_MODEL, dim=EMBED_DIM)   # another model's row, wider
+    idx = VectorIndex(repo, fake_embedder, model="tiny", dim=4)
+    assert len(idx) == 1
+    assert idx.nearest([1.0, 0.0, 0.0, 0.0], limit=10, ceiling=2.0) == [(a, pytest.approx(0.0))]
 
 
 def test_nearest_is_a_count_under_a_ceiling_ordered_by_distance_then_id(repo, fake_embedder):

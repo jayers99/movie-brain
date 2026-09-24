@@ -23,8 +23,6 @@ from movie_brain.infrastructure.database import Repository
 
 log = logging.getLogger(__name__)
 
-_FORMAT = f"<{EMBED_DIM}f"  # yt-brain's `_to_blob`, byte for byte
-
 
 class SemanticUnavailable(RuntimeError):
     """The optional extra is missing, or the model cannot be loaded (not cached, offline)."""
@@ -34,14 +32,18 @@ class Embedder(Protocol):
     def encode(self, texts: Sequence[str]) -> list[list[float]]: ...
 
 
-def pack(vector: Sequence[float]) -> bytes:
-    if len(vector) != EMBED_DIM:
-        raise ValueError(f"expected {EMBED_DIM} floats, got {len(vector)}")
-    return struct.pack(_FORMAT, *vector)
+def _fmt(dim: int) -> str:
+    return f"<{dim}f"  # yt-brain's `_to_blob`, byte for byte
 
 
-def unpack(blob: bytes) -> list[float]:
-    return list(struct.unpack(_FORMAT, blob))
+def pack(vector: Sequence[float], dim: int = EMBED_DIM) -> bytes:
+    if len(vector) != dim:
+        raise ValueError(f"expected {dim} floats, got {len(vector)}")
+    return struct.pack(_fmt(dim), *vector)
+
+
+def unpack(blob: bytes, dim: int = EMBED_DIM) -> list[float]:
+    return list(struct.unpack(_fmt(dim), blob))
 
 
 class SentenceTransformerEmbedder:
@@ -90,14 +92,16 @@ class VectorIndex:
     `(count, max embedded_on, Σ film_id)` over the same non-disposed rows `all_embeddings` reads,
     so the sum catches a merge moving a film_id onto its survivor and a tombstone dropping a row
     out of the non-disposed set, neither of which moves `embedding_summary`'s bare (count, max)
-    alone. A failed model load latches: once `embed_query` has raised `SemanticUnavailable` once,
-    every later call on this instance raises immediately without asking the embedder again, for
-    the life of this `VectorIndex`."""
+    alone. It is scoped to one model and one width — `dim` — so a row written by another model is
+    never reshaped into this matrix. A failed model load latches: once `embed_query` has raised
+    `SemanticUnavailable` once, every later call on this instance raises immediately without
+    asking the embedder again, for the life of this `VectorIndex`."""
 
-    def __init__(self, repo: Repository, embedder: Embedder, model: str = EMBED_MODEL) -> None:
+    def __init__(self, repo: Repository, embedder: Embedder, model: str = EMBED_MODEL, dim: int = EMBED_DIM) -> None:
         self.repo = repo
         self.embedder = embedder
         self.model = model
+        self.dim = dim
         self._stamp: tuple[int, str, int] | None = None
         self._ids: list[int] = []
         self._matrix: Any = None
@@ -113,7 +117,7 @@ class VectorIndex:
         rows = self.repo.all_embeddings(self.model)
         self._ids = [film_id for film_id, _ in rows]
         blob = b"".join(vector for _, vector in rows)
-        self._matrix = np.frombuffer(blob, dtype="<f4").reshape(len(rows), EMBED_DIM) if rows else None
+        self._matrix = np.frombuffer(blob, dtype="<f4").reshape(len(rows), self.dim) if rows else None
         self._stamp = stamp
 
     def __len__(self) -> int:

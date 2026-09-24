@@ -109,7 +109,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument(
         "--embed",
         action="store_true",
-        help="re-embed the copy with --model before scoring (a non-default --dim is unsupported until Task 5)",
+        help="re-embed the copy with --model before scoring",
     )
     ap.add_argument("--label", default="run")
     ap.add_argument("--json", type=Path)
@@ -120,9 +120,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     embedder = SentenceTransformerEmbedder(args.model)
     if args.embed:
         t0 = time.perf_counter()
-        report = embed_films(repo, embedder, date.today(), apply=True, log=lambda m: print(m, file=sys.stderr))
+        report = embed_films(
+            repo, embedder, date.today(), apply=True, model=args.model, dim=args.dim,
+            log=lambda m: print(m, file=sys.stderr),
+        )
         print(f"embedded {report.embedded} with {args.model} in {time.perf_counter() - t0:.0f}s", file=sys.stderr)
-    index = VectorIndex(repo, embedder, model=args.model)
+    index = VectorIndex(repo, embedder, model=args.model, dim=args.dim)
     kw = _keyword_rows(args.db)
     picked = pick_keywords(list(kw.items()), args.sample, args.seed, args.min, args.max)
     verbatim = run_benchmark(repo, index, picked)
