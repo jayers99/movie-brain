@@ -2,6 +2,8 @@
 
 **Version 1.0 — frozen 2026-09-20.** You chose variant B on the mock-up [mockup-1.html](mockup-1.html) ("option b is great"). A cold read-back by a fresh agent reconstructed the intent correctly; its 14 findings are folded in below. From here the brief changes only by amendment. *Where the mock-up and this brief disagree, the brief wins.* Third trial of the process in `docs/superpowers/research/2026-09-19-human-in-loop-diet-v2.md`; stories first, as in "Find my row".
 
+**Amendment 1.1 — 2026-09-24, from backlog 44 (brief `../2026-09-24-move-on/brief.md`).** Stories 3 and 4 are superseded: a wishlisted film still leaves the list the moment the click lands, but the drawer no longer stays on it — it moves on to the film that took its place, as ↓ would have (move-on story 1), and "I change my mind" is the undo line in the drawer it moved to (move-on story 6). The tests under those two names now assert the amended behaviour; `test_closing_on_a_film_that_left_the_list_leaves_no_mark` became `test_closing_after_a_move_on_marks_the_film_the_drawer_moved_to`.
+
 ## Your page
 
 ### The stories

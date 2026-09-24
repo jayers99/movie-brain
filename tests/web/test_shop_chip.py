@@ -124,9 +124,11 @@ def open_film(page: Page, title: str) -> None:
     expect(page.locator("#drawer h2")).to_contain_text(title)
 
 
-def wishlist_it(page: Page) -> None:
+def wishlist_it(page: Page, then: str) -> None:
+    """Click ♡ Wishlist it and wait for the drawer to move on to `then` — since backlog 44 (move-on
+    brief story 1) the film leaves the list AND the drawer steps to the film in its place."""
     page.locator("#drawer p.links button.wish-button").click()
-    expect(page.locator("#drawer p.links .wish-done")).to_have_text("♥ Wishlisted")  # the fake takes about a second
+    expect(page.locator("#drawer h2")).to_contain_text(then)  # the fake takes about a second
 
 
 # ---- the six stories ----
@@ -155,25 +157,30 @@ def test_story_2_nothing_i_can_already_watch_nothing_i_have_judged(shop: Page):
 
 
 def test_story_3_i_browse_with_the_arrows_and_wishlist_as_i_go(shop: Page):
+    # Amended 1.1 (2026-09-24, backlog 44): the drawer no longer stays on the wishlisted film —
+    # it moves on to the film that took its place, as ↓ would have (move-on brief, story 1).
     shop.click(SHOP_CHIP)
     open_film(shop, "Army of Shadows")
     shop.keyboard.press("ArrowDown")
     expect(shop.locator("#drawer h2")).to_contain_text("Pan's Labyrinth")
-    wishlist_it(shop)
+    wishlist_it(shop, "Summer of Soul")
     expect(row(shop, "Pan's Labyrinth")).to_have_count(0)  # its row left the list behind the drawer
-    expect(shop.locator("#drawer h2")).to_contain_text("Pan's Labyrinth")  # the drawer stays on it
     expect(shop.locator("#count-showing")).to_have_text("Showing 6 of 13")
+    expect(row(shop, "Summer of Soul")).to_have_class("lit edge")  # the film that took its place, white
     shop.keyboard.press("ArrowDown")
-    expect(shop.locator("#drawer h2")).to_contain_text("Summer of Soul")  # the film that took its place
-    expect(row(shop, "Summer of Soul")).to_have_class("lit edge")
+    expect(shop.locator("#drawer h2")).to_contain_text("Nashville")
 
 
 def test_story_4_i_change_my_mind(shop: Page):
+    # Amended 1.1 (2026-09-24, backlog 44): the drawer has moved on, so the reversal is the undo
+    # line in the drawer it moved to (move-on brief, story 6), not the ♥ in the old drawer.
     shop.click(SHOP_CHIP)
     open_film(shop, "Pan's Labyrinth")
-    wishlist_it(shop)
+    wishlist_it(shop, "Summer of Soul")
     expect(row(shop, "Pan's Labyrinth")).to_have_count(0)
-    shop.locator("#drawer p.links .wish-done").click()
+    expect(shop.locator("#drawer .moved-on")).to_have_text("Wishlisted Pan's Labyrinth · Undo")
+    shop.locator("#drawer .moved-on button.undo").click()
+    expect(shop.locator("#drawer h2")).to_contain_text("Pan's Labyrinth")
     expect(shop.locator("#drawer p.links button.wish-button")).to_have_text("♡ Wishlist it")
     expect(row(shop, "Pan's Labyrinth")).to_have_class("lit edge")  # straight back, white
     assert titles(shop)[1] == "Pan's Labyrinth"  # in its old place
@@ -213,7 +220,7 @@ def test_the_chip_sits_after_rewatch_and_clear_resets_it(shop: Page):
 def test_up_after_the_open_film_left_goes_to_the_film_before_it(shop: Page):
     shop.click(SHOP_CHIP)
     open_film(shop, "Pan's Labyrinth")
-    wishlist_it(shop)
+    wishlist_it(shop, "Summer of Soul")
     shop.keyboard.press("ArrowUp")
     expect(shop.locator("#drawer h2")).to_contain_text("Army of Shadows")
 
@@ -232,6 +239,7 @@ def test_stepping_on_while_cheapcharts_is_still_answering(shop: Page):
 
 
 def test_the_arrows_carry_on_for_every_chip_not_only_shop(shop: Page):
+    # Since backlog 44 the drawer itself carries on the moment the film leaves; ↓ then goes one further.
     shop.click('#chips .chip[data-group="rated"]')  # Unrated by me
     assert titles(shop)[:3] == ["The Leopard", "Army of Shadows", "Pan's Labyrinth"]
     open_film(shop, "Army of Shadows")
@@ -239,8 +247,9 @@ def test_the_arrows_carry_on_for_every_chip_not_only_shop(shop: Page):
     rating.fill("8")
     rating.press("Enter")
     expect(row(shop, "Army of Shadows")).to_have_count(0)  # rated: it left the Unrated list
+    expect(shop.locator("#drawer h2")).to_contain_text("Pan's Labyrinth")  # the drawer moved on by itself
     shop.keyboard.press("ArrowDown")
-    expect(shop.locator("#drawer h2")).to_contain_text("Pan's Labyrinth")
+    expect(shop.locator("#drawer h2")).to_contain_text("Summer of Soul")
 
 
 def test_a_film_that_was_never_in_the_list_leaves_the_arrows_quiet(shop: Page, shop_server: str):
@@ -252,12 +261,16 @@ def test_a_film_that_was_never_in_the_list_leaves_the_arrows_quiet(shop: Page, s
     expect(shop.locator("#drawer h2")).to_contain_text("The Leopard")
 
 
-def test_closing_on_a_film_that_left_the_list_leaves_no_mark(shop: Page):
+def test_closing_after_a_move_on_marks_the_film_the_drawer_moved_to(shop: Page):
+    # Before backlog 44 the drawer stayed on the film that left and closing marked nothing; now the
+    # mark follows the drawer to the film that took its place, and the film that left is unmarked.
     shop.click(SHOP_CHIP)
     open_film(shop, "Pan's Labyrinth")
-    wishlist_it(shop)
+    wishlist_it(shop, "Summer of Soul")
     shop.keyboard.press("Escape")
     expect(shop.locator("#drawer")).to_be_hidden()
-    expect(shop.locator("#films tbody tr.marked")).to_have_count(0)  # the mark rides with its film
-    shop.click(SHOP_CHIP)  # Shop off: the film is back, and so is its mark
-    expect(row(shop, "Pan's Labyrinth")).to_have_class("marked")
+    expect(row(shop, "Summer of Soul")).to_have_class("marked")
+    shop.click(SHOP_CHIP)  # Shop off: the film is back, unmarked; the mark stayed where the drawer was
+    expect(row(shop, "Pan's Labyrinth")).to_have_count(1)
+    expect(row(shop, "Pan's Labyrinth")).not_to_have_class("marked")
+    expect(row(shop, "Summer of Soul")).to_have_class("marked")
