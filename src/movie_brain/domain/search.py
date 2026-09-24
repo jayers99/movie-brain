@@ -54,9 +54,12 @@ LENGTH_PENALTY_EXPONENT = 0.35  # in similarity(): plain difflib ratio over-rewa
 # Semantic search (Plan C D14–D17; search-recall spec D3–D4 supersede D16/D18). The vector is over PROSE ONLY.
 EMBED_MODEL = "all-MiniLM-L6-v2"
 EMBED_DIM = 384
-SEMANTIC_NEAREST = 10  # the net is a COUNT: ten nearest, whatever their distance, so it means the same under every model
-SEMANTIC_CEILING = 0.8  # a loose sanity ceiling — only films the model calls unrelated are dropped (short-query distances cluster 0.5–0.7)
-SEMANTIC_WEIGHT = 5.0  # one more SUMMED signal, 5 × (1 − distance): a title hit (10) stays above any meaning-only film
+# the net is a COUNT: ten nearest, whatever their distance, so it means the same under every model
+SEMANTIC_NEAREST = 10
+# a loose sanity ceiling — only films the model calls unrelated are dropped (short-query distances cluster 0.5–0.7)
+SEMANTIC_CEILING = 0.8
+# one more SUMMED signal, 5 × (1 − distance): a title hit (10) stays above any meaning-only film
+SEMANTIC_WEIGHT = 5.0
 
 
 @dataclass(frozen=True)
@@ -288,12 +291,47 @@ def similarity(query: str, name: str) -> float:
     return best
 
 
-def rank_candidates(query: str, candidates: Iterable[Candidate]) -> list[Ranked]:
+def _may_reach(matcher: SequenceMatcher, q: str, n: str, floor: float) -> bool:
+    """An UPPER BOUND of `similarity(q, n) >= floor`, from difflib's cheap bounds: for any pair,
+    ratio() <= quick_ratio() <= real_quick_ratio() (same 2·x/(len_a+len_b) arithmetic, x only
+    growing), and all three are symmetric, so a matcher holding the QUERY as seq2 bounds both the
+    whole-name ratio and every token's — the token bound times the same length penalty
+    `similarity` applies. False only when no path of `similarity` can reach the floor."""
+    matcher.set_seq1(n)
+    if matcher.real_quick_ratio() >= floor and matcher.quick_ratio() >= floor:
+        return True
+    lq = len(q)
+    for token in n.split():
+        lt = len(token)
+        penalty = (min(lq, lt) / max(lq, lt)) ** LENGTH_PENALTY_EXPONENT
+        matcher.set_seq1(token)
+        if matcher.real_quick_ratio() * penalty >= floor and matcher.quick_ratio() * penalty >= floor:
+            return True
+    return False
+
+
+def rank_candidates(query: str, candidates: Iterable[Candidate], floor: float | None = None) -> list[Ranked]:
     """Similarity desc, then the candidate's weight (credit count) desc, then name — so four
-    Bogarts tied at 0.91 resolve to the one the catalogue credits most, deterministically."""
+    Bogarts tied at 0.91 resolve to the one the catalogue credits most, deterministically.
+
+    With a `floor`, only candidates scoring at least the floor are returned, and a candidate is
+    skipped BEFORE `similarity` when difflib's upper bounds (real_quick_ratio, then quick_ratio,
+    over the whole name and each length-penalised token) cannot reach it — lossless, since a
+    bound is never below the score it bounds; it is what keeps an 11,949-keyword ladder cheap."""
     cands = list(candidates)
     weights = {c.key: c.weight for c in cands}
-    scored = [Ranked(c.key, c.name, similarity(query, c.name)) for c in cands]
+    if floor is None:
+        scored = [Ranked(c.key, c.name, similarity(query, c.name)) for c in cands]
+    else:
+        q = query.lower().strip()
+        matcher = SequenceMatcher(None, "", q)  # the query is seq2: difflib caches its counts once
+        scored = []
+        for c in cands:
+            if not _may_reach(matcher, q, c.name.lower(), floor):
+                continue
+            score = similarity(query, c.name)
+            if score >= floor:
+                scored.append(Ranked(c.key, c.name, score))
     return sorted(scored, key=lambda r: (-r.score, -weights[r.key], r.name))
 
 

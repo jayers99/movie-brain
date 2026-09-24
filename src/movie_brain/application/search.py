@@ -72,7 +72,7 @@ class _Resolver:
 
     def _pick(self, term: Term, candidates: list[Candidate]) -> Candidate | None:
         """Exact-first has already failed. Rank, then use / suggest / refuse (spec §7.3)."""
-        ranked = rank_candidates(term.value, candidates)
+        ranked = rank_candidates(term.value, candidates, floor=SUGGESTION_FLOOR)
         if ranked and ranked[0].score >= CORRECTION_FLOOR:
             top = ranked[0]
             self.corrections.append({"field": term.field, "typed": term.value, "used": top.name})

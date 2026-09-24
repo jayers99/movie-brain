@@ -1743,7 +1743,7 @@ class Repository:
     def keyword_ladder(self, free: str) -> str | None:
         """The one keyword the fuzzy ladder would use for a freeform string, at
         FREEFORM_KEYWORD_FLOOR (stricter than the field's CORRECTION_FLOOR), else None."""
-        ranked = rank_candidates(free, self.keyword_candidates())
+        ranked = rank_candidates(free, self.keyword_candidates(), floor=FREEFORM_KEYWORD_FLOOR)
         return str(ranked[0].name) if ranked and ranked[0].score >= FREEFORM_KEYWORD_FLOOR else None
 
     def service_candidates(self) -> list[Candidate]:

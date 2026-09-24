@@ -53,7 +53,9 @@ class Report:
     mean_size: float
 
 
-def pick_keywords(rows: Sequence[tuple[str, frozenset[int]]], sample: int, seed: int, lo: int, hi: int) -> list[tuple[str, frozenset[int]]]:
+def pick_keywords(
+    rows: Sequence[tuple[str, frozenset[int]]], sample: int, seed: int, lo: int, hi: int
+) -> list[tuple[str, frozenset[int]]]:
     eligible = sorted((k, ids) for k, ids in rows if lo <= len(ids) <= hi)
     rng = random.Random(seed)
     return eligible if len(eligible) <= sample else sorted(rng.sample(eligible, sample))
@@ -131,7 +133,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     verbatim = run_benchmark(repo, index, picked)
     variants = [(p, ids) for q, ids in picked if (p := plural(q))]
     plurals = run_benchmark(repo, index, variants)
-    named = run_benchmark(repo, index, [("time loops", frozenset({GROUNDHOG_DAY})), ("dystopian", kw.get("dystopia", frozenset()))])
+    named_cases = [("time loops", frozenset({GROUNDHOG_DAY})), ("dystopian", kw.get("dystopia", frozenset()))]
+    named = run_benchmark(repo, index, named_cases)
     t0 = time.perf_counter()
     embedder.encode(["a short query"])
     warm_ms = (time.perf_counter() - t0) * 1000
@@ -142,8 +145,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     for r in named.rows:
         print(f"  {r.query!r}: expected {r.expected_n}, hit={r.hit}, recall@10={r.recall10:.2f}, size={r.size}")
     if args.json:
-        args.json.write_text(json.dumps({"label": args.label, "model": args.model, "warm_ms": warm_ms,
-                                         "verbatim": asdict(verbatim), "plural": asdict(plurals), "named": asdict(named)}, indent=1))
+        payload = {
+            "label": args.label, "model": args.model, "warm_ms": warm_ms,
+            "verbatim": asdict(verbatim), "plural": asdict(plurals), "named": asdict(named),
+        }
+        args.json.write_text(json.dumps(payload, indent=1))
 
 
 if __name__ == "__main__":

@@ -1892,7 +1892,10 @@ def test_rewriting_credits_and_merging_keep_one_keyword_fts_row_per_keyword(repo
     repo.write_credits(a, _credits(cast=(), crew=(), keywords=("film noir", "heist")), day)  # re-enrichment replaces the set
     repo.write_credits(b, _credits(tmdb_id=911, keywords=("film noir", "vampire")), day)
     with sqlite3.connect(repo.db_path) as c:
-        rows = lambda: sorted(c.execute("SELECT film_id, keyword FROM film_keyword_fts").fetchall())
+
+        def rows():
+            return sorted(c.execute("SELECT film_id, keyword FROM film_keyword_fts").fetchall())
+
         assert rows() == [(a, "film noir"), (a, "heist"), (b, "film noir"), (b, "vampire")]
     repo.merge_film(b, a, day, note="twin")
     with sqlite3.connect(repo.db_path) as c:
@@ -2204,7 +2207,10 @@ def test_keyword_filter_and_freeform_signal_match_through_the_stem(repo):
     day = date(2026, 9, 23)
     repo.write_credits(a, _credits(keywords=("time loop", "vampire")), day)
     repo.write_credits(b, _credits(tmdb_id=911, keywords=("dystopia",)), day)
-    ids = lambda filters, free="": [i for i, _ in repo.search_films(filters, free)]
+
+    def ids(filters, free=""):
+        return [i for i, _ in repo.search_films(filters, free)]
+
     assert ids([Filter("keyword", values=('"loops"',))]) == [a]
     assert ids([Filter("keyword", values=('"time loops"',))]) == [a]
     assert ids([Filter("keyword", values=('"loop AND NOT vampire*"',))]) == []   # a phrase, not a query

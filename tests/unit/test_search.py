@@ -1,3 +1,5 @@
+import pytest
+
 from movie_brain.domain.search import (
     ALIASES,
     CORRECTION_FLOOR,
@@ -193,6 +195,29 @@ def test_rank_candidates_on_nothing_is_empty():
     assert rank_candidates("x", []) == []
 
 
+_PREFILTER_CANDIDATES = [
+    Candidate(k, name, w)
+    for k, (name, w) in enumerate(
+        [
+            ("dystopia", 40), ("distant future", 3), ("dystopian future", 2), ("time loop", 12),
+            ("time travel", 30), ("vampire", 25), ("vampire hunter", 4), ("Humphrey Bogart", 11),
+            ("Jane Bogart", 1), ("Bogart Edwards", 11), ("Lena Brogren", 40), ("Akira Kurosawa", 9),
+            ("Kurosawa", 1), ("world war ii", 50), ("star wars", 5), ("hospital", 8), ("b", 1),
+            ("a very long keyword about loops of time and dystopian vampires", 1), ("Ogranya", 2),
+        ]
+    )
+]
+
+
+def test_rank_candidates_prefilter_at_a_floor_is_lossless():
+    """The floor only skips candidates whose difflib upper bounds cannot reach it, so the result
+    is exactly the unfiltered ranking cut at the floor — the prefilter is a speed-up, never a filter."""
+    for query in ("dystopian", "time loops", "vampires", "humphrey bogart", "kurosawa", "dystopian future", "bogrt"):
+        full = rank_candidates(query, _PREFILTER_CANDIDATES)
+        for floor in (0.6, 0.8, 0.9):
+            assert rank_candidates(query, _PREFILTER_CANDIDATES, floor=floor) == [r for r in full if r.score >= floor]
+
+
 def test_length_penalty_only_bites_when_the_query_is_much_shorter_than_the_token():
     """Equal lengths are unpenalised; a short query inside a long token is scaled down. The
     Brogren assertion above passes ONLY because of this — 0.667 unpenalised, 0.593 with it."""
@@ -218,3 +243,40 @@ def test_embedding_text_skips_empty_fields_and_never_takes_a_title():
 def test_semantic_constants_are_the_spec_values():
     assert EMBED_MODEL == "all-MiniLM-L6-v2" and EMBED_DIM == 384
     assert SEMANTIC_NEAREST == 10 and SEMANTIC_CEILING == 0.8 and SEMANTIC_WEIGHT == 5.0
+
+
+class _FixedEmbedder:
+    """Every query embeds to the first axis, so a film's distance is set by its stored vector alone."""
+
+    def encode(self, texts):
+        return [_axis(0) for _ in texts]
+
+
+def _axis(*dims: int) -> list[float]:
+    v = [0.0] * EMBED_DIM
+    for d in dims:
+        v[d] = 1.0
+    n = sum(x * x for x in v) ** 0.5
+    return [x / n for x in v]
+
+
+def test_a_word_hit_outside_the_ten_nearest_gets_no_semantic_bonus(repo):
+    """D4: the net is the ten nearest by COUNT. A word hit inside it gains 5 × (1 − d); a word
+    hit that is only the 11th nearest (well under the ceiling) keeps its lexical score exactly."""
+    from datetime import date
+
+    from movie_brain.application.search import _semantic_stage
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.embeddings import VectorIndex, pack
+
+    films = [repo.create_film(Film(f"F{i}", 1950 + i, None, "")) for i in range(12)]
+    rows = [(f, pack(_axis(0, 1))) for f in films[:10]] + [(f, pack(_axis(0, 1, 2))) for f in films[10:]]
+    repo.write_embeddings(rows, date(2026, 9, 23), model=EMBED_MODEL, dim=EMBED_DIM)
+    index = VectorIndex(repo, _FixedEmbedder())
+    near, far = films[0], films[10]  # far is exactly the 11th nearest (ties break by id)
+    d_near, d_far = 1 - 2 ** -0.5, 1 - 3 ** -0.5
+    assert d_far < SEMANTIC_CEILING  # far is excluded by the count, not the ceiling
+    scored, _ = _semantic_stage(repo, index, "anything", [(near, 1.0), (far, 1.0)], [])
+    scores = dict(scored)
+    assert scores[near] == pytest.approx(1.0 + SEMANTIC_WEIGHT * (1 - d_near))
+    assert scores[far] == 1.0
