@@ -923,6 +923,8 @@
   let movedOn = null;  // { at, film, label, slow, undo } — the last edit that moved the drawer on
   function moveOnIfLeft(edit) {
     if (edit.film !== state.openFilm) return false;
+    // The line belongs to this drawer's LAST edit: any edit landing here retires the earlier one.
+    movedOn = null; const old = body.querySelector('.moved-on'); if (old) old.remove();
     if (drawer.hidden || openIndex == null) return false;
     if (state.filtered.some((f) => f.id === state.openFilm)) return false;
     if (!state.filtered.length) return false;
@@ -942,7 +944,7 @@
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.moved-on button.undo'); if (!b || b.disabled || !movedOn) return;
     const m = movedOn;
-    m.busy = true; b.disabled = true; if (m.slow) b.textContent = 'Reaching CheapCharts…';
+    m.busy = true; const line0 = body.querySelector('.moved-on'); if (line0) line0.outerHTML = movedOnHtml(m);
     const ok = await m.undo();  // the exact reverse call; on success the film is back in state.films and the list
     const line = body.querySelector('.moved-on');
     if (!ok) { m.busy = false; if (line && movedOn === m) line.outerHTML = movedOnHtml(m, m.slow); return; }

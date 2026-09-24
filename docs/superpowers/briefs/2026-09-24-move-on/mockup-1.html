@@ -97,7 +97,7 @@
 <body><div class="page">
 <div class="intro">
   <h1>Move on — stories and mock-up, round 1</h1>
-  <p>Your rule: <i>when editing a movie in the drawer that caused it to be removed from the current filtered results the selection should automatically move to the next movie in the list</i> — for any filter, not just Shop. Below are <b>eight stories</b> on your real catalogue (a copy from this morning) and <b>one mock-up with three variants</b>. The variants differ in one thing only: where "I change my mind" lives once the drawer has moved on (story 6). Press <b>Walk it</b> on a story and the mock-up sets itself up.</p>
+  <p>Your rule: <i>when editing a movie in the drawer that caused it to be removed from the current filtered results the selection should automatically move to the next movie in the list</i> — for any filter, not just Shop. Below are <b>nine stories</b> on your real catalogue (a copy from this morning) and <b>one mock-up with three variants</b>. The variants differ in one thing only: where "I change my mind" lives once the drawer has moved on (story 6). Press <b>Walk it</b> on a story and the mock-up sets itself up.</p>
   <p>The stories you keep become the automated tests, word for word. <b>You chose B</b> ("b", 2026-09-24); A and C stay on the page only as the record of what you compared. Story 9 and the "CheapCharts is down" switch were added after the gap check.</p>
 </div>
 <h2 class="sec">The stories</h2>
@@ -346,7 +346,7 @@ const STORIES = [
     coach:'M came from a link; it was never in the Shop list, so no row is white. Press <b>★</b>: nothing moves. ↑ ↓ do nothing.',
     setup() { reset(); state.shop = true; render(); openById(film('M').id); } },
   { n:9, title:'I wishlist two in a row and change my mind about the first',
-    text:'Under <b>Shop</b> I wishlist <b>Pan\'s Labyrinth</b> and the drawer moves on to <b>Summer of Soul</b>, wearing "Wishlisted Pan\'s Labyrinth · Undo". I wishlist Summer of Soul too; the drawer moves on to <b>Nashville</b> and the line now says "<b>Wishlisted Summer of Soul · Undo</b>". Pan\'s Labyrinth\'s Undo is gone: only the last edit has one. To take Pan\'s Labyrinth back I close the drawer, turn Shop off, find it near the top wearing its ♥, open it and press ♥ Wishlisted.',
+    text:'Under <b>Shop</b> I wishlist <b>Pan\'s Labyrinth</b> and the drawer moves on to <b>Summer of Soul</b>, wearing "Wishlisted Pan\'s Labyrinth · Undo". I wishlist Summer of Soul too; the drawer moves on to <b>Nashville</b> and the line now says "<b>Wishlisted Summer of Soul (...Or, When the Revolution Could Not Be Televised) · Undo</b>" — the film\'s full title, still one line. Pan\'s Labyrinth\'s Undo is gone: only the last edit has one. To take Pan\'s Labyrinth back I close the drawer, turn Shop off, find it near the top wearing its ♥, open it and press ♥ Wishlisted.',
     coach:'The drawer is on Summer of Soul with Pan\'s Labyrinth\'s Undo. Press <b>♡ Wishlist it</b> and wait a second: the drawer moves on to Nashville and the line is now Summer of Soul\'s. Pan\'s Labyrinth\'s Undo is gone.',
     setup() { STORIES[5].setup(); } },
   { n:8, title:'The list runs out',

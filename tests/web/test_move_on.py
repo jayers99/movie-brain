@@ -353,6 +353,18 @@ def test_the_line_lasts_only_until_that_drawer_is_redrawn(dash: Page):
     expect(undo_line(dash)).to_have_count(0)
 
 
+def test_an_edit_that_drops_nothing_retires_the_earlier_undo(dash: Page):
+    dash.click(WATCHLIST_CHIP)
+    open_film(dash, "Tokyo Story")
+    star(dash)
+    expect(drawer_title(dash)).to_contain_text("The Conformist")
+    expect(undo_line(dash)).to_have_text("Took Tokyo Story off your watchlist · Undo")
+    rate(dash, "7")                                   # a rating drops nothing under Watchlist
+    expect(drawer_title(dash)).to_contain_text("The Conformist")
+    expect(undo_line(dash)).to_have_count(0)          # the line belonged to an earlier edit
+    expect(dash.locator("#drawer input.rating")).to_have_value("7")
+
+
 def test_undo_landing_after_a_step_brings_the_row_back_but_not_the_drawer(dash: Page):
     dash.click(SHOP_CHIP)
     open_film(dash, "Pan's Labyrinth")

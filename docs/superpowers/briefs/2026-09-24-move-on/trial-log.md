@@ -63,3 +63,18 @@ Re-check (scoped to the six, 14 agent minutes): 6 closed, 0 open. Three residual
 ## Delivery, 2026-09-24
 
 Built test-first on `feature/STORY-44-move-on`: 20 Playwright tests in `tests/web/test_move_on.py` — the nine stories under their own names plus the brief's defaults and the five Review Focus lines — on their own 80-film server with a fresh fake wishlist account; four Shop chip tests amended (Shop brief 1.1). The load-bearing lines (the edit-path-only trigger, the landing rule's guard) were each proven by removing them. Whole suite 1826 passed, ruff clean; `mypy src` (the project's own scope, per `pyproject.toml`) carries one pre-existing error unrelated to this feature (`domain/search.py:296`, from the 2026-09-23 mpnet commit, a day before this branch); `mypy src tests` also surfaces pre-existing untyped-test debt across the whole suite, none of it introduced here. Interruptions during the build: **0**. Unverified: the real CheapCharts timing of a wishlist and its Undo (his click at the hands-on test); Safari; a window narrower than about 1,100 px.
+
+## Gap check (point C)
+
+Run on the branch head 67af1e0 (after the whole-branch review's fix wave) on a copy of the live database; the checker replayed the 20 tests (20 passed) and walked all nine stories by hand with the real films, 22 screenshots kept. Every count and neighbour held. The wishlist shapes could only be walked with a browser-side stub (no credentials, by design); the real add and remove are his click at the hands-on test.
+
+| # | Finding (kind) | Answer | Note |
+|---|---|---|---|
+| 1 | Try again on a failed wishlist Undo showed "Couldn't reach CheapCharts." and "Reaching CheapCharts…" side by side while the retry ran (story-differs-on-screen) | fixed | the click now re-draws the whole line as the busy line, as the ♡ slot already did |
+| 2 | An edit in the moved-to drawer that drops nothing left the EARLIER edit's Undo standing — rate The Conformist after un-starring Tokyo Story and the line still offered Tokyo Story's Undo (gap-unpictured) | fixed | ruling: the line belongs to the drawer's own last edit, so any edit landing in the open drawer retires it; pinned by `test_an_edit_that_drops_nothing_retires_the_earlier_undo`; brief decision row extended |
+| 3 | Story 9's line reads with Summer of Soul's full title (story-differs-on-screen) | fixed | wording in the brief and the card; still one line |
+| 4 | "Eight stories" survived in the delivery paragraph and the mock-up intro; screenshots not yet in the folder (story-untrue, low) | fixed | nine; screenshots committed (stories 2, 4, 6 in its rating shape — the wishlist shape needs his account) |
+
+Agent minutes: 18 · Findings: 4 · Fixed: 4 · Stories added: 0 · Declined: 0 · Not checked: a real wishlist add or remove and its timing (no credentials in any check environment); a failed ★ Undo (only the rating variant was forced); Safari; narrow windows.
+
+Re-check: pending.
