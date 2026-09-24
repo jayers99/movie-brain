@@ -269,3 +269,147 @@ def test_stepping_on_before_the_wishlist_lands_moves_nothing_more(dash: Page):
     expect(row(dash, "Pan's Labyrinth")).to_have_count(0)          # the earlier click lands
     expect(drawer_title(dash)).to_contain_text("Summer of Soul")   # the film now open is still in the list
     expect(row(dash, "Summer of Soul")).to_have_class("lit edge")
+
+
+def test_story_6_i_change_my_mind(dash: Page):
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Pan's Labyrinth")
+    wishlist_it(dash)
+    expect(drawer_title(dash)).to_contain_text("Summer of Soul")
+    expect(undo_line(dash)).to_have_text("Wishlisted Pan's Labyrinth · Undo")
+    undo_line(dash).locator("button.undo").click()
+    expect(undo_line(dash).locator("button.undo")).to_have_text("Reaching CheapCharts…")
+    expect(drawer_title(dash)).to_contain_text("Pan's Labyrinth")            # back to the film
+    expect(row(dash, "Pan's Labyrinth")).to_have_class("lit edge")             # back in its place, white
+    assert titles(dash)[1] == "Pan's Labyrinth"
+    expect(dash.locator("#drawer p.links button.wish-button")).to_have_text("♡ Wishlist it")
+    expect(undo_line(dash)).to_have_count(0)
+
+
+def test_story_9_i_wishlist_two_in_a_row_and_change_my_mind_about_the_first(dash: Page):
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Pan's Labyrinth")
+    wishlist_it(dash)
+    expect(drawer_title(dash)).to_contain_text("Summer of Soul")
+    expect(undo_line(dash)).to_have_text("Wishlisted Pan's Labyrinth · Undo")
+    wishlist_it(dash)
+    expect(drawer_title(dash)).to_contain_text("Nashville")
+    expect(undo_line(dash)).to_have_count(1)
+    expect(undo_line(dash)).to_have_text("Wishlisted Summer of Soul · Undo")  # Pan's Labyrinth's Undo is gone
+    # The way back to Pan's Labyrinth is the chip-off route.
+    dash.keyboard.press("Escape")
+    expect(dash.locator("#drawer")).to_be_hidden()
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Pan's Labyrinth")
+    expect(dash.locator("#drawer p.links .wish-done")).to_have_text("♥ Wishlisted")
+
+
+def test_the_line_serves_a_star_and_a_rating_too(dash: Page):
+    dash.click(WATCHLIST_CHIP)
+    open_film(dash, "Tokyo Story")
+    star(dash)
+    expect(drawer_title(dash)).to_contain_text("The Conformist")
+    expect(undo_line(dash)).to_have_text("Took Tokyo Story off your watchlist · Undo")
+    undo_line(dash).locator("button.undo").click()
+    expect(drawer_title(dash)).to_contain_text("Tokyo Story")
+    expect(row(dash, "Tokyo Story")).to_have_class("lit edge")
+    expect(dash.locator("#drawer .watch-toggle")).to_have_text("★")
+    dash.keyboard.press("Escape")
+    dash.click(WATCHLIST_CHIP)  # off
+    dash.click(RATED_CHIP)      # Unrated by me
+    open_film(dash, "Three Colors: Red")
+    rate(dash, "9")
+    expect(drawer_title(dash)).to_contain_text("The Leopard")
+    expect(undo_line(dash)).to_have_text("Rated Three Colors: Red 9 · Undo")
+    undo_line(dash).locator("button.undo").click()
+    expect(drawer_title(dash)).to_contain_text("Three Colors: Red")
+    expect(dash.locator("#drawer input.rating")).to_have_value("")
+
+
+def test_clearing_a_rating_under_rated_by_me_moves_on_and_undo_restores_it(dash: Page):
+    dash.click(RATED_CHIP)
+    dash.click(RATED_CHIP)  # Rated by me
+    assert titles(dash)[:2] == ["Fanny and Alexander", "Tokyo Story"]
+    open_film(dash, "Fanny and Alexander")
+    rate(dash, "")
+    expect(drawer_title(dash)).to_contain_text("Tokyo Story")
+    expect(undo_line(dash)).to_have_text("Cleared Fanny and Alexander's rating · Undo")
+    undo_line(dash).locator("button.undo").click()
+    expect(drawer_title(dash)).to_contain_text("Fanny and Alexander")
+    expect(dash.locator("#drawer input.rating")).to_have_value("9")
+
+
+def test_the_line_lasts_only_until_that_drawer_is_redrawn(dash: Page):
+    dash.click(WATCHLIST_CHIP)
+    open_film(dash, "Tokyo Story")
+    star(dash)
+    expect(undo_line(dash)).to_have_count(1)
+    dash.keyboard.press("ArrowDown")   # a step redraws: the line is gone
+    expect(drawer_title(dash)).to_contain_text("Seven Chances")
+    expect(undo_line(dash)).to_have_count(0)
+    dash.keyboard.press("ArrowUp")     # …and does not come back
+    expect(drawer_title(dash)).to_contain_text("The Conformist")
+    expect(undo_line(dash)).to_have_count(0)
+
+
+def test_undo_landing_after_a_step_brings_the_row_back_but_not_the_drawer(dash: Page):
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Pan's Labyrinth")
+    wishlist_it(dash)
+    expect(drawer_title(dash)).to_contain_text("Summer of Soul")
+    undo_line(dash).locator("button.undo").click()
+    dash.keyboard.press("ArrowDown")   # stepped away while CheapCharts is slow
+    expect(drawer_title(dash)).to_contain_text("Nashville")
+    expect(row(dash, "Pan's Labyrinth")).to_have_count(1)   # the reverse lands: the row is back…
+    expect(drawer_title(dash)).to_contain_text("Nashville")  # …the drawer stays where I am
+    expect(row(dash, "Nashville")).to_have_class("lit edge")
+    expect(undo_line(dash)).to_have_count(0)
+
+
+def test_undo_landing_after_a_close_reopens_nothing(dash: Page):
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Pan's Labyrinth")
+    wishlist_it(dash)
+    expect(drawer_title(dash)).to_contain_text("Summer of Soul")
+    undo_line(dash).locator("button.undo").click()
+    dash.keyboard.press("Escape")
+    expect(dash.locator("#drawer")).to_be_hidden()
+    expect(row(dash, "Pan's Labyrinth")).to_have_count(1)   # the reverse lands
+    dash.wait_for_timeout(300)
+    expect(dash.locator("#drawer")).to_be_hidden()           # nothing reopens
+
+
+def test_a_failed_wishlist_undo_keeps_the_words_and_offers_try_again(dash: Page):
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Aftersun")   # November's product: the fake's REMOVE always fails
+    wishlist_it(dash)
+    expect(drawer_title(dash)).to_contain_text("Do the Right Thing")
+    expect(undo_line(dash)).to_have_text("Wishlisted Aftersun · Undo")
+    undo_line(dash).locator("button.undo").click()
+    expect(undo_line(dash).locator("button.undo")).to_have_text("Try again")
+    expect(undo_line(dash)).to_contain_text("Wishlisted Aftersun")
+    expect(undo_line(dash).locator(".wish-failed")).to_have_text("Couldn't reach CheapCharts.")
+    expect(row(dash, "Aftersun")).to_have_count(0)                     # still out
+    expect(drawer_title(dash)).to_contain_text("Do the Right Thing")   # still here
+    undo_line(dash).locator("button.undo").click()                     # Try again repeats the reverse call
+    expect(undo_line(dash).locator("button.undo")).to_have_text("Reaching CheapCharts…")
+    expect(undo_line(dash).locator("button.undo")).to_have_text("Try again")
+
+
+def test_undo_is_disabled_while_it_runs(dash: Page):
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Pan's Labyrinth")
+    wishlist_it(dash)
+    expect(drawer_title(dash)).to_contain_text("Summer of Soul")
+    undo_line(dash).locator("button.undo").click()
+    expect(undo_line(dash).locator("button.undo")).to_be_disabled()
+
+
+def test_a_failed_wishlist_click_moves_nothing(dash: Page):
+    dash.click(SHOP_CHIP)
+    open_film(dash, "Do the Right Thing")   # Delta's product: the fake's ADD always fails
+    wishlist_it(dash)
+    expect(dash.locator("#drawer p.links .wish-failed")).to_contain_text("Couldn't reach CheapCharts.")
+    expect(drawer_title(dash)).to_contain_text("Do the Right Thing")
+    expect(row(dash, "Do the Right Thing")).to_have_class("lit edge")
+    expect(undo_line(dash)).to_have_count(0)

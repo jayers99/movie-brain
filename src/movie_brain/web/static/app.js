@@ -872,6 +872,9 @@
     if (seq !== drawerSeq) return;
     closeTrailer();  // a redraw (popstate, a step that was in flight) never happens under an open trailer
     body.innerHTML = detailHtml(d); drawnDetail = d;
+    // Move on: the line rides with the film it was drawn for; any other film's draw ends it.
+    if (movedOn && movedOn.at === id) body.querySelector('h2').insertAdjacentHTML('afterend', movedOnHtml());
+    else movedOn = null;
     drawer.hidden = false; backdrop.hidden = false; drawer.scrollTop = 0;
     state.openFilm = id; state.mark = id; drawnFilm = id;
     const at = state.filtered.findIndex((f) => f.id === id);
@@ -923,6 +926,27 @@
     moveDrawerTo(i);
     return true;
   }
+  // The line under the moved-to drawer's title: "Wishlisted Pan's Labyrinth · Undo". Only the
+  // LAST edit has one; it lasts until that drawer is redrawn (openDrawer clears it for any other
+  // film, hideDrawer always). A failed wishlist Undo keeps the words and offers Try again in
+  // Undo's place; a failed rating or star Undo toasts (inside edit.undo) and keeps its Undo.
+  function movedOnHtml(failed = false) {
+    return `<div class="moved-on">${esc(movedOn.label)} ·${failed ? ' <span class="wish-failed">Couldn\'t reach CheapCharts.</span>' : ''} <button class="undo">${failed ? 'Try again' : 'Undo'}</button></div>`;
+  }
+  body.addEventListener('click', async (e) => {
+    const b = e.target.closest('.moved-on button.undo'); if (!b || b.disabled || !movedOn) return;
+    const m = movedOn;
+    b.disabled = true; if (m.slow) b.textContent = 'Reaching CheapCharts…';
+    const ok = await m.undo();  // the exact reverse call; on success the film is back in state.films and the list
+    const line = body.querySelector('.moved-on');
+    if (!ok) { if (line && movedOn === m) line.outerHTML = movedOnHtml(m.slow); return; }
+    // Landing rule: the row is back already; the drawer goes back to the film only if nothing was
+    // stepped, clicked or closed since Undo was pressed (any other draw cleared movedOn).
+    if (movedOn !== m || drawer.hidden || state.openFilm !== m.at) return;
+    movedOn = null;
+    const i = state.filtered.findIndex((f) => f.id === m.film);
+    if (i >= 0) moveDrawerTo(i); else if (line) line.remove();
+  });
   // The index of the film row showing through the dim at a point, or -1. Only the TOPMOST thing
   // under the backdrop counts: a row scrolled beneath the sticky header is not showing, and the
   // white row is pointer-events:none, so both read as "no row" and a click there closes.
