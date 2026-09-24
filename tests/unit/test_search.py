@@ -5,7 +5,8 @@ from movie_brain.domain.search import (
     EMBED_MODEL,
     FIELDS,
     FREEFORM_KEYWORD_FLOOR,
-    MAX_DISTANCE,
+    SEMANTIC_CEILING,
+    SEMANTIC_NEAREST,
     SEMANTIC_WEIGHT,
     Candidate,
     Filter,
@@ -216,4 +217,4 @@ def test_embedding_text_skips_empty_fields_and_never_takes_a_title():
 
 def test_semantic_constants_are_the_spec_values():
     assert EMBED_MODEL == "all-MiniLM-L6-v2" and EMBED_DIM == 384
-    assert MAX_DISTANCE == 0.6 and SEMANTIC_WEIGHT == 5.0
+    assert SEMANTIC_NEAREST == 10 and SEMANTIC_CEILING == 0.8 and SEMANTIC_WEIGHT == 5.0

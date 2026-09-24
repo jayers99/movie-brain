@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.domain.models import Film
-from movie_brain.domain.search import EMBED_DIM, MAX_DISTANCE
+from movie_brain.domain.search import EMBED_DIM
 from movie_brain.infrastructure.embeddings import SemanticUnavailable, VectorIndex, pack, unpack
 
 D = date(2026, 8, 19)
@@ -37,14 +37,17 @@ def _films(repo, n):
     return [repo.create_film(Film(f"F{i}", 1950 + i, None, "")) for i in range(n)]
 
 
-def test_nearest_orders_by_distance_inside_the_floor_and_ties_by_id(repo, fake_embedder):
-    a, b, c = _films(repo, 3)
-    repo.write_embeddings([(a, pack(_unit(0))), (b, pack(_unit(0, 1))), (c, pack(_unit(2)))], D, model="m", dim=EMBED_DIM)
+def test_nearest_is_a_count_under_a_ceiling_ordered_by_distance_then_id(repo, fake_embedder):
+    films = _films(repo, 12)
+    rows = [(films[0], pack(_unit(0))), (films[1], pack(_unit(0, 1)))] + [(f, pack(_unit(2))) for f in films[2:]]
+    repo.write_embeddings(rows, D, model="m", dim=EMBED_DIM)
     idx = VectorIndex(repo, fake_embedder, model="m")
     q = _unit(0)
-    assert idx.nearest(q, MAX_DISTANCE) == [(a, pytest.approx(0.0)), (b, pytest.approx(1 - 2 ** -0.5))]
-    assert idx.nearest(q, 2.0)[-1] == (c, pytest.approx(1.0))  # a wide floor admits everything, farthest last
-    assert len(idx) == 3
+    assert idx.nearest(q, limit=10, ceiling=0.8) == [(films[0], pytest.approx(0.0)), (films[1], pytest.approx(1 - 2 ** -0.5))]  # the ten others sit at 1.0, past the ceiling
+    wide = idx.nearest(q, limit=10, ceiling=2.0)
+    assert len(wide) == 10 and wide[:2] == [(films[0], pytest.approx(0.0)), (films[1], pytest.approx(1 - 2 ** -0.5))]
+    assert [i for i, _ in wide[2:]] == sorted(films[2:])[:8]  # ties at 1.0 break by id, and the count caps them
+    assert len(idx) == 12
 
 
 def test_distances_reports_only_the_films_that_hold_a_vector(repo, fake_embedder):
@@ -58,9 +61,9 @@ def test_index_rebuilds_when_the_table_changes(repo, fake_embedder):
     a, b = _films(repo, 2)
     repo.write_embeddings([(a, pack(_unit(0)))], D, model="m", dim=EMBED_DIM)
     idx = VectorIndex(repo, fake_embedder, model="m")
-    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [a]
+    assert [i for i, _ in idx.nearest(_unit(0), 10, 2.0)] == [a]
     repo.write_embeddings([(b, pack(_unit(0)))], date(2026, 8, 20), model="m", dim=EMBED_DIM)
-    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [a, b]
+    assert [i for i, _ in idx.nearest(_unit(0), 10, 2.0)] == [a, b]
 
 
 def test_embed_query_goes_through_the_embedder_once(repo, fake_embedder):
@@ -72,7 +75,7 @@ def test_embed_query_goes_through_the_embedder_once(repo, fake_embedder):
 
 def test_an_empty_index_answers_nothing_without_error(repo, fake_embedder):
     idx = VectorIndex(repo, fake_embedder, model="m")
-    assert idx.nearest(_unit(0), 2.0) == [] and idx.distances(_unit(0), [1]) == {} and len(idx) == 0
+    assert idx.nearest(_unit(0), 10, 2.0) == [] and idx.distances(_unit(0), [1]) == {} and len(idx) == 0
 
 
 def test_sentence_transformer_adapter_reports_availability_and_raises_when_absent(monkeypatch):
@@ -149,15 +152,15 @@ def test_index_notices_a_merge_that_moves_the_loser_vector_onto_the_survivor(rep
     a, b = _films(repo, 2)
     repo.write_embeddings([(b, pack(_unit(0)))], D, model="m", dim=EMBED_DIM)
     idx = VectorIndex(repo, fake_embedder, model="m")
-    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [b]
+    assert [i for i, _ in idx.nearest(_unit(0), 10, 2.0)] == [b]
     repo.merge_film(b, a, D)  # survivor a holds no vector, so the loser's row MOVES to a
-    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [a]
+    assert [i for i, _ in idx.nearest(_unit(0), 10, 2.0)] == [a]
 
 
 def test_index_notices_a_tombstoned_film_dropping_out(repo, fake_embedder):
     (a,) = _films(repo, 1)
     repo.write_embeddings([(a, pack(_unit(0)))], D, model="m", dim=EMBED_DIM)
     idx = VectorIndex(repo, fake_embedder, model="m")
-    assert [i for i, _ in idx.nearest(_unit(0), 2.0)] == [a]
+    assert [i for i, _ in idx.nearest(_unit(0), 10, 2.0)] == [a]
     repo.tombstone_film(a, D)  # film_embedding is untouched; only _NOT_DISPOSED hides the row
-    assert idx.nearest(_unit(0), 2.0) == []
+    assert idx.nearest(_unit(0), 10, 2.0) == []

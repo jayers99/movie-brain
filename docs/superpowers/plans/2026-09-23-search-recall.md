@@ -973,8 +973,8 @@ Numbers from `scripts/search_benchmark.py` against copies of the live database (
 | | plural | 282 | 0.546 | 0.168 | 18.0 | | |
 | After Task 3 (stem + ladder) | verbatim | 300 | 1.000 | 0.623 | 47.8 | hit, recall@10=1.00 (size=4) | hit, recall@10=0.70 (size=75) |
 | | plural | 282 | 1.000 | 0.677 | 27.1 | | |
-| After Task 4 (meaning adds) | verbatim | | | | | | |
-| | plural | | | | | | |
+| After Task 4 (meaning adds) | verbatim | 300 | 1.000 | 0.627 | 55.4 | hit, recall@10=1.00 (size=12) | hit, recall@10=0.70 (size=81) |
+| | plural | 282 | 1.000 | 0.676 | 35.0 | | |
 | mpnet (Task 6) | verbatim | | | | | | |
 | | plural | | | | | | |
 

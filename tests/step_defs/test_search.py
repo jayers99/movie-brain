@@ -80,6 +80,15 @@ def search(repo, result, text):
     result["r"] = run_search(repo, text.replace('\\"', '"'))
 
 
+@given("Delta is a night-shift caregiver drama with no word in common")
+def delta(repo, films):
+    d = repo.create_film(Film("Delta", 1970, None, ""))
+    repo.set_external_id(d, "tmdb", "913", DAY)
+    repo.write_credits(d, _credits(913, "Delta", "A caregiver on the night shift.", (),
+                                   (CastRow(78, "Someone Else", "Orderly", 0),), ()), DAY)
+    films["Delta"] = d
+
+
 @given("the corpus is embedded by meaning")
 def embedded(repo, fake_embedder):
     embed_films(repo, fake_embedder, DAY, apply=True, log=lambda _m: None)

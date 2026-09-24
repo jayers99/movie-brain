@@ -141,13 +141,14 @@ class VectorIndex:
 
         return ids, matrix @ np.asarray(vector, dtype="<f4")
 
-    def nearest(self, vector: Sequence[float], floor: float) -> list[tuple[int, float]]:
+    def nearest(self, vector: Sequence[float], limit: int, ceiling: float) -> list[tuple[int, float]]:
+        """The `limit` nearest films with distance ≤ ceiling, by distance then id (D4)."""
         ids, scores = self._scores(vector)
         if scores is None:
             return []
-        hits = [(ids[i], float(1.0 - s)) for i, s in enumerate(scores) if 1.0 - s <= floor]
+        hits = [(ids[i], float(1.0 - s)) for i, s in enumerate(scores) if 1.0 - s <= ceiling]
         hits.sort(key=lambda t: (t[1], t[0]))
-        return hits
+        return hits[:limit]
 
     def distances(self, vector: Sequence[float], ids: Iterable[int]) -> dict[int, float]:
         row_ids, scores = self._scores(vector)

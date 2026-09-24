@@ -5,9 +5,10 @@ repository's candidate queries: exact match first; else the trigram candidates r
 `similarity`, the top one used when it clears CORRECTION_FLOOR and always reported in
 `corrections`; below that floor nothing is used and the nearest names are `suggestions`
 (spec D7, D8). A quoted value is exact and skips correction. 3. `search_films` filters and ranks.
-4. Semantic (optional, spec D16, D17): when a `VectorIndex` is supplied and the query has
-freeform text, meaning either re-ranks a non-empty lexical result as one more summed signal, or
-supplies candidates when the lexical result is empty.
+4. Semantic (optional, search-recall spec D3–D5, superseding Plan C D16/D18): when a
+`VectorIndex` is supplied and the query has freeform text, the nearest `SEMANTIC_NEAREST` films
+under `SEMANTIC_CEILING` always join the result — as a re-rank bonus for a word hit already in
+the lexical set, appended after every word hit for a film reached by meaning alone.
 
 Resolution never touches SQL; it asks the repository for candidates and decides in Python,
 because the FTS trigram index is a candidate generator, not a ranker (Plan A's finding).
@@ -21,8 +22,9 @@ from dataclasses import asdict, dataclass
 from movie_brain.domain.search import (
     CORRECTION_FLOOR,
     FIELDS,
-    MAX_DISTANCE,
     MAX_SUGGESTIONS,
+    SEMANTIC_CEILING,
+    SEMANTIC_NEAREST,
     SEMANTIC_WEIGHT,
     SUGGESTION_FLOOR,
     Candidate,
@@ -40,6 +42,7 @@ from movie_brain.infrastructure.embeddings import SemanticUnavailable, VectorInd
 
 NO_CREDITS_HINT = "no credits loaded — run `movie-brain enrich credits --apply`"
 SEMANTIC_HINT = "no exact match — showing the {n} closest by meaning"
+MORE_BY_MEANING_HINT = "{n} more by meaning"
 NO_SEMANTIC_HINT = "semantic search is not installed — uv sync --extra semantic"
 
 
@@ -208,31 +211,30 @@ def _semantic_stage(
     ids: list[tuple[int, float]],
     filters: list[Filter],
 ) -> tuple[list[tuple[int, float]], str | None]:
-    """Stage 4 (spec D16, D17). Re-rank mode when the lexical set has members: semantic is one
-    more SUMMED signal, never a replacement order, so a title hit stays first. Supply mode when
-    it is empty: the films within MAX_DISTANCE, intersected with the exact set every field
-    filter produces over the whole catalogue (parent D6), ordered by distance, and said so in
-    the hint. A model that cannot load leaves the lexical result untouched. The score column
-    differs by mode — lexical + bonus in re-rank mode, 1 − distance in supply mode — and
-    `run_search` discards it; do not compare scores across modes."""
+    """Stage 4 (search-recall spec D3–D5, superseding Plan C D16/D18). ONE mode: the nearest
+    SEMANTIC_NEAREST films under SEMANTIC_CEILING always join the result. A word hit keeps its
+    lexical score plus the semantic bonus (D17: summed, a title hit stays first); a film reached
+    by meaning alone carries the bonus and nothing else, and is APPENDED after every word hit
+    rather than merged by score, so meaning never lifts a film past a word. Every meaning-only
+    film must pass every field filter over the whole catalogue (D5). The hint names what
+    meaning did: how many it added, or that it supplied the whole result. A model that cannot
+    load leaves the lexical result untouched."""
     if len(index) == 0:
         return ids, None  # no vectors yet — never load the model for nothing to search
     try:
         query = index.embed_query(free)
     except SemanticUnavailable:
         return ids, None
-    if ids:
-        dist = index.distances(query, [i for i, _ in ids])
-        rescored = [
-            (i, s + (SEMANTIC_WEIGHT * (1.0 - dist[i]) if i in dist and dist[i] <= MAX_DISTANCE else 0.0))
-            for i, s in ids
-        ]
-        rescored.sort(key=lambda t: -t[1])  # stable: ties keep search_films' title order
-        return rescored, None
-    near = index.nearest(query, MAX_DISTANCE)
-    if near and filters:
+    near = index.nearest(query, SEMANTIC_NEAREST, SEMANTIC_CEILING)
+    dist = dict(near)
+    present = {i for i, _ in ids}
+    extra = [(i, d) for i, d in near if i not in present]
+    if extra and filters:
         allowed = {i for i, _ in repo.search_films(filters, "")}
-        near = [(i, d) for i, d in near if i in allowed]
-    if not near:
-        return [], None
-    return [(i, 1.0 - d) for i, d in near], SEMANTIC_HINT.format(n=len(near))
+        extra = [(i, d) for i, d in extra if i in allowed]
+    rescored = [(i, s + (SEMANTIC_WEIGHT * (1.0 - dist[i]) if i in dist else 0.0)) for i, s in ids]
+    rescored.sort(key=lambda t: -t[1])  # stable: ties keep search_films' title order
+    added = [(i, SEMANTIC_WEIGHT * (1.0 - d)) for i, d in extra]
+    if not ids:
+        return added, (SEMANTIC_HINT.format(n=len(added)) if added else None)
+    return rescored + added, (MORE_BY_MEANING_HINT.format(n=len(added)) if added else None)

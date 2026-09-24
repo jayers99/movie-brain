@@ -148,6 +148,28 @@ Feature: Resolving a search into an exact film-id set
     Then the result ids are Alpha then Beta
     And the result is ranked
     And the hints do not include "no exact match — showing the 2 closest by meaning"
+    And the hints do not include "0 more by meaning"
+
+  Scenario: Meaning adds films under the word hits and says how many
+    Given Delta is a night-shift caregiver drama with no word in common
+    And the corpus is embedded by meaning
+    When I search by meaning for "ward"
+    Then the result ids are Beta then Delta
+    And the result is ranked
+    And the hints include "1 more by meaning"
+
+  Scenario: A field excludes the films meaning would have added
+    Given Delta is a night-shift caregiver drama with no word in common
+    And the corpus is embedded by meaning
+    When I search by meaning for "ward director: hawks"
+    Then the result ids are Beta
+    And the hints do not include "1 more by meaning"
+
+  Scenario: Nothing is added when no other film is near by meaning
+    Given the corpus is embedded by meaning
+    When I search by meaning for "sternwood"
+    Then the result ids are Alpha
+    And the hints do not include "1 more by meaning"
 
   Scenario: Fields alone are never sent to the model
     Given the corpus is embedded by meaning

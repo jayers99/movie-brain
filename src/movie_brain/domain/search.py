@@ -51,13 +51,12 @@ LENGTH_PENALTY_EXPONENT = 0.35  # in similarity(): plain difflib ratio over-rewa
 # token ('bogrt' inside 'Lena Brogren' scored 0.667 unpenalised); token scores are scaled by
 # (min_len / max_len) ** LENGTH_PENALTY_EXPONENT; equal lengths unpenalised
 
-# Semantic search (Plan C, spec D14–D18). The vector is over PROSE ONLY: the title is the
-# heaviest lexical signal already, and inside the vector it rewards string coincidence —
-# measured: title-in-vector put "Hard Boiled" (1992) first on the owner's own query.
+# Semantic search (Plan C D14–D17; search-recall spec D3–D4 supersede D16/D18). The vector is over PROSE ONLY.
 EMBED_MODEL = "all-MiniLM-L6-v2"
 EMBED_DIM = 384
-MAX_DISTANCE = 0.6  # cosine distance floor; one constant, no slider (owner decision, D18)
-SEMANTIC_WEIGHT = 5.0  # re-rank mode: one more SUMMED signal, 5 × (1 − distance), so a title hit (10) stays first
+SEMANTIC_NEAREST = 10  # the net is a COUNT: ten nearest, whatever their distance, so it means the same under every model
+SEMANTIC_CEILING = 0.8  # a loose sanity ceiling — only films the model calls unrelated are dropped (short-query distances cluster 0.5–0.7)
+SEMANTIC_WEIGHT = 5.0  # one more SUMMED signal, 5 × (1 − distance): a title hit (10) stays above any meaning-only film
 
 
 @dataclass(frozen=True)
