@@ -413,3 +413,28 @@ def test_a_failed_wishlist_click_moves_nothing(dash: Page):
     expect(drawer_title(dash)).to_contain_text("Do the Right Thing")
     expect(row(dash, "Do the Right Thing")).to_have_class("lit edge")
     expect(undo_line(dash)).to_have_count(0)
+
+
+def test_story_5_the_awkward_one_re_pinned_a_chip_press_moves_nothing(dash: Page, move_on_server: tuple[str, dict[str, int]]):
+    base, _ = move_on_server
+    dash.goto(f"{base}/?list=noir-test")
+    dash.wait_for_selector("#films tbody[data-count]")
+    assert titles(dash) == NOIR                       # unordered list: Metacritic order, Pursued (no score) last
+    open_film(dash, "Pursued")
+    dash.keyboard.press("Escape")
+    expect(row(dash, "Pursued")).to_have_class("marked")
+    dash.click(OWNED_CHIP)                            # Owned
+    expect(row(dash, "Pursued")).to_have_count(0)
+    expect(dash.locator("#films tbody tr.marked")).to_have_count(0)
+    expect(dash.locator("#drawer")).to_be_hidden()    # nothing jumps, nothing opens
+    dash.click(OWNED_CHIP)                            # Not owned
+    dash.click(OWNED_CHIP)                            # round to off
+    expect(row(dash, "Pursued")).to_have_class("marked")
+    # With the drawer open a chip cannot be pressed at all: the click lands on the grey and closes.
+    open_film(dash, "Pursued")
+    box = dash.locator(OWNED_CHIP).bounding_box()
+    assert box is not None
+    dash.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    expect(dash.locator("#drawer")).to_be_hidden()
+    expect(dash.locator("#count-showing")).to_have_text("Showing 3 of 80")   # Owned was NOT pressed
+    expect(row(dash, "Pursued")).to_have_class("marked")
