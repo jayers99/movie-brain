@@ -57,4 +57,4 @@ Run on the 0.9 draft (commit 8cdedae), read-only on a snapshot and a database co
 
 Agent minutes: 35 · Findings: 6 · Fixed: 5 · Stories added: 1 · Declined: 0 · Not checked: any real CheapCharts call (no credentials); Back-button filter changes with a drawer opened from a link; the search box and column filters other than Title as drop-causing edits.
 
-Re-check: pending.
+Re-check (scoped to the six, 14 agent minutes): 6 closed, 0 open. Three residuals, all fixed in the same commit: the landing rule now says "not stepped away or closed since pressing Undo" (a ↓ then ↑ back counts as stepping away — that is what the build's memory does); story 9's card is labelled "B only"; the last two unqualified "five to ten seconds" became "several seconds (untimed)".

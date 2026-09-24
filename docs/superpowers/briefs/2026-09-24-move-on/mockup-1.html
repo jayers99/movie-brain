@@ -138,10 +138,10 @@
 <div class="panel">
   <h2>What may surprise you</h2>
   <ul>
-    <li><b>The drawer moves when the edit lands, not when you press.</b> A star or a rating lands at once. A wishlist click talks to CheapCharts first — five to ten seconds on the real thing, one pretend second here — and the drawer moves on when the answer comes. If you have already pressed ↓ by then, nothing moves: the film now open is still in the list.</li>
+    <li><b>The drawer moves when the edit lands, not when you press.</b> A star or a rating lands at once. A wishlist click talks to CheapCharts first — several seconds on the real thing (an estimate, never timed), one pretend second here — and the drawer moves on when the answer comes. If you have already pressed ↓ by then, nothing moves: the film now open is still in the list.</li>
     <li><b>A chip cannot be pressed while the drawer is open.</b> The chips, the search box, the list picker and the column filters all sit under the grey; a click there closes the drawer, as today. So the only thing that can ever move the drawer is an edit inside it (story 5).</li>
     <li><b>When the list runs out, the drawer stays.</b> Un-star the only film left and there is nowhere to move: the drawer stays on it, nothing is white, ↑ ↓ are quiet (story 8). It does not close by itself.</li>
-    <li><b>Only in B:</b> the undo line remembers the <i>last</i> edit only, and only in the drawer it moved to (story 9). Step, click another row, close, or reload, and the line is gone; the way back is then the chip-off route (A). Undo lands like the edit did: the row comes back at once, and the drawer goes back to the film only if you are still in the drawer that carried the line — after a step or a close, nothing moves. A failed Undo keeps the line's words and offers Try again.</li>
+    <li><b>Only in B:</b> the undo line remembers the <i>last</i> edit only, and only in the drawer it moved to (story 9). Step, click another row, close, or reload, and the line is gone; the way back is then the chip-off route (A). Undo lands like the edit did: the row comes back at once, and the drawer goes back to the film only if you have not stepped away or closed since pressing Undo — otherwise nothing moves. A failed Undo keeps the line's words and offers Try again.</li>
     <li><b>Only in C:</b> one ↑ reaches the film that left, although the hint beside ✕ still says "previous film". From that film, ↑ goes to the film before the gap and ↓ to the film that took its place, as today.</li>
     <li><b>Nothing here is sent anywhere.</b> The wishlist click is pretend (one second, no CheapCharts); the star and the rating change only this page.</li>
   </ul>
@@ -362,14 +362,14 @@ function wishMemory(f) {
     if (b) { b.disabled = true; b.textContent = 'Reaching CheapCharts…'; }
     await new Promise((r) => setTimeout(r, 1000));
     if ($('#down').checked) {
-      if (state.open === m.at && $('#drawer').hidden === false) drawDrawer(byId(m.at), true);
+      if (state.movedOn === m && state.open === m.at && !$('#drawer').hidden) drawDrawer(byId(m.at), true);
       return;
     }
     f.w = f.w ? 0 : 1; landUndo(f, m);
   } };
 }
 function landUndo(f, m) {
-  if (state.open === m.at && !$('#drawer').hidden) goBackTo(f); else { state.movedOn = null; render(); }
+  if (state.movedOn === m && state.open === m.at && !$('#drawer').hidden) goBackTo(f); else render();
 }
 function reset() {
   closeDrawer();
@@ -424,7 +424,7 @@ document.addEventListener('keydown', (e) => {
 $('#variants').innerHTML = VARIANTS.map((v) => `<button class="variant" data-key="${v.key}">${v.name}<small>${v.sub}</small></button>`).join('');
 $('#variants').addEventListener('click', (e) => { const b = e.target.closest('.variant'); if (!b) return; state.variant = b.dataset.key; history.replaceState(null, '', '#' + state.variant); if (state.open != null) drawDrawer(byId(state.open)); render(); });
 $('#stories').innerHTML = [...STORIES].sort((a, b) => a.n - b.n).map((s) => `<div class="story" data-n="${s.n}"><h3><span class="n">${s.n}</span>${s.title}</h3><p>${s.text}</p>
-  <div class="foot"><span class="does">${s.coachBy ? 'differs between A, B and C' : 'the same in A, B and C'}</span><button class="walk" data-n="${s.n}">Walk it ▸</button></div></div>`).join('');
+  <div class="foot"><span class="does">${s.coachBy ? 'differs between A, B and C' : s.n === 9 ? 'B only' : 'the same in A, B and C'}</span><button class="walk" data-n="${s.n}">Walk it ▸</button></div></div>`).join('');
 $('#stories').addEventListener('click', (e) => {
   const b = e.target.closest('.walk'); if (!b) return;
   const s = STORIES.find((x) => x.n === +b.dataset.n); state.story = s.n; s.setup(); render();
