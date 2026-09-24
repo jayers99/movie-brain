@@ -52,8 +52,10 @@ LENGTH_PENALTY_EXPONENT = 0.35  # in similarity(): plain difflib ratio over-rewa
 # (min_len / max_len) ** LENGTH_PENALTY_EXPONENT; equal lengths unpenalised
 
 # Semantic search (Plan C D14–D17; search-recall spec D3–D4 supersede D16/D18). The vector is over PROSE ONLY.
-EMBED_MODEL = "all-MiniLM-L6-v2"
-EMBED_DIM = 384
+# all-mpnet-base-v2 since 2026-09-23 (search-recall D7, owner): a tie on the keyword benchmark, a clear win on
+# meaning-only phrasings; MiniLM (all-MiniLM-L6-v2, 384) before. Changing the pair re-embeds every film (D6).
+EMBED_MODEL = "all-mpnet-base-v2"
+EMBED_DIM = 768
 # the net is a COUNT: ten nearest, whatever their distance, so it means the same under every model
 SEMANTIC_NEAREST = 10
 # a loose sanity ceiling — only films the model calls unrelated are dropped (short-query distances cluster 0.5–0.7)

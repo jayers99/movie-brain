@@ -985,3 +985,5 @@ Precision on prose (final review): verbatim recall@10 fell 0.705 → 0.635 at Ta
 Owner decision 1 (2026-09-23): Porter on keywords only — migration 030 no longer rebuilds `film_text_fts`; measured on a migrated copy with prose Porter reverted, verbatim recall@10 0.686 (0.627 as built, baseline 0.705) and plural 0.855 (0.676), with `time loops` and `dystopian` still hitting through the keyword index and ladder.
 
 Owner decision 2 (2026-09-23): no meaning-only films under a title hit — `_semantic_stage` drops its additions when any word hit reaches its film through the title (`Repository.title_hits`), so "maltese falcon" returns the film alone while "dystopian" and "ward" keep theirs; meaning still re-scores the word hits.
+
+Owner decision 3 (2026-09-23): adopt all-mpnet-base-v2 (768 dims) — the keyword benchmark tied (0.626/0.677 vs 0.627/0.676) and the meaning-only probe was a clear win (Groundhog Day rank 1 vs 9 on "a man relives the same day over and over"), warm encode 10 ms, full re-embed 44 s; the live re-embed is the controller's step.
