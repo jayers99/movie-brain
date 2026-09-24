@@ -90,6 +90,7 @@ tbody tr.departed td { color:var(--muted); }
 #drawer .moved-on { margin:4px 0 10px; padding:6px 10px; background:var(--chip); border-radius:6px; font-size:14px; }
 #drawer .moved-on button.undo { font:inherit; border:0; background:none; padding:0; margin-left:4px; color:LinkText; text-decoration:underline; cursor:pointer; }
 #drawer .moved-on button.undo[disabled] { color:var(--muted); text-decoration:none; cursor:default; }
+#drawer .moved-on .wish-failed { color:var(--muted); }
 .svc-more { display:inline; }
 .svc-more > summary { display:inline; cursor:pointer; color:var(--muted); list-style:none; }
 .svc-more > summary::-webkit-details-marker { display:none; }

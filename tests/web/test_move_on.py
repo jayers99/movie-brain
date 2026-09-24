@@ -269,6 +269,7 @@ def test_stepping_on_before_the_wishlist_lands_moves_nothing_more(dash: Page):
     expect(row(dash, "Pan's Labyrinth")).to_have_count(0)          # the earlier click lands
     expect(drawer_title(dash)).to_contain_text("Summer of Soul")   # the film now open is still in the list
     expect(row(dash, "Summer of Soul")).to_have_class("lit edge")
+    expect(undo_line(dash)).to_have_count(0)                       # landed in a drawer already stepped away from
 
 
 def test_story_6_i_change_my_mind(dash: Page):

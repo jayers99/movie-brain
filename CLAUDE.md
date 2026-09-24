@@ -52,7 +52,7 @@ uv run movie-brain thumbprint backfill [--apply]      # copy owned/criterion/met
 uv run movie-brain audit run [--no-tmdb]              # read-only consistency checks → audit_flags (+ one-time TMDB facts cache); prints tally + top suspects
 uv run movie-brain audit verdicts [--verdict V]       # append-only human verdict history (pattern-analysis export)
 
-uv run pytest                                        # whole suite (~40s, Playwright dominates; the real-model test runs only when the semantic extra is installed, else skips)
+uv run pytest                                        # whole suite (~2.5 min, Playwright dominates; the real-model test runs only when the semantic extra is installed, else skips)
 uv run pytest -q -m semantic                         # the ONE test that loads the real sentence-transformers model (needs `uv sync --extra semantic`)
 uv run pytest tests/step_defs/test_sync.py -k kept   # single test / scenario by keyword
 uv run playwright install chromium                   # once, for tests/web/test_dashboard.py

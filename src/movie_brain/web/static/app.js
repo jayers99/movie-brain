@@ -518,22 +518,26 @@
     }
     if (input.value.trim() === current) return;
     input.dataset.busy = '1';
+    let saved = null;
     try {
       const r = await fetch(`/api/films/${id}/rating`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: parsed.score }) });
       if (!r.ok) throw new Error((await r.json()).error || r.statusText);
-      updateFilmLocal(await r.json());
-      if (film) moveOnIfLeft({ film: id, slow: false,
-        label: parsed.score == null ? `Cleared ${film.title}'s rating` : `Rated ${film.title} ${parsed.score}`,
-        undo: async () => {
-          const r2 = await fetch(`/api/films/${id}/rating`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: prev }) }).catch(() => null);
-          if (!r2 || !r2.ok) { toast('Could not save rating'); return false; }
-          updateFilmLocal(await r2.json()); return true;
-        } });
+      saved = await r.json();
+      updateFilmLocal(saved);
     } catch (err) {
       input.value = current; toast(`Could not save rating: ${err.message}`);
     } finally {
       delete input.dataset.busy;
     }
+    // Outside the try/catch/finally: a throw from the move path must never run the catch above
+    // (which would toast a failed save) after the save itself already succeeded.
+    if (saved && film) moveOnIfLeft({ film: id, slow: false,
+      label: parsed.score == null ? `Cleared ${film.title}'s rating` : `Rated ${film.title} ${parsed.score}`,
+      undo: async () => {
+        const r2 = await fetch(`/api/films/${id}/rating`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: prev }) }).catch(() => null);
+        if (!r2 || !r2.ok) { toast('Could not save rating'); return false; }
+        updateFilmLocal(await r2.json()); return true;
+      } });
   }
   document.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input.rating')) e.target.blur(); });
   document.addEventListener('focusout', (e) => { if (e.target.matches('input.rating')) commitRating(e.target); });
@@ -873,7 +877,7 @@
     closeTrailer();  // a redraw (popstate, a step that was in flight) never happens under an open trailer
     body.innerHTML = detailHtml(d); drawnDetail = d;
     // Move on: the line rides with the film it was drawn for; any other film's draw ends it.
-    if (movedOn && movedOn.at === id) body.querySelector('h2').insertAdjacentHTML('afterend', movedOnHtml());
+    if (movedOn && movedOn.at === id) body.querySelector('h2').insertAdjacentHTML('afterend', movedOnHtml(movedOn));
     else movedOn = null;
     drawer.hidden = false; backdrop.hidden = false; drawer.scrollTop = 0;
     state.openFilm = id; state.mark = id; drawnFilm = id;
@@ -918,6 +922,7 @@
   // an empty list moves nothing. `edit` is what the moved-to drawer's undo line remembers.
   let movedOn = null;  // { at, film, label, slow, undo } — the last edit that moved the drawer on
   function moveOnIfLeft(edit) {
+    if (edit.film !== state.openFilm) return false;
     if (drawer.hidden || openIndex == null) return false;
     if (state.filtered.some((f) => f.id === state.openFilm)) return false;
     if (!state.filtered.length) return false;
@@ -930,20 +935,24 @@
   // LAST edit has one; it lasts until that drawer is redrawn (openDrawer clears it for any other
   // film, hideDrawer always). A failed wishlist Undo keeps the words and offers Try again in
   // Undo's place; a failed rating or star Undo toasts (inside edit.undo) and keeps its Undo.
-  function movedOnHtml(failed = false) {
-    return `<div class="moved-on">${esc(movedOn.label)} ·${failed ? ' <span class="wish-failed">Couldn\'t reach CheapCharts.</span>' : ''} <button class="undo">${failed ? 'Try again' : 'Undo'}</button></div>`;
+  function movedOnHtml(m, failed = false) {
+    if (m.busy) return `<div class="moved-on">${esc(m.label)} · <button class="undo" disabled>${m.slow ? 'Reaching CheapCharts…' : 'Undo'}</button></div>`;
+    return `<div class="moved-on">${esc(m.label)} ·${failed ? ' <span class="wish-failed">Couldn\'t reach CheapCharts.</span>' : ''} <button class="undo">${failed ? 'Try again' : 'Undo'}</button></div>`;
   }
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.moved-on button.undo'); if (!b || b.disabled || !movedOn) return;
     const m = movedOn;
-    b.disabled = true; if (m.slow) b.textContent = 'Reaching CheapCharts…';
+    m.busy = true; b.disabled = true; if (m.slow) b.textContent = 'Reaching CheapCharts…';
     const ok = await m.undo();  // the exact reverse call; on success the film is back in state.films and the list
     const line = body.querySelector('.moved-on');
-    if (!ok) { if (line && movedOn === m) line.outerHTML = movedOnHtml(m.slow); return; }
+    if (!ok) { m.busy = false; if (line && movedOn === m) line.outerHTML = movedOnHtml(m, m.slow); return; }
     // Landing rule: the row is back already; the drawer goes back to the film only if nothing was
-    // stepped, clicked or closed since Undo was pressed (any other draw cleared movedOn).
-    if (movedOn !== m || drawer.hidden || state.openFilm !== m.at) return;
-    movedOn = null;
+    // stepped, clicked or closed since Undo was pressed (any other draw cleared movedOn). Clear
+    // movedOn on a match regardless of where the drawer landed, so an undone edit never comes back
+    // as a fresh, enabled Undo on a later redraw of the line's film.
+    const landing = movedOn === m && !drawer.hidden && state.openFilm === m.at;
+    if (movedOn === m) movedOn = null;
+    if (!landing) return;
     const i = state.filtered.findIndex((f) => f.id === m.film);
     if (i >= 0) moveDrawerTo(i); else if (line) line.remove();
   });
