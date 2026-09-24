@@ -975,7 +975,7 @@ Numbers from `scripts/search_benchmark.py` against copies of the live database (
 | | plural | 282 | 1.000 | 0.677 | 27.1 | | |
 | After Task 4 (meaning adds) | verbatim | 300 | 1.000 | 0.627 | 55.4 | hit, recall@10=1.00 (size=12) | hit, recall@10=0.70 (size=81) |
 | | plural | 282 | 1.000 | 0.676 | 35.0 | | |
-| mpnet (Task 6) | verbatim | | | | | | |
-| | plural | | | | | | |
+| mpnet (Task 6) | verbatim | 300 | 1.000 | 0.626 | 55.6 | hit, recall@10=1.00 (size=12) | hit, recall@10=0.70 (size=83) |
+| | plural | 282 | 1.000 | 0.677 | 35.2 | | |
 
-Warm encode, one short query: MiniLM ___ ms · mpnet ___ ms. Decision (D7): ___.
+Warm encode, one short query: MiniLM 6 ms · mpnet 10 ms. Full re-embed of 5,052 films with mpnet on this machine: 44 s (the plan's "hour of CPU" estimate was wrong by two orders of magnitude). Decision (D7): the keyword benchmark is a TIE (verbatim 0.626 vs 0.627, plural 0.677 vs 0.676, named rows identical) because its queries are keywords that the word stages match directly, so meaning rarely reaches the top ten under either model — the instrument cannot separate the models. A meaning-only probe (cosine rank over the whole catalogue, no word stages) on the owner's own phrasings does separate them: "a man relives the same day over and over" → Groundhog Day rank 1 with mpnet (rank 9 with MiniLM); "stuck repeating the same day" → rank 1 (rank 1); "time loops" → rank 4 (rank 5); "hard boiled private eye" → Lady in the Lake, Chinatown, L.A. Confidential in the top five with mpnet (MiniLM ranked The Maltese Falcon 30th, per `.claude/rules/search.md`). Controller ruling: measured, NOT adopted by the letter of D7 (a tie is not a win), with a recommendation to the owner to adopt on the probe — the constant change and the live re-embed are his "proceed" either way (spec D6).
