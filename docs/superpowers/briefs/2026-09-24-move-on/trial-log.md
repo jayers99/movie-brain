@@ -23,6 +23,7 @@ Fourth trial of the version 2 process, upstream half; stories first, gap check a
 | 2 | Story 8 added (the list runs out) | the seed named it in one line; it is an edge you can bump into, so it is a card you can walk |
 | 3 | When the list runs out the drawer STAYS open (seed said: closes) | a drawer closing by itself is a jump; staying is the pasted-link state the dashboard already has, and the film's own control is where you would change your mind. Shown as story 8; named in the brief for you to overrule |
 | 4 | Variant C is drawn as "one ↑ reaches the film that left" | the seed's third candidate was ↑, with the note that today ↑ lands on the film BEFORE the gap. As a home for "I change my mind" it only works if ↑ reaches the film that left, so that is what C shows; the note about the film before is what happens without C |
+| 6 | The plan (`docs/superpowers/plans/2026-09-24-move-on.md`) went straight to the subagent-driven build without a plan review by him | his entry prompt fixed the sequence ("plan, subagent-driven build, …") and his standing rule sends implementation questions to the recommended answer; the stories are the contract he reviews |
 | 5 | Recommendation: B, the undo line | visible, one click, says what happened, serves a rating and a star with the same line; C hides a rule inside a key whose hint reads "previous film"; A is today's route |
 
 ## Surprises and corrections (misunderstood intent · implementation defect · changed preference · new opportunity)
