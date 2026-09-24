@@ -219,6 +219,8 @@ def test_story_7_a_film_that_was_never_in_the_list_stays_put(dash: Page, move_on
 def test_story_8_the_list_runs_out(dash: Page):
     dash.click(WATCHLIST_CHIP)
     dash.fill("#f-title", "sherlock")
+    dash.keyboard.press("Tab")  # commits the filter's `change` re-render before the row click, or the
+    # mousedown-triggered re-render swaps the row out from under the click (pre-existing, not this feature's)
     expect(dash.locator("#count-showing")).to_have_text("Showing 1 of 80")
     open_film(dash, "Sherlock Jr.")
     star(dash)
