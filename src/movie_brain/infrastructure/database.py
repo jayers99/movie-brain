@@ -3452,13 +3452,9 @@ class Repository:
                     c.execute("UPDATE viewing SET film_id = ? WHERE id = ?", (survivor_id, row["id"]))
                     moved["viewing"] = moved.get("viewing", 0) + 1
                 else:
-                    # Move loser's artefacts to survivor's viewing; update added_on to tomorrow so
-                    # they sort after survivor's existing artefacts (loser's notes join the line).
-                    tomorrow = today + timedelta(days=1)
-                    n_art = c.execute(
-                        "UPDATE artefact SET viewing_id = ?, added_on = ? WHERE viewing_id = ?",
-                        (twin["id"], tomorrow.isoformat(), row["id"]),
-                    ).rowcount
+                    # Move loser's artefacts to survivor's viewing, preserving their added_on
+                    # (immutable: the day the owner said them, never a merge artifact).
+                    n_art = c.execute("UPDATE artefact SET viewing_id = ? WHERE viewing_id = ?", (twin["id"], row["id"])).rowcount
                     c.execute("DELETE FROM viewing WHERE id = ?", (row["id"],))
                     moved["artefact"] = moved.get("artefact", 0) + n_art
             # Ranker rows (spec §3): per-session one-row tables survivor-wins; the log re-points.

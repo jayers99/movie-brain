@@ -120,7 +120,10 @@ def test_merge_repoints_viewings_and_folds_a_same_date_collision(repo):
     report = repo.merge_film(loser, survivor, TODAY)
     vs = repo.viewings_for(survivor)
     assert [v["watched_on"] for v in vs] == ["2026-09-27", "2026-09-20"]
-    assert [a["text"] for a in vs[0]["artefacts"]] == ["survivor today", "loser today"]
+    # Artefacts on the same viewing sort by added_on, id; both TODAY so order is by id.
+    assert [a["text"] for a in vs[0]["artefacts"]] == ["loser today", "survivor today"]
+    # added_on is immutable: preserved from original insertion (never rewritten by merge).
+    assert [a["added_on"] for a in vs[0]["artefacts"]] == ["2026-09-27", "2026-09-27"]
     assert repo.viewings_for(loser) == []
     assert report.moved.get("viewing") == 1 and report.moved.get("artefact") == 1
 
