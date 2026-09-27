@@ -144,6 +144,9 @@ def test_every_field_has_a_kind_and_every_alias_points_at_a_field():
     assert set(ALIASES.values()) <= set(FIELDS)
     assert {f.kind for f in FIELDS.values()} <= {"person", "character", "title", "genre", "keyword", "year", "text", "service"}
     assert FIELDS["service"].kind == "service" and ALIASES["on"] == "service"
+    # `person:` reaches cast and every crew job — no kind, no job set (backlog 45); `any:` is its alias
+    assert FIELDS["person"].kind == "person" and FIELDS["person"].credit_kind is None and FIELDS["person"].jobs == ()
+    assert ALIASES["any"] == "person"
     assert FIELDS["writer"].jobs == (
         "Screenplay", "Writer", "Story", "Novel", "Original Story", "Dialogue", "Adaptation", "Author", "Book",
         "Short Story", "Theatre Play", "Scenario Writer", "Co-Writer", "Screenstory", "Original Film Writer",

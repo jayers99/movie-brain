@@ -34,6 +34,18 @@ Feature: Resolving a search into an exact film-id set
     When I search for "director: humphrey bogart"
     Then the result is empty
 
+  Scenario: The person field finds every role, the director field only the chair
+    Given Howard Hawks also acts in Gamma
+    When I search for "person: hawks"
+    Then the result ids are Alpha, Beta, Gamma
+    And the result is not ranked
+    And the correction for "person" reads hawks → Howard Hawks
+
+  Scenario: any is the person field's alias and a director search still excludes the acting credit
+    Given Howard Hawks also acts in Gamma
+    When I search for "any: \"Howard Hawks\" director: hawks"
+    Then the result ids are Alpha, Beta
+
   Scenario: Fields AND and freeform ranks within them
     When I search for "alpha director: hawks"
     Then the result ids are Alpha then Beta

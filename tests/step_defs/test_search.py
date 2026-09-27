@@ -57,6 +57,13 @@ def alpha_dystopia(repo, films):
                                                  (CrewRow(2636, "Howard Hawks", "Director", "Directing"),)), DAY)
 
 
+@given("Howard Hawks also acts in Gamma")
+def hawks_acts(repo, films):
+    repo.set_external_id(films["Gamma"], "tmdb", "912", DAY)
+    repo.write_credits(films["Gamma"], _credits(912, "Gamma", "A man plays himself.", (),
+                                                 (CastRow(2636, "Howard Hawks", "Himself", 0),), ()), DAY)
+
+
 @given("Alpha streams on Kino Film Collection and Beta left it last month")
 def kino(repo, films):
     repo.register_provider(500, "Kino Film Collection")   # lands unsubscribed, like every auto-registered provider

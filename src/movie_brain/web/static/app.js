@@ -566,31 +566,34 @@
   // OMDb-fallback names are bare so the fuzzy stage can bridge a spelling drift. `shown` is the
   // link text, `queried` the name in the query (they differ for the director: the table's
   // Criterion string is shown, the TMDB Director credit is searched).
-  const personLink = (field, shown, exact, queried = shown) => {
-    const query = exact ? `${field}: "${queried.replace(/"/g, '')}"` : `${field}: ${queried}`;
+  // Every name link queries `person:` — cast and any crew job — whatever row it sits under
+  // (backlog 45): the row is the shown role, the search is everything the person touched, and
+  // the narrow fields (`director:` …) stay for typing.
+  const personLink = (shown, exact, queried = shown) => {
+    const query = exact ? `person: "${queried.replace(/"/g, '')}"` : `person: ${queried}`;
     return `<a class="person" href="#" data-query="${esc(query)}">${esc(shown)}</a>`;
   };
   function castHtml(d, p) {
     const cast = (d.credits && d.credits.cast) || [];
     if (cast.length) {
-      const inline = cast.slice(0, TOP_CAST).map((c) => personLink('actor', c.name, true)).join(', ');
+      const inline = cast.slice(0, TOP_CAST).map((c) => personLink(c.name, true)).join(', ');
       if (cast.length <= TOP_CAST) return inline;
       // Six bare names inline; the disclosure lists EVERYONE with their role, one per line, and
       // CSS hides the inline six while it is open (spec §3 "Cast row").
-      const full = cast.map((c) => `<li>${personLink('actor', c.name, true)}${c.character ? ` as ${esc(c.character)}` : ''}</li>`).join('');
+      const full = cast.map((c) => `<li>${personLink(c.name, true)}${c.character ? ` as ${esc(c.character)}` : ''}</li>`).join('');
       return `<div class="cast"><span class="cast-inline">${inline}</span> <details class="svc-more cast-more"><summary><span class="when-closed">⋯ ${cast.length - TOP_CAST} more</span><span class="when-open">⋯ fewer</span></summary><ul class="cast-full">${full}</ul></details></div>`;
     }
-    if (p.Actors && p.Actors !== 'N/A') return p.Actors.split(', ').map((n) => personLink('actor', n, false)).join(', ');
+    if (p.Actors && p.Actors !== 'N/A') return p.Actors.split(', ').map((n) => personLink(n, false)).join(', ');
     return '';
   }
   function writerHtml(d, p) {
     const writers = (d.credits && d.credits.writers) || [];
     // label is "Name" or "Name (novel)" (domain/credits.py::writer_label): link the name, keep the tag as text.
-    if (writers.length) return writers.map((w) => personLink('writer', w.name, true) + esc(w.label.slice(w.name.length))).join(', ');
+    if (writers.length) return writers.map((w) => personLink(w.name, true) + esc(w.label.slice(w.name.length))).join(', ');
     if (p.Writer && p.Writer !== 'N/A') {
       return p.Writer.split(', ').map((part) => {
         const name = part.replace(/\s*\(.*\)\s*$/, '');   // OMDb's "(screenplay)" / "(novel)" suffixes stay as text
-        return personLink('writer', name, false) + esc(part.slice(name.length));
+        return personLink(name, false) + esc(part.slice(name.length));
       }).join(', ');
     }
     return '';
@@ -687,7 +690,7 @@
       watchLine = `<p class="meta best-source">${bs.url ? `<a class="watch-link" href="${esc(bs.url)}" target="_blank" rel="noopener">${label}</a>` : label}</p>`;
     }
     const credited = d.credits && d.credits.director;
-    const director = d.director ? personLink('director', d.director, !!credited, credited || d.director) : '—';
+    const director = d.director ? personLink(d.director, !!credited, credited || d.director) : '—';
     // Move-tier spec M4/M7: the tier row exists only for a film the open session has placed
     // (`rank_tier` is detail-only); a click hands the film to the Order tab, never to a slot.
     const tierRow = d.rank_tier == null ? '' : `<div class="tier-row"><span class="tier-label">Tier</span>${[1, 2, 3, 4, 5].map((t) => `<button class="tier-pick" data-id="${d.id}" data-tier="${t}"${t === d.rank_tier ? ' aria-current="true"' : ''} title="Move to tier ${t}">${t}</button>`).join('')}</div>`;

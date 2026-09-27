@@ -93,6 +93,10 @@ FIELDS: dict[str, FieldSpec] = {
         ("Producer", "Executive Producer", "Co-Producer", "Associate Producer"),
     ),
     "crew": FieldSpec("crew", "person", "crew", ()),
+    # `person: Orson Welles` — every credit the person holds, cast AND any crew job (backlog 45,
+    # owner request 2026-09-24): the field the drawer's name links query, so a click on a
+    # director also finds the films he only acted in. `_credit_clause` is a no-op for it.
+    "person": FieldSpec("person", "person"),
     "genre": FieldSpec("genre", "genre"),
     "keyword": FieldSpec("keyword", "keyword"),
     "year": FieldSpec("year", "year"),
@@ -104,6 +108,7 @@ FIELDS: dict[str, FieldSpec] = {
 }
 ALIASES: dict[str, str] = {name: name for name in FIELDS} | {
     "cast": "actor",
+    "any": "person",
     "role": "character",
     "dp": "cinematographer",
     "music": "composer",
