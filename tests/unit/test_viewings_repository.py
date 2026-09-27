@@ -136,3 +136,36 @@ def test_service_name_and_canonical_titles(repo, blue):
     ids = {row[0] for row in repo.canonical_titles()}
     assert blue in ids and ghost not in ids
     assert next(row for row in repo.canonical_titles() if row[0] == blue) == (blue, "The Blue Angel", 1930, None)
+
+
+from datetime import datetime, timedelta
+
+
+def test_view_carries_last_watched_and_viewing_count(repo, blue):
+    assert repo.get_view(blue, TODAY).viewing_count == 0 and repo.get_view(blue, TODAY).last_watched is None
+    repo.add_viewing(blue, date(2026, 9, 21), None, "monday", None, TODAY)
+    repo.add_viewing(blue, TODAY, None, "today", None, TODAY)
+    v = repo.get_view(blue, TODAY)
+    assert (v.last_watched, v.viewing_count) == ("2026-09-27", 2)
+    listed = {x.id: x for x in repo.list_views("criterion", TODAY)}
+    assert (listed[blue].last_watched, listed[blue].viewing_count) == ("2026-09-27", 2)
+
+
+def test_a_viewed_film_is_visible_even_when_unrated_and_departed(repo):
+    """The current-or-rated filter widens to current-or-rated-or-viewed (finding 14)."""
+    repo.record_catalog("criterion", [Film("Cool Hand Luke", 1967, "Stuart Rosenberg", "https://c/luke"), Film("Stay", 1970, "S", "https://c/stay")], date(2026, 8, 1))
+    repo.record_catalog("criterion", [Film("Stay", 1970, "S", "https://c/stay")], TODAY)  # Luke departs
+    luke = repo.film_id_by_key("cool hand luke (1967)")
+    assert luke not in {v.id for v in repo.list_views("criterion", TODAY)}
+    repo.add_viewing(luke, TODAY, None, "watched it anyway", None, TODAY)
+    assert luke in {v.id for v in repo.list_views("criterion", TODAY)}
+
+
+def test_drawer_signal_is_trusted_for_two_minutes(repo, blue):
+    now = datetime(2026, 9, 27, 21, 0, 0)
+    assert repo.drawer_film(now) is None
+    repo.set_drawer_film(blue, now)
+    assert repo.drawer_film(now + timedelta(seconds=119)) == blue
+    assert repo.drawer_film(now + timedelta(seconds=121)) is None
+    repo.set_drawer_film(None, now)
+    assert repo.drawer_film(now) is None

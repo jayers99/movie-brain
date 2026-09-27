@@ -55,7 +55,13 @@ def test_chip_names_are_stable():
         "multi_list",
         "rewatch",
         "shop",
+        "watched",
     )
+
+
+def test_watched_chip_is_a_logged_viewing_not_a_rental():
+    assert matches(view(viewing_count=1, last_watched="2026-09-27"), ["watched"], date(2026, 9, 27))
+    assert not matches(view(old_rating={"stars": 5, "rented_on": "2005-01-12"}), ["watched"], date(2026, 9, 27))
 
 
 SVOD = {"name": "MUBI", "subscribed": False, "kind": "svod", "quality": 1, "has_apple_app": False}

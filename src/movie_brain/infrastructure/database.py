@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -68,6 +68,8 @@ from movie_brain.infrastructure.cheapcharts import product_url
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 TMDB_REFRESH_STAMP = "tmdb_providers_refreshed_at"
+DRAWER_FILM_KEY = "drawer_film"
+DRAWER_MAX_AGE = timedelta(seconds=120)
 
 _RUNTIME_MIN = re.compile(r"(\d+)\s*min")
 
@@ -473,6 +475,13 @@ def _old_rating_by_film(c: sqlite3.Connection) -> dict[int, dict[str, object]]:
     return out
 
 
+def _viewing_stats_by_film(c: sqlite3.Connection) -> dict[int, tuple[str, int]]:
+    return {
+        int(r["film_id"]): (str(r["last"]), int(r["n"]))
+        for r in c.execute("SELECT film_id, MAX(watched_on) AS last, COUNT(*) AS n FROM viewing GROUP BY film_id")
+    }
+
+
 def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
     out: dict[int, list[dict[str, object]]] = {}
     for r in c.execute(_LISTS_SQL):
@@ -586,6 +595,7 @@ def _row_to_view(
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
     store_option: dict[str, object] | None = None,
+    viewing: tuple[str, int] | None = None,
 ) -> FilmView:
     view = FilmView(
         id=row["id"],
@@ -620,6 +630,8 @@ def _row_to_view(
         revisit_note=revisit[1],
         audit=audit[0],
         verdict=audit[1],
+        last_watched=viewing[0] if viewing else None,
+        viewing_count=viewing[1] if viewing else 0,
     )
     # The Criterion option's landing page is this film's own listing URL (the LEFT JOIN in
     # _VIEW_SQL); a fresh dict per film, never a mutation of the option shared across the build.
@@ -2298,6 +2310,24 @@ class Repository:
                 (key, value),
             )
 
+    def set_drawer_film(self, film_id: int | None, now: datetime) -> None:
+        """The dashboard's report of its open drawer (brief 2.2, "the open-film signal"): written on
+        open, on close (None) and every 30 s while open; read by `viewings add` and `viewings open`."""
+        self.set_meta(DRAWER_FILM_KEY, json.dumps({"film_id": film_id, "at": now.isoformat(timespec="seconds")}))
+
+    def drawer_film(self, now: datetime, max_age: timedelta = DRAWER_MAX_AGE) -> int | None:
+        raw = self.get_meta(DRAWER_FILM_KEY)
+        if raw is None:
+            return None
+        try:
+            data = json.loads(raw)
+            at = datetime.fromisoformat(str(data["at"]))
+        except (ValueError, KeyError, TypeError):
+            return None
+        if data.get("film_id") is None or now - at > max_age or at > now + timedelta(seconds=5):
+            return None
+        return int(data["film_id"])
+
     # omdb -------------------------------------------------------------
     def films_needing_lookup(self, source: str, today: date) -> list[tuple[int, Film]]:
         cutoff = (today - timedelta(days=MISS_RETRY_DAYS)).isoformat()
@@ -3837,7 +3867,8 @@ class Repository:
                 + _NOT_DISPOSED
                 + " AND (l.film_id IS NULL "
                 + "OR l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
-                + "OR r.score IS NOT NULL) ORDER BY f.id",
+                + "OR r.score IS NOT NULL "
+                + "OR EXISTS (SELECT 1 FROM viewing v WHERE v.film_id = f.id)) ORDER BY f.id",
                 (source, source),
             ).fetchall()
             services = _services_by_film(c)
@@ -3851,6 +3882,7 @@ class Repository:
             old = _old_rating_by_film(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
+            vw = _viewing_stats_by_film(c)
             criterion_option = _service_option(c, 'criterion')
             store_option = _service_option(c, 'apple-tv-store')
             return [
@@ -3869,6 +3901,7 @@ class Repository:
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
                     store_option=store_option,
+                    viewing=vw.get(r["id"]),
                 )
                 for r in rows
             ]
@@ -3896,6 +3929,7 @@ class Repository:
                 audit=au.get(row["id"], (None, None)),
                 criterion_option=_service_option(c, 'criterion'),
                 store_option=_service_option(c, 'apple-tv-store'),
+                viewing=_viewing_stats_by_film(c).get(row["id"]),
             )
 
     def get_payload(self, film_id: int) -> str | None:

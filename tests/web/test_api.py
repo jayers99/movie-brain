@@ -702,3 +702,19 @@ def test_films_payload_carries_the_old_rating(client, repo):
     assert films["Trio"]["old_rating"] == {"stars": 5, "rented_on": "2005-03-02"}
     assert films["Quartet"]["old_rating"] is None
     assert client.get(f"/api/films/{trio}").get_json()["old_rating"]["stars"] == 5
+
+
+def test_detail_carries_viewings_and_all_rentals_and_the_drawer_route_records_the_open_film(client, repo):
+    trio = repo.film_id_by_key("trio (1950)")
+    repo.add_viewing(trio, D, None, "three tales, again", None, D)
+    d = client.get(f"/api/films/{trio}").get_json()
+    assert d["viewings"][0]["watched_on"] == "2026-08-19" and d["viewings"][0]["artefacts"][0]["text"] == "three tales, again"
+    assert d["old_ratings"] == [] and d["viewing_count"] == 1 and d["last_watched"] == "2026-08-19"
+    assert "viewings" not in client.get("/api/films").get_json()[0]  # detail-only
+    r = client.put("/api/drawer", json={"film_id": trio})
+    assert r.status_code == 200 and r.get_json() == {"film_id": trio}
+    from datetime import datetime
+    assert repo.drawer_film(datetime.now()) == trio
+    assert client.put("/api/drawer", json={"film_id": None}).get_json() == {"film_id": None}
+    assert repo.drawer_film(datetime.now()) is None
+    assert client.put("/api/drawer", json={"film_id": "x"}).status_code == 400

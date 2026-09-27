@@ -388,6 +388,10 @@ class FilmView:
     # winner would go stale the moment a merge re-points a listing, the same argument that
     # keeps the cross-list tally computed.
     best_source: dict[str, object] | None = None
+    # The viewing log (brief 2026-09-21-viewing-log/brief-2.md): last logged viewing date and how
+    # many there are, for the Watched column and chip; the lines themselves are detail-only.
+    last_watched: str | None = None
+    viewing_count: int = 0
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
