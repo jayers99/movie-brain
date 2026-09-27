@@ -88,7 +88,9 @@ oldratings_app = typer.Typer(
 app.add_typer(oldratings_app, name="oldratings")
 films_app = typer.Typer(help="Films by hand: add one the catalog lacks, by its IMDb id.")
 app.add_typer(films_app, name="films")
-viewings_app = typer.Typer(help="The viewing log: one dictation → one dated viewing against a film (the skill log-viewing drives it).")
+viewings_app = typer.Typer(
+    help="The viewing log: one dictation → one dated viewing against a film (the skill log-viewing drives it)."
+)
 app.add_typer(viewings_app, name="viewings")
 repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong TMDB links, fix years.")
 app.add_typer(repair_app, name="repair")
@@ -652,23 +654,40 @@ def _parse_day(raw: str | None, flag: str) -> date | None:
 
 @viewings_app.command("add")
 def viewings_add_cmd(
-    title: Annotated[str | None, typer.Option("--title", help="The title as dictated; the verb runs the ladder.")] = None,
-    film: Annotated[int | None, typer.Option("--film", help="A film id, once one is confirmed — skips the ladder.")] = None,
-    year: Annotated[int | None, typer.Option("--year", help="Narrows the title to one year (skips the open-film rung when it differs).")] = None,
+    title: Annotated[
+        str | None, typer.Option("--title", help="The title as dictated; the verb runs the ladder.")
+    ] = None,
+    film: Annotated[
+        int | None, typer.Option("--film", help="A film id, once one is confirmed — skips the ladder.")
+    ] = None,
+    year: Annotated[
+        int | None,
+        typer.Option("--year", help="Narrows the title to one year (skips the open-film rung when it differs)."),
+    ] = None,
     on: Annotated[str | None, typer.Option("--on", help="The viewing's date, YYYY-MM-DD (default today).")] = None,
-    service: Annotated[str | None, typer.Option("--service", help="A registry slug (movie-brain services list); omit for a disc or a cinema.")] = None,
-    rate: Annotated[int | None, typer.Option("--rate", help="The 0–10 the dictation states, if it states one.")] = None,
-    text: Annotated[str, typer.Option("--text", help="The dictation: '-' reads standard input, else a file path.")] = "-",
+    service: Annotated[
+        str | None,
+        typer.Option("--service", help="A registry slug (movie-brain services list); omit for a disc or a cinema."),
+    ] = None,
+    rate: Annotated[
+        int | None, typer.Option("--rate", help="The 0–10 the dictation states, if it states one.")
+    ] = None,
+    text: Annotated[
+        str,
+        typer.Option("--text", help="The dictation: '-' reads standard input, else a file path."),
+    ] = "-",
 ) -> None:
     """Log ONE viewing from a dictation. Writes a viewing, a note, the rating (if said) and clears
     Unseen in one transaction; refuses and writes nothing otherwise (exit 2), or stops to ask
     (exit 3: AMBIGUOUS / NO-FILM)."""
-    from movie_brain.application import viewings as vw
     import sys
 
+    from movie_brain.application import viewings as vw
+
+    on_date = _parse_day(on, "--on")
     body = sys.stdin.read() if text == "-" else Path(text).read_text(encoding="utf-8")
     out = vw.log_viewing(
-        _repo(), title=title, film_id=film, year=year, on=_parse_day(on, "--on"), service=service,
+        _repo(), title=title, film_id=film, year=year, on=on_date, service=service,
         rate=rate, text=body, today=date.today(), now=datetime.now(),
     )
     console.print(out.line, markup=False, highlight=False, soft_wrap=True)
@@ -678,7 +697,10 @@ def viewings_add_cmd(
 @viewings_app.command("remove")
 def viewings_remove_cmd(
     viewing_id: Annotated[int, typer.Argument(help="The viewing number the add printed.")],
-    note: Annotated[int | None, typer.Option("--note", help="Remove only this note (1-based) and keep the viewing.")] = None,
+    note: Annotated[
+        int | None,
+        typer.Option("--note", help="Remove only this note (1-based) and keep the viewing."),
+    ] = None,
 ) -> None:
     """Remove a viewing and its notes, or one note. The rating and the Unseen mark are untouched."""
     from movie_brain.application import viewings as vw
@@ -696,7 +718,8 @@ def viewings_list_cmd(
     """Every logged viewing, newest first: date, film, service, notes, rating."""
     from movie_brain.application import viewings as vw
 
-    console.print(vw.listing(_repo(), _parse_day(since, "--since"), film), markup=False, highlight=False, soft_wrap=True)
+    since_date = _parse_day(since, "--since")
+    console.print(vw.listing(_repo(), since_date, film), markup=False, highlight=False, soft_wrap=True)
 
 
 @viewings_app.command("open")
