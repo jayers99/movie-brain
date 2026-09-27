@@ -229,6 +229,16 @@ class OldRating:
 
 
 @dataclass(frozen=True)
+class ViewingWrite:
+    """What one `viewings add` wrote: the viewing's id, whether it was created by this write
+    (False = the day already had a line and the artefact was appended), and the line's note count."""
+
+    viewing_id: int
+    created: bool
+    note_count: int
+
+
+@dataclass(frozen=True)
 class ServiceMeta:
     """One row of the service registry. `quality` and `has_apple_app` are owner-set constants
     written only by `movie-brain services` — see the canon-best-source design §5."""

@@ -35,6 +35,7 @@ from movie_brain.domain.models import (
     TieredEntry,
     TmdbCredits,
     TrailerTarget,
+    ViewingWrite,
     YearBackfillTarget,
     film_key,
 )
@@ -448,6 +449,16 @@ def service_slug(name: str) -> str:
     """A TMDB provider name as a registry slug: lowercase, runs of non-alphanumerics to one
     hyphen, no leading or trailing hyphen. 'Plex Channel' -> 'plex-channel'."""
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def _write_rating(c: sqlite3.Connection, film_id: int, score: int, rated_at: date) -> None:
+    """The one `my_ratings` upsert, shared by `set_rating` and `add_viewing` (viewing-log
+    controller ruling: the rating is written only through this statement, never duplicated)."""
+    c.execute(
+        "INSERT INTO my_ratings (film_id, score, rated_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(film_id) DO UPDATE SET score=excluded.score, rated_at=excluded.rated_at",
+        (film_id, score, rated_at.isoformat()),
+    )
 
 
 def _old_rating_by_film(c: sqlite3.Connection) -> dict[int, dict[str, object]]:
@@ -2370,11 +2381,7 @@ class Repository:
             if score is None:
                 c.execute("DELETE FROM my_ratings WHERE film_id = ?", (film_id,))
             else:
-                c.execute(
-                    "INSERT INTO my_ratings (film_id, score, rated_at) VALUES (?, ?, ?) "
-                    "ON CONFLICT(film_id) DO UPDATE SET score=excluded.score, rated_at=excluded.rated_at",
-                    (film_id, score, rated_at.isoformat()),
-                )
+                _write_rating(c, film_id, score, rated_at)
             return True
 
     def all_my_ratings(self) -> dict[str, int]:
@@ -2782,6 +2789,122 @@ class Repository:
                 return True
             c.execute("DELETE FROM rank_mark WHERE film_id = ?", (film_id,))
             return False
+
+    # viewings (brief 2026-09-21-viewing-log/brief-2.md) ------------------------------
+    def add_viewing(
+        self, film_id: int, watched_on: date, service: str | None, text: str, rate: int | None, today: date
+    ) -> ViewingWrite:
+        """One transaction: the day's viewing (created, or found), one `dictation` artefact,
+        the 0–10 when a number was said, and the Unseen mark cleared. A line's service is set
+        once and never overwritten. Validation (film canonical, slug known, text non-blank,
+        rate 0–10) is the caller's — application/viewings.py — so nothing here refuses."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT id, service FROM viewing WHERE film_id = ? AND watched_on = ?",
+                (film_id, watched_on.isoformat()),
+            ).fetchone()
+            if row is None:
+                cur = c.execute(
+                    "INSERT INTO viewing (film_id, watched_on, service, logged_on) VALUES (?, ?, ?, ?)",
+                    (film_id, watched_on.isoformat(), service, today.isoformat()),
+                )
+                vid, created = int(cur.lastrowid), True
+            else:
+                vid, created = int(row["id"]), False
+                if service and row["service"] is None:
+                    c.execute("UPDATE viewing SET service = ? WHERE id = ?", (service, vid))
+            c.execute(
+                "INSERT INTO artefact (viewing_id, kind, text, added_on) VALUES (?, 'dictation', ?, ?)",
+                (vid, text, today.isoformat()),
+            )
+            if rate is not None:
+                _write_rating(c, film_id, rate, today)
+            c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
+            n = int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (vid,)).fetchone()[0])
+            return ViewingWrite(vid, created, n)
+
+    def viewings_for(self, film_id: int) -> list[dict[str, object]]:
+        with self._conn() as c:
+            out: list[dict[str, object]] = []
+            for v in c.execute(
+                "SELECT v.id, v.watched_on, v.service, s.name AS service_name FROM viewing v "
+                "LEFT JOIN movie_service s ON s.slug = v.service WHERE v.film_id = ? "
+                "ORDER BY v.watched_on DESC, v.id DESC",
+                (film_id,),
+            ).fetchall():
+                arts = [
+                    {"id": int(a["id"]), "kind": str(a["kind"]), "text": str(a["text"]), "added_on": str(a["added_on"])}
+                    for a in c.execute(
+                        "SELECT id, kind, text, added_on FROM artefact WHERE viewing_id = ? ORDER BY added_on, id", (v["id"],)
+                    )
+                ]
+                out.append({"id": int(v["id"]), "watched_on": str(v["watched_on"]), "service": v["service"], "service_name": v["service_name"], "artefacts": arts})
+            return out
+
+    def remove_viewing(self, viewing_id: int) -> dict[str, object] | None:
+        with self._conn() as c:
+            row = c.execute("SELECT film_id, watched_on FROM viewing WHERE id = ?", (viewing_id,)).fetchone()
+            if row is None:
+                return None
+            notes = int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (viewing_id,)).fetchone()[0])
+            c.execute("DELETE FROM artefact WHERE viewing_id = ?", (viewing_id,))  # explicit: PRAGMA foreign_keys cascades too
+            c.execute("DELETE FROM viewing WHERE id = ?", (viewing_id,))
+            return {"film_id": int(row["film_id"]), "watched_on": str(row["watched_on"]), "notes": notes}
+
+    def remove_artefact(self, viewing_id: int, n: int) -> dict[str, object] | None:
+        with self._conn() as c:
+            row = c.execute("SELECT film_id, watched_on FROM viewing WHERE id = ?", (viewing_id,)).fetchone()
+            if row is None:
+                return None
+            ids = [int(a["id"]) for a in c.execute("SELECT id FROM artefact WHERE viewing_id = ? ORDER BY added_on, id", (viewing_id,))]
+            if n < 1 or n > len(ids):
+                return None
+            c.execute("DELETE FROM artefact WHERE id = ?", (ids[n - 1],))
+            return {"film_id": int(row["film_id"]), "watched_on": str(row["watched_on"]), "notes_left": len(ids) - 1}
+
+    def list_viewings(self, since: date | None = None, film_id: int | None = None) -> list[dict[str, object]]:
+        sql = (
+            "SELECT v.id, v.film_id, f.title, f.year, v.watched_on, v.service, r.score, "
+            "(SELECT COUNT(*) FROM artefact a WHERE a.viewing_id = v.id) AS notes "
+            "FROM viewing v JOIN films f ON f.id = v.film_id LEFT JOIN my_ratings r ON r.film_id = v.film_id WHERE 1=1"
+        )
+        args: list[object] = []
+        if since is not None:
+            sql += " AND v.watched_on >= ?"; args.append(since.isoformat())
+        if film_id is not None:
+            sql += " AND v.film_id = ?"; args.append(film_id)
+        sql += " ORDER BY v.watched_on DESC, v.id DESC"
+        with self._conn() as c:
+            return [
+                {"id": int(r["id"]), "film_id": int(r["film_id"]), "title": str(r["title"]), "year": r["year"], "watched_on": str(r["watched_on"]), "service": r["service"], "notes": int(r["notes"]), "my_rating": r["score"]}
+                for r in c.execute(sql, args)
+            ]
+
+    def old_ratings_for(self, film_id: int) -> list[dict[str, object]]:
+        """Every real rental, newest first; two rows with the same date and stars are one rental
+        listed twice in the source file (Love & Anarchy), shown once (round-1 finding 8)."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT stars, rented_on FROM old_rating WHERE film_id = ? "
+                "ORDER BY COALESCE(rented_on, '') DESC, stars DESC",
+                (film_id,),
+            ).fetchall()
+            return [{"stars": int(r["stars"]), "rented_on": r["rented_on"]} for r in rows]
+
+    def service_name(self, slug: str) -> str | None:
+        with self._conn() as c:
+            row = c.execute("SELECT name FROM movie_service WHERE slug = ?", (slug,)).fetchone()
+            return None if row is None else str(row["name"])
+
+    def canonical_titles(self) -> list[tuple[int, str, int | None, str | None]]:
+        """(id, title, year, director) for every film with no disposition row — the ladder's
+        candidate set. The title is normalised by the CALLER at query time; the `title_norm`
+        column is never read (empty for every film created since the backfill)."""
+        with self._conn() as c:
+            return [
+                (int(r["id"]), str(r["title"]), r["year"], r["director"])
+                for r in c.execute(f"SELECT f.id, f.title, f.year, f.director FROM films f WHERE {_NOT_DISPOSED} ORDER BY f.id")
+            ]
 
     # cheapcharts_wishlist ("Wishlist it", brief 2026-09-19-price-watch) ----------
     def wishlisted_film_ids(self) -> set[int]:
