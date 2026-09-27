@@ -128,3 +128,5 @@ Relaunched with `Re-check only findings: 1–17` on a snapshot of d6c5437. About
 Owner cost across both runs: zero minutes.
 
 **Summary line for the owner:** Checked: 17 findings, 13 fixed, 4 stories added, 0 declined; re-check closed 15, the last 2 and 3 fix-introduced slips fixed and rehearsed. Not checked: the drawer signal across two databases and everything point C covers (nothing is built yet).
+
+**Built 2026-09-27** on `feature/STORY-27-viewing-log`, plan `docs/superpowers/plans/2026-09-27-viewing-log.md`; point C gap check next, on a migrated copy, before the owner's hands-on test.
