@@ -683,11 +683,16 @@
     const notesHtml = (v) => {
       const arts = v.artefacts || [];
       if (!arts.length) return '';
-      const first = arts[0].text.replace(/\s+/g, ' ').slice(0, 42).trim();
+      const cleaned = arts[0].text.replace(/\s+/g, ' ').trim();
+      const cut = cleaned.length > 42;
+      const first = cleaned.slice(0, 42);
       const more = arts.length > 1 ? ` (${arts.length} notes)` : '';
-      return `<details class="note"><summary>"${esc(first)}…"${more}</summary>${arts.map((a) => `<span class="txt">${esc(a.text)}</span>`).join('')}</details>`;
+      return `<details class="note"><summary>"${esc(first)}${cut ? '…' : ''}"${more}</summary>${arts.map((a) => `<span class="txt">${esc(a.text)}</span>`).join('')}</details>`;
     };
-    const viewingLines = (d.viewings || []).map((v) => `<li class="viewing">${esc(v.watched_on)}${v.service_name ? ` <span class="sep">·</span> ${esc(v.service_name)}` : ''} <span class="sep">·</span> ${notesHtml(v)}</li>`);
+    const viewingLines = (d.viewings || []).map((v) => {
+      const notes = notesHtml(v);
+      return `<li class="viewing">${esc(v.watched_on)}${v.service_name ? ` <span class="sep">·</span> ${esc(v.service_name)}` : ''}${notes ? ` <span class="sep">·</span> ${notes}` : ''}</li>`;
+    });
     const rentalLines = (d.old_ratings || []).map((o) => `<li class="rental">${esc(o.rented_on || '—')} <span class="sep">·</span> rented <span class="sep">·</span> <span class="old-stars" aria-label="${o.stars} of 5 stars">${'★'.repeat(o.stars)}${'☆'.repeat(5 - o.stars)}</span></li>`);
     const lines = viewingLines.concat(rentalLines);
     const watchedBlock = `<div class="row watched"><span class="lbl">Watched:</span> ${lines.length ? `<ul class="viewings">${lines.join('')}</ul>` : '<span class="none">Never logged.</span>'}</div>`;
@@ -1238,14 +1243,19 @@
   // current: re-read the open film on focus / visibility and patch its row. Other rows and the
   // Watched chip catch up on the next reload or drawer open (brief 2.2, "the page refreshes on focus").
   async function refreshOpenFilm() {
-    if (drawer.hidden || state.openFilm == null) return;
+    // A step (↑ ↓, a click on a dimmed row) is already an in-flight openDrawer for a NEW film:
+    // state.openFilm has moved ahead of drawnFilm, and this refresh must not race it (it would
+    // draw the new film without startHeartbeat, drawnFilm, the URL, scrollTop or move-on).
+    if (drawer.hidden || state.openFilm == null || state.openFilm !== drawnFilm) return;
     const id = state.openFilm, seq = ++drawerSeq;
     const r = await fetch(`/api/films/${id}`).catch(() => null);
     if (!r || !r.ok || seq !== drawerSeq || state.openFilm !== id) return;
     const d = await r.json();
+    if (seq !== drawerSeq || state.openFilm !== id) return;  // a step could have landed during the await above
     const i = state.films.findIndex((f) => f.id === id);
     if (i >= 0) state.films[i] = { ...state.films[i], my_rating: d.my_rating, unseen: d.unseen, last_watched: d.last_watched, viewing_count: d.viewing_count, watchlisted: d.watchlisted };
     body.innerHTML = detailHtml(d); drawnDetail = d;
+    if (movedOn && movedOn.at === id) body.querySelector('h2').insertAdjacentHTML('afterend', movedOnHtml(movedOn));
     renderCounts(); applyFilters();
   }
   window.addEventListener('focus', refreshOpenFilm);

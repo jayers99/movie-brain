@@ -44,11 +44,14 @@ def seed(repo: Repository) -> None:
     dragon = film("Dragon Inn", 1967, 100)
     repo.set_rating(dragon, 9, TODAY)
     film("Solaris", 1972, 93)
-    # Logged already: Blue Angel on the 27th (two notes) and the 21st; Cuba today.
+    # Logged already: Blue Angel on the 27th (two notes) and the 21st; Cuba on the 25th — an
+    # earlier day, so the Watched column and sort have a real order to pin, not a same-day tie.
+    # Love and Anarchy has only the old 2004-08 rentals above — no viewing was ever logged for
+    # it, so it stays out of the Watched chip.
     repo.add_viewing(blue, date(2026, 9, 21), "kino-film-collection", "Pretty good — bottom of tier one.", None, TODAY)
     repo.add_viewing(blue, TODAY, "kino-film-collection", "I just watched The Blue Angel. It's an early German sound film.", 6, TODAY)
     repo.add_viewing(blue, TODAY, None, "One more thing — the Dietrich songs are the best part.", 7, TODAY)
-    repo.add_viewing(cuba, TODAY, None, "Still astonishing, the camera work.", None, TODAY)
+    repo.add_viewing(cuba, date(2026, 9, 25), None, "Still astonishing, the camera work.", None, TODAY)
 
 
 @pytest.fixture
@@ -116,17 +119,17 @@ def test_story_9_the_watched_chip_and_column(dash: Page):
     chip.click()
     expect(chip).to_have_class("chip active")
     assert "chips=watched" in dash.url
-    # Both were watched today — a same-day tie in last_watched falls through to the default
-    # hierarchy (metacritic, rt, imdb, title): Cuba's Metacritic 91 beats the Blue Angel's 90.
-    # Cuba's rental does not count for Love and Anarchy (no viewing, only an old rating).
-    assert titles(dash) == ["I Am Cuba", "The Blue Angel"]
+    # Newest viewing first: Blue Angel logged on the 27th, Cuba on the 25th. Love and Anarchy
+    # has only the old 2004-08 rentals — no viewing — so it never appears under this chip.
+    assert titles(dash) == ["The Blue Angel", "I Am Cuba"]
     dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").wait_for()
-    assert dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").inner_text().strip() == "2026-09-27"
+    assert dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").inner_text().strip() == "2026-09-25"
     chip.click()
-    dash.locator('#films thead th[data-col="last_watched"]').click()  # asc: logged films first by date, never-logged last
-    t = titles(dash)
-    assert t[:2] in (["The Blue Angel", "I Am Cuba"], ["I Am Cuba", "The Blue Angel"]) and t[-1] in ("Dragon Inn", "Solaris", "Love and Anarchy")
-    dash.locator('#films thead th[data-col="last_watched"]').click()  # desc: still never-logged last
+    dash.locator('#films thead th[data-col="last_watched"]').click()  # asc: earliest logged first, never-logged last
+    assert titles(dash)[:2] == ["I Am Cuba", "The Blue Angel"]
+    assert titles(dash)[-1] in ("Dragon Inn", "Solaris", "Love and Anarchy")
+    dash.locator('#films thead th[data-col="last_watched"]').click()  # desc: newest logged first, still never-logged last
+    assert titles(dash)[:2] == ["The Blue Angel", "I Am Cuba"]
     assert titles(dash)[-1] in ("Dragon Inn", "Solaris", "Love and Anarchy")
 
 
