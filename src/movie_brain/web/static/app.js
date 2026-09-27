@@ -108,10 +108,6 @@
       if (state.chips.has('watched')) {  // Watched on: last viewing desc leads (the On-a-list precedent)
         const la = a.last_watched || '', lb = b.last_watched || '';
         if (la !== lb) return lb.localeCompare(la);
-        // Same day: the film logged more often that day (more of it dictated, more artefacts)
-        // outranks a single mention — before falling to the ordinary metacritic/rt/imdb tiers.
-        const ca = a.viewing_count || 0, cb = b.viewing_count || 0;
-        if (ca !== cb) return cb - ca;
       }
       for (const key of ['metacritic', 'rt', 'imdb']) {
         if ((a[key] == null) !== (b[key] == null)) return a[key] == null ? 1 : -1;

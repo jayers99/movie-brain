@@ -116,7 +116,10 @@ def test_story_9_the_watched_chip_and_column(dash: Page):
     chip.click()
     expect(chip).to_have_class("chip active")
     assert "chips=watched" in dash.url
-    assert titles(dash) == ["The Blue Angel", "I Am Cuba"]  # newest viewing first; Cuba's rental does not count for Love and Anarchy
+    # Both were watched today — a same-day tie in last_watched falls through to the default
+    # hierarchy (metacritic, rt, imdb, title): Cuba's Metacritic 91 beats the Blue Angel's 90.
+    # Cuba's rental does not count for Love and Anarchy (no viewing, only an old rating).
+    assert titles(dash) == ["I Am Cuba", "The Blue Angel"]
     dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").wait_for()
     assert dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").inner_text().strip() == "2026-09-27"
     chip.click()
