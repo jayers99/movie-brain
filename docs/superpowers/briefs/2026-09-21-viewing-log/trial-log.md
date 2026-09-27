@@ -112,3 +112,19 @@ Run 2026-09-27 on a snapshot of 1bb93ea with a copy of the live database (`scrip
 | 17 | Header reachable count, a future-dated line after story 8, director "from TMDB at creation" (story-untrue, small) | fixed | header 5,074; the mock-up's clock only moves forward (story 8 leaves the page on the 28th); director arrives with OMDb, wording fixed |
 
 Agent minutes: 30 · Findings: 17 · Fixed: 13 · Stories added: 4 · Declined: 0 · Not checked: the drawer signal across two databases (nothing built); TMDB's answer beyond the dry run's own line; the Watched column in the filter header row; everything point C covers.
+
+### Scoped re-check (point A, round 2, same day)
+
+Relaunched with `Re-check only findings: 1–17` on a snapshot of d6c5437. About 10 agent minutes. **15 of 17 closed.** Two halves still open and three defects the fixes had introduced, all fixed in 2.2 and verified by the builder's own headless rehearsal (the checker never loops), listed as the diagnostic-checkpoint items and closed:
+
+| # | Still open because | Answer |
+|---|---|---|
+| 6 | the "versus" half: the real `title_hits("Godzilla versus Gigan")` returns nothing (FTS ANDs every word, no title holds "versus"); the mock-up's own word filter hid it | fixed: the nearest-title lookup drops articles and vs/versus before asking `title_hits`, then falls back to a normalised substring; the decision row says so and names the failing call |
+| 13 | the CREATED line: `films.py` appends the keying status and `keying.py::KEYED_OK` is `matched` / `adopted` / `collision`, so a real run prints `… (1931)  matched`, not `keyed` | fixed: mock-up and grounding read `matched`; the grounding names the three statuses |
+| A | story 13 walked after story 12 removed note 4 (the Kanopy remark) while the owner asked to scratch the Jannings one | fixed: the story finds the Jannings note by content and removes THAT number; the card says `--note N` |
+| B | story 14 said Solaris (2002) was open one turn before the page opened it | fixed: the beats reordered |
+| C | the reworded "two numbers → ask" rule would make story 2's "tier one … tier two" a question | fixed: the rule is "a number offered as a rating"; tiers, years and counts stay in the note (panel + decision row) |
+
+Owner cost across both runs: zero minutes.
+
+**Summary line for the owner:** Checked: 17 findings, 13 fixed, 4 stories added, 0 declined; re-check closed 15, the last 2 and 3 fix-introduced slips fixed and rehearsed. Not checked: the drawer signal across two databases and everything point C covers (nothing is built yet).
