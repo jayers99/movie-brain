@@ -1115,15 +1115,15 @@ def test_writer_row_labels_the_novelist_and_links_the_name(dash: Page):
     body = _open(dash, "Alpha")
     expect(body.locator("dd.dd-writer")).to_have_text("Leigh Brackett, Raymond Chandler (novel)")
     expect(body.locator("dd.dd-writer a.person").nth(1)).to_have_text("Raymond Chandler")
-    expect(body.locator("dd.dd-writer a.person").nth(1)).to_have_attribute("data-query", 'writer: "Raymond Chandler"')
+    expect(body.locator("dd.dd-writer a.person").nth(1)).to_have_attribute("data-query", 'person: "Raymond Chandler"')
 
 
 def test_unenriched_film_falls_back_to_omdb_names_with_bare_queries(dash: Page):
     body = _open(dash, "Echo")
     expect(body.locator("dd.dd-cast")).to_have_text("Ed Actor, Flo Actor")
-    expect(body.locator("dd.dd-cast a.person").first).to_have_attribute("data-query", "actor: Ed Actor")
+    expect(body.locator("dd.dd-cast a.person").first).to_have_attribute("data-query", "person: Ed Actor")
     expect(body.locator("dd.dd-writer")).to_have_text("Gus Writer (screenplay)")
-    expect(body.locator("dd.dd-writer a.person")).to_have_attribute("data-query", "writer: Gus Writer")
+    expect(body.locator("dd.dd-writer a.person")).to_have_attribute("data-query", "person: Gus Writer")
     assert body.locator(".cast-more").count() == 0
 
 
@@ -1131,7 +1131,7 @@ def test_cast_link_closes_the_drawer_and_searches_the_exact_name(dash: Page):
     body = _open(dash, "Alpha")
     body.locator("a.person", has_text="Lauren Bacall").first.click()  # inline AND full-disclosure both name her; .first is the visible inline link
     expect(dash.locator("#drawer")).to_be_hidden()
-    expect(dash.locator("#search")).to_have_value('actor: "Lauren Bacall"')
+    expect(dash.locator("#search")).to_have_value('person: "Lauren Bacall"')
     _settled(dash)
     assert count(dash) == 1
     assert "q=" in dash.url and "film=" not in dash.url
@@ -1149,7 +1149,7 @@ def test_director_link_searches_the_tmdb_credit_and_keeps_a_set_chip(dash: Page)
     link = body.locator("div.meta a.person")
     expect(link).to_have_text("Ann")
     link.click()
-    expect(dash.locator("#search")).to_have_value('director: "Howard Hawks"')
+    expect(dash.locator("#search")).to_have_value('person: "Howard Hawks"')
     _settled(dash)
     assert count(dash) == 2  # Alpha and Bravo
     _search(dash, "")
@@ -1163,7 +1163,7 @@ def test_director_link_searches_the_tmdb_credit_and_keeps_a_set_chip(dash: Page)
 
 def test_writer_link_searches_the_writer_field(dash: Page):
     _open(dash, "Alpha").locator("a.person", has_text="Raymond Chandler").click()
-    expect(dash.locator("#search")).to_have_value('writer: "Raymond Chandler"')
+    expect(dash.locator("#search")).to_have_value('person: "Raymond Chandler"')
     _settled(dash)
     assert count(dash) == 1
 
