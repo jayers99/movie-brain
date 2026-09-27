@@ -136,7 +136,7 @@ def test_language_typeahead_filters_options_and_builds_up_selection(dash: Page):
 
 def test_rating_columns_show_metacritic_then_rt_then_imdb(dash: Page):
     cols = [th.get_attribute("data-col") for th in dash.locator("thead tr.labels th.sortable").all()]
-    assert cols == ["title", "year", "director", "language", "metacritic", "rt", "imdb", "my_rating"]
+    assert cols == ["title", "year", "director", "language", "metacritic", "rt", "imdb", "my_rating", "last_watched"]
     row = dash.locator("#films tbody tr[data-id]").filter(has_text="Alpha")
     expect(row.locator(".c-metacritic")).to_have_text("92")
     expect(row.locator(".c-rt")).to_have_text("95%")
@@ -163,7 +163,7 @@ def test_default_sort_hierarchy_metacritic_then_rt_then_imdb_then_title(dash: Pa
 def test_chip_labels_and_order(dash: Page):
     # Everything off by default: every cycle chip shows its off label.
     labels = [t.strip() for t in dash.locator("#chips .chip").all_inner_texts()]
-    assert labels == ["Reachable", "Rated", "Criterion", "Watchlist", "Owned", "On a list", "Rewatch", "Shop", "Clear"]
+    assert labels == ["Reachable", "Rated", "Criterion", "Watchlist", "Owned", "On a list", "Rewatch", "Shop", "Watched", "Clear"]
 
 
 def test_cycle_chip_walks_off_a_b_off_and_encodes_one_key(dash: Page):
@@ -1237,10 +1237,13 @@ def test_old_rating_badges_mark_only_the_two_ends(dash: Page):
 
 
 def test_drawer_shows_the_old_rating_under_my_rating(dash: Page):
+    # Since the viewing-log dashboard task (2026-09-27), the old 2004-08 rentals moved into the
+    # Watched block as `li.rental` rows — there is no standalone `.old-rating` line any more
+    # (tests/web/test_viewing_log.py pins the block itself; this test only tracks placement).
     clear_lang(dash)
     dash.locator("tr[data-id]", has_text="Bravo").locator("button.info").click()
     dash.wait_for_selector("#drawer:not([hidden])")
-    line = dash.locator("#drawer-body .ratings .old-rating")
-    expect(line).to_have_text("Me, 2004–08: ★★★★★ · rented 2005-03-02")
+    line = dash.locator("#drawer-body .ratings .watched li.rental")
+    expect(line).to_have_text("2005-03-02 · rented · ★★★★★")
     ratings = dash.locator("#drawer-body .ratings").inner_text()
-    assert ratings.index("My rating") < ratings.index("Me, 2004–08")
+    assert ratings.index("My rating") < ratings.index("Watched")

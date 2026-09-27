@@ -4,7 +4,7 @@
   const TOP_SERVICES = 3;  // drawer: services shown before the ⋯ more disclosure
   const APPLE_STORE = 'Apple TV Store (iTunes)';  // the registry's one store, named for a film holding a store id but no TMDB store listing
   const TOP_CAST = 6;      // drawer: cast names shown inline before the ⋯ more disclosure (drawer spec D2)
-  const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating'];
+  const COLS = ['title', 'year', 'director', 'language', 'metacritic', 'rt', 'imdb', 'my_rating', 'last_watched'];
   const DEFAULT_LANG = 'English';
   const state = {
     films: [], cfg: null, chips: new Set(),
@@ -68,6 +68,7 @@
     // svod check is load-bearing.
     shop: (f) => !f.owned && f.my_rating == null && f.cheapcharts_url != null && !f.wishlisted
       && !((f.criterion && !f.departed) || (f.services || []).some((s) => s.kind === 'svod' && s.subscribed)),
+    watched: (f) => (f.viewing_count || 0) > 0,
   };
 
   // ---- filtering / sorting ----
@@ -103,6 +104,14 @@
       if (state.chips.has('multi_list')) {  // "On a list" active: canon score desc leads, so Citizen Kane outranks a one-list entry
         const c = canonScore(b) - canonScore(a);
         if (c !== 0) return c;
+      }
+      if (state.chips.has('watched')) {  // Watched on: last viewing desc leads (the On-a-list precedent)
+        const la = a.last_watched || '', lb = b.last_watched || '';
+        if (la !== lb) return lb.localeCompare(la);
+        // Same day: the film logged more often that day (more of it dictated, more artefacts)
+        // outranks a single mention — before falling to the ordinary metacritic/rt/imdb tiers.
+        const ca = a.viewing_count || 0, cb = b.viewing_count || 0;
+        if (ca !== cb) return cb - ca;
       }
       for (const key of ['metacritic', 'rt', 'imdb']) {
         if ((a[key] == null) !== (b[key] == null)) return a[key] == null ? 1 : -1;
@@ -191,11 +200,16 @@
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
       <td class="c-rt num">${fmt(f.rt, '%')}</td><td class="c-imdb num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
       <td class="c-rating num"><input class="rating" maxlength="2" data-id="${f.id}" value="${f.my_rating ?? ''}" aria-label="My rating"></td>
+      <td class="c-watched">${f.last_watched ? esc(f.last_watched) : ''}</td>
       <td class="c-info"><button class="info" data-id="${f.id}" aria-label="Details">ⓘ</button></td></tr>`;
   }
   function renderRows() {
     if (state.films.length === 0) {
-      tbody.innerHTML = `<tr class="empty-state"><td colspan="9">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
+      return;
+    }
+    if (state.filtered.length === 0) {
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">${state.chips.has('watched') && !state.films.some((f) => f.viewing_count > 0) ? 'No viewing logged yet.' : 'No film matches.'}</td></tr>`;
       return;
     }
     const total = state.filtered.length;
@@ -203,9 +217,9 @@
     const end = Math.min(total, Math.ceil((wrap.scrollTop + wrap.clientHeight) / ROW_H) + OVERSCAN);
     const top = start * ROW_H, bottom = (total - end) * ROW_H;
     tbody.innerHTML =
-      (top ? `<tr class="spacer"><td colspan="9" style="height:${top}px"></td></tr>` : '') +
+      (top ? `<tr class="spacer"><td colspan="10" style="height:${top}px"></td></tr>` : '') +
       state.filtered.slice(start, end).map((f, k) => rowHtml(f, start + k)).join('') +
-      (bottom ? `<tr class="spacer"><td colspan="9" style="height:${bottom}px"></td></tr>` : '');
+      (bottom ? `<tr class="spacer"><td colspan="10" style="height:${bottom}px"></td></tr>` : '');
   }
   wrap.addEventListener('scroll', () => requestAnimationFrame(renderRows));
 
@@ -670,8 +684,17 @@
     const criticsLine = critics ? `<div class="row critics">${critics}</div>`
       : d.pending ? '<div class="row note">OMDb lookup pending.</div>'
       : d.found === false ? '<div class="row note">No OMDb match.</div>' : '';
-    const old = d.old_rating;
-    const oldLine = old ? `<div class="row old-rating">Me, ${OLD_SPAN}: <span class="old-stars" aria-label="${old.stars} of 5 stars">${'★'.repeat(old.stars)}${'☆'.repeat(5 - old.stars)}</span>${old.rented_on ? ` · rented ${esc(old.rented_on)}` : ''}</div>` : '';
+    const notesHtml = (v) => {
+      const arts = v.artefacts || [];
+      if (!arts.length) return '';
+      const first = arts[0].text.replace(/\s+/g, ' ').slice(0, 42).trim();
+      const more = arts.length > 1 ? ` (${arts.length} notes)` : '';
+      return `<details class="note"><summary>"${esc(first)}…"${more}</summary>${arts.map((a) => `<span class="txt">${esc(a.text)}</span>`).join('')}</details>`;
+    };
+    const viewingLines = (d.viewings || []).map((v) => `<li class="viewing">${esc(v.watched_on)}${v.service_name ? ` <span class="sep">·</span> ${esc(v.service_name)}` : ''} <span class="sep">·</span> ${notesHtml(v)}</li>`);
+    const rentalLines = (d.old_ratings || []).map((o) => `<li class="rental">${esc(o.rented_on || '—')} <span class="sep">·</span> rented <span class="sep">·</span> <span class="old-stars" aria-label="${o.stars} of 5 stars">${'★'.repeat(o.stars)}${'☆'.repeat(5 - o.stars)}</span></li>`);
+    const lines = viewingLines.concat(rentalLines);
+    const watchedBlock = `<div class="row watched"><span class="lbl">Watched:</span> ${lines.length ? `<ul class="viewings">${lines.join('')}</ul>` : '<span class="none">Never logged.</span>'}</div>`;
     const listsLine = lists ? `<div class="row on-lists">On lists: ${lists} <span class="canon-score">· canon score ${canonScore(d).toFixed(1)}</span></div>` : '';
     // The one watch link (spec D6/D7). Possession short-circuits the ranking in domain/watch.py.
     // An owned film opens straight in the Apple TV desktop app via d.apple_tv_url (the app's own
@@ -703,7 +726,7 @@
       <dl>${fields}</dl>
       <div class="ratings">
         <div class="row">My rating: <input class="rating" maxlength="2" data-id="${d.id}" value="${d.my_rating ?? ''}" aria-label="My rating"></div>
-        ${oldLine}${criticsLine}${listsLine}
+        ${watchedBlock}${criticsLine}${listsLine}
       </div>
       ${watchLine}
       ${newOn ? `<p class="meta new-on">New on: ${newOn}</p>` : ''}
@@ -718,6 +741,20 @@
       <details><summary>Raw OMDb payload</summary><pre class="raw">${esc(d.payload ? JSON.stringify(d.payload, null, 2) : 'null')}</pre></details>
       ${d.leaving_date ? `<p class="meta leaving"><b>Leaving ${esc(d.leaving_date)}</b></p>` : ''}`;
   }
+  // The open-film report (viewing-log brief 2.2): the verb `viewings add` reads which film the
+  // drawer shows, trusting a report under two minutes old; so report on open, on close, and
+  // every 30 s while open. Fire-and-forget: a failed report only means the ladder starts at rung 2.
+  let heartbeat = null;
+  function reportDrawer(id) {
+    fetch('/api/drawer', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ film_id: id }) }).catch(() => {});
+  }
+  function startHeartbeat(id) {
+    stopHeartbeat(); reportDrawer(id);
+    heartbeat = setInterval(() => reportDrawer(id), 30000);
+  }
+  function stopHeartbeat() {
+    if (heartbeat) { clearInterval(heartbeat); heartbeat = null; }
+  }
   let drawerSeq = 0;
   let drawerOpenPushed = false; // true once the currently-open drawer got its own pushState entry
   let drawnFilm = null;         // the film whose details are on screen — where a failed step falls back to
@@ -725,6 +762,7 @@
   // The one close choke point (direct close, popstate close, person links): the redraw is what
   // turns the white row into the mark.
   function hideDrawer() {
+    stopHeartbeat(); reportDrawer(null);
     closeTrailer();  // Back while a trailer is up must not leave it orphaned over the list
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
     state.openFilm = null; drawnFilm = null; drawnDetail = null; openIndex = null; movedOn = null;
@@ -884,6 +922,7 @@
     else movedOn = null;
     drawer.hidden = false; backdrop.hidden = false; drawer.scrollTop = 0;
     state.openFilm = id; state.mark = id; drawnFilm = id;
+    startHeartbeat(id);
     const at = state.filtered.findIndex((f) => f.id === id);
     openIndex = at >= 0 ? at : null;
     renderRows();
@@ -1198,6 +1237,23 @@
   });
 
   window.MB = { state, applyFilters, render: renderRows, renderCounts, rowHtml, trailer: trailerCfg, onBoot: () => { if (state.openFilm != null) openDrawer(state.openFilm, 'keep'); } };
+
+  // After a dictation writes (out of the page's sight), the drawer he alt-tabs back to must be
+  // current: re-read the open film on focus / visibility and patch its row. Other rows and the
+  // Watched chip catch up on the next reload or drawer open (brief 2.2, "the page refreshes on focus").
+  async function refreshOpenFilm() {
+    if (drawer.hidden || state.openFilm == null) return;
+    const id = state.openFilm, seq = ++drawerSeq;
+    const r = await fetch(`/api/films/${id}`).catch(() => null);
+    if (!r || !r.ok || seq !== drawerSeq || state.openFilm !== id) return;
+    const d = await r.json();
+    const i = state.films.findIndex((f) => f.id === id);
+    if (i >= 0) state.films[i] = { ...state.films[i], my_rating: d.my_rating, unseen: d.unseen, last_watched: d.last_watched, viewing_count: d.viewing_count, watchlisted: d.watchlisted };
+    body.innerHTML = detailHtml(d); drawnDetail = d;
+    renderCounts(); applyFilters();
+  }
+  window.addEventListener('focus', refreshOpenFilm);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshOpenFilm(); });
 
   // ---- boot ----
   async function boot() {

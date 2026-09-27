@@ -127,6 +127,17 @@ input.revisit-note { display:block; width:100%; max-width:320px; font:inherit; p
 #drawer .ratings { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:12px 0; }
 #drawer .ratings .row { margin:3px 0; }
 #drawer .ratings .note, #drawer .canon-score { color:var(--muted); }
+col.col-watched { width:104px; }
+#drawer .ratings .watched .lbl { color:var(--muted); }
+#drawer .ratings .watched ul.viewings { list-style:none; margin:2px 0 0; padding:0; }
+#drawer .ratings .watched ul.viewings li { margin:3px 0; }
+#drawer .ratings .watched ul.viewings li.rental { color:var(--muted); }
+#drawer .ratings .watched details.note { display:inline; }
+#drawer .ratings .watched details.note summary { display:inline; cursor:pointer; color:#0000ee; }
+#drawer .ratings .watched details.note[open] summary { display:none; }
+#drawer .ratings .watched .txt { display:block; margin:4px 0 6px 14px; padding-left:8px; border-left:2px solid var(--line); white-space:pre-wrap; color:#333; }
+#drawer .ratings .watched .sep { color:#c0c0c0; }
+#drawer .ratings .watched .none { color:var(--muted); }
 #drawer .best-source a { color:inherit; }
 #drawer p.links a { margin-right:6px; }
 /* Open = the whole cast, one per line, roles throughout; the inline six hide while it is open. */
