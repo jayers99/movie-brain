@@ -111,6 +111,20 @@ def test_old_ratings_for_collapses_a_duplicate_row_and_is_newest_first(repo, blu
     assert repo.old_ratings_for(blue) == [{"stars": 4, "rented_on": "2006-01-05"}, {"stars": 5, "rented_on": "2004-06-22"}]
 
 
+def test_merge_repoints_viewings_and_folds_a_same_date_collision(repo):
+    survivor = repo.create_film(Film("Godzilla", 1954, None, ""))
+    loser = repo.create_film(Film("Gojira", 1954, None, ""))
+    repo.add_viewing(loser, date(2026, 9, 20), None, "loser only", None, TODAY)
+    repo.add_viewing(loser, TODAY, None, "loser today", None, TODAY)
+    repo.add_viewing(survivor, TODAY, None, "survivor today", None, TODAY)
+    report = repo.merge_film(loser, survivor, TODAY)
+    vs = repo.viewings_for(survivor)
+    assert [v["watched_on"] for v in vs] == ["2026-09-27", "2026-09-20"]
+    assert [a["text"] for a in vs[0]["artefacts"]] == ["survivor today", "loser today"]
+    assert repo.viewings_for(loser) == []
+    assert report.moved.get("viewing") == 1 and report.moved.get("artefact") == 1
+
+
 def test_service_name_and_canonical_titles(repo, blue):
     assert repo.service_name("kino-film-collection") == "Kino Film Collection"
     assert repo.service_name("criterion-channel") is None

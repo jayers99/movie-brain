@@ -3442,6 +3442,25 @@ class Repository:
             ).rowcount
             if n_old:
                 moved["old_rating"] = n_old
+            # Viewings (brief 2.2): many rows per film, so a plain re-point — except that the
+            # survivor may already hold that day, when the loser's notes join the survivor's line.
+            for row in c.execute("SELECT id, watched_on FROM viewing WHERE film_id = ?", (loser_id,)).fetchall():
+                twin = c.execute(
+                    "SELECT id FROM viewing WHERE film_id = ? AND watched_on = ?", (survivor_id, row["watched_on"])
+                ).fetchone()
+                if twin is None:
+                    c.execute("UPDATE viewing SET film_id = ? WHERE id = ?", (survivor_id, row["id"]))
+                    moved["viewing"] = moved.get("viewing", 0) + 1
+                else:
+                    # Move loser's artefacts to survivor's viewing; update added_on to tomorrow so
+                    # they sort after survivor's existing artefacts (loser's notes join the line).
+                    tomorrow = today + timedelta(days=1)
+                    n_art = c.execute(
+                        "UPDATE artefact SET viewing_id = ?, added_on = ? WHERE viewing_id = ?",
+                        (twin["id"], tomorrow.isoformat(), row["id"]),
+                    ).rowcount
+                    c.execute("DELETE FROM viewing WHERE id = ?", (row["id"],))
+                    moved["artefact"] = moved.get("artefact", 0) + n_art
             # Ranker rows (spec §3): per-session one-row tables survivor-wins; the log re-points.
             for table in ("rank_placement", "rank_deferral", "rank_order_deferral"):
                 for row in c.execute(f"SELECT session_id FROM {table} WHERE film_id = ?", (loser_id,)).fetchall():
