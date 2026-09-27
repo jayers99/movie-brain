@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<title>Viewing log — stories and mock-up, round 2</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  /* Everything inside .window is copied from the real dashboard (static/app.css): colours, row height, the 760px drawer, the 30% black dim. The session pane imitates a Claude Code terminal. */
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#e3e3e3; --accent:#b3261e; --chip:#f2f2f2; --chip-on:#1b1b1b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:22px 20px 80px; background:#ecebe7; color:var(--fg); font:14px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif; }
+  .page { max-width:1600px; margin:0 auto; }
+  .intro { font-size:17px; line-height:1.55; }
+  .intro h1 { font-size:26px; margin:0 0 6px; }
+  .intro p { margin:6px 0; max-width:1100px; }
+  h2.sec { font-size:21px; margin:26px 0 10px; }
+  .stories { display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; }
+  @media (max-width:1200px) { .stories { grid-template-columns:repeat(2, 1fr); } }
+  @media (max-width:700px) { .stories { grid-template-columns:1fr; } }
+  .story { background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:14px 16px 12px; font-size:16px; line-height:1.5; display:flex; flex-direction:column; }
+  .story.current { border-color:#1b1b1b; box-shadow:0 0 0 2px #1b1b1b; }
+  .story h3 { margin:0 0 6px; font-size:18px; }
+  .story h3 .n { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center; border-radius:50%; background:#1b1b1b; color:#fff; font-size:14px; margin-right:8px; vertical-align:2px; }
+  .story p { margin:0 0 10px; flex:1; }
+  .story .foot { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .does { font-size:13px; color:var(--muted); }
+  button.walk, button.next { font:inherit; font-size:15px; border:1px solid #1b1b1b; background:#fff; border-radius:6px; padding:3px 12px; cursor:pointer; }
+  button.walk:hover, button.next:hover { background:var(--chip); }
+  button.next { background:#1b1b1b; color:#fff; }
+  button.next:hover { background:#333; }
+  button.next[disabled] { opacity:.4; cursor:default; }
+  .coach { background:#fff6d6; border:1px solid #e2cf86; border-radius:8px; padding:10px 14px; margin:0 0 10px; font-size:17px; line-height:1.5; min-height:48px; display:flex; gap:14px; align-items:center; justify-content:space-between; }
+  .coach .txt { flex:1; }
+
+  .two { display:grid; grid-template-columns:minmax(420px, 38%) 1fr; gap:14px; align-items:stretch; }
+  @media (max-width:1100px) { .two { grid-template-columns:1fr; } }
+
+  /* ---- the dictation session (a Claude Code window) ---- */
+  .session { background:#1e1e1e; color:#e6e6e6; border-radius:10px; border:1px solid #444; display:flex; flex-direction:column; height:78vh; min-height:560px; overflow:hidden; font-size:15px; }
+  .session .bar { background:#2b2b2b; color:#bbb; padding:8px 14px; font-size:13px; border-bottom:1px solid #444; display:flex; justify-content:space-between; }
+  .session .log { flex:1; overflow:auto; padding:14px 16px; }
+  .beat { margin:0 0 14px; max-width:100%; white-space:pre-wrap; line-height:1.5; }
+  .beat.you { color:#f4e6c1; }
+  .beat.you::before { content:"❯ you (dictating)"; display:block; font-size:12px; color:#9a8a5a; margin-bottom:2px; letter-spacing:.3px; }
+  .beat.claude { color:#dcdcdc; }
+  .beat.claude::before { content:"● claude"; display:block; font-size:12px; color:#7aa2f7; margin-bottom:2px; letter-spacing:.3px; }
+  .beat.cmd { font-family:ui-monospace, Menlo, monospace; font-size:13.5px; background:#111; border:1px solid #3a3a3a; border-radius:6px; padding:8px 10px; color:#c6f6d5; }
+  .beat.cmd::before { content:"$ "; color:#777; }
+  .beat.out { font-family:ui-monospace, Menlo, monospace; font-size:13.5px; color:#bdbdbd; padding:0 10px; border-left:2px solid #3a3a3a; }
+  .beat.out b { color:#fff; font-weight:600; }
+  .beat.out .warn { color:#f6c177; }
+  .beat.sys { color:#8a8a8a; font-size:13px; font-style:italic; }
+  .session .foot { border-top:1px solid #444; padding:8px 14px; color:#777; font-size:13px; display:flex; justify-content:space-between; align-items:center; }
+
+  /* ---- the dashboard window ---- */
+  .window { position:relative; isolation:isolate; height:78vh; min-height:560px; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); border:1px solid #cfcfcf; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.08); }
+  .top { background:var(--bg); border-bottom:1px solid var(--line); padding:10px 16px; }
+  .top h1 { margin:0 0 4px; font-size:18px; }
+  #counts span { margin-right:14px; color:var(--muted); }
+  #counts b { color:var(--fg); }
+  .showing { float:right; }
+  #chips { margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip, .picker { border:1px solid var(--line); background:var(--chip); border-radius:999px; padding:4px 10px; font:inherit; color:#9a9a9a; }
+  .chip.live { color:var(--fg); cursor:pointer; }
+  .chip.active { background:var(--chip-on); color:#fff; border-color:var(--chip-on); }
+  .table-wrap { flex:1; min-height:0; overflow:auto; }
+  table.films { border-collapse:collapse; width:100%; table-layout:fixed; }
+  col.col-year { width:60px; } col.col-director { width:16%; } col.col-language { width:12%; }
+  col.col-mc, col.col-rt, col.col-imdb { width:58px; } col.col-rating { width:88px; } col.col-watched { width:104px; } col.col-info { width:36px; }
+  table.films thead th { position:sticky; top:0; background:var(--bg); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; white-space:nowrap; }
+  .num { text-align:right !important; }
+  table.films tbody tr { height:36px; cursor:pointer; }
+  table.films tbody tr:hover { background:#fafafa; }
+  table.films tbody td { padding:0 8px; border-bottom:1px solid var(--line); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:320px; }
+  table.films tbody tr.lit { pointer-events:none; }
+  table.films tbody tr.lit td { position:relative; z-index:5; background:#fff; }
+  table.films tbody tr.marked td { background:#f2f2f2; }
+  table.films tbody tr.marked td:first-child, table.films tbody tr.lit td:first-child { box-shadow:inset 4px 0 0 #1b1b1b; }
+  table.films tbody tr.empty td { text-align:center; color:var(--muted); padding:32px 16px; white-space:normal; }
+  input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1px solid var(--line); border-radius:4px; }
+  button.info { border:0; background:none; cursor:pointer; font-size:16px; }
+  .badge-owned { background:#e8f0fe; color:#1a56db; border:1px solid #1a56db; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-watch { background:#e6f4ea; color:#1e7e34; border:1px solid #1e7e34; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .badge-new { background:#fff3cd; color:#7a5a00; border:1px solid #d9b94a; border-radius:999px; padding:0 6px; font-size:11px; vertical-align:1px; }
+  .old-stars { letter-spacing:1px; }
+  .rank-toggle[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .tier-row { margin:0 0 6px; font-size:12px; } .tier-row .tier-label { margin-left:6px; color:var(--muted); } .tier-pick { margin-left:4px; font-size:12px; min-width:26px; } .tier-pick[aria-current="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #toast { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); background:var(--accent); color:#fff; padding:8px 14px; border-radius:6px; z-index:7; }
+  table.films thead th.th-watched { cursor:pointer; user-select:none; }
+  table.films thead th.th-watched[data-dir="desc"]::after { content:" ▼"; } table.films thead th.th-watched[data-dir="asc"]::after { content:" ▲"; }
+  #backdrop { position:absolute; inset:0; background:rgba(0,0,0,.3); z-index:3; }
+  #backdrop.hand { cursor:pointer; }
+  #drawer { position:absolute; top:0; right:0; height:100%; width:min(760px, 100%); overflow:auto; background:var(--bg); z-index:6; box-shadow:-4px 0 16px rgba(0,0,0,.15); padding:16px 20px; }
+  #drawer-close { position:absolute; top:10px; right:12px; border:0; background:none; font-size:18px; cursor:pointer; }
+  #drawer .keys { position:absolute; top:14px; right:44px; color:var(--muted); font-size:12px; }
+  #drawer h2 { margin:0 0 4px; padding-right:250px; font-size:21px; }
+  #drawer h2 .star { font-size:18px; margin-left:6px; color:#1b1b1b; }
+  #drawer .meta { color:var(--muted); margin-bottom:10px; }
+  #drawer img.poster { max-width:200px; float:right; margin:0 0 12px 12px; }
+  #drawer p { margin:8px 0; }
+  .unseen-row { margin:2px 0 6px; }
+  .unseen-toggle, .rank-toggle { margin-left:6px; font:inherit; font-size:12px; }
+  .unseen-toggle[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #drawer .ratings { border-top:1px solid var(--line); border-bottom:1px solid var(--line); padding:8px 0; margin:12px 0; clear:both; }
+  #drawer .ratings .row { margin:3px 0; }
+  #drawer .ratings .note, #drawer .canon-score { color:var(--muted); }
+  #drawer p.links a { margin-right:6px; color:#0000ee; text-decoration:underline; cursor:pointer; }
+  #drawer .left-out { margin-top:18px; padding:10px 12px; border:1px dashed #cfcfcf; border-radius:8px; color:var(--muted); }
+  [hidden] { display:none !important; }
+
+  /* ---- THE CHANGE: the Watched block inside the ratings block — read-only ---- */
+  #drawer .watched { margin:6px 0 2px; }
+  #drawer .watched .lbl { color:var(--muted); }
+  #drawer .watched ul.viewings { list-style:none; margin:2px 0 0; padding:0; }
+  #drawer .watched ul.viewings li { margin:3px 0; }
+  #drawer .watched ul.viewings li.rental { color:var(--muted); }
+  #drawer .watched ul.viewings li.fresh { background:#fffbe6; border-radius:6px; padding:2px 6px; margin-left:-6px; }
+  #drawer .watched details { display:inline; }
+  #drawer .watched summary { display:inline; cursor:pointer; color:#0000ee; }
+  #drawer .watched details[open] summary { display:none; }
+  #drawer .watched .txt { display:block; margin:4px 0 6px 14px; padding-left:8px; border-left:2px solid var(--line); white-space:pre-wrap; color:#333; }
+  #drawer .watched .sep { color:#c0c0c0; }
+  #drawer .watched .none { color:var(--muted); }
+
+  .panel { margin-top:26px; background:#fff; border:1px solid #cfcfcf; border-radius:10px; padding:16px 20px; font-size:16px; line-height:1.55; }
+  .panel h2 { font-size:21px; margin:0 0 8px; }
+  .panel li { margin:5px 0; }
+  .panel code, .story code { font-family:ui-monospace, Menlo, monospace; font-size:.9em; background:#f2f2f2; padding:0 4px; border-radius:4px; }
+</style></head>
+<body><div class="page">
+<div class="intro">
+  <h1>A viewing log — stories and mock-up, round 2</h1>
+  <p>Round 1 asked which barometer buttons go in the drawer. You answered with a different front door: <b>you dictate, in a Claude Code session, and I turn your words into one deterministic command</b> that writes a viewing against the film. The drawer becomes a reader of the log, not its entry point. Ruled since: <b>a title is all you say</b> — if it matches the film open in the drawer that is the film; if not, and exactly one film in the catalogue carries the title, that is the film; only ambiguity, or a year in question, asks you. <b>Your words are stored whole</b>, in the database, as the first artefact of the viewing. The 0–10 stays per film and is written from the number you say, if you say one.</p>
+  <p>Below: <b>ten stories</b> on your real films (a copy of the catalogue from 2026-09-27), then <b>one mock-up</b> in two panes — the dictation session on the left, the dashboard on the right — in which the log really works (in the page only; nothing is written anywhere). Press <b>Walk it</b> on a story, then <b>Next</b> to play each turn of the conversation. What you log stays logged while you move between stories, so story 9 shows what stories 1–8 wrote.</p>
+</div>
+
+<h2 class="sec">The stories</h2>
+<div class="stories" id="stories"></div>
+
+<h2 class="sec">The mock-up</h2>
+<div class="coach"><span class="txt" id="coach"></span><button class="next" id="next" disabled>Next ▸</button></div>
+<div class="two">
+  <div class="session">
+    <div class="bar"><span>claude — ~/code/movie-brain</span><span id="clock">2026-09-27, evening</span></div>
+    <div class="log" id="log"></div>
+    <div class="foot"><span>a skill (<code>log-viewing</code>) tells me how to read a dictation and which verb to run</span><span id="beatcount"></span></div>
+  </div>
+  <div class="window">
+    <div class="top">
+      <h1>movie-brain</h1>
+      <div id="counts"><span><b>5,250</b> films</span><span><b>4,565</b> reachable</span><span><b>859</b> owned</span><span><b id="rated-count">394</b> rated by me</span><span class="showing">this mock-up carries 8 of them</span></div>
+      <div id="chips"><span class="chip">Reachable</span><span class="chip">Rated</span><span class="chip">Criterion</span><span class="chip">Watchlist</span><span class="chip">Owned</span><span class="chip">On a list</span><span class="chip">Rewatch</span><span class="chip">Shop</span><button class="chip live" id="chip-watched" title="Films with a logged viewing, most recent first">Watched</button><span class="picker">All lists ▾</span><span class="chip" style="background:transparent">Clear</span></div>
+    </div>
+    <div class="table-wrap" id="wrap">
+      <table class="films">
+        <colgroup><col><col class="col-year"><col class="col-director"><col class="col-language"><col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-rating"><col class="col-watched"><col class="col-info"></colgroup>
+        <thead><tr><th>Title</th><th>Year</th><th>Director</th><th>Language</th><th class="num">MC</th><th class="num">RT</th><th class="num">IMDb</th><th class="num">My rating</th><th class="th-watched">Watched</th><th></th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div id="backdrop" hidden></div>
+    <div id="toast" hidden></div>
+    <aside id="drawer" hidden><button id="drawer-close" aria-label="Close">✕</button><span class="keys">↑ ↓ previous / next film · T trailer</span><div id="drawer-body"></div></aside>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>What you should know before saying yes</h2>
+  <ul>
+    <li><b>One verb writes the log:</b> <code>movie-brain viewings add</code>, run by me from your dictation. It takes the title (or a film id once you have confirmed one), an optional date (today unless you say otherwise), an optional service from the registry, an optional rating, and your words on standard input. It writes one <b>viewing</b> (film, date, service) and one <b>note</b> holding your words whole, sets the 0–10 if you said a number, and clears an <i>Unseen</i> mark. It refuses and writes nothing when the title is ambiguous, unknown, the date is in the future, the service slug is not in the registry, or the rating is not a whole number 0–10 — and it says why, on one line.</li>
+    <li><b>Which film:</b> the verb itself runs your ladder, not me. It reads which film the dashboard has open in its drawer (the page tells the server when the drawer opens and closes); a title that matches the open film wins; otherwise exactly one catalogue film with that title (apostrophes, accents and case do not matter — Pandora’s Box is found by "Pandora's Box"); otherwise it lists the candidates and stops, and I ask you. A title the catalogue lacks is a stop too: I propose <code>films add ttNNN</code>, it shows you TMDB's title and year, and only your yes creates the film.</li>
+    <li><b>One viewing per film per day; many notes.</b> A second dictation about the same film the same day adds a second note to the same viewing (and moves the rating if you gave a new number). The next day the same words are a new viewing; "about last night" puts them on last night's line (<code>--on</code>).</li>
+    <li><b>The rating is only ever the number you say.</b> No number, no write — I Am Cuba stays a 9 after "still astonishing" (story 5). A range ("a 7 or 8") is a question back to you, never a guess. "Put it in tier 2" is not written by the log at all: tiers and ranks stay the ranker's, through the drawer's own Tier row and Rank this (story 6).</li>
+    <li><b>The drawer only reads.</b> Its Watched block lists every viewing newest first — date · service · the first words of your note, click to read all of it — with your 2004–08 rentals below them, greyed, as today (the "Me, 2004–08" line becomes a line in this list). No buttons: a wrong entry is removed by telling me (<code>viewings remove</code>, story 7). Nothing puts an <i>Unseen</i> mark back; the Unseen button is right there. The watchlist star, the wishlist heart, the ranker's placements, the Rewatch chip and the header counts do not move; only the "rated by me" count moves, when a rating is new.</li>
+    <li><b>The Watched chip</b> shows every film with at least one logged viewing, newest viewing first, and stacks with the other chips; the <b>Watched column</b> (after My rating) shows each film's last viewing date and sorts like the others, never-logged films last either way. Rentals do not count as viewings for either. Before anything is logged the chip shows one line: <i>No viewing logged yet.</i></li>
+    <li><b>Remarks about the copy</b> (a restoration, a stretched transfer) stay inside your note and I ALSO append a row to <code>observations/presentation.tsv</code>, the hand-kept presentation log, exactly as it is kept today. No new code reads or writes that file.</li>
+    <li><b>Nothing is imported.</b> The log starts empty. Sans Soleil's 2026-09-21 viewing goes in by dictation (story 2), and so would the six dated Apple TV plays, one sentence each; no dates are invented for your 394 rated films — their rating dates are rating dates.</li>
+    <li><b>Not in this build:</b> the drawer as a place to log (no buttons, no date box), a tier or rank from the log, tier calibration (showing a tier's top and bottom film when placing — a named follow-up), documentaries as a separate pool, any import, a watch plan, essays or media as further artefact kinds (the table is built for them; only <i>note</i> ships), and a notes-versus-critics loop.</li>
+    <li><b>Failure:</b> a refused command writes nothing, not half a viewing. If the dashboard is not running the drawer signal is simply absent and the ladder starts at rung two. If a stale drawer signal is left behind (you closed the browser with a film open) it can only ever pick among films of the SAME title, so it cannot log the wrong work. A reload of the dashboard shows what the database holds; the page keeps nothing.</li>
+    <li><b>Story 4's new film</b> is drawn from what TMDB says at creation (title, year, director); its scores, overview and poster arrive with the enrichment tail that runs inside <code>films add --apply</code>, so the mock-up leaves them as dashes rather than invent them.</li>
+  </ul>
+</div>
+</div>
+
+<script>
+const FILMS = [{"id": 3390, "t": "The Blue Angel", "y": 1930, "d": "Josef von Sternberg", "l": "German, English, French", "mc": 90, "rt": 96, "im": 7.6, "r": null, "n": 1, "o": false, "badge": null, "gone": false, "rm": false, "tier": null, "ov": "Prim professor Immanuel Rath finds some of his students ogling racy photos of cabaret performer Lola Lola and visits a local club, The Blue Angel, in an attempt to catch them there. Seeing Lola perform, the teacher is filled with lust, eventually resigning his position at the school to marry the young woman. However, his marriage to a coquette -- whose job is to entice men -- proves to be more difficult than Rath imagined.", "poster": "https://m.media-amazon.com/images/M/MV5BMzQzYTA1N2EtOTUxMy00YzI1LWFjOWEtN2NlOGZmZjZhNDYwXkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Kino Film Collection ↗", "also": "Kanopy, Tubi TV, Fawesome, Artiflix (not subscribed) ⋯ 2 more", "buy": "Apple TV Store (iTunes)", "lists": "Ronald Bergan: The Film Book #11", "crit": false, "old": {"rented_on": "2006-12-26", "stars": 4}, "unseen": false, "trailer": true, "wl": true}, {"id": 1970, "t": "Sans Soleil", "y": 1983, "d": "Chris Marker", "l": "French, Japanese, English, Cantonese, Japanese Sign ", "mc": null, "rt": 88, "im": 7.7, "r": 9, "n": 2, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": 2, "ov": "A woman narrates the thoughts of a world traveler, meditations on time and memory expressed in words and images from places as far-flung as Japan, Guinea-Bissau, Iceland, and San Francisco.", "poster": "https://m.media-amazon.com/images/M/MV5BNjNhOTg4YjQtNDVkYi00MWQxLTg5NzQtNjk4MmJhZWIzMmM0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "Kanopy", "buy": "", "lists": "Sight & Sound: 2022 #59, Sight & Sound: Documentaries #3", "crit": true, "old": null, "unseen": false, "trailer": true, "wl": false}, {"id": 2979, "t": "Solaris", "y": 1972, "d": "Andrei Tarkovsky", "l": "Russian, German", "mc": 93, "rt": 92, "im": 7.9, "r": null, "n": 1, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": null, "ov": "A psychologist is sent to a space station orbiting a planet called Solaris to investigate the death of a doctor and the mental problems of cosmonauts on the station. He soon discovers that the water on the planet is a type of brain which brings out repressed memories and obsessions.", "poster": "https://m.media-amazon.com/images/M/MV5BYTYyMjU4MjItYzZkNy00NmIyLTg1ZGEtYTY5ZTEyM2U2NDM2XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "HBO Max, Plex, Plex Channel, Tubi TV ⋯ 3 more", "buy": "Apple TV Store (iTunes)", "lists": "Time Out: Sci-Fi #17", "crit": true, "old": null, "unseen": false, "trailer": true, "wl": false}, {"id": 5235, "t": "Solaris", "y": 2002, "d": "Steven Soderbergh", "l": "English", "mc": 67, "rt": 66, "im": 6.2, "r": null, "n": 1, "o": false, "badge": null, "gone": false, "rm": false, "tier": null, "ov": "A troubled psychologist is sent to investigate the crew of an isolated research station orbiting a bizarre planet.", "poster": "https://m.media-amazon.com/images/M/MV5BODM3ZWM5NjMtNDE5NC00ODEwLTllZGUtMTdlNzQ5NTNiNmIwXkEyXkFqcGc@._V1_SX300.jpg", "watch": "", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "Time Out: Sci-Fi #91", "crit": false, "old": null, "unseen": false, "trailer": true, "wl": false}, {"id": 668, "t": "I Am Cuba", "y": 1964, "d": "Mikhail Kalatozov", "l": "Spanish, English", "mc": 91, "rt": 100, "im": 8.2, "r": 9, "n": 1, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": 1, "ov": "A study in contrasts set in and around Havana that explores Cuba's 1959 revolution: a young woman's fascination with the excess of an American-owned casino leads to her downfall in the eyes of her street vendor boyfriend; a tenant farmer revolts the only way he knows how, attacking the land he works; university students gain first-hand knowledge of political upheaval; and, in the hills outside the city, the members of a poor peasant family are patriotically swept up into the burgeoning revolt.", "poster": "https://m.media-amazon.com/images/M/MV5BMGM0OTgwNjItNDViZC00ODI5LWI5MDMtZjNmNGFhN2ZlNDU0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "Kino Film Collection, Kanopy, Hoopla (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #81", "crit": true, "old": {"rented_on": "2005-01-12", "stars": 5}, "unseen": false, "trailer": true, "wl": false}, {"id": 1477, "t": "Godzilla vs. Gigan", "y": 1972, "d": "Jun Fukuda", "l": "Japanese", "mc": null, "rt": 67, "im": 5.6, "r": null, "n": 0, "o": true, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": null, "ov": "Manga artist Gengo Odaka lands a job with the World Children's Land amusement park only to become suspicious of the organization when a garbled message is discovered on tapes. As Gengo and his team investigate, Godzilla and Anguirus quickly decipher the message and begin their own plan of action.", "poster": "https://m.media-amazon.com/images/M/MV5BNmVkNTU3ZmMtMzM2My00MTE0LWJkNjMtNzY0NjhlNTc5NWM4XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": null, "unseen": true, "trailer": true, "wl": false}, {"id": 1478, "t": "Godzilla vs. Hedorah", "y": 1971, "d": "Yoshimitsu Banno", "l": "Japanese", "mc": null, "rt": 67, "im": 6.1, "r": null, "n": 0, "o": true, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": null, "ov": "An ever evolving alien life-form arrives on a comet from the Dark Gaseous Nebula and proceeds to consume pollution. Spewing mists of sulfuric acid and corrosive sludge, neither humanity nor Godzilla may be able to defeat this toxic menace.", "poster": "https://m.media-amazon.com/images/M/MV5BMWI5YWYxNjgtYTZmOC00YmFlLWJjMGUtMmNiZDk3NGVjOGY0XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Owned on Apple TV ↗", "also": "HBO Max, Cinemax Amazon Channel (not subscribed), Cinemax Apple TV channel (not subscribed), HBO Max Amazon Channel (not subscribed)", "buy": "Apple TV Store (iTunes)", "lists": "", "crit": true, "old": null, "unseen": true, "trailer": true, "wl": false}, {"id": 2053, "t": "Dragon Inn", "y": 1967, "d": "King Hu", "l": "Mandarin", "mc": 100, "rt": 100, "im": 7.4, "r": 9, "n": 1, "o": false, "badge": "Criterion Channel", "gone": false, "rm": false, "tier": 2, "ov": "China, year 1457. The Minister of Defense is executed, and his children are sentenced to exile by order of the tyrannical Tsao. Fearful of future revenge from the young people, Tsao sends cruel soldiers to murder them, but a brave group of swordsmen can change the course of the battle at the Dragon Inn.", "poster": "https://m.media-amazon.com/images/M/MV5BMjQ3MGJlNzUtMDUzYS00NmY0LTkyN2EtNmM3ODM5YTMzZDY5XkEyXkFqcGc@._V1_SX300.jpg", "watch": "Watch on Criterion Channel ↗", "also": "", "buy": "Apple TV Store (iTunes)", "lists": "My Ranking #382", "crit": true, "old": null, "unseen": false, "trailer": true, "wl": false}];
+const TODAY0 = '2026-09-27';
+let TODAY = TODAY0;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (v, suf = '') => v == null ? '—' : v + suf;
+const film = (t, y) => FILMS.find((f) => f.t === t && (y == null || f.y === y));
+const byId = (id) => FILMS.find((f) => f.id === id);
+const SERVICE_NAMES = { 'kino-film-collection':'Kino Film Collection', 'criterion-channel':'Criterion Channel', 'apple-tv-store':'Apple TV Store (iTunes)' };
+const state = { open:null, mark:null, story:null, watchedChip:false, sortWatched:null, openIndex:null, beats:[], at:0 };
+// viewings: { id, film, on, service, notes:[text], logged } — page state only; a reload empties it
+let viewings = [], nextVid = 1, nextFilmId = 5403;
+const unseen = new Set(FILMS.filter((f) => f.unseen).map((f) => f.id));
+const byDefault = (a, b) => (b.mc ?? -1) - (a.mc ?? -1) || (b.rt ?? -1) - (a.rt ?? -1) || (b.im ?? -1) - (a.im ?? -1) || a.t.localeCompare(b.t);
+function lastWatched(f) { const v = viewings.filter((x) => x.film === f.id).map((x) => x.on).sort(); return v.length ? v[v.length - 1] : null; }
+function rows() {
+  let r = FILMS.slice().sort(byDefault);
+  if (state.watchedChip) r = r.filter((f) => lastWatched(f)).sort((a, b) => lastWatched(b).localeCompare(lastWatched(a)) || byDefault(a, b));
+  if (state.sortWatched) {  // the real compare(): a film with no value sorts LAST in either direction
+    const dir = state.sortWatched === 'asc' ? 1 : -1;
+    r = r.slice().sort((a, b) => { const x = lastWatched(a), y = lastWatched(b); if (x == null && y == null) return byDefault(a, b); if (x == null) return 1; if (y == null) return -1; return dir * x.localeCompare(y) || byDefault(a, b); });
+  }
+  return r;
+}
+
+// ---- the verb, as the page imitates it: `viewings add` runs the ladder and writes, or refuses and writes nothing ----
+const norm = (s) => String(s).toLowerCase().replace(/[’']/g, '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function resolve(title, year, filmId) {
+  if (filmId != null) return { film: byId(filmId), how: 'by id' };
+  const open = state.open != null ? byId(state.open) : null;
+  if (open && norm(open.t) === norm(title) && (year == null || open.y === year)) return { film: open, how: 'matched the open film' };
+  const hits = FILMS.filter((f) => norm(f.t) === norm(title) && (year == null || f.y === year));
+  if (hits.length === 1) return { film: hits[0], how: 'the one film with that title' };
+  return { hits };
+}
+function addViewing({ title, year, filmId, on, service, rate, text }) {
+  on = on || TODAY;
+  const r = resolve(title, year, filmId);
+  if (!r.film) {
+    if (!r.hits.length) return { line: `<span class="warn">NO-FILM</span>   no film titled '${esc(title)}' — nothing written (<b>films add ttNNN</b> mints one)`, exit: 3 };
+    return { line: `<span class="warn">AMBIGUOUS</span> ${r.hits.length} films titled '${esc(title)}' — nothing written\n` + r.hits.map((f) => `  #${f.id}  ${esc(f.t)} (${f.y})  ${esc(f.d || '—')}${f.watch ? '   ' + esc(f.watch.replace(' ↗', '')) : ''}`).join('\n') + `\n  say which: --film ID or --year YYYY`, exit: 3 };
+  }
+  if (on > TODAY) return { line: `<span class="warn">REFUSED</span>   ${on} is in the future — nothing written`, exit: 2 };
+  if (service && !SERVICE_NAMES[service]) return { line: `<span class="warn">REFUSED</span>   no service '${esc(service)}' in the registry (movie-brain services list) — nothing written`, exit: 2 };
+  if (rate != null && !(Number.isInteger(rate) && rate >= 0 && rate <= 10)) return { line: `<span class="warn">REFUSED</span>   a rating is a whole number 0–10 — nothing written`, exit: 2 };
+  const f = r.film;
+  let v = viewings.find((x) => x.film === f.id && x.on === on), verb;
+  if (v) { v.notes.push(text); if (service) v.service = service; verb = `ADDED-TO  viewing #${v.id} (#${f.id} '${esc(f.t)}', ${on}) · note ${v.notes.length}`; }
+  else { v = { id: nextVid++, film: f.id, on, service: service || null, notes: [text], logged: TODAY }; viewings.push(v); unseen.delete(f.id); verb = `<b>LOGGED</b>    #${f.id} '${esc(f.t)}' (${f.y}) · ${on}${service ? ' · ' + esc(service) : ''} · viewing #${v.id} · ${r.how}`; }
+  if (rate != null) { f.r = rate; verb += ` · rated ${rate}`; }
+  render();
+  return { line: verb, exit: 0, v };
+}
+function removeViewing(vid) {
+  const i = viewings.findIndex((x) => x.id === vid); if (i < 0) return { line: `<span class="warn">REFUSED</span>   no viewing #${vid}`, exit: 2 };
+  const v = viewings[i], f = byId(v.film); viewings.splice(i, 1); render();
+  return { line: `REMOVED   viewing #${vid} (#${f.id} '${esc(f.t)}', ${v.on}) and its ${v.notes.length} note${v.notes.length === 1 ? '' : 's'} · rating and Unseen untouched`, exit: 0 };
+}
+function listViewings(since) {
+  const vs = viewings.filter((v) => v.on >= since).sort((a, b) => b.on.localeCompare(a.on) || b.id - a.id);
+  if (!vs.length) return `no viewing since ${since}`;
+  return vs.map((v) => { const f = byId(v.film); return `${v.on}  #${String(f.id).padEnd(5)} ${esc(f.t)} (${f.y})${v.service ? '  ' + v.service : ''}  ${v.notes.length} note${v.notes.length === 1 ? '' : 's'}${f.r != null ? '  rated ' + f.r : ''}`; }).join('\n');
+}
+function openLine() { const f = state.open != null ? byId(state.open) : null; return f ? `OPEN      #${f.id} '${esc(f.t)}' (${f.y})` : `OPEN      nothing — the drawer is closed (or the dashboard is not running)`; }
+function createFilm(t, y, d, tt) { const f = { id: nextFilmId++, t, y, d, l: 'German', mc: null, rt: null, im: null, r: null, n: 0, o: false, badge: null, gone: false, rm: false, tier: null, ov: null, poster: null, watch: '', also: '', buy: '', lists: '', crit: false, old: null, unseen: false, trailer: false, wl: false, fresh: true, tt }; FILMS.push(f); render(); return f; }
+
+// ---- the ten stories: each is a list of beats; a beat prints, and may act on the page ----
+const CMD_ADD = (o) => `movie-brain viewings add --title "${o.title}"${o.year ? ' --year ' + o.year : ''}${o.film ? ' --film ' + o.film : ''}${o.on ? ' --on ' + o.on : ''}${o.service ? ' --service ' + o.service : ''}${o.rate != null ? ' --rate ' + o.rate : ''} --text - <<'EOF'\n${o.text}\nEOF`;
+const BLUE = `I just watched The Blue Angel. It's an early German sound talking movie about a character who falls in love with a cabaret singer. I find this professor a bit of a buffoon. I find the film a little bit irritating. The restoration job on it is really good, and I'm watching it on Kino Collection — they tend to do a pretty good job of getting the highest quality copy of an older movie. The German language is irritating me a little bit because they're yelling at each other a whole lot, which is a little bit annoying. Maybe I'm not liking it as much as I should. But I would say I'll rate this one about a six, because I don't think it's that great.`;
+const STORIES = [
+  { n:1, title:'The Blue Angel, in one breath', film:'The Blue Angel',
+    text:'<b>The Blue Angel</b> is open in the drawer — starred on my watchlist, rented once in 2006 (4★), never rated, best watched on Kino Film Collection. I dictate everything at once: what it is, that the professor is a buffoon, that the restoration is very good, that I watched it on Kino, that it is about a six. I am asked nothing. One command runs. The drawer now says <i>My rating 6</i> and its Watched block reads <i>2026-09-27 · Kino Film Collection · "I just watched The Blue Angel…"</i> above <i>2006-12-26 · rented · ★★★★☆</i>. The star stays. The restoration remark also lands in the presentation log.',
+    coach:'The drawer is open on The Blue Angel. Press <b>Next</b> to dictate; keep pressing to watch me match the open film, run the verb, and the drawer update.',
+    setup() { openFilm('The Blue Angel'); },
+    beats:[
+      { who:'you', text:BLUE },
+      { who:'claude', text:'The Blue Angel is open in your drawer and that is the title you said, so no question. Tonight, on kino-film-collection, rated 6, your words kept whole.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'The Blue Angel', service:'kino-film-collection', rate:6, text:BLUE }) },
+      { who:'out', run:() => addViewing({ title:'The Blue Angel', service:'kino-film-collection', rate:6, text:BLUE }).line },
+      { who:'claude', text:'Logged. I also added a row to observations/presentation.tsv: 2026-09-27 · #3390 · The Blue Angel · kino-film-collection · good · "restoration job really good; Kino tends to get the highest-quality copy".' },
+      { who:'sys', text:'Look at the drawer: My rating, the Watched block (click the quoted words to read the whole note), the star still lit, and the Watched cell on its row.' },
+    ] },
+  { n:2, title:'Last Monday, from memory, browser closed', film:'Sans Soleil',
+    text:'The dashboard is not even open. "I watched <b>Sans Soleil</b> last Monday on the Criterion Channel. Pretty good — bottom of tier one, top of tier two." There is exactly one Sans Soleil, so no question. The viewing is dated <b>2026-09-21</b>, not today. I said no number, so the 9 I typed on the 22nd stays a 9; the tier remark stays inside the note and moves nothing (story 6). This is the log\'s first entry by date — put in by dictation, not by an import.',
+    coach:'Nothing is open. Press <b>Next</b>: the ladder skips the drawer and finds the one Sans Soleil. Note the date on the line, and the untouched 9.',
+    setup() { closeDrawer(); },
+    beats:[
+      { who:'you', text:'I watched Sans Soleil last Monday on the Criterion Channel. Pretty good — I would put it at the bottom of tier one or the top of tier two.' },
+      { who:'cmd', text:'movie-brain viewings open' },
+      { who:'out', run:() => openLine() },
+      { who:'claude', text:'Nothing open, so the catalogue decides: one film titled Sans Soleil (1983, Chris Marker). Last Monday is 2026-09-21. You gave no number, so your 9 stands; the tier remark stays in the note.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Sans Soleil', on:'2026-09-21', service:'criterion-channel', text:'Pretty good — I would put it at the bottom of tier one or the top of tier two.' }) },
+      { who:'out', run:() => addViewing({ title:'Sans Soleil', on:'2026-09-21', service:'criterion-channel', text:'Pretty good — I would put it at the bottom of tier one or the top of tier two.' }).line },
+      { who:'sys', act:() => openFilm('Sans Soleil'), text:'Opened Sans Soleil in the drawer for you: My rating 9, Tier 2 (placed already), and the new line dated 2026-09-21.' },
+    ] },
+  { n:3, title:'Two films share the title', film:'Solaris',
+    text:'"I watched <b>Solaris</b> tonight." Nothing is open, and the catalogue has two: Tarkovsky\'s (1972) and Soderbergh\'s (2002). The verb stops — <i>AMBIGUOUS, 2 films titled Solaris, nothing written</i> — and lists them, so I ask you: Tarkovsky or Soderbergh? "The Russian one." Now the command names the film by id and it logs. Second beat: had the 1972 Solaris been open in the drawer, the same sentence would have logged it without a question — the open film is the tie-breaker.',
+    coach:'Nothing open. Press <b>Next</b> through the refusal, the question, and the answer. The last beats replay it with Solaris (1972) open in the drawer.',
+    setup() { closeDrawer(); },
+    beats:[
+      { who:'you', text:'I watched Solaris tonight on Criterion.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Solaris', service:'criterion-channel', text:'(tonight, on Criterion)' }) },
+      { who:'out', run:() => addViewing({ title:'Solaris', service:'criterion-channel', text:'(tonight, on Criterion)' }).line },
+      { who:'claude', text:'Two films are called Solaris — Tarkovsky (1972) or Soderbergh (2002)?' },
+      { who:'you', text:'The Russian one.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Solaris', film:2979, service:'criterion-channel', text:'(tonight, on Criterion)' }) },
+      { who:'out', run:() => addViewing({ title:'Solaris', filmId:2979, service:'criterion-channel', text:'(tonight, on Criterion)' }).line },
+      { who:'sys', act:() => { const i = viewings.findIndex((v) => v.film === 2979); if (i >= 0) viewings.splice(i, 1); openFilm('Solaris', 1972); }, text:'Replay: I have undone that line and opened Solaris (1972) in the drawer. Same sentence again —' },
+      { who:'you', text:'I watched Solaris tonight on Criterion.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Solaris', service:'criterion-channel', text:'(tonight, on Criterion)' }) },
+      { who:'out', run:() => addViewing({ title:'Solaris', service:'criterion-channel', text:'(tonight, on Criterion)' }).line },
+      { who:'claude', text:'No question this time: the open film carries the title you said.' },
+    ] },
+  { n:4, title:'A film the catalogue does not have', film:'Mädchen in Uniform',
+    text:'"I watched <b>Mädchen in Uniform</b> on a Blu-ray tonight, the 1931 one. Remarkable — an 8." The verb stops: <i>NO-FILM, nothing written</i>. I propose the film by its IMDb id and run <code>films add</code> as a dry run first, which prints what TMDB says it is: <i>Mädchen in Uniform (1931)</i>. Your yes creates it (keyed, then enriched: OMDb, credits, trailers) and only then is the viewing logged against the new film — no service, because a disc is not one. The new film opens in the drawer with your 8.',
+    coach:'Press <b>Next</b>: the refusal, my proposal, the dry run, your yes, the creation, the viewing. The new film joins the table.',
+    setup() { closeDrawer(); },
+    beats:[
+      { who:'you', text:'I watched Mädchen in Uniform on a Blu-ray tonight, the 1931 one. Remarkable — I would give it an 8.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Mädchen in Uniform', year:1931, rate:8, text:'Remarkable — I would give it an 8. (Blu-ray)' }) },
+      { who:'out', run:() => { const f = film('Mädchen in Uniform'); if (f) return addViewing({ title:'Mädchen in Uniform', year:1931, rate:8, text:'Remarkable — I would give it an 8. (Blu-ray)' }).line; return addViewing({ title:'Mädchen in Uniform', year:1931, rate:8, text:'x' }).line; } },
+      { who:'claude', text:'The catalogue has no Mädchen in Uniform. I believe it is tt0022183 (Leontine Sagan, 1931). Let me check what TMDB says before creating anything.' },
+      { who:'cmd', text:'movie-brain films add tt0022183' },
+      { who:'out', text:"WOULD-CREATE  tt0022183 'Mädchen in Uniform' (1931)" },
+      { who:'claude', text:'TMDB agrees: Mädchen in Uniform, 1931. Shall I add it? (Creating a film is the one step that always waits for your yes.)' },
+      { who:'you', text:'Yes.' },
+      { who:'cmd', text:'movie-brain films add tt0022183 --apply' },
+      { who:'out', run:() => { const f = film('Mädchen in Uniform') || createFilm('Mädchen in Uniform', 1931, 'Leontine Sagan', 'tt0022183'); return `CREATED       #${f.id} tt0022183 'Mädchen in Uniform' (1931)  keyed\nenriching the 1 new film…\nkeyed: 1 · looked up: 1 · review: 0\ncaught up — credits 1 · vectors 1 · store ids 0 · trailers 1`; } },
+      { who:'cmd', text:() => CMD_ADD({ title:'Mädchen in Uniform', film:(film('Mädchen in Uniform') || {}).id, rate:8, text:'Remarkable — I would give it an 8. (Blu-ray)' }) },
+      { who:'out', run:() => addViewing({ title:'Mädchen in Uniform', filmId:film('Mädchen in Uniform').id, rate:8, text:'Remarkable — I would give it an 8. (Blu-ray)' }).line },
+      { who:'sys', act:() => openFilm('Mädchen in Uniform'), text:'Opened the new film. Its scores, overview and poster are what enrichment brought; this page does not know them, so it shows dashes.' },
+    ] },
+  { n:5, title:'No number, no rating — and a range is a question', film:'I Am Cuba',
+    text:'"Watched <b>I Am Cuba</b> again on Criterion. Still astonishing, the camera work." It logs; the 9 stays a 9 because I said no number, and the 2005 rental (5★) now sits below tonight\'s line. Then: "Actually I would say it is a 9 or a 10 now." That is not a number, so I am asked — "9 or 10?" — never guessed. "Ten." The same viewing takes the second note and the rating moves to 10.',
+    coach:'Press <b>Next</b>. Watch the rating box stay at 9 after the first dictation, the question after "9 or 10", and the move to 10.',
+    setup() { openFilm('I Am Cuba'); },
+    beats:[
+      { who:'you', text:'Watched I Am Cuba again on Criterion tonight. Still astonishing, the camera work.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'I Am Cuba', service:'criterion-channel', text:'Still astonishing, the camera work.' }) },
+      { who:'out', run:() => addViewing({ title:'I Am Cuba', service:'criterion-channel', text:'Still astonishing, the camera work.' }).line },
+      { who:'claude', text:'Logged; no number, so your 9 stands.' },
+      { who:'you', text:"Actually I'd say it is a 9 or a 10 now." },
+      { who:'claude', text:'9 or 10? I only write the number you say.' },
+      { who:'you', text:'Ten.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'I Am Cuba', rate:10, text:"Actually I'd say it is a 9 or a 10 now. — Ten." }) },
+      { who:'out', run:() => addViewing({ title:'I Am Cuba', rate:10, text:"Actually I'd say it is a 9 or a 10 now. — Ten." }).line },
+      { who:'sys', text:'The rating box says 10; the line still says one viewing, now with two notes.' },
+    ] },
+  { n:6, title:'"Move it to tier one" (not this build)', film:'Sans Soleil',
+    text:'Back on <b>Sans Soleil</b>, which the ranker already holds in tier 2: "Move it to tier one." Nothing is written. Tiers and ranks are the ranker\'s — the drawer\'s own Tier row does it in one click, and Rank this queues a full comparison — so I say so and leave the log alone. Showing a tier\'s top and bottom film while you place one is a named follow-up, not part of this build. Documentaries against fiction is an open question I do not answer here.',
+    coach:'Sans Soleil is open, Tier row showing 2. Press <b>Next</b>; then click <b>1</b> in the Tier row yourself — that is the real control, unchanged.',
+    setup() { openFilm('Sans Soleil'); },
+    beats:[
+      { who:'you', text:'Move Sans Soleil to tier one.' },
+      { who:'claude', text:'That is the ranker\'s to do, not the log\'s — the Tier row in the drawer moves it in one click, and Rank this puts it through a full comparison. Nothing written here. (If you want, I can note "tier one" on last Monday\'s line.)' },
+      { who:'sys', text:'No command ran. The Tier row is right there in the drawer.' },
+    ] },
+  { n:7, title:'I named the wrong film', film:'Godzilla vs. Gigan',
+    text:'Two Godzillas I own and have marked <i>Unseen</i>. "I watched <b>Godzilla vs. Gigan</b> tonight." Logged, and Gigan\'s Unseen mark goes out. "No — it was Hedorah, the smog one." I remove the viewing by its number: <i>REMOVED … rating and Unseen untouched</i>. Gigan\'s Unseen mark does <b>not</b> come back by itself; the button is right there in its drawer. Then Hedorah is logged.',
+    coach:'Press <b>Next</b>. Afterwards click <b>Godzilla vs. Gigan</b> in the dimmed list and look at its Unseen button.',
+    setup() { closeDrawer(); },
+    beats:[
+      { who:'you', text:'I watched Godzilla vs. Gigan tonight, on Apple TV.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Godzilla vs. Gigan', service:'apple-tv-store', text:'(tonight, owned copy on Apple TV)' }) },
+      { who:'out', run:() => addViewing({ title:'Godzilla vs. Gigan', service:'apple-tv-store', text:'(tonight, owned copy on Apple TV)' }).line },
+      { who:'you', text:'No wait — it was Hedorah, the smog one.' },
+      { who:'cmd', text:() => `movie-brain viewings remove ${(viewings.find((v) => v.film === 1477) || { id:'?' }).id}` },
+      { who:'out', run:() => { const v = viewings.find((x) => x.film === 1477); return v ? removeViewing(v.id).line : 'REFUSED   no viewing for Gigan'; } },
+      { who:'claude', text:'Removed. Gigan\'s Unseen mark went out when it was logged and I do not put it back — press Unseen in its drawer if you want it. Logging Hedorah now.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Godzilla vs. Hedorah', service:'apple-tv-store', text:'(tonight, owned copy on Apple TV)' }) },
+      { who:'out', run:() => addViewing({ title:'Godzilla vs. Hedorah', service:'apple-tv-store', text:'(tonight, owned copy on Apple TV)' }).line },
+      { who:'sys', act:() => openFilm('Godzilla vs. Hedorah'), text:'Opened Hedorah. Now click Gigan in the dimmed list: no line, and Unseen is off.' },
+    ] },
+  { n:8, title:'One more thing, the same night — and the morning after', film:'The Blue Angel',
+    text:'Later the same evening, about <b>The Blue Angel</b>: "One more thing — the Dietrich songs are the best part. Make it a seven." Same film, same day, so the words join tonight\'s viewing as a second note and the rating moves to 7: still one line in the drawer. Next morning (the page moves to 2026-09-28) the same kind of sentence is a <b>new</b> viewing dated the 28th — unless I say "about last night", which puts it on last night\'s line.',
+    coach:'Press <b>Next</b>. The first half adds to tonight\'s line; the second half moves the clock to tomorrow and shows the two outcomes.',
+    setup() { if (!viewings.some((v) => v.film === 3390)) addViewing({ title:'The Blue Angel', filmId:3390, service:'kino-film-collection', rate:6, text:BLUE }); openFilm('The Blue Angel'); },
+    beats:[
+      { who:'you', text:'One more thing about The Blue Angel — the Dietrich songs are the best part. Make it a seven.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'The Blue Angel', rate:7, text:'One more thing — the Dietrich songs are the best part. Make it a seven.' }) },
+      { who:'out', run:() => addViewing({ title:'The Blue Angel', rate:7, text:'One more thing — the Dietrich songs are the best part. Make it a seven.' }).line },
+      { who:'sys', act:() => { TODAY = '2026-09-28'; $('#clock').textContent = '2026-09-28, morning'; render(); }, text:'It is now the morning of 2026-09-28.' },
+      { who:'you', text:'About last night — The Blue Angel: Jannings\' crowing scene is unbearable in the right way.' },
+      { who:'claude', text:'"About last night" — I will put it on the 27th\'s line, not a new viewing.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'The Blue Angel', on:'2026-09-27', text:"Jannings' crowing scene is unbearable in the right way." }) },
+      { who:'out', run:() => addViewing({ title:'The Blue Angel', on:'2026-09-27', text:"Jannings' crowing scene is unbearable in the right way." }).line },
+      { who:'you', text:'I watched The Blue Angel again this morning, with the commentary.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'The Blue Angel', text:'Again this morning, with the commentary.' }) },
+      { who:'out', run:() => addViewing({ title:'The Blue Angel', text:'Again this morning, with the commentary.' }).line },
+      { who:'sys', text:'Two lines now: 2026-09-28 (one note) above 2026-09-27 (three notes). The rating is 7 from last night; this morning you gave no number.' },
+    ] },
+  { n:9, title:'What did I watch this month?', film:null,
+    text:'I press the <b>Watched</b> chip: the films with a logged viewing, newest viewing first, and the <b>Watched</b> column shows each film\'s last date (its header sorts; never-logged films last either way). Rentals do not count: a film rented in 2006 and never logged is not in this list. At the keyboard the same question is one command, <code>viewings list --since 2026-09-01</code>, and it prints the same rows. Before anything is logged the chip shows one line: <i>No viewing logged yet.</i>',
+    coach:'Press <b>Watched</b> in the chip row (it is real in this mock-up) and click the Watched header to sort. Press <b>Next</b> to see the same list from the command line. Walk stories 1–8 first if the list is empty.',
+    setup() { closeDrawer(); state.watchedChip = true; render(); },
+    beats:[
+      { who:'you', text:'What have I watched this month?' },
+      { who:'cmd', text:'movie-brain viewings list --since 2026-09-01' },
+      { who:'out', run:() => listViewings('2026-09-01') },
+      { who:'sys', text:'The same rows the Watched chip shows on the right, newest first.' },
+    ] },
+  { n:10, title:'A film I rated, never logged', film:'Dragon Inn',
+    text:'<b>Dragon Inn</b>: a 9, in tier 2. I open it: the rating box says 9; the Watched block says <i>Never logged.</i> Nothing invents a viewing from a rating — today all 394 of my rated films open this way, and they stay that way until I say I watched one. "I watched Dragon Inn last Thursday" puts a line on 2026-09-24 and leaves the 9 alone.',
+    coach:'Look at the drawer: rating 9, Never logged. Press <b>Next</b> to log last Thursday from memory.',
+    setup() { openFilm('Dragon Inn'); },
+    beats:[
+      { who:'you', text:'I watched Dragon Inn last Thursday, on Criterion.' },
+      { who:'claude', text:'Last Thursday is 2026-09-24. No number, so the 9 stays.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'Dragon Inn', on:'2026-09-24', service:'criterion-channel', text:'(last Thursday, on Criterion)' }) },
+      { who:'out', run:() => addViewing({ title:'Dragon Inn', on:'2026-09-24', service:'criterion-channel', text:'(last Thursday, on Criterion)' }).line },
+    ] },
+];
+
+// ---- drawing ----
+function rowHtml(f) {
+  const title = esc(f.t)
+    + (f.badge ? ` <span class="badge-watch">${esc(f.badge)}</span>` : '')
+    + (f.o ? ' <span class="badge-owned">owned</span>' : '')
+    + (f.fresh ? ' <span class="badge-new">new tonight</span>' : '')
+    + (f.old ? ` <span class="old-stars" title="rented ${f.old.rented_on}">${'★'.repeat(f.old.stars)}${'☆'.repeat(5 - f.old.stars)}</span>` : '');
+  const lw = lastWatched(f);
+  const cls = [state.open === f.id ? 'lit' : '', state.mark === f.id && state.open !== f.id ? 'marked' : ''].join(' ').trim();
+  return `<tr data-id="${f.id}" class="${cls}"><td>${title}</td><td>${fmt(f.y)}</td><td>${esc(f.d) || '—'}</td><td>${esc(f.l) || '—'}</td><td class="num">${fmt(f.mc)}</td><td class="num">${fmt(f.rt)}</td><td class="num">${fmt(f.im)}</td><td class="num"><input class="rating" maxlength="2" value="${f.r ?? ''}" readonly></td><td class="td-watched">${lw ? (lw === TODAY ? 'today' : lw) : ''}</td><td><button class="info">ⓘ</button></td></tr>`;
+}
+function noteHtml(v) {
+  const first = v.notes[0].replace(/\s+/g, ' ').slice(0, 42).trim();
+  return `<details><summary>"${esc(first)}…" ${v.notes.length > 1 ? `(${v.notes.length} notes)` : ''}</summary>${v.notes.map((n) => `<span class="txt">${esc(n)}</span>`).join('')}</details>`;
+}
+function watchedHtml(f) {
+  const vs = viewings.filter((v) => v.film === f.id).sort((a, b) => b.on.localeCompare(a.on));
+  const lines = vs.map((v) => `<li class="${v.logged === TODAY ? 'fresh' : ''}">${v.on === TODAY ? 'today' : v.on}${v.service ? ` <span class="sep">·</span> ${esc(SERVICE_NAMES[v.service] || v.service)}` : ''} <span class="sep">·</span> ${noteHtml(v)}</li>`);
+  if (f.old) lines.push(`<li class="rental">${esc(f.old.rented_on)} <span class="sep">·</span> rented <span class="sep">·</span> <span class="old-stars">${'★'.repeat(f.old.stars)}${'☆'.repeat(5 - f.old.stars)}</span></li>`);
+  return `<div class="watched"><span class="lbl">Watched:</span> ${lines.length ? `<ul class="viewings">${lines.join('')}</ul>` : '<span class="none">Never logged.</span>'}</div>`;
+}
+function drawDrawer(f) {
+  const critics = [f.im != null ? `IMDb <b>${f.im.toFixed(1)}</b>` : '', f.mc != null ? `Metacritic <b>${f.mc}</b>` : '', f.rt != null ? `Rotten Tomatoes <b>${f.rt}%</b>` : ''].filter(Boolean).join(' · ');
+  $('#drawer-body').innerHTML = `<h2>${esc(f.t)} <span class="star" title="watchlist">${f.wl ? '★' : '☆'}</span><span class="star" title="needs revisit">⚐</span></h2>
+    <div class="unseen-row"><button class="unseen-toggle" data-id="${f.id}" aria-pressed="${unseen.has(f.id) ? 'true' : 'false'}" title="Toggle unseen (the ranker skips it)">Unseen</button><button class="rank-toggle" aria-pressed="${f.rm ? 'true' : 'false'}" disabled>Rank this</button></div>
+    ${f.tier ? `<div class="tier-row"><span class="tier-label">Tier</span>${[1, 2, 3, 4, 5].map((t) => `<button class="tier-pick" data-id="${f.id}" data-tier="${t}"${t === f.tier ? ' aria-current="true"' : ''}>${t}</button>`).join('')}</div>` : ''}
+    <div class="meta">${fmt(f.y)} · ${esc(f.d) || '—'}${f.gone ? ' · <b>Gone from Criterion</b>' : ''}</div>
+    <p>${f.poster ? `<img class="poster" src="${esc(f.poster)}" alt="">` : ''}${f.ov ? esc(f.ov) : '<span class="none" style="color:#6b6b6b">(overview, scores and poster arrive with enrichment — not known to this page)</span>'}</p>
+    <div class="ratings"><div class="row">My rating: <input class="rating" maxlength="2" value="${f.r ?? ''}" readonly></div>
+    ${watchedHtml(f)}
+    ${critics ? `<div class="row">${critics}</div>` : '<div class="row note">OMDb lookup pending.</div>'}${f.lists ? `<div class="row">On lists: ${esc(f.lists)}</div>` : ''}</div>
+    ${f.watch ? `<p class="meta">${esc(f.watch)}</p>` : ''}${f.also ? `<p class="meta">Also streaming on: ${esc(f.also)}</p>` : ''}${f.buy ? `<p class="meta">Buy on: <u>${esc(f.buy)}</u></p>` : ''}
+    <p class="links">${f.trailer ? '<a>▶ Trailer</a>' : ''}${f.crit ? '<a>Open on Criterion ↗</a>' : ''}<a>TMDB ↗</a><a>CheapCharts ↗</a></p>
+    <div class="left-out">The rest of the drawer — cast, writer, facts, the audit block — is unchanged and left out of this mock-up. The links are dead; the Unseen button and the Tier row work as they do today; the rating box is read-only here because dictation writes it.</div>`;
+}
+function render() {
+  const R = rows();
+  $('#tbody').innerHTML = R.length ? R.map(rowHtml).join('') : `<tr class="empty"><td colspan="10">${state.watchedChip ? 'No viewing logged yet.' : 'No film matches.'}</td></tr>`;
+  $('.th-watched').dataset.dir = state.sortWatched || '';
+  $('#chip-watched').classList.toggle('active', state.watchedChip);
+  $('#rated-count').textContent = String(394 + FILMS.filter((f) => f.r != null && !f.r0).length).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  document.querySelectorAll('.story').forEach((el) => el.classList.toggle('current', +el.dataset.n === state.story));
+  const s = STORIES.find((x) => x.n === state.story);
+  $('#coach').innerHTML = s ? `<b>Story ${s.n}.</b> ${s.coach}` : `Click any film on the right, or press <b>Walk it</b> on a story above, then <b>Next</b> to play the conversation.`;
+  $('#next').disabled = !s || state.at >= s.beats.length;
+  $('#beatcount').textContent = s ? `turn ${Math.min(state.at, s.beats.length)} of ${s.beats.length}` : '';
+  const f = FILMS.find((x) => x.id === state.open);
+  if (f) drawDrawer(f);
+}
+function openAt(f) {
+  if (!f) return;
+  state.open = f.id; state.mark = f.id; state.openIndex = rows().findIndex((x) => x.id === f.id);
+  $('#drawer').hidden = false; $('#backdrop').hidden = false; $('#drawer').scrollTop = 0;
+  render();
+}
+function openFilm(t, y) { openAt(film(t, y)); }
+function closeDrawer() { state.open = null; $('#drawer').hidden = true; $('#backdrop').hidden = true; render(); }
+function rowAt(x, y) {
+  const under = document.elementsFromPoint(x, y).find((el) => el.id !== 'backdrop');
+  const tr = under && under.closest('#tbody tr[data-id]');
+  return tr ? FILMS.find((f) => f.id === +tr.dataset.id) : null;
+}
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 2500); }
+
+// ---- playing a story's beats ----
+function printBeat(b) {
+  const el = document.createElement('div'); el.className = 'beat ' + b.who;
+  if (b.act) b.act();
+  let text = typeof b.text === 'function' ? b.text() : b.text;
+  if (b.run) text = b.run();
+  if (b.who === 'out') el.innerHTML = text; else el.textContent = text || '';
+  $('#log').appendChild(el); $('#log').scrollTop = $('#log').scrollHeight;
+}
+function nextBeat() { const s = STORIES.find((x) => x.n === state.story); if (!s || state.at >= s.beats.length) return; printBeat(s.beats[state.at++]); render(); }
+function walk(n) {
+  const s = STORIES.find((x) => x.n === n);
+  if (state.story !== null && TODAY !== TODAY0) { TODAY = TODAY0; $('#clock').textContent = '2026-09-27, evening'; }
+  state.story = n; state.at = 0; state.sortWatched = null; if (n !== 9) state.watchedChip = false;
+  $('#log').innerHTML = `<div class="beat sys">— story ${n}: ${s.title} —</div>`;
+  s.setup(); render();
+  document.querySelector('.two').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+
+// ---- wiring ----
+FILMS.forEach((f) => { f.r0 = f.r != null; });
+$('#stories').innerHTML = STORIES.map((s) => `<div class="story" data-n="${s.n}"><h3><span class="n">${s.n}</span>${s.title}</h3><p>${s.text}</p><div class="foot"><span class="does">${s.beats.length} turns</span><button class="walk" data-n="${s.n}">Walk it</button></div></div>`).join('');
+$('#stories').addEventListener('click', (e) => { const b = e.target.closest('.walk'); if (b) walk(+b.dataset.n); });
+$('#next').addEventListener('click', nextBeat);
+$('#drawer-body').addEventListener('click', (e) => {
+  const u = e.target.closest('.unseen-toggle'); if (u) { const id = +u.dataset.id; if (unseen.has(id)) unseen.delete(id); else unseen.add(id); return render(); }
+  const t = e.target.closest('.tier-pick'); if (t) { byId(+t.dataset.id).tier = +t.dataset.tier; toast('Moved to tier ' + t.dataset.tier + ' (the real move-tier, unchanged by this feature)'); return render(); }
+});
+$('.th-watched').addEventListener('click', () => { state.sortWatched = state.sortWatched === 'desc' ? 'asc' : state.sortWatched === 'asc' ? null : 'desc'; render(); });
+$('#tbody').addEventListener('click', (e) => { if (e.target.closest('input')) return; const tr = e.target.closest('tr[data-id]'); if (tr) openAt(FILMS.find((f) => f.id === +tr.dataset.id)); });
+$('#backdrop').addEventListener('click', (e) => { const f = rowAt(e.clientX, e.clientY); if (f) openAt(f); else closeDrawer(); });
+$('#backdrop').addEventListener('mousemove', (e) => $('#backdrop').classList.toggle('hand', !!rowAt(e.clientX, e.clientY)));
+$('#drawer-close').addEventListener('click', closeDrawer);
+$('#chip-watched').addEventListener('click', () => { state.watchedChip = !state.watchedChip; render(); });
+document.addEventListener('keydown', (e) => {
+  if (state.open == null || e.target.matches('input, textarea, select') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'Escape') return closeDrawer();
+  if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  const R = rows(), here = R.findIndex((f) => f.id === state.open);
+  let i;
+  if (here >= 0) i = here + (e.key === 'ArrowDown' ? 1 : -1);
+  else if (state.openIndex == null) return;
+  else { const gap = Math.min(state.openIndex, R.length - 1); i = e.key === 'ArrowDown' ? gap : gap - 1; }
+  if (i >= 0 && i < R.length) openAt(R[i]);
+});
+$('#log').innerHTML = '<div class="beat sys">Press Walk it on a story above, then Next.</div>';
+render();
+</script>
+</body></html>

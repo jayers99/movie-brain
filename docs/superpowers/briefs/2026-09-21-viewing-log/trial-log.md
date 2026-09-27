@@ -68,3 +68,21 @@ Two seams it also saw, both fixed: the brief's two API rows disagreed on a same-
 The spec says the checker never loops, so these three were verified by the builder's own headless rehearsal, not a third run; they are listed here as the diagnostic-checkpoint items and closed. Owner cost across both runs: zero minutes.
 
 **Summary line for the owner:** Checked: 16 findings, 13 fixed, 3 stories added, 0 declined. Not checked: whether TV.app can answer a played date; everything point C covers (nothing is built yet).
+
+## Round 2 (2026-09-27)
+
+The owner picked the story up again ("let's shape backlog item 27") and reshaped the entry path in a spoken brain dump; three rulings followed (title-only ladder, words stored in the database, proceed to stories). `shaping.md` §7 has the record; `brief-2.md` and `mockup-2.html` are the round-2 page.
+
+### Your active time (round 2)
+
+| When | What you did | Rough minutes |
+|---|---|---|
+| 2026-09-27 | brain dump in a user-story voice (dictation through the agent → deterministic commands); ruled the identification ladder; picked database storage; "proceed" | unmeasured, under 15 |
+
+### Probes used (round 2)
+
+| Probe | Decision it was meant to change | Did it? |
+|---|---|---|
+| Copy of the live database + its dashboard (`/api/films/<id>` for the story films) | which real films carry each story; what the drawer shows today | yes: The Blue Angel is watchlisted and has a 2006 rental (story 1 shows both); Sans Soleil is already rated 9 and in tier 2 (story 6 became "move it", not "place it"); two Solaris, both unrated |
+| `films add` dry runs on the copy (tt0018737, tt0022183, tt0019415, tt0019648) | which film the catalogue truly lacks for story 4 | yes: Pandora's Box is HELD under a curly apostrophe (the ladder normalises because of it); Mädchen in Uniform WOULD-CREATE |
+| Headless rehearsal of `mockup-2.html`, every story, every turn | whether the page does what the stories say | run before the gap check: 10 stories, 81 turns, no page errors; chip order, empty state and column sort checked |
