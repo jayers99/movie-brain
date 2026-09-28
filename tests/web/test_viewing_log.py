@@ -161,3 +161,26 @@ def test_the_drawer_refreshes_itself_when_the_window_regains_focus(dash: Page, s
     dash.evaluate("window.dispatchEvent(new Event('focus'))")
     expect(dash.locator("#drawer .ratings .watched li").first).to_contain_text("2026-09-24")
     expect(dash.locator("#films tbody tr[data-id]", has_text="Dragon Inn").locator("td.c-watched")).to_have_text("2026-09-24")
+
+
+def test_a_focus_refresh_with_nothing_changed_leaves_an_open_note_and_the_scroll_alone(dash: Page, server):
+    """Point-C gap check finding 5: the redraw must be skipped when nothing moved, or every
+    alt-tab (not just one that followed a dictation) would collapse a note the owner had open
+    and reset the drawer's scroll."""
+    _, repo = server
+    dash.set_viewport_size({"width": 1440, "height": 300})  # short enough that the drawer must scroll
+    open_film(dash, "The Blue Angel")
+    note = dash.locator("#drawer .ratings .watched li").first.locator("details.note")
+    note.locator("summary").click()
+    expect(note).to_have_js_property("open", True)
+    dash.evaluate("document.querySelector('#drawer').scrollTop = 40")
+    dash.evaluate("window.dispatchEvent(new Event('focus'))")
+    dash.wait_for_timeout(200)
+    expect(note).to_have_js_property("open", True)
+    assert dash.evaluate("document.querySelector('#drawer').scrollTop") == 40
+    # Now something DOES change out of the page's sight: the block must update.
+    repo.add_viewing(IDS["The Blue Angel"], date(2026, 9, 26), None, "another night", None, TODAY)
+    dash.evaluate("window.dispatchEvent(new Event('focus'))")
+    lines = dash.locator("#drawer .ratings .watched li")
+    expect(lines).to_have_count(4)
+    expect(lines.nth(1)).to_contain_text("2026-09-26")

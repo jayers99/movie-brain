@@ -1257,9 +1257,19 @@
     if (!r || !r.ok || seq !== drawerSeq || state.openFilm !== id) return;
     const d = await r.json();
     if (seq !== drawerSeq || state.openFilm !== id) return;  // a step could have landed during the await above
+    // Point-C gap check finding 5: redraw only when something that can change OUT OF THE PAGE'S
+    // SIGHT actually moved — else a focus/visibilitychange fired for no reason (every alt-tab,
+    // not only a dictation) would collapse an open note and jump the scroll for nothing.
+    const prev = drawnDetail || {};
+    const changed = prev.my_rating !== d.my_rating || prev.unseen !== d.unseen || prev.watchlisted !== d.watchlisted
+      || prev.last_watched !== d.last_watched || prev.viewing_count !== d.viewing_count || prev.rank_tier !== d.rank_tier
+      || JSON.stringify(prev.viewings) !== JSON.stringify(d.viewings);
+    if (!changed) return;
     const i = state.films.findIndex((f) => f.id === id);
     if (i >= 0) state.films[i] = { ...state.films[i], my_rating: d.my_rating, unseen: d.unseen, last_watched: d.last_watched, viewing_count: d.viewing_count, watchlisted: d.watchlisted };
+    const scrollTop = drawer.scrollTop;
     body.innerHTML = detailHtml(d); drawnDetail = d;
+    drawer.scrollTop = scrollTop;
     if (movedOn && movedOn.at === id) body.querySelector('h2').insertAdjacentHTML('afterend', movedOnHtml(movedOn));
     renderCounts(); applyFilters();
   }
