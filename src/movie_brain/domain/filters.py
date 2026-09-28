@@ -125,6 +125,7 @@ _PREDICATES: dict[str, Predicate] = {
     "multi_list": lambda v, _: len(v.lists) >= MIN_LISTS,
     "rewatch": lambda v, _: rewatch(v),
     "shop": lambda v, _: shop(v),
+    "watched": lambda v, _: v.viewing_count > 0,
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)

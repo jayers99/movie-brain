@@ -229,6 +229,19 @@ class OldRating:
 
 
 @dataclass(frozen=True)
+class ViewingWrite:
+    """What one `viewings add` wrote: the viewing's id, whether it was created by this write
+    (False = the day already had a line and the artefact was appended), the line's note count,
+    and the service the LINE now carries (never overwritten — so a caller whose own `--service`
+    differs from this can say the dropped one out loud, point-C gap check finding 8)."""
+
+    viewing_id: int
+    created: bool
+    note_count: int
+    service: str | None
+
+
+@dataclass(frozen=True)
 class ServiceMeta:
     """One row of the service registry. `quality` and `has_apple_app` are owner-set constants
     written only by `movie-brain services` — see the canon-best-source design §5."""
@@ -378,6 +391,10 @@ class FilmView:
     # winner would go stale the moment a merge re-points a listing, the same argument that
     # keeps the cross-list tally computed.
     best_source: dict[str, object] | None = None
+    # The viewing log (brief 2026-09-21-viewing-log/brief-2.md): last logged viewing date and how
+    # many there are, for the Watched column and chip; the lines themselves are detail-only.
+    last_watched: str | None = None
+    viewing_count: int = 0
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

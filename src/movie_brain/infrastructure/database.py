@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -35,6 +35,7 @@ from movie_brain.domain.models import (
     TieredEntry,
     TmdbCredits,
     TrailerTarget,
+    ViewingWrite,
     YearBackfillTarget,
     film_key,
 )
@@ -67,6 +68,8 @@ from movie_brain.infrastructure.cheapcharts import product_url
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 TMDB_REFRESH_STAMP = "tmdb_providers_refreshed_at"
+DRAWER_FILM_KEY = "drawer_film"
+DRAWER_MAX_AGE = timedelta(seconds=120)
 
 _RUNTIME_MIN = re.compile(r"(\d+)\s*min")
 
@@ -450,6 +453,16 @@ def service_slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
+def _write_rating(c: sqlite3.Connection, film_id: int, score: int, rated_at: date) -> None:
+    """The one `my_ratings` upsert, shared by `set_rating` and `add_viewing` (viewing-log
+    controller ruling: the rating is written only through this statement, never duplicated)."""
+    c.execute(
+        "INSERT INTO my_ratings (film_id, score, rated_at) VALUES (?, ?, ?) "
+        "ON CONFLICT(film_id) DO UPDATE SET score=excluded.score, rated_at=excluded.rated_at",
+        (film_id, score, rated_at.isoformat()),
+    )
+
+
 def _old_rating_by_film(c: sqlite3.Connection) -> dict[int, dict[str, object]]:
     """Old ratings for the WHOLE view in one query (old-ratings spec §4.4). A film may hold two
     rows (the source can list one film twice): the latest rental wins, ties to the higher line."""
@@ -460,6 +473,13 @@ def _old_rating_by_film(c: sqlite3.Connection) -> dict[int, dict[str, object]]:
     ):
         out[int(r["film_id"])] = {"stars": int(r["stars"]), "rented_on": r["rented_on"]}
     return out
+
+
+def _viewing_stats_by_film(c: sqlite3.Connection) -> dict[int, tuple[str, int]]:
+    return {
+        int(r["film_id"]): (str(r["last"]), int(r["n"]))
+        for r in c.execute("SELECT film_id, MAX(watched_on) AS last, COUNT(*) AS n FROM viewing GROUP BY film_id")
+    }
 
 
 def _lists_by_film(c: sqlite3.Connection) -> dict[int, list[dict[str, object]]]:
@@ -575,6 +595,7 @@ def _row_to_view(
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
     store_option: dict[str, object] | None = None,
+    viewing: tuple[str, int] | None = None,
 ) -> FilmView:
     view = FilmView(
         id=row["id"],
@@ -609,6 +630,8 @@ def _row_to_view(
         revisit_note=revisit[1],
         audit=audit[0],
         verdict=audit[1],
+        last_watched=viewing[0] if viewing else None,
+        viewing_count=viewing[1] if viewing else 0,
     )
     # The Criterion option's landing page is this film's own listing URL (the LEFT JOIN in
     # _VIEW_SQL); a fresh dict per film, never a mutation of the option shared across the build.
@@ -2287,6 +2310,24 @@ class Repository:
                 (key, value),
             )
 
+    def set_drawer_film(self, film_id: int | None, now: datetime) -> None:
+        """The dashboard's report of its open drawer (brief 2.2, "the open-film signal"): written on
+        open, on close (None) and every 30 s while open; read by `viewings add` and `viewings open`."""
+        self.set_meta(DRAWER_FILM_KEY, json.dumps({"film_id": film_id, "at": now.isoformat(timespec="seconds")}))
+
+    def drawer_film(self, now: datetime, max_age: timedelta = DRAWER_MAX_AGE) -> int | None:
+        raw = self.get_meta(DRAWER_FILM_KEY)
+        if raw is None:
+            return None
+        try:
+            data = json.loads(raw)
+            at = datetime.fromisoformat(str(data["at"]))
+        except (ValueError, KeyError, TypeError):
+            return None
+        if data.get("film_id") is None or now - at > max_age or at > now + timedelta(seconds=5):
+            return None
+        return int(data["film_id"])
+
     # omdb -------------------------------------------------------------
     def films_needing_lookup(self, source: str, today: date) -> list[tuple[int, Film]]:
         cutoff = (today - timedelta(days=MISS_RETRY_DAYS)).isoformat()
@@ -2370,11 +2411,7 @@ class Repository:
             if score is None:
                 c.execute("DELETE FROM my_ratings WHERE film_id = ?", (film_id,))
             else:
-                c.execute(
-                    "INSERT INTO my_ratings (film_id, score, rated_at) VALUES (?, ?, ?) "
-                    "ON CONFLICT(film_id) DO UPDATE SET score=excluded.score, rated_at=excluded.rated_at",
-                    (film_id, score, rated_at.isoformat()),
-                )
+                _write_rating(c, film_id, score, rated_at)
             return True
 
     def all_my_ratings(self) -> dict[str, int]:
@@ -2782,6 +2819,152 @@ class Repository:
                 return True
             c.execute("DELETE FROM rank_mark WHERE film_id = ?", (film_id,))
             return False
+
+    # viewings (brief 2026-09-21-viewing-log/brief-2.md) ------------------------------
+    def add_viewing(
+        self, film_id: int, watched_on: date, service: str | None, text: str, rate: int | None, today: date
+    ) -> ViewingWrite:
+        """One transaction: the day's viewing (created, or found), one `dictation` artefact,
+        the 0–10 when a number was said, and the Unseen mark cleared. A line's service is set
+        once and never overwritten. Validation (film canonical, slug known, text non-blank,
+        rate 0–10) is the caller's — application/viewings.py — so nothing here refuses."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT id, service FROM viewing WHERE film_id = ? AND watched_on = ?",
+                (film_id, watched_on.isoformat()),
+            ).fetchone()
+            if row is None:
+                cur = c.execute(
+                    "INSERT INTO viewing (film_id, watched_on, service, logged_on) VALUES (?, ?, ?, ?)",
+                    (film_id, watched_on.isoformat(), service, today.isoformat()),
+                )
+                vid, created, line_service = int(cur.lastrowid), True, service
+            else:
+                vid, created = int(row["id"]), False
+                line_service = row["service"]
+                if service and row["service"] is None:
+                    c.execute("UPDATE viewing SET service = ? WHERE id = ?", (service, vid))
+                    line_service = service
+            c.execute(
+                "INSERT INTO artefact (viewing_id, kind, text, added_on) VALUES (?, 'dictation', ?, ?)",
+                (vid, text, today.isoformat()),
+            )
+            if rate is not None:
+                _write_rating(c, film_id, rate, today)
+            c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
+            n = int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (vid,)).fetchone()[0])
+            return ViewingWrite(vid, created, n, line_service)
+
+    def viewings_for(self, film_id: int) -> list[dict[str, object]]:
+        with self._conn() as c:
+            out: list[dict[str, object]] = []
+            for v in c.execute(
+                "SELECT v.id, v.watched_on, v.service, s.name AS service_name FROM viewing v "
+                "LEFT JOIN movie_service s ON s.slug = v.service WHERE v.film_id = ? "
+                "ORDER BY v.watched_on DESC, v.id DESC",
+                (film_id,),
+            ).fetchall():
+                arts = [
+                    {"id": int(a["id"]), "kind": str(a["kind"]), "text": str(a["text"]), "added_on": str(a["added_on"])}
+                    for a in c.execute(
+                        "SELECT id, kind, text, added_on FROM artefact WHERE viewing_id = ? ORDER BY added_on, id", (v["id"],)
+                    )
+                ]
+                out.append({"id": int(v["id"]), "watched_on": str(v["watched_on"]), "service": v["service"], "service_name": v["service_name"], "artefacts": arts})
+            return out
+
+    def remove_viewing(self, viewing_id: int) -> dict[str, object] | None:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT v.film_id, v.watched_on, f.title FROM viewing v "
+                "JOIN films f ON f.id = v.film_id WHERE v.id = ?",
+                (viewing_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            notes = int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (viewing_id,)).fetchone()[0])
+            c.execute("DELETE FROM artefact WHERE viewing_id = ?", (viewing_id,))  # explicit: PRAGMA foreign_keys cascades too
+            c.execute("DELETE FROM viewing WHERE id = ?", (viewing_id,))
+            return {
+                "film_id": int(row["film_id"]), "title": str(row["title"]),
+                "watched_on": str(row["watched_on"]), "notes": notes,
+            }
+
+    def note_count(self, viewing_id: int) -> int | None:
+        """None when the viewing itself does not exist; else its current note count — lets a
+        bad `--note N` REFUSED line say how many notes the line actually has (finding 12)."""
+        with self._conn() as c:
+            row = c.execute("SELECT 1 FROM viewing WHERE id = ?", (viewing_id,)).fetchone()
+            if row is None:
+                return None
+            return int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (viewing_id,)).fetchone()[0])
+
+    def remove_artefact(self, viewing_id: int, n: int) -> dict[str, object] | None:
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT v.film_id, v.watched_on, f.title FROM viewing v "
+                "JOIN films f ON f.id = v.film_id WHERE v.id = ?",
+                (viewing_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            ids = [
+                int(a["id"])
+                for a in c.execute(
+                    "SELECT id FROM artefact WHERE viewing_id = ? ORDER BY added_on, id", (viewing_id,)
+                )
+            ]
+            if n < 1 or n > len(ids):
+                return None
+            c.execute("DELETE FROM artefact WHERE id = ?", (ids[n - 1],))
+            return {
+                "film_id": int(row["film_id"]), "title": str(row["title"]),
+                "watched_on": str(row["watched_on"]), "notes_left": len(ids) - 1,
+            }
+
+    def list_viewings(self, since: date | None = None, film_id: int | None = None) -> list[dict[str, object]]:
+        sql = (
+            "SELECT v.id, v.film_id, f.title, f.year, v.watched_on, v.service, r.score, "
+            "(SELECT COUNT(*) FROM artefact a WHERE a.viewing_id = v.id) AS notes "
+            "FROM viewing v JOIN films f ON f.id = v.film_id LEFT JOIN my_ratings r ON r.film_id = v.film_id WHERE 1=1"
+        )
+        args: list[object] = []
+        if since is not None:
+            sql += " AND v.watched_on >= ?"; args.append(since.isoformat())
+        if film_id is not None:
+            sql += " AND v.film_id = ?"; args.append(film_id)
+        sql += " ORDER BY v.watched_on DESC, v.id DESC"
+        with self._conn() as c:
+            return [
+                {"id": int(r["id"]), "film_id": int(r["film_id"]), "title": str(r["title"]), "year": r["year"], "watched_on": str(r["watched_on"]), "service": r["service"], "notes": int(r["notes"]), "my_rating": r["score"]}
+                for r in c.execute(sql, args)
+            ]
+
+    def old_ratings_for(self, film_id: int) -> list[dict[str, object]]:
+        """Every real rental, newest first; two rows with the same date and stars are one rental
+        listed twice in the source file (Love & Anarchy), shown once (round-1 finding 8)."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT stars, rented_on FROM old_rating WHERE film_id = ? "
+                "ORDER BY COALESCE(rented_on, '') DESC, stars DESC",
+                (film_id,),
+            ).fetchall()
+            return [{"stars": int(r["stars"]), "rented_on": r["rented_on"]} for r in rows]
+
+    def service_name(self, slug: str) -> str | None:
+        with self._conn() as c:
+            row = c.execute("SELECT name FROM movie_service WHERE slug = ?", (slug,)).fetchone()
+            return None if row is None else str(row["name"])
+
+    def canonical_titles(self) -> list[tuple[int, str, int | None, str | None]]:
+        """(id, title, year, director) for every film with no disposition row — the ladder's
+        candidate set. The title is normalised by the CALLER at query time; the `title_norm`
+        column is never read (empty for every film created since the backfill)."""
+        with self._conn() as c:
+            return [
+                (int(r["id"]), str(r["title"]), r["year"], r["director"])
+                for r in c.execute(f"SELECT f.id, f.title, f.year, f.director FROM films f WHERE {_NOT_DISPOSED} ORDER BY f.id")
+            ]
 
     # cheapcharts_wishlist ("Wishlist it", brief 2026-09-19-price-watch) ----------
     def wishlisted_film_ids(self) -> set[int]:
@@ -3319,6 +3502,24 @@ class Repository:
             ).rowcount
             if n_old:
                 moved["old_rating"] = n_old
+            # Viewings (brief 2.2): many rows per film, so a plain re-point — except that the
+            # survivor may already hold that day, when the loser's notes join the survivor's line.
+            for row in c.execute("SELECT id, watched_on, service FROM viewing WHERE film_id = ?", (loser_id,)).fetchall():
+                twin = c.execute(
+                    "SELECT id FROM viewing WHERE film_id = ? AND watched_on = ?", (survivor_id, row["watched_on"])
+                ).fetchone()
+                if twin is None:
+                    c.execute("UPDATE viewing SET film_id = ? WHERE id = ?", (survivor_id, row["id"]))
+                    moved["viewing"] = moved.get("viewing", 0) + 1
+                else:
+                    # A same-date collision: set the survivor's line's service only if it had
+                    # none (the "set only if the line had none" rule — never overwrite one).
+                    c.execute("UPDATE viewing SET service = COALESCE(service, ?) WHERE id = ?", (row["service"], twin["id"]))
+                    # Move loser's artefacts to survivor's viewing, preserving their added_on
+                    # (immutable: the day the owner said them, never a merge artifact).
+                    n_art = c.execute("UPDATE artefact SET viewing_id = ? WHERE viewing_id = ?", (twin["id"], row["id"])).rowcount
+                    c.execute("DELETE FROM viewing WHERE id = ?", (row["id"],))
+                    moved["artefact"] = moved.get("artefact", 0) + n_art
             # Ranker rows (spec §3): per-session one-row tables survivor-wins; the log re-points.
             for table in ("rank_placement", "rank_deferral", "rank_order_deferral"):
                 for row in c.execute(f"SELECT session_id FROM {table} WHERE film_id = ?", (loser_id,)).fetchall():
@@ -3699,7 +3900,8 @@ class Repository:
                 + _NOT_DISPOSED
                 + " AND (l.film_id IS NULL "
                 + "OR l.last_seen = (SELECT MAX(last_seen) FROM listings WHERE source = ?) "
-                + "OR r.score IS NOT NULL) ORDER BY f.id",
+                + "OR r.score IS NOT NULL "
+                + "OR EXISTS (SELECT 1 FROM viewing v WHERE v.film_id = f.id)) ORDER BY f.id",
                 (source, source),
             ).fetchall()
             services = _services_by_film(c)
@@ -3713,6 +3915,7 @@ class Repository:
             old = _old_rating_by_film(c)
             rv = _revisit_by_film(c)
             au = _audit_by_film(c)
+            vw = _viewing_stats_by_film(c)
             criterion_option = _service_option(c, 'criterion')
             store_option = _service_option(c, 'apple-tv-store')
             return [
@@ -3731,6 +3934,7 @@ class Repository:
                     audit=au.get(r["id"], (None, None)),
                     criterion_option=criterion_option,
                     store_option=store_option,
+                    viewing=vw.get(r["id"]),
                 )
                 for r in rows
             ]
@@ -3758,6 +3962,7 @@ class Repository:
                 audit=au.get(row["id"], (None, None)),
                 criterion_option=_service_option(c, 'criterion'),
                 store_option=_service_option(c, 'apple-tv-store'),
+                viewing=_viewing_stats_by_film(c).get(row["id"]),
             )
 
     def get_payload(self, film_id: int) -> str | None:

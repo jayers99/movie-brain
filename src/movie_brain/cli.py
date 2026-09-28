@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
@@ -88,6 +88,10 @@ oldratings_app = typer.Typer(
 app.add_typer(oldratings_app, name="oldratings")
 films_app = typer.Typer(help="Films by hand: add one the catalog lacks, by its IMDb id.")
 app.add_typer(films_app, name="films")
+viewings_app = typer.Typer(
+    help="The viewing log: one dictation → one dated viewing against a film (the skill log-viewing drives it)."
+)
+app.add_typer(viewings_app, name="viewings")
 repair_app = typer.Typer(help="Human-confirmed repairs: merge dupes, clear wrong TMDB links, fix years.")
 app.add_typer(repair_app, name="repair")
 cheapcharts_app = typer.Typer(help="CheapCharts: resolve each film's direct product page.")
@@ -636,6 +640,128 @@ def films_add_cmd(
     if apply:
         _enrich_after_add(repo, int(outcome.kind == "created"))
     raise typer.Exit(outcome.exit_code)
+
+
+def _parse_day(raw: str | None, flag: str) -> date | None:
+    if raw is None:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        console.print(
+            f"REFUSED   {flag} wants YYYY-MM-DD, not {raw!r} — nothing written",
+            markup=False, highlight=False, soft_wrap=True,
+        )
+        raise typer.Exit(2) from exc
+
+
+def _parse_rate(raw: str | None) -> int | None:
+    """`--rate` is a plain string here on purpose (finding 12): a whole number handed to typer's
+    own `int` option type raises ITS boxed error ("not a valid int") on `--rate 7.5`, one shape
+    for that refusal and a different one for every other REFUSED line. Parsed by hand, both
+    read the same."""
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        value = None
+    if value is None or not 0 <= value <= 10:
+        console.print(
+            "REFUSED   a rating is a whole number 0–10 — nothing written",
+            markup=False, highlight=False, soft_wrap=True,
+        )
+        raise typer.Exit(2)
+    return value
+
+
+@viewings_app.command("add")
+def viewings_add_cmd(
+    title: Annotated[
+        str | None, typer.Option("--title", help="The title as dictated; the verb runs the ladder.")
+    ] = None,
+    film: Annotated[
+        int | None, typer.Option("--film", help="A film id, once one is confirmed — skips the ladder.")
+    ] = None,
+    year: Annotated[
+        int | None,
+        typer.Option("--year", help="Narrows the title to one year (skips the open-film rung when it differs)."),
+    ] = None,
+    on: Annotated[str | None, typer.Option("--on", help="The viewing's date, YYYY-MM-DD (default today).")] = None,
+    service: Annotated[
+        str | None,
+        typer.Option("--service", help="A registry slug (movie-brain services list); omit for a disc or a cinema."),
+    ] = None,
+    rate: Annotated[
+        str | None, typer.Option("--rate", help="The 0–10 the dictation states, if it states one.")
+    ] = None,
+    text: Annotated[
+        str,
+        typer.Option("--text", help="The dictation: '-' reads standard input, else a file path."),
+    ] = "-",
+) -> None:
+    """Log ONE viewing from a dictation. Writes a viewing, a note, the rating (if said) and clears
+    Unseen in one transaction; refuses and writes nothing otherwise (exit 2), or stops to ask
+    (exit 3: AMBIGUOUS / NO-FILM)."""
+    import sys
+
+    from movie_brain.application import viewings as vw
+
+    on_date = _parse_day(on, "--on")
+    rate_n = _parse_rate(rate)
+    if text == "-":
+        body = sys.stdin.read()
+    else:
+        try:
+            body = Path(text).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            console.print(
+                f"REFUSED   cannot read {text}: {exc} — nothing written",
+                markup=False, highlight=False, soft_wrap=True,
+            )
+            raise typer.Exit(2) from exc
+    out = vw.log_viewing(
+        _repo(), title=title, film_id=film, year=year, on=on_date, service=service,
+        rate=rate_n, text=body, today=date.today(), now=datetime.now(),
+    )
+    console.print(out.line, markup=False, highlight=False, soft_wrap=True)
+    raise typer.Exit(out.exit_code)
+
+
+@viewings_app.command("remove")
+def viewings_remove_cmd(
+    viewing_id: Annotated[int, typer.Argument(help="The viewing number the add printed.")],
+    note: Annotated[
+        int | None,
+        typer.Option("--note", help="Remove only this note (1-based) and keep the viewing."),
+    ] = None,
+) -> None:
+    """Remove a viewing and its notes, or one note. The rating and the Unseen mark are untouched."""
+    from movie_brain.application import viewings as vw
+
+    out = vw.remove(_repo(), viewing_id, note)
+    console.print(out.line, markup=False, highlight=False, soft_wrap=True)
+    raise typer.Exit(out.exit_code)
+
+
+@viewings_app.command("list")
+def viewings_list_cmd(
+    since: Annotated[str | None, typer.Option("--since", help="Only viewings on or after this date.")] = None,
+    film: Annotated[int | None, typer.Option("--film", help="Only this film's viewings.")] = None,
+) -> None:
+    """Every logged viewing, newest first: date, film, service, notes, rating."""
+    from movie_brain.application import viewings as vw
+
+    since_date = _parse_day(since, "--since")
+    console.print(vw.listing(_repo(), since_date, film), markup=False, highlight=False, soft_wrap=True)
+
+
+@viewings_app.command("open")
+def viewings_open_cmd() -> None:
+    """The film the dashboard has open in its drawer, if it reported in during the last two minutes."""
+    from movie_brain.application import viewings as vw
+
+    console.print(vw.open_line(_repo(), datetime.now()), markup=False, highlight=False, soft_wrap=True)
 
 
 @oldratings_app.command("link")

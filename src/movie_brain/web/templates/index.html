@@ -33,6 +33,7 @@
       <button class="chip" data-chip="multi_list">On a list</button>
       <button class="chip" data-chip="rewatch" title="I gave it 5★ in 2004–08 and have not rated it since">Rewatch</button>
       <button class="chip" data-chip="shop" title="Worth buying: for sale on Apple, not owned, not rated, not on a service I have, not yet on my wishlist">Shop</button>
+      <button class="chip" data-chip="watched" title="Films with a logged viewing, most recent first">Watched</button>
       <select id="list-picker" class="picker" title="Filter to one curated list and order by its rank"></select>
       <button id="chips-clear" class="chip clear">Clear</button>
     </div>
@@ -42,7 +43,7 @@
     <table id="films">
       <colgroup>
         <col class="col-title"><col class="col-year"><col class="col-director"><col class="col-language">
-        <col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-rating"><col class="col-info">
+        <col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-rating"><col class="col-watched"><col class="col-info">
       </colgroup>
       <thead>
         <tr class="labels">
@@ -54,6 +55,7 @@
           <th class="sortable num" data-col="rt">RT</th>
           <th class="sortable num" data-col="imdb">IMDb</th>
           <th class="sortable num" data-col="my_rating">My Rating</th>
+          <th class="sortable" data-col="last_watched">Watched</th>
           <th></th>
         </tr>
         <tr class="filters">
@@ -67,7 +69,7 @@
           <th><input id="f-mc-min" type="number" placeholder="min" class="half"><input id="f-mc-max" type="number" placeholder="max" class="half"></th>
           <th><input id="f-rt-min" type="number" placeholder="min" class="half"><input id="f-rt-max" type="number" placeholder="max" class="half"></th>
           <th><input id="f-imdb-min" type="number" step="0.1" placeholder="min" class="half"><input id="f-imdb-max" type="number" step="0.1" placeholder="max" class="half"></th>
-          <th></th><th></th>
+          <th></th><th></th><th></th>
         </tr>
       </thead>
       <tbody></tbody>

@@ -8,6 +8,7 @@ from movie_brain.application.enrich import EnrichReport
 from movie_brain.application.repair import DupesReport, LinksReport, YearsFromTmdbReport, YearsReport
 from movie_brain.application.sync import SyncResult
 from movie_brain.cli import app
+from movie_brain.domain.models import Film
 
 runner = CliRunner()
 
@@ -1327,3 +1328,123 @@ def test_review_resolve_create_enriches_the_film_it_made_and_other_actions_do_no
     assert len(calls) == 1 and calls[0]["skip_catalog"] is True and "enriching the 1 new film…" in r.output
     r = runner.invoke(app, ["review", "resolve", "7", "--dismiss"])
     assert r.exit_code == 0 and len(calls) == 1
+
+
+def test_viewings_add_reads_the_dictation_from_stdin_and_prints_one_line(repo):
+    fid = repo.create_film(Film("The Blue Angel", 1930, None, ""))
+    repo.register_provider(1899, "Kino Film Collection")
+    r = runner.invoke(
+        app,
+        [
+            "viewings",
+            "add",
+            "--title",
+            "The Blue Angel",
+            "--service",
+            "kino-film-collection",
+            "--rate",
+            "6",
+            "--text",
+            "-",
+        ],
+        input="about a six\n",
+    )
+    assert r.exit_code == 0, r.output
+    assert (
+        r.output.startswith(f"LOGGED    #{fid} 'The Blue Angel' (1930)") and "rated 6" in r.output
+    )
+    assert repo.viewings_for(fid)[0]["artefacts"][0]["text"] == "about a six"
+
+
+def test_viewings_add_refuses_a_bad_date_and_an_unknown_slug_with_exit_2(repo):
+    repo.create_film(Film("The Blue Angel", 1930, None, ""))
+    r = runner.invoke(
+        app,
+        [
+            "viewings",
+            "add",
+            "--title",
+            "The Blue Angel",
+            "--on",
+            "2099-01-01",
+            "--text",
+            "-",
+        ],
+        input="x",
+    )
+    assert r.exit_code == 2 and "REFUSED" in r.output
+    r = runner.invoke(
+        app,
+        ["viewings", "add", "--title", "The Blue Angel", "--on", "not-a-date", "--text", "-"],
+        input="x",
+    )
+    assert r.exit_code == 2
+    r = runner.invoke(
+        app,
+        [
+            "viewings",
+            "add",
+            "--title",
+            "The Blue Angel",
+            "--service",
+            "criterion-channel",
+            "--text",
+            "-",
+        ],
+        input="x",
+    )
+    assert r.exit_code == 2 and "criterion-channel" in r.output
+
+
+def test_viewings_add_refuses_a_non_integer_rate_cleanly_with_exit_2(repo):
+    """Point-C gap check finding 12: `--rate 7.5` must answer with our own REFUSED line, not
+    typer's boxed "not a valid int" error — one refusal shape for every REFUSED line."""
+    repo.create_film(Film("The Blue Angel", 1930, None, ""))
+    r = runner.invoke(
+        app, ["viewings", "add", "--title", "The Blue Angel", "--rate", "7.5", "--text", "-"], input="x"
+    )
+    assert r.exit_code == 2 and "REFUSED   a rating is a whole number 0–10" in r.output
+    r = runner.invoke(
+        app, ["viewings", "add", "--title", "The Blue Angel", "--rate", "11", "--text", "-"], input="x"
+    )
+    assert r.exit_code == 2 and "REFUSED   a rating is a whole number 0–10" in r.output
+
+
+def test_viewings_add_refuses_an_unreadable_text_file_with_exit_2(repo):
+    repo.create_film(Film("The Blue Angel", 1930, None, ""))
+    r = runner.invoke(
+        app,
+        ["viewings", "add", "--title", "The Blue Angel", "--text", "/nonexistent/file"],
+    )
+    assert r.exit_code == 2 and "REFUSED" in r.output
+
+
+def test_viewings_add_ambiguous_exits_3_and_lists_the_films(repo):
+    a = repo.create_film(Film("Solaris", 1972, "Andrei Tarkovsky", ""))
+    b = repo.create_film(Film("Solaris", 2002, "Steven Soderbergh", ""))
+    r = runner.invoke(
+        app, ["viewings", "add", "--title", "Solaris", "--text", "-"], input="tonight"
+    )
+    assert r.exit_code == 3 and f"#{a}" in r.output and f"#{b}" in r.output and "AMBIGUOUS" in r.output
+
+
+def test_viewings_remove_list_and_open(repo):
+    fid = repo.create_film(Film("Dragon Inn", 1967, "King Hu", ""))
+    runner.invoke(
+        app,
+        ["viewings", "add", "--film", str(fid), "--on", "2026-09-24", "--text", "-"],
+        input="thursday",
+    )
+    r = runner.invoke(app, ["viewings", "list", "--since", "2026-09-01"])
+    assert r.exit_code == 0 and "Dragon Inn (1967)" in r.output and "1 note" in r.output
+    r = runner.invoke(app, ["viewings", "open"])
+    assert r.exit_code == 0 and r.output.startswith("OPEN      nothing")
+    vid = repo.viewings_for(fid)[0]["id"]
+    r = runner.invoke(app, ["viewings", "remove", str(vid), "--note", "9"])
+    assert r.exit_code == 2 and "has 1 note, no note 9" in r.output
+    r = runner.invoke(app, ["viewings", "remove", str(vid), "--note", "1"])
+    assert r.exit_code == 0 and "REMOVED   note 1" in r.output and "Dragon Inn" in r.output
+    r = runner.invoke(app, ["viewings", "remove", str(vid)])
+    assert r.exit_code == 0 and r.output.startswith("REMOVED   viewing") and "Dragon Inn" in r.output
+    r = runner.invoke(app, ["viewings", "remove", str(vid)])
+    assert r.exit_code == 2

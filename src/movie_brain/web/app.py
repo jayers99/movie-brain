@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from collections.abc import Callable
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import TypeGuard
 
@@ -95,6 +95,10 @@ def create_app(
             # Detail-only too (move-tier spec M7): the drawer's tier row and its "Rank this"
             # awaiting state, derived per read from the open session; a READ, never a seed.
             **_rank_keys(film_id),
+            # Detail-only (viewing-log brief 2026-09-21, task 3): the logged viewings and the
+            # 2004-08 rentals — /api/films carries only the summary (last_watched, viewing_count).
+            "viewings": repo.viewings_for(film_id),
+            "old_ratings": repo.old_ratings_for(film_id),
         }), 200
 
     def _rank_keys(film_id: int) -> dict[str, object]:
@@ -336,6 +340,20 @@ def create_app(
         if result is None:
             return jsonify({"error": "not found"}), 404
         return jsonify({"unseen": result}), 200
+
+    @app.put("/api/drawer")
+    def put_drawer() -> tuple[Response, int]:
+        body = request.get_json(silent=True)
+        film_id = body.get("film_id") if isinstance(body, dict) else None
+        valid = (
+            isinstance(body, dict)
+            and "film_id" in body
+            and (film_id is None or (_is_int(film_id) and 0 < film_id < 2**63))
+        )
+        if not valid:
+            return jsonify({"error": 'body must be JSON {"film_id": int | null}'}), 400
+        repo.set_drawer_film(film_id, datetime.now())
+        return jsonify({"film_id": film_id}), 200
 
     @app.put("/api/films/<int:film_id>/rank-mark")
     def put_rank_mark(film_id: int) -> tuple[Response, int]:

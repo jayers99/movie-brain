@@ -43,3 +43,23 @@ The fresh look did not happen on 2026-09-22; the owner is thinking more and will
 - **A watch plan preceded the viewings.** The B-movie list arrived as a plain title/year/director file (`lists/b_movies_1960s_1970s.tsv`, untracked, deliberately NOT a curated list) — a personal "want to watch these" set. That is the artefact that comes BEFORE an event, the complement of §1's artefacts that come after. Whether the log's shape has a place for intent (a plan, a syllabus) as well as record is a question for the next look, not an answer.
 
 Everything in §2–§5 stands. Next look still starts from §2–§3.
+
+## 7. Reshaped 2026-09-27 — the front door is dictation through the agent
+
+The owner picked the story up again on 2026-09-27 and reshaped the entry path in a spoken brain dump (his words summarised; the ruling verbatim where it matters).
+
+- **The interface is a skill calling a command-line verb.** He dictates freeform in a Claude Code session ("I just watched The Blue Angel … watching it on Kino Collection … the restoration job is really good … I'll rate this one about a six"); the agent turns the dictation into deterministic CLI commands that populate a watch record against the film. The drawer becomes a reader of the log, not its entry point. No new HTTP write path for logging.
+- **One dictation carries several things at once**: the viewing (date, service), his reaction and notes, a presentation remark (restoration quality → the presentation log, not the viewing), and the per-film rating (the 0–10 stays per film, written as today).
+- **Date defaults to now** unless the dictation says otherwise.
+- **Film identification — ruled 2026-09-27, his words:** "plan on just a title coming through." The ladder: (1) the title matches the film open in the dashboard's drawer → "bingo, that's a great signal", proceed; (2) no drawer match but the title matches exactly one catalog film → "high enough signal to proceed"; (3) ambiguity, or a year in question → ask him to confirm. No confirmation step on a clean verdict. A title the catalog lacks is an ask too (the agent proposes the IMDb id, `films add` mints it on his yes). Builder's call: the dashboard stamps the open film server-side when the drawer opens, so the CLI can read "what is open" without browser tooling.
+- **Where the words live — ruled 2026-09-27: option 1, text in the database.** The dictation is stored verbatim as a text column on the artefact row, the agent's extraction (service, rating, presentation remark) beside it; the drawer and the search bar can reach the text later without a second store. Larger kinds (essay, media) come later as a path plus a hash on the same table. No markdown file per artefact, no pointer store.
+
+### Builder's calls for round 2 (stated, not asked; the owner may overrule any of them on the stories page)
+
+- **First-build floor.** Tables: `viewing` (film, watched_on, service slug optional, logged_on) and `artefact` (viewing, kind = `dictation` only in v1, text, extraction). One dictation → one viewing + one artefact; the rating goes to `my_ratings` as today; a presentation remark goes to the presentation log at (film × service).
+- **No felt field.** Round 1's one-word felt is dropped: the dictation and the rating already say it. The viewing line in the drawer reads date · service · the dictation's first words.
+- **Rating after viewing.** v1 writes the 0–10 from the dictation; tier placement and a full rank stay in the dashboard as today. Tier calibration (§3.2, bottom and top anchor shown on first placement) is a named follow-up, not in v1.
+- **Intent** (§6.3) is not in the log; a watch plan is the watchlist's business (backlog 46 gives it a hand order).
+- **Documentaries** (§3.3) deferred; noted in the spec.
+- **Backfill.** Sans Soleil (2026-09-21) and the six dated Apple plays are logged by hand with `--on`, no import code.
+- **The stories page changes shape.** The primary surface is a dictation transcript: what he says, what the agent asks or writes back, the exact command run, and what the drawer shows afterwards. The drawer's read side (history block, Watched chip and column) is the second half of each story, from round 1.

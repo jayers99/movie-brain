@@ -1,0 +1,11 @@
+# `movie-brain films add <tt>` DRY RUNS (no --apply), 2026-09-27, against a copy of the live database
+# (schema 30) with the owner's TMDB token; each line is the verb's own last line of output, verbatim.
+# Run to find a film the catalogue truly lacks for story 4, and to see why title equality is not enough.
+$ movie-brain films add tt0018737
+HELD          #3002 'Pandora’s Box' (1929) dir G. W. Pabst already holds tt0018737  via imdb tt0018737
+$ movie-brain films add tt0022183
+WOULD-CREATE  tt0022183 'Mädchen in Uniform' (1931)
+$ movie-brain films add tt0019415
+WOULD-CREATE  tt0019415 'Spies' (1928)
+$ movie-brain films add tt0019648
+WOULD-CREATE  tt0019648 'The Arizona Kid' (1929)
