@@ -2822,9 +2822,10 @@ class Repository:
 
     # viewings (brief 2026-09-21-viewing-log/brief-2.md) ------------------------------
     def add_viewing(
-        self, film_id: int, watched_on: date, service: str | None, text: str, rate: int | None, today: date
+        self, film_id: int, watched_on: date, service: str | None, text: str | None, rate: int | None, today: date
     ) -> ViewingWrite:
-        """One transaction: the day's viewing (created, or found), one `dictation` artefact,
+        """One transaction: the day's viewing (created, or found), one `dictation` artefact
+        (none when `text` is None — a viewing is a date, everything else optional),
         the 0–10 when a number was said, and the Unseen mark cleared. A line's service is set
         once and never overwritten. Validation (film canonical, slug known, text non-blank,
         rate 0–10) is the caller's — application/viewings.py — so nothing here refuses."""
@@ -2845,10 +2846,11 @@ class Repository:
                 if service and row["service"] is None:
                     c.execute("UPDATE viewing SET service = ? WHERE id = ?", (service, vid))
                     line_service = service
-            c.execute(
-                "INSERT INTO artefact (viewing_id, kind, text, added_on) VALUES (?, 'dictation', ?, ?)",
-                (vid, text, today.isoformat()),
-            )
+            if text is not None:
+                c.execute(
+                    "INSERT INTO artefact (viewing_id, kind, text, added_on) VALUES (?, 'dictation', ?, ?)",
+                    (vid, text, today.isoformat()),
+                )
             if rate is not None:
                 _write_rating(c, film_id, rate, today)
             c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))

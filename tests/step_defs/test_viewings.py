@@ -271,3 +271,25 @@ def open_names(ctx, title, year):
 @then("the open line says nothing is open")
 def open_nothing(ctx):
     assert vw.open_line(ctx["repo"], NOW).startswith("OPEN      nothing")
+
+
+@when(parsers.parse('I mark "{title}" watched on {d} with no note'))
+def i_log_no_note(ctx, title, d):
+    ctx["out"] = vw.log_viewing(
+        ctx["repo"], title=title, film_id=None, year=None, on=date.fromisoformat(d), service=None,
+        rate=None, text=None, today=ctx["today"], now=NOW,
+    )
+    if ctx["out"].viewing_id is not None:
+        ctx["last_vid"] = ctx["out"].viewing_id
+
+
+@then(parsers.parse('the last viewing of "{title}" ({year:d}) has no notes'))
+def last_viewing_no_notes(ctx, title, year):
+    vs = ctx["repo"].viewings_for(ctx["films"][(title, year)])
+    assert vs and vs[0]["artefacts"] == [], vs
+
+
+@then("the outcome says the line already existed and nothing new was added")
+def outcome_nothing_new(ctx):
+    o = ctx["out"]
+    assert o.kind == "added-to" and "no new note (0 kept)" in o.line, o

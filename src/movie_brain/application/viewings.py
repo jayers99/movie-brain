@@ -140,11 +140,13 @@ def log_viewing(
     on: date | None,
     service: str | None,
     rate: int | None,
-    text: str,
+    text: str | None,
     today: date,
     now: datetime,
 ) -> Outcome:
-    if not text or not text.strip():
+    # text None = "just mark the date" (--no-note): a viewing with no artefact. A dictation that
+    # was GIVEN but is blank is still a refusal.
+    if text is not None and not text.strip():
         return _refused("the dictation is empty")
     on = on or today
     if on > today:
@@ -193,7 +195,7 @@ def log_viewing(
         )
         return Outcome("no-film", line, 3)
     fid, (_, ftitle, fyear, _d) = res.film_id, canonical[res.film_id]
-    w = repo.add_viewing(fid, on, service, text.strip(), rate, today)
+    w = repo.add_viewing(fid, on, service, text.strip() if text is not None else None, rate, today)
     rated = f" · rated {rate}" if rate is not None else ""
     if w.created:
         svc = f" · {service}" if service else ""
@@ -205,7 +207,7 @@ def log_viewing(
     dropped = f" · service kept: {w.service} ({service} noted)" if service and w.service != service else ""
     line = (
         f"ADDED-TO  viewing #{w.viewing_id} (#{fid} '{ftitle}', {on.isoformat()}) · "
-        f"note {w.note_count}{dropped}{rated}"
+        f"{f'note {w.note_count}' if text is not None else f'no new note ({w.note_count} kept)'}{dropped}{rated}"
     )
     return Outcome("added-to", line, 0, fid, w.viewing_id)
 

@@ -1448,3 +1448,11 @@ def test_viewings_remove_list_and_open(repo):
     assert r.exit_code == 0 and r.output.startswith("REMOVED   viewing") and "Dragon Inn" in r.output
     r = runner.invoke(app, ["viewings", "remove", str(vid)])
     assert r.exit_code == 2
+
+
+def test_viewings_add_no_note_writes_a_dated_viewing_and_no_artefact(repo):
+    fid = repo.create_film(Film("Seven Chances", 1925, None, ""))
+    r = runner.invoke(app, ["viewings", "add", "--title", "Seven Chances", "--on", "2026-09-27", "--no-note"])
+    assert r.exit_code == 0, r.output
+    assert r.output.startswith(f"LOGGED    #{fid} 'Seven Chances' (1925) · 2026-09-27")
+    assert repo.viewings_for(fid)[0]["artefacts"] == []

@@ -699,6 +699,9 @@ def viewings_add_cmd(
         str,
         typer.Option("--text", help="The dictation: '-' reads standard input, else a file path."),
     ] = "-",
+    no_note: Annotated[
+        bool, typer.Option("--no-note", help="Just mark the date: write the viewing with no note (nothing is read).")
+    ] = False,
 ) -> None:
     """Log ONE viewing from a dictation. Writes a viewing, a note, the rating (if said) and clears
     Unseen in one transaction; refuses and writes nothing otherwise (exit 2), or stops to ask
@@ -709,7 +712,10 @@ def viewings_add_cmd(
 
     on_date = _parse_day(on, "--on")
     rate_n = _parse_rate(rate)
-    if text == "-":
+    body: str | None
+    if no_note:
+        body = None
+    elif text == "-":
         body = sys.stdin.read()
     else:
         try:

@@ -161,3 +161,11 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     And a film "Nowhere" (2015) directed by "Someone Else"
     When I log "Nowhere" saying "which one"
     Then the outcome is "ambiguous" with exit 3 listing "Gregg Araki" and "Someone Else"
+
+  Scenario: A viewing with no note is a date and nothing else
+    Given a film "Seven Chances" (1925)
+    When I mark "Seven Chances" watched on 2026-09-27 with no note
+    Then the outcome is "logged" for "Seven Chances" (1925) matched "the one film with that title"
+    And the last viewing of "Seven Chances" (1925) has no notes
+    When I mark "Seven Chances" watched on 2026-09-27 with no note
+    Then the outcome says the line already existed and nothing new was added
