@@ -130,3 +130,79 @@ Owner cost across both runs: zero minutes.
 **Summary line for the owner:** Checked: 17 findings, 13 fixed, 4 stories added, 0 declined; re-check closed 15, the last 2 and 3 fix-introduced slips fixed and rehearsed. Not checked: the drawer signal across two databases and everything point C covers (nothing is built yet).
 
 **Built 2026-09-27** on `feature/STORY-27-viewing-log`, plan `docs/superpowers/plans/2026-09-27-viewing-log.md`; point C gap check next, on a migrated copy, before the owner's hands-on test.
+
+### Rehearsal on a copy (2026-09-27)
+
+Whole suite, run once before the rehearsal, from the worktree: `uv run pytest -q` → `1876 passed, 1 skipped, 2 warnings in 148.04s (0:02:28)`.
+
+Scratch copy built under the session scratchpad (`$S`), never `~/.config/movie-brain` itself: `cp` of `movie-brain.db`, `tmdb-read-token.txt` and `omdb-api-key.txt` only (never `credentials.toml`), every verb below run with `MOVIE_BRAIN_CONFIG_DIR="$S"`. Expected facts checked against the copy first: #3390 The Blue Angel (1930), #2979 Solaris (1972), #5235 Solaris (2002), #3002 Pandora's Box with the curly apostrophe stored, service slugs `kino-film-collection` and `criterion` — all confirmed by a direct `sqlite3` read of the copy before running any verb.
+
+```
+$ MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain migrate --apply
+pending: 031_viewing.sql
+applied 1 migration(s)
+```
+
+```
+$ MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain viewings open
+OPEN      nothing — no drawer has reported in for two minutes (closed, or the dashboard is not running)
+```
+
+```
+$ MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain viewings add --title "The Blue Angel" --service kino-film-collection --rate 6 --text - <<'EOF'
+I just watched The Blue Angel. The restoration job on it is really good, and I'm watching it on Kino Collection. I would say I'll rate this one about a six.
+EOF
+LOGGED    #3390 'The Blue Angel' (1930) · 2026-09-27 · kino-film-collection · viewing #1 · the one film with that title · rated 6
+```
+
+```
+$ MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain viewings add --title "Solaris" --text - <<'EOF'
+tonight
+EOF
+AMBIGUOUS 2 films titled 'Solaris' — nothing written
+  #2979  Solaris (1972)  Andrei Tarkovsky  Criterion Channel
+  #5235  Solaris (2002)  Steven Soderbergh
+  say which: --film ID or --year YYYY
+(exit 3)
+```
+
+```
+$ MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain viewings add --title "Blue Angel" --text - <<'EOF'
+dropped the article
+EOF
+NO-FILM   no film titled 'Blue Angel' — nothing written
+  nearest: #3390 The Blue Angel (1930)
+  say --film ID if one of these is it; otherwise films add ttNNN mints a new film
+(exit 3)
+```
+
+```
+$ MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain viewings add --title "pandora's box" --text - <<'EOF'
+curly apostrophe in the catalogue
+EOF
+LOGGED    #3002 'Pandora's Box' (1929) · 2026-09-27 · viewing #2 · the one film with that title
+```
+
+(No `--service`/`--rate` given for Pandora's Box, so the line carries neither — the ladder still matched the straight-apostrophe dictation to the film held under the curly one.)
+
+```
+$ MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain viewings list --since 2026-09-01
+2026-09-27  #3002  Pandora's Box (1929)  1 note
+2026-09-27  #3390  The Blue Angel (1930)  kino-film-collection  1 note  rated 6
+```
+
+All six lines matched the brief's expected wording and exit codes exactly (character-for-character on the ones the brief spelled out in full).
+
+**Dashboard check, port 5712.** Found an unrelated `movie-brain dashboard` already running against the live config from the main checkout (default port, someone else's session) — left untouched; started a second instance on the scratch copy: `MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain dashboard --port 5712`. Opened `http://127.0.0.1:5712/?film=3390` with Playwright (chromium). The drawer's Watched block rendered as:
+
+```
+<span class="lbl">Watched:</span> <ul class="viewings"><li class="viewing">2026-09-27 · Kino Film Collection · <details class="note"><summary>"I just watched The Blue Angel. The restora…"</summary><span class="txt">I just watched The Blue Angel. The restoration job on it is really good, and I'm watching it on Kino Collection. I would say I'll rate this one about a six.</span></details></li><li class="rental">2006-12-26 · rented · <span class="old-stars" aria-label="4 of 5 stars">★★★★☆</span></li></ul>
+```
+
+Today's line sits above the 2006-12-26 rental line as expected. The rating input (`#drawer input.rating`) read `6`. From a second process (a `subprocess.run` launched from inside the same Playwright script while the page stayed open, so the heartbeat PUT to `/api/drawer` was live), `MOVIE_BRAIN_CONFIG_DIR="$S" uv run movie-brain viewings open` printed:
+
+```
+OPEN      #3390 'The Blue Angel' (1930)
+```
+
+— matching the brief exactly. Server stopped afterward: `pkill -f "movie-brain dashboard --port 5712"`.
