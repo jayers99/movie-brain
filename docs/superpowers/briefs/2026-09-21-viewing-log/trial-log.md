@@ -206,3 +206,26 @@ OPEN      #3390 'The Blue Angel' (1930)
 ```
 
 — matching the brief exactly. Server stopped afterward: `pkill -f "movie-brain dashboard --port 5712"`.
+
+### Gap check (point C)
+
+Run 2026-09-27 on the same migrated copy; the findings file is in the session scratchpad (`FINDINGS.md`, 12 findings with evidence). Every finding answered; one fix wave, no re-check requested.
+
+| # | Finding (kind) | Answer | Note |
+|---|---|---|---|
+| 1 | A removed viewing's number is handed to the next viewing, so a repeated `remove` deletes a different film's evening (gap-unpictured) | fixed | migration 031 edited (legitimate — unapplied to any real database, unmerged branch): both `viewing.id` and `artefact.id` gained `AUTOINCREMENT`; `remove_viewing`/`remove_artefact` now also return the film's title and the `REMOVED` lines name it |
+| 2 | "Say the year or the director and rung 1 is skipped" is only true for the year (story-untrue) | fixed | wording only — brief-2.md's open-film-signal row and the mock-up's panel sentence now say only a year skips rung 1; a director makes the agent confirm the open film first; SKILL.md gained the confirmation rule (no `--director` flag added) |
+| 3 | Story 13's note number cannot be read anywhere (gap-unpictured) | fixed | `viewings list --film ID` now numbers every viewing's notes underneath it; SKILL.md points at it before any `remove --note N` |
+| 4 | Story 1's starting state and story 10's count are already out of date on this copy (story-untrue) | fixed | changed story cards 1 and 10, and the grounding paragraph's rated/unseen counts |
+| 5 | Switching back to the browser collapses the note he opened and moves the drawer's scroll (story-differs-on-screen) | fixed | `refreshOpenFilm` now diffs `my_rating`/`unseen`/`watchlisted`/`last_watched`/`viewing_count`/`rank_tier`/`viewings` against what is already drawn and skips the redraw when nothing changed; when it does redraw, `drawer.scrollTop` is saved and restored |
+| 6 | The skill does not carry story 14's three answers (exclusion-to-walk) | fixed | new SKILL.md section "Sentences that are not viewings" (an import request, a plan, a long piece); the frontmatter trigger narrowed so "I want to watch" does not match |
+| 7 | `--film` silently wins over a `--title` that names another film (gap-unpictured) | fixed | `log_viewing` refuses (`REFUSED --film ID is 'Title' (Year), not '…'`) when the two disagree past `title_norm` containment |
+| 8 | A second service on the same night is dropped without a word (gap-unpictured) | fixed | `ViewingWrite` carries the service the line ends up with; the `ADDED-TO` line now says `· service kept: X (Y noted)` when a differing `--service` was given |
+| 9 | `viewings list` and the Watched chip are not "the same rows" (story-differs-on-screen) | fixed | wording only — brief-2.md story 9, CLAUDE.md's command line and the mock-up's story 9 text now say "the same films, one row per viewing…, each row carrying the film's standing rating" |
+| 10 | The director column in AMBIGUOUS lists is often "—" (gap-unpictured) | fixed | `_candidate` falls back to `Repository.film_credits(film_id).director` when `films.director` is NULL, the same fallback the drawer uses |
+| 11 | A dictation after midnight is dated tomorrow (gap-unpictured) | fixed | SKILL.md only: between midnight and ~5 AM, "tonight"/"just watched" means yesterday, pass `--on` and say so |
+| 12 | Small differences between the refusals and the mock-up's transcript (fixture-mismatch) | fixed | `--rate` is now parsed by the CLI itself so a bad value (`7.5`, out of range) answers our own `REFUSED` line, never typer's boxed error; `REMOVED` lines carry the title (finding 1); a bad `--note N` now says how many notes the line has |
+
+Agent minutes: 40 · Findings: 12 · Fixed: 12 · Stories added: 0 · Declined: 0 · Not checked: TMDB/OMDb through `films add` (no keys on the copy); the skill driven by a live agent; heartbeat in a background tab; a real date change.
+
+**Changed story cards:** stories 1, 9, 10 and the panel sentence on rung 1.
