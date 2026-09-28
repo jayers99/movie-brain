@@ -146,7 +146,7 @@
   <div class="window">
     <div class="top">
       <h1>movie-brain</h1>
-      <div id="counts"><span><b>5,250</b> films</span><span><b>5,074</b> reachable</span><span><b>859</b> owned</span><span><b id="rated-count">394</b> rated by me</span><span class="showing">this mock-up carries 8 of them</span></div>
+      <div id="counts"><span><b>5,250</b> films</span><span><b>5,074</b> reachable</span><span><b>859</b> owned</span><span><b id="rated-count">396</b> rated by me</span><span class="showing">this mock-up carries 8 of them</span></div>
       <div id="chips"><span class="chip">Reachable</span><span class="chip">Rated</span><span class="chip">Criterion</span><span class="chip">Watchlist</span><span class="chip">Owned</span><span class="chip">On a list</span><span class="chip">Rewatch</span><span class="chip">Shop</span><button class="chip live" id="chip-watched" title="Films with a logged viewing, most recent first">Watched</button><span class="picker">All lists ▾</span><span class="chip" style="background:transparent">Clear</span></div>
     </div>
     <div class="table-wrap" id="wrap">
@@ -175,7 +175,7 @@
     <li><b>The Watched chip</b> shows every film with at least one logged viewing, newest viewing first, and stacks with the other chips; the <b>Watched column</b> (after My rating) shows each film's last viewing date and sorts like the others, never-logged films last either way. Rentals do not count as viewings for either. A logged film is always shown — a film the page hides today (unrated and gone from every service) becomes visible the moment it has a viewing, as a rated one does. Before anything is logged the chip shows one line: <i>No viewing logged yet.</i></li>
     <li><b>Remarks about the copy</b> (a restoration, a stretched transfer) stay inside your note and I ALSO append a row to <code>observations/presentation.tsv</code>, the hand-kept presentation log, exactly as it is kept today. No new code reads or writes that file.</li>
     <li><b>Which service slug:</b> I map what you say to the registry through the film itself — "Apple TV" for a film you own is <code>apple-tv-store</code>, for one streaming on Apple TV+ it is <code>apple-tv-plus</code>; "Max" is <code>max</code> when the film lists it; when two slugs fit, or none, I ask before running anything (story 7). A disc or a cinema is no service: the line has none and the note says where.</li>
-    <li><b>Nothing is imported.</b> The log starts empty. Sans Soleil's 2026-09-21 viewing goes in by dictation (story 2), and so would the six dated Apple TV plays, one sentence each (story 14); no dates are invented for your 394 rated films — their rating dates are rating dates.</li>
+    <li><b>Nothing is imported.</b> The log starts empty. Sans Soleil's 2026-09-21 viewing goes in by dictation (story 2), and so would the six dated Apple TV plays, one sentence each (story 14); no dates are invented for your 396 rated films — their rating dates are rating dates.</li>
     <li><b>Not in this build:</b> the drawer as a place to log, a tier or rank from the log, tier calibration (a tier's top and bottom film shown while placing — a named follow-up), documentaries as a separate pool, any import, a watch plan (story 14: the watchlist star, set in the drawer), essays or media as further artefact kinds (a long dictation is stored whole as a note; the table is built for more kinds), and a notes-versus-critics loop.</li>
     <li><b>Failure:</b> a refused command writes nothing, not half a viewing. If the dashboard is not running there is no drawer report and the ladder starts at rung 2. <code>films add</code> needs the OMDb key and the TMDB token the live machine has; without them it refuses before creating anything, and I tell you so. A reload of the dashboard shows what the database holds; the page keeps nothing.</li>
     <li><b>Story 4's new film</b> is drawn from what TMDB gives at creation (title and year); its director, scores, overview and poster arrive with the enrichment tail that runs inside <code>films add --apply</code>, so the mock-up leaves them as dashes rather than invent them. Its four CREATED lines are the verb's own format read from the code, not a captured run; the dry run's answer IS captured (<code>films-add-dry-runs-2026-09-27.txt</code>).</li>
@@ -392,10 +392,10 @@ const STORIES = [
       { who:'you', text:'What have I watched this month?' },
       { who:'cmd', text:'movie-brain viewings list --since 2026-09-01' },
       { who:'out', run:() => listViewings('2026-09-01') },
-      { who:'sys', text:'The same rows the Watched chip shows on the right, newest first.' },
+      { who:'sys', text:'The same films the Watched chip shows on the right — one row per viewing here, newest first, each row carrying the film\'s standing rating.' },
     ] },
   { n:10, title:'A film I rated, never logged', film:'Dragon Inn',
-    text:'<b>Dragon Inn</b>: a 9, in tier 2. I open it: the rating box says 9; the Watched block says <i>Never logged.</i> Nothing invents a viewing from a rating — today all 394 of my rated films open this way, and they stay that way until I say I watched one. "I watched Dragon Inn last Thursday" puts a line on 2026-09-24 and leaves the 9 alone.',
+    text:'<b>Dragon Inn</b>: a 9, in tier 2. I open it: the rating box says 9; the Watched block says <i>Never logged.</i> Nothing invents a viewing from a rating — today all 396 of my rated films open this way, and they stay that way until I say I watched one. "I watched Dragon Inn last Thursday" puts a line on 2026-09-24 and leaves the 9 alone.',
     coach:'Look at the drawer: rating 9, Never logged. Press <b>Next</b> to log last Thursday from memory.',
     setup() { openFilm('Dragon Inn'); },
     beats:[
@@ -512,7 +512,7 @@ function render() {
   $('#tbody').innerHTML = R.length ? R.map(rowHtml).join('') : `<tr class="empty"><td colspan="10">${state.watchedChip ? 'No viewing logged yet.' : 'No film matches.'}</td></tr>`;
   $('.th-watched').dataset.dir = state.sortWatched || '';
   $('#chip-watched').classList.toggle('active', state.watchedChip);
-  $('#rated-count').textContent = String(394 + FILMS.filter((f) => f.r != null && !f.r0).length).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  $('#rated-count').textContent = String(396 + FILMS.filter((f) => f.r != null && !f.r0).length).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   document.querySelectorAll('.story').forEach((el) => el.classList.toggle('current', +el.dataset.n === state.story));
   const s = STORIES.find((x) => x.n === state.story);
   $('#coach').innerHTML = s ? `<b>Story ${s.n}.</b> ${s.coach}` : `Click any film on the right, or press <b>Walk it</b> on a story above, then <b>Next</b> to play the conversation.`;

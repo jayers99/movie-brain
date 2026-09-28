@@ -229,3 +229,17 @@ Run 2026-09-27 on the same migrated copy; the findings file is in the session sc
 Agent minutes: 40 · Findings: 12 · Fixed: 12 · Stories added: 0 · Declined: 0 · Not checked: TMDB/OMDb through `films add` (no keys on the copy); the skill driven by a live agent; heartbeat in a background tab; a real date change.
 
 **Changed story cards:** stories 1, 9, 10 and the panel sentence on rung 1.
+
+### Scoped re-check (point C, same day)
+
+Relaunched with `Re-check only findings: 1–12` on a snapshot of 2d04c89 with a fresh copy migrated by the corrected 031. About 11 agent minutes; 37 story tests passed; all 14 mock-up stories walked with no page error. **9 of 12 closed** (1, 3, 5, 6, 7, 8, 10, 11, 12 — every behavioural fix reproduced on fresh evidence). Three were leftover wording in places the fix wave missed, fixed by the builder and verified by grep and a fresh mock-up rehearsal (the checker never loops):
+
+| # | Still open because | Answer |
+|---|---|---|
+| 2 | `brief-2.md`'s open-film-signal row still said "saying the year or director skips rung 1" | fixed: the row now matches the panel and the skill (a year skips rung 1; a named director makes the agent confirm the open film) |
+| 4 | the mock-up's header, panel and story-10 card still said 394 rated (the counter script too) | fixed: 396 everywhere the page says it (the copy meanwhile holds 397 — he rated one more film the same afternoon; the page states a day, not a live count) |
+| 9 | story 9's scripted reply still said "the same rows" | fixed: "the same films … one row per viewing here" |
+
+Owner cost across point C: zero minutes.
+
+**Summary line for the owner (point C):** Checked: 12 findings, 12 fixed (3 changed story cards: 1, 9, 10, plus the panel sentence on rung 1), 0 declined; re-check closed 9, the 3 wording leftovers fixed and rehearsed. Not checked: TMDB and OMDb through `films add` (no keys on the copy), the skill driven by a live agent, the heartbeat in a background tab, a real date change.
