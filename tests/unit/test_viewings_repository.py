@@ -73,7 +73,7 @@ def test_viewings_for_is_newest_first_with_artefacts(repo, blue):
 def test_remove_viewing_takes_its_artefacts_and_leaves_rating_and_unseen(repo, blue):
     w = repo.add_viewing(blue, TODAY, None, "oops", 5, TODAY)
     gone = repo.remove_viewing(w.viewing_id)
-    assert gone == {"film_id": blue, "watched_on": "2026-09-27", "notes": 1}
+    assert gone == {"film_id": blue, "title": "The Blue Angel", "watched_on": "2026-09-27", "notes": 1}
     assert _q(repo, "SELECT COUNT(*) FROM viewing")[0][0] == 0
     assert _q(repo, "SELECT COUNT(*) FROM artefact")[0][0] == 0
     assert _q(repo, "SELECT score FROM my_ratings WHERE film_id = ?", blue) == [(5,)]
@@ -84,10 +84,29 @@ def test_remove_artefact_drops_one_note_and_keeps_the_viewing(repo, blue):
     w = repo.add_viewing(blue, TODAY, None, "one", None, TODAY)
     repo.add_viewing(blue, TODAY, None, "two", None, TODAY)
     repo.add_viewing(blue, TODAY, None, "three", None, TODAY)
-    assert repo.remove_artefact(w.viewing_id, 2) == {"film_id": blue, "watched_on": "2026-09-27", "notes_left": 2}
+    assert repo.remove_artefact(w.viewing_id, 2) == {"film_id": blue, "title": "The Blue Angel", "watched_on": "2026-09-27", "notes_left": 2}
     assert [a["text"] for a in repo.viewings_for(blue)[0]["artefacts"]] == ["one", "three"]
     assert repo.remove_artefact(w.viewing_id, 5) is None
     assert repo.remove_artefact(999, 1) is None
+
+
+def test_a_removed_viewing_id_is_never_reused(repo, blue):
+    """Point-C gap check finding 1: AUTOINCREMENT so a repeated `remove` cannot delete the
+    wrong film's evening — the id it names is retired for good."""
+    first = repo.add_viewing(blue, TODAY, None, "gigan", None, TODAY)
+    repo.remove_viewing(first.viewing_id)
+    second = repo.add_viewing(blue, date(2026, 9, 26), None, "hedorah", None, TODAY)
+    assert second.viewing_id > first.viewing_id
+
+
+def test_a_removed_artefact_id_is_never_reused(repo, blue):
+    w = repo.add_viewing(blue, TODAY, None, "one", None, TODAY)
+    repo.add_viewing(blue, TODAY, None, "two", None, TODAY)
+    first_id = repo.viewings_for(blue)[0]["artefacts"][0]["id"]
+    repo.remove_artefact(w.viewing_id, 1)
+    repo.add_viewing(blue, TODAY, None, "three", None, TODAY)
+    new_ids = [a["id"] for a in repo.viewings_for(blue)[0]["artefacts"]]
+    assert all(nid > first_id for nid in new_ids)
 
 
 def test_list_viewings_since_and_for_a_film(repo, blue):

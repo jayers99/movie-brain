@@ -1396,6 +1396,20 @@ def test_viewings_add_refuses_a_bad_date_and_an_unknown_slug_with_exit_2(repo):
     assert r.exit_code == 2 and "criterion-channel" in r.output
 
 
+def test_viewings_add_refuses_a_non_integer_rate_cleanly_with_exit_2(repo):
+    """Point-C gap check finding 12: `--rate 7.5` must answer with our own REFUSED line, not
+    typer's boxed "not a valid int" error — one refusal shape for every REFUSED line."""
+    repo.create_film(Film("The Blue Angel", 1930, None, ""))
+    r = runner.invoke(
+        app, ["viewings", "add", "--title", "The Blue Angel", "--rate", "7.5", "--text", "-"], input="x"
+    )
+    assert r.exit_code == 2 and "REFUSED   a rating is a whole number 0–10" in r.output
+    r = runner.invoke(
+        app, ["viewings", "add", "--title", "The Blue Angel", "--rate", "11", "--text", "-"], input="x"
+    )
+    assert r.exit_code == 2 and "REFUSED   a rating is a whole number 0–10" in r.output
+
+
 def test_viewings_add_refuses_an_unreadable_text_file_with_exit_2(repo):
     repo.create_film(Film("The Blue Angel", 1930, None, ""))
     r = runner.invoke(
@@ -1426,9 +1440,11 @@ def test_viewings_remove_list_and_open(repo):
     r = runner.invoke(app, ["viewings", "open"])
     assert r.exit_code == 0 and r.output.startswith("OPEN      nothing")
     vid = repo.viewings_for(fid)[0]["id"]
+    r = runner.invoke(app, ["viewings", "remove", str(vid), "--note", "9"])
+    assert r.exit_code == 2 and "has 1 note, no note 9" in r.output
     r = runner.invoke(app, ["viewings", "remove", str(vid), "--note", "1"])
-    assert r.exit_code == 0 and "REMOVED   note 1" in r.output
+    assert r.exit_code == 0 and "REMOVED   note 1" in r.output and "Dragon Inn" in r.output
     r = runner.invoke(app, ["viewings", "remove", str(vid)])
-    assert r.exit_code == 0 and r.output.startswith("REMOVED   viewing")
+    assert r.exit_code == 0 and r.output.startswith("REMOVED   viewing") and "Dragon Inn" in r.output
     r = runner.invoke(app, ["viewings", "remove", str(vid)])
     assert r.exit_code == 2

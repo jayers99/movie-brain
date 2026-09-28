@@ -2838,11 +2838,13 @@ class Repository:
                     "INSERT INTO viewing (film_id, watched_on, service, logged_on) VALUES (?, ?, ?, ?)",
                     (film_id, watched_on.isoformat(), service, today.isoformat()),
                 )
-                vid, created = int(cur.lastrowid), True
+                vid, created, line_service = int(cur.lastrowid), True, service
             else:
                 vid, created = int(row["id"]), False
+                line_service = row["service"]
                 if service and row["service"] is None:
                     c.execute("UPDATE viewing SET service = ? WHERE id = ?", (service, vid))
+                    line_service = service
             c.execute(
                 "INSERT INTO artefact (viewing_id, kind, text, added_on) VALUES (?, 'dictation', ?, ?)",
                 (vid, text, today.isoformat()),
@@ -2851,7 +2853,7 @@ class Repository:
                 _write_rating(c, film_id, rate, today)
             c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
             n = int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (vid,)).fetchone()[0])
-            return ViewingWrite(vid, created, n)
+            return ViewingWrite(vid, created, n, line_service)
 
     def viewings_for(self, film_id: int) -> list[dict[str, object]]:
         with self._conn() as c:
@@ -2873,24 +2875,52 @@ class Repository:
 
     def remove_viewing(self, viewing_id: int) -> dict[str, object] | None:
         with self._conn() as c:
-            row = c.execute("SELECT film_id, watched_on FROM viewing WHERE id = ?", (viewing_id,)).fetchone()
+            row = c.execute(
+                "SELECT v.film_id, v.watched_on, f.title FROM viewing v "
+                "JOIN films f ON f.id = v.film_id WHERE v.id = ?",
+                (viewing_id,),
+            ).fetchone()
             if row is None:
                 return None
             notes = int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (viewing_id,)).fetchone()[0])
             c.execute("DELETE FROM artefact WHERE viewing_id = ?", (viewing_id,))  # explicit: PRAGMA foreign_keys cascades too
             c.execute("DELETE FROM viewing WHERE id = ?", (viewing_id,))
-            return {"film_id": int(row["film_id"]), "watched_on": str(row["watched_on"]), "notes": notes}
+            return {
+                "film_id": int(row["film_id"]), "title": str(row["title"]),
+                "watched_on": str(row["watched_on"]), "notes": notes,
+            }
+
+    def note_count(self, viewing_id: int) -> int | None:
+        """None when the viewing itself does not exist; else its current note count — lets a
+        bad `--note N` REFUSED line say how many notes the line actually has (finding 12)."""
+        with self._conn() as c:
+            row = c.execute("SELECT 1 FROM viewing WHERE id = ?", (viewing_id,)).fetchone()
+            if row is None:
+                return None
+            return int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (viewing_id,)).fetchone()[0])
 
     def remove_artefact(self, viewing_id: int, n: int) -> dict[str, object] | None:
         with self._conn() as c:
-            row = c.execute("SELECT film_id, watched_on FROM viewing WHERE id = ?", (viewing_id,)).fetchone()
+            row = c.execute(
+                "SELECT v.film_id, v.watched_on, f.title FROM viewing v "
+                "JOIN films f ON f.id = v.film_id WHERE v.id = ?",
+                (viewing_id,),
+            ).fetchone()
             if row is None:
                 return None
-            ids = [int(a["id"]) for a in c.execute("SELECT id FROM artefact WHERE viewing_id = ? ORDER BY added_on, id", (viewing_id,))]
+            ids = [
+                int(a["id"])
+                for a in c.execute(
+                    "SELECT id FROM artefact WHERE viewing_id = ? ORDER BY added_on, id", (viewing_id,)
+                )
+            ]
             if n < 1 or n > len(ids):
                 return None
             c.execute("DELETE FROM artefact WHERE id = ?", (ids[n - 1],))
-            return {"film_id": int(row["film_id"]), "watched_on": str(row["watched_on"]), "notes_left": len(ids) - 1}
+            return {
+                "film_id": int(row["film_id"]), "title": str(row["title"]),
+                "watched_on": str(row["watched_on"]), "notes_left": len(ids) - 1,
+            }
 
     def list_viewings(self, since: date | None = None, film_id: int | None = None) -> list[dict[str, object]]:
         sql = (

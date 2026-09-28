@@ -10,7 +10,7 @@ import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application import viewings as vw
-from movie_brain.domain.models import Film
+from movie_brain.domain.models import CrewRow, Film, TmdbCredits
 
 scenarios("../features/viewings.feature")
 
@@ -67,6 +67,23 @@ def a_film_directed(ctx, title, year, director):
     ctx["before"] = _snapshot(ctx)
 
 
+@given(parsers.parse('a film "{title}" ({year:d}) with credits director "{director}" but no stored director'))
+def a_film_with_credits_director(ctx, title, year, director):
+    fid = ctx["repo"].create_film(Film(title, year, None, ""))
+    assert fid is not None
+    ctx["repo"].write_credits(
+        fid,
+        TmdbCredits(
+            tmdb_id=900000 + fid, imdb_id=None, title=title, original_title=title, year=year, runtime_min=None,
+            alt_titles=(), overview=None, tagline=None, genres=(), keywords=(),
+            cast=(), crew=(CrewRow(800000 + fid, director, "Director", "Directing"),),
+        ),
+        ctx["today"],
+    )
+    ctx["films"][(title, year)] = fid
+    ctx["before"] = _snapshot(ctx)
+
+
 @given(parsers.parse('a merged-away twin "{title}" ({year:d})'))
 def merged_twin(ctx, title, year):
     # Created under a different key so create_film accepts it, then given the SAME displayed title
@@ -101,7 +118,8 @@ def unseen_and_watchlisted(ctx, title, year):
 
 
 _HOW = re.compile(
-    r'^(?:film "(?P<ftitle>[^"]+)" \((?P<fyear>\d{4})\)|film id (?P<fid>\d+)|the merged twin of "(?P<mtitle>[^"]+)" \((?P<myear>\d{4})\)|"(?P<title>[^"]+)")'
+    r'^(?:film "(?P<ftitle>[^"]+)" \((?P<fyear>\d{4})\)(?: titled "(?P<mismatch_title>[^"]+)")?'
+    r'|film id (?P<fid>\d+)|the merged twin of "(?P<mtitle>[^"]+)" \((?P<myear>\d{4})\)|"(?P<title>[^"]+)")'
     r'(?: year (?P<year>\d{4}))?(?: on (?P<on>\d{4}-\d{2}-\d{2}))?(?: on "(?P<service>[^"]+)")?(?: rating (?P<rate>-?\d+))? saying "(?P<text>[^"]*)"$'
 )
 
@@ -118,9 +136,10 @@ def i_log(ctx, rest):
         film_id = int(g["fid"])
     elif g["mtitle"]:
         film_id = ctx["merged"][(g["mtitle"], int(g["myear"]))]
+    title_arg = g["mismatch_title"] if g["mismatch_title"] else g["title"]
     ctx["out"] = vw.log_viewing(
         ctx["repo"],
-        title=g["title"],
+        title=title_arg,
         film_id=film_id,
         year=int(g["year"]) if g["year"] else None,
         on=date.fromisoformat(g["on"]) if g["on"] else None,
@@ -185,6 +204,17 @@ def outcome_notes(ctx, kind, n):
     assert ctx["out"].kind == kind and f"note {n}" in ctx["out"].line, ctx["out"]
 
 
+@then(parsers.parse('the outcome is "{kind}" naming "{text}"'))
+def outcome_naming(ctx, kind, text):
+    assert ctx["out"].kind == kind and text in ctx["out"].line, ctx["out"]
+
+
+@then(parsers.parse('the outcome is "{kind}" with exit {code:d} naming "{text}"'))
+def outcome_kind_naming(ctx, kind, code, text):
+    o = ctx["out"]
+    assert (o.kind, o.exit_code) == (kind, code) and text in o.line, o
+
+
 @then("nothing was written")
 def nothing_written(ctx):
     assert _snapshot(ctx) == ctx["before"]
@@ -225,6 +255,12 @@ def listing_reads(ctx, d, a, b, c, e, f):
     assert re.search(
         re.escape(a) + r".*" + re.escape(b) + r".*" + re.escape(c) + r".*" + re.escape(e) + r".*" + re.escape(f), text
     ), text
+
+
+@then(parsers.parse('the film listing for "{title}" ({year:d}) shows note 1 "{a}" and note 2 "{b}"'))
+def film_listing_shows_notes(ctx, title, year, a, b):
+    text = vw.listing(ctx["repo"], None, ctx["films"][(title, year)])
+    assert re.search(re.escape(f"note 1  {a}") + r".*" + re.escape(f"note 2  {b}"), text, re.S), text
 
 
 @then(parsers.parse('the open line names "{title}" ({year:d})'))

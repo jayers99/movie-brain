@@ -231,11 +231,14 @@ class OldRating:
 @dataclass(frozen=True)
 class ViewingWrite:
     """What one `viewings add` wrote: the viewing's id, whether it was created by this write
-    (False = the day already had a line and the artefact was appended), and the line's note count."""
+    (False = the day already had a line and the artefact was appended), the line's note count,
+    and the service the LINE now carries (never overwritten — so a caller whose own `--service`
+    differs from this can say the dropped one out loud, point-C gap check finding 8)."""
 
     viewing_id: int
     created: bool
     note_count: int
+    service: str | None
 
 
 @dataclass(frozen=True)

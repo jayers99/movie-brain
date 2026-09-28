@@ -69,6 +69,13 @@ def title_norm_words(title: str) -> str:
 def _candidate(
     repo: Repository, film_id: int, title: str, year: int | None, director: str | None, today: date
 ) -> Candidate:
+    if director is None:
+        # films.director is NULL for 1,857 of 5,274 canonical films (finding 10) — the same
+        # credits fallback the drawer uses, so an AMBIGUOUS line does not show a dash where the
+        # question needs a name.
+        credits = repo.film_credits(film_id)
+        if credits is not None:
+            director = credits.director
     view = repo.get_view(film_id, today)
     best = cast("str | None", view.best_source["name"]) if view is not None and view.best_source else None
     return Candidate(film_id, title, year, director, best)
@@ -153,6 +160,13 @@ def log_viewing(
     if film_id is not None:
         if film_id not in canonical:
             return _refused(f"no film #{film_id} (merged away, tombstoned or unknown)")
+        if title and title.strip():
+            # `--title` and `--film` must agree (finding 7): a mistyped id in a rerun must not
+            # silently log some OTHER film under the words meant for this one.
+            _, cftitle, cfyear, _cd = canonical[film_id]
+            wanted, stored = title_norm(title), title_norm(cftitle)
+            if wanted and stored and wanted not in stored and stored not in wanted:
+                return _refused(f"--film {film_id} is '{cftitle}' ({cfyear or '-'}), not '{title}'")
         res = Resolution(film_id, "by id")
     else:
         if not title or not title.strip():
@@ -188,7 +202,11 @@ def log_viewing(
             f"viewing #{w.viewing_id} · {res.how}{rated}"
         )
         return Outcome("logged", line, 0, fid, w.viewing_id)
-    line = f"ADDED-TO  viewing #{w.viewing_id} (#{fid} '{ftitle}', {on.isoformat()}) · note {w.note_count}{rated}"
+    dropped = f" · service kept: {w.service} ({service} noted)" if service and w.service != service else ""
+    line = (
+        f"ADDED-TO  viewing #{w.viewing_id} (#{fid} '{ftitle}', {on.isoformat()}) · "
+        f"note {w.note_count}{dropped}{rated}"
+    )
     return Outcome("added-to", line, 0, fid, w.viewing_id)
 
 
@@ -199,16 +217,20 @@ def remove(repo: Repository, viewing_id: int, note: int | None) -> Outcome:
             return _refused(f"no viewing #{viewing_id}")
         n = cast(int, gone["notes"])
         line = (
-            f"REMOVED   viewing #{viewing_id} (#{gone['film_id']}, {gone['watched_on']}) and its "
+            f"REMOVED   viewing #{viewing_id} (#{gone['film_id']} '{gone['title']}', {gone['watched_on']}) and its "
             f"{n} note{'' if n == 1 else 's'} · rating and Unseen untouched"
         )
         return Outcome("removed", line, 0, cast(int, gone["film_id"]), viewing_id)
     gone = repo.remove_artefact(viewing_id, note)
     if gone is None:
-        return _refused(f"viewing #{viewing_id} has no note {note}")
+        n_have = repo.note_count(viewing_id)
+        if n_have is None:
+            return _refused(f"no viewing #{viewing_id}")
+        return _refused(f"viewing #{viewing_id} has {n_have} note{'' if n_have == 1 else 's'}, no note {note}")
     left = cast(int, gone["notes_left"])
     line = (
-        f"REMOVED   note {note} of viewing #{viewing_id} (#{gone['film_id']}, {gone['watched_on']}) · "
+        f"REMOVED   note {note} of viewing #{viewing_id} "
+        f"(#{gone['film_id']} '{gone['title']}', {gone['watched_on']}) · "
         f"{left} note{'' if left == 1 else 's'} left · the viewing, the rating and Unseen untouched"
     )
     return Outcome("removed", line, 0, cast(int, gone["film_id"]), viewing_id)
@@ -218,6 +240,11 @@ def listing(repo: Repository, since: date | None, film_id: int | None) -> str:
     rows = repo.list_viewings(since=since, film_id=film_id)
     if not rows:
         return f"no viewing{' since ' + since.isoformat() if since else ''}"
+    # Only with --film (finding 3): the note numbers "scratch that remark" and `remove --note N`
+    # need, since nothing else ever prints them. One extra read, keyed by viewing id.
+    artefacts_by_viewing: dict[int, list[dict[str, object]]] = {}
+    if film_id is not None:
+        artefacts_by_viewing = {cast(int, v["id"]): cast(list, v["artefacts"]) for v in repo.viewings_for(film_id)}
     out = []
     for r in rows:
         n = cast(int, r["notes"])
@@ -227,6 +254,10 @@ def listing(repo: Repository, since: date | None, film_id: int | None) -> str:
             f"{r['watched_on']}  #{str(r['film_id']).ljust(5)} {r['title']} ({r['year'] or '-'}){svc}  "
             f"{n} note{'' if n == 1 else 's'}{rated}"
         )
+        for i, a in enumerate(artefacts_by_viewing.get(cast(int, r["id"]), []), start=1):
+            text = cast(str, a["text"])
+            first60 = text[:60] + ("…" if len(text) > 60 else "")
+            out.append(f"    note {i}  {first60}")
     return "\n".join(out)
 
 

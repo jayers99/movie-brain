@@ -84,12 +84,23 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     Then the outcome is "refused" with exit 2
     And nothing was written
 
+  Scenario: --title and --film must agree
+    When I log film "Solaris" (2002) titled "Godzilla vs. Hedorah" saying "mismatch"
+    Then the outcome is "refused" with exit 2
+    And nothing was written
+
   Scenario: The same film the same day appends a note and moves the rating
     When I log "The Blue Angel" on "kino-film-collection" rating 6 saying "first"
     And I log "The Blue Angel" on "criterion" rating 7 saying "second"
     Then the outcome is "added-to" with 2 notes
     And the film "The Blue Angel" (1930) has 1 viewing on 2026-09-27 with service "kino-film-collection"
     And the film "The Blue Angel" (1930) is rated 7
+
+  Scenario: A dropped second service is named in the ADDED-TO line
+    When I log "The Blue Angel" on "kino-film-collection" saying "first"
+    And I log "The Blue Angel" on "criterion" saying "second"
+    Then the outcome is "added-to" naming "service kept: kino-film-collection (criterion noted)"
+    And the film "The Blue Angel" (1930) has 1 viewing on 2026-09-27 with service "kino-film-collection"
 
   Scenario: Another date is another viewing
     When I log "The Blue Angel" on 2026-09-21 saying "monday"
@@ -126,6 +137,12 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     When I remove note 1 of viewing 999
     Then the outcome is "refused" with exit 2
 
+  Scenario: A note number out of range says how many notes the line has
+    When I log "The Blue Angel" saying "one"
+    And I log "The Blue Angel" saying "two"
+    And I remove note 9 of the last viewing
+    Then the outcome is "refused" with exit 2 naming "has 2 notes, no note 9"
+
   Scenario: The listing and the open line
     Given the drawer reported "Solaris" (1972) 30 seconds ago
     When I log "The Blue Angel" on 2026-09-21 on "kino-film-collection" rating 6 saying "monday"
@@ -133,3 +150,14 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     And the open line names "Solaris" (1972)
     Given the drawer reported nothing
     Then the open line says nothing is open
+
+  Scenario: A listing filtered to one film numbers its notes
+    When I log "The Blue Angel" saying "first remark"
+    And I log "The Blue Angel" saying "second remark"
+    Then the film listing for "The Blue Angel" (1930) shows note 1 "first remark" and note 2 "second remark"
+
+  Scenario: A missing films.director falls back to the credits director in an AMBIGUOUS list
+    Given a film "Nowhere" (1997) with credits director "Gregg Araki" but no stored director
+    And a film "Nowhere" (2015) directed by "Someone Else"
+    When I log "Nowhere" saying "which one"
+    Then the outcome is "ambiguous" with exit 3 listing "Gregg Araki" and "Someone Else"

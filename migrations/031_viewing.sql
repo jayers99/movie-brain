@@ -5,9 +5,15 @@
 -- same-date collision's artefacts onto the survivor's viewing. `service` is a registry slug or
 -- NULL (a disc, a cinema). Only `movie-brain viewings add` writes here; sync and every import
 -- verb never do.
+--
+-- Edited 2026-09-27 BEFORE any real database applied it (unmerged branch, never pushed), which
+-- is the only reason editing an applied-looking migration is legitimate here (point-C gap check
+-- finding 1): both PKs gained AUTOINCREMENT so a removed viewing's or artefact's number is never
+-- handed to the next one created — a second `viewings remove N` (a retried or re-run command)
+-- must refuse rather than silently delete whatever now sits at N.
 BEGIN;
 CREATE TABLE viewing (
-    id         INTEGER PRIMARY KEY,
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
     film_id    INTEGER NOT NULL REFERENCES films(id),
     watched_on TEXT    NOT NULL,
     service    TEXT    REFERENCES movie_service(slug),
@@ -15,7 +21,7 @@ CREATE TABLE viewing (
     UNIQUE (film_id, watched_on)
 );
 CREATE TABLE artefact (
-    id         INTEGER PRIMARY KEY,
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
     viewing_id INTEGER NOT NULL REFERENCES viewing(id) ON DELETE CASCADE,
     kind       TEXT    NOT NULL CHECK (kind IN ('dictation')),
     text       TEXT    NOT NULL CHECK (length(trim(text)) > 0),

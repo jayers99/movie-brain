@@ -655,6 +655,26 @@ def _parse_day(raw: str | None, flag: str) -> date | None:
         raise typer.Exit(2) from exc
 
 
+def _parse_rate(raw: str | None) -> int | None:
+    """`--rate` is a plain string here on purpose (finding 12): a whole number handed to typer's
+    own `int` option type raises ITS boxed error ("not a valid int") on `--rate 7.5`, one shape
+    for that refusal and a different one for every other REFUSED line. Parsed by hand, both
+    read the same."""
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        value = None
+    if value is None or not 0 <= value <= 10:
+        console.print(
+            "REFUSED   a rating is a whole number 0–10 — nothing written",
+            markup=False, highlight=False, soft_wrap=True,
+        )
+        raise typer.Exit(2)
+    return value
+
+
 @viewings_app.command("add")
 def viewings_add_cmd(
     title: Annotated[
@@ -673,7 +693,7 @@ def viewings_add_cmd(
         typer.Option("--service", help="A registry slug (movie-brain services list); omit for a disc or a cinema."),
     ] = None,
     rate: Annotated[
-        int | None, typer.Option("--rate", help="The 0–10 the dictation states, if it states one.")
+        str | None, typer.Option("--rate", help="The 0–10 the dictation states, if it states one.")
     ] = None,
     text: Annotated[
         str,
@@ -688,6 +708,7 @@ def viewings_add_cmd(
     from movie_brain.application import viewings as vw
 
     on_date = _parse_day(on, "--on")
+    rate_n = _parse_rate(rate)
     if text == "-":
         body = sys.stdin.read()
     else:
@@ -701,7 +722,7 @@ def viewings_add_cmd(
             raise typer.Exit(2) from exc
     out = vw.log_viewing(
         _repo(), title=title, film_id=film, year=year, on=on_date, service=service,
-        rate=rate, text=body, today=date.today(), now=datetime.now(),
+        rate=rate_n, text=body, today=date.today(), now=datetime.now(),
     )
     console.print(out.line, markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(out.exit_code)
