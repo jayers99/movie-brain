@@ -10,6 +10,7 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     And a film "Godzilla vs. Gigan" (1972)
     And a film "Godzilla" (1954)
     And a merged-away twin "Godzilla" (1954)
+    And a film "M" (1931)
 
   Scenario: The open film wins when it carries the dictated title
     Given the drawer reported "Solaris" (1972) 30 seconds ago
@@ -28,6 +29,15 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     When I log "Solaris" year 2002 saying "the remake"
     Then the outcome is "logged" for "Solaris" (2002) matched "the one film with that title"
 
+  Scenario: A fresh report on a differently titled film falls to rung 2
+    Given the drawer reported "The Blue Angel" (1930) 30 seconds ago
+    When I log "Solaris" year 1972 saying "the drawer shows another film"
+    Then the outcome is "logged" for "Solaris" (1972) matched "the one film with that title"
+
+  Scenario: A year inside the dictated title is not ignored
+    When I log "Solaris (1972)" saying "year in the title"
+    Then the outcome is "logged" for "Solaris" (1972) matched "the one film with that title"
+
   Scenario: Exactly one film with the title logs without a question
     When I log "The Blue Angel" on "kino-film-collection" rating 6 saying "about a six"
     Then the outcome is "logged" for "The Blue Angel" (1930) matched "the one film with that title"
@@ -36,6 +46,10 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
   Scenario: Apostrophes, case and accents do not matter
     When I log "pandora's box" saying "silent"
     Then the outcome is "logged" for "Pandora’s Box" (1929) matched "the one film with that title"
+
+  Scenario: A bracketed edition in the dictated title is stripped before matching
+    When I log "The Blue Angel (Restored)" saying "edition in the title"
+    Then the outcome is "logged" for "The Blue Angel" (1930) matched "the one film with that title"
 
   Scenario: A merged-away twin is never a candidate
     When I log "Godzilla" saying "the original"

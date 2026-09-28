@@ -718,3 +718,6 @@ def test_detail_carries_viewings_and_all_rentals_and_the_drawer_route_records_th
     assert client.put("/api/drawer", json={"film_id": None}).get_json() == {"film_id": None}
     assert repo.drawer_film(datetime.now()) is None
     assert client.put("/api/drawer", json={"film_id": "x"}).status_code == 400
+    assert client.put("/api/drawer", json={"film_id": 10**30}).status_code == 400
+    assert client.put("/api/drawer", json={"film_id": -1}).status_code == 400
+    assert client.put("/api/drawer", json={"film_id": 0}).status_code == 400

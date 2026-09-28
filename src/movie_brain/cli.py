@@ -648,7 +648,10 @@ def _parse_day(raw: str | None, flag: str) -> date | None:
     try:
         return date.fromisoformat(raw)
     except ValueError as exc:
-        err.print(f"REFUSED   {flag} wants YYYY-MM-DD, not {raw!r} — nothing written")
+        console.print(
+            f"REFUSED   {flag} wants YYYY-MM-DD, not {raw!r} — nothing written",
+            markup=False, highlight=False, soft_wrap=True,
+        )
         raise typer.Exit(2) from exc
 
 
@@ -685,7 +688,17 @@ def viewings_add_cmd(
     from movie_brain.application import viewings as vw
 
     on_date = _parse_day(on, "--on")
-    body = sys.stdin.read() if text == "-" else Path(text).read_text(encoding="utf-8")
+    if text == "-":
+        body = sys.stdin.read()
+    else:
+        try:
+            body = Path(text).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            console.print(
+                f"REFUSED   cannot read {text}: {exc} — nothing written",
+                markup=False, highlight=False, soft_wrap=True,
+            )
+            raise typer.Exit(2) from exc
     out = vw.log_viewing(
         _repo(), title=title, film_id=film, year=year, on=on_date, service=service,
         rate=rate, text=body, today=date.today(), now=datetime.now(),

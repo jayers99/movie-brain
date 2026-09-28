@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import cast
 
-from movie_brain.domain.thumbprint import title_norm
+from movie_brain.domain.thumbprint import parse_title, title_norm
 from movie_brain.infrastructure.database import Repository
 
 STOP_WORDS = frozenset({"the", "a", "an", "of", "and", "vs", "versus"})
@@ -78,6 +78,11 @@ def resolve_title(
     repo: Repository, title: str, *, year: int | None, now: datetime, today: date | None = None
 ) -> Resolution:
     today = today or now.date()
+    if year is None:
+        # A year said INSIDE the title ("Solaris (1972)") is as good as `--year`: title_norm
+        # strips it before matching, so without this the command would call it AMBIGUOUS
+        # although the owner already named the year.
+        year = parse_title(title).embedded_year
     wanted = title_norm(title)
     rows = repo.canonical_titles()
     by_id = {r[0]: r for r in rows}
@@ -106,7 +111,11 @@ def resolve_title(
             # the same stop-word filter on both sides) recovers it without ever calling title_hits("").
             near = [r for r in rows if all(w in _words(r[1]) for w in words) and (year is None or r[2] == year)]
         if not near and wanted:
-            near = [r for r in rows if title_norm(r[1]) and (wanted in title_norm(r[1]) or title_norm(r[1]) in wanted)]
+            # Films whose normalised title CONTAINS the normalised dictation — one direction only
+            # (spec: "films whose normalised title contains the normalised dictation"). The reverse
+            # test floods the list with one-letter titles ("M" contains nothing, but "M" IS contained
+            # in almost anything) whenever the dictated title is longer than a stored one.
+            near = [r for r in rows if title_norm(r[1]) and wanted in title_norm(r[1])]
     near = sorted(near, key=lambda r: (r[2] or 0, r[0]))[:NEAREST]
     return Resolution(None, "no-film", tuple(_candidate(repo, *r, today) for r in near))
 

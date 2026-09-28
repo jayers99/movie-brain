@@ -1396,6 +1396,15 @@ def test_viewings_add_refuses_a_bad_date_and_an_unknown_slug_with_exit_2(repo):
     assert r.exit_code == 2 and "criterion-channel" in r.output
 
 
+def test_viewings_add_refuses_an_unreadable_text_file_with_exit_2(repo):
+    repo.create_film(Film("The Blue Angel", 1930, None, ""))
+    r = runner.invoke(
+        app,
+        ["viewings", "add", "--title", "The Blue Angel", "--text", "/nonexistent/file"],
+    )
+    assert r.exit_code == 2 and "REFUSED" in r.output
+
+
 def test_viewings_add_ambiguous_exits_3_and_lists_the_films(repo):
     a = repo.create_film(Film("Solaris", 1972, "Andrei Tarkovsky", ""))
     b = repo.create_film(Film("Solaris", 2002, "Steven Soderbergh", ""))

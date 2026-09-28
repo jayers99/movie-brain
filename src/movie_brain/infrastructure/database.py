@@ -3474,7 +3474,7 @@ class Repository:
                 moved["old_rating"] = n_old
             # Viewings (brief 2.2): many rows per film, so a plain re-point — except that the
             # survivor may already hold that day, when the loser's notes join the survivor's line.
-            for row in c.execute("SELECT id, watched_on FROM viewing WHERE film_id = ?", (loser_id,)).fetchall():
+            for row in c.execute("SELECT id, watched_on, service FROM viewing WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT id FROM viewing WHERE film_id = ? AND watched_on = ?", (survivor_id, row["watched_on"])
                 ).fetchone()
@@ -3482,6 +3482,9 @@ class Repository:
                     c.execute("UPDATE viewing SET film_id = ? WHERE id = ?", (survivor_id, row["id"]))
                     moved["viewing"] = moved.get("viewing", 0) + 1
                 else:
+                    # A same-date collision: set the survivor's line's service only if it had
+                    # none (the "set only if the line had none" rule — never overwrite one).
+                    c.execute("UPDATE viewing SET service = COALESCE(service, ?) WHERE id = ?", (row["service"], twin["id"]))
                     # Move loser's artefacts to survivor's viewing, preserving their added_on
                     # (immutable: the day the owner said them, never a merge artifact).
                     n_art = c.execute("UPDATE artefact SET viewing_id = ? WHERE viewing_id = ?", (twin["id"], row["id"])).rowcount

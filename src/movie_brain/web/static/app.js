@@ -691,7 +691,8 @@
     };
     const viewingLines = (d.viewings || []).map((v) => {
       const notes = notesHtml(v);
-      return `<li class="viewing">${esc(v.watched_on)}${v.service_name ? ` <span class="sep">·</span> ${esc(v.service_name)}` : ''}${notes ? ` <span class="sep">·</span> ${notes}` : ''}</li>`;
+      const svc = v.service_name || v.service;
+      return `<li class="viewing">${esc(v.watched_on)}${svc ? ` <span class="sep">·</span> ${esc(svc)}` : ''}${notes ? ` <span class="sep">·</span> ${notes}` : ''}</li>`;
     });
     const rentalLines = (d.old_ratings || []).map((o) => `<li class="rental">${esc(o.rented_on || '—')} <span class="sep">·</span> rented <span class="sep">·</span> <span class="old-stars" aria-label="${o.stars} of 5 stars">${'★'.repeat(o.stars)}${'☆'.repeat(5 - o.stars)}</span></li>`);
     const lines = viewingLines.concat(rentalLines);
@@ -1246,6 +1247,10 @@
     // A step (↑ ↓, a click on a dimmed row) is already an in-flight openDrawer for a NEW film:
     // state.openFilm has moved ahead of drawnFilm, and this refresh must not race it (it would
     // draw the new film without startHeartbeat, drawnFilm, the URL, scrollTop or move-on).
+    // A trailer window redraws nothing under it (openDrawer's own redraws call closeTrailer
+    // first; a focus/visibility refresh — fired on every alt-tab, including into the trailer's
+    // own YouTube iframe — must instead skip the redraw and leave the trailer alone).
+    if (trailer) return;
     if (drawer.hidden || state.openFilm == null || state.openFilm !== drawnFilm) return;
     const id = state.openFilm, seq = ++drawerSeq;
     const r = await fetch(`/api/films/${id}`).catch(() => null);

@@ -128,6 +128,29 @@ def test_merge_repoints_viewings_and_folds_a_same_date_collision(repo):
     assert report.moved.get("viewing") == 1 and report.moved.get("artefact") == 1
 
 
+def test_merge_fold_carries_the_losers_service_when_the_survivor_line_has_none(repo):
+    survivor = repo.create_film(Film("Godzilla", 1954, None, ""))
+    loser = repo.create_film(Film("Gojira", 1954, None, ""))
+    repo.register_provider(1, "Kino Film Collection")  # slug kino-film-collection
+    repo.add_viewing(survivor, TODAY, None, "survivor today", None, TODAY)
+    repo.add_viewing(loser, TODAY, "kino-film-collection", "loser today", None, TODAY)
+    repo.merge_film(loser, survivor, TODAY)
+    vs = repo.viewings_for(survivor)
+    assert vs[0]["service"] == "kino-film-collection"
+
+
+def test_merge_fold_never_overwrites_a_service_the_survivor_line_already_has(repo):
+    survivor = repo.create_film(Film("Godzilla", 1954, None, ""))
+    loser = repo.create_film(Film("Gojira", 1954, None, ""))
+    repo.register_provider(1, "Kino Film Collection")  # slug kino-film-collection
+    repo.register_provider(8, "Kanopy")
+    repo.add_viewing(survivor, TODAY, "kino-film-collection", "survivor today", None, TODAY)
+    repo.add_viewing(loser, TODAY, "kanopy", "loser today", None, TODAY)
+    repo.merge_film(loser, survivor, TODAY)
+    vs = repo.viewings_for(survivor)
+    assert vs[0]["service"] == "kino-film-collection"
+
+
 def test_service_name_and_canonical_titles(repo, blue):
     assert repo.service_name("kino-film-collection") == "Kino Film Collection"
     assert repo.service_name("criterion-channel") is None

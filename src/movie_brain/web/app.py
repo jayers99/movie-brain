@@ -344,10 +344,16 @@ def create_app(
     @app.put("/api/drawer")
     def put_drawer() -> tuple[Response, int]:
         body = request.get_json(silent=True)
-        if not isinstance(body, dict) or "film_id" not in body or not (body["film_id"] is None or _is_int(body["film_id"])):
+        film_id = body.get("film_id") if isinstance(body, dict) else None
+        valid = (
+            isinstance(body, dict)
+            and "film_id" in body
+            and (film_id is None or (_is_int(film_id) and 0 < film_id < 2**63))
+        )
+        if not valid:
             return jsonify({"error": 'body must be JSON {"film_id": int | null}'}), 400
-        repo.set_drawer_film(body["film_id"], datetime.now())
-        return jsonify({"film_id": body["film_id"]}), 200
+        repo.set_drawer_film(film_id, datetime.now())
+        return jsonify({"film_id": film_id}), 200
 
     @app.put("/api/films/<int:film_id>/rank-mark")
     def put_rank_mark(film_id: int) -> tuple[Response, int]:
