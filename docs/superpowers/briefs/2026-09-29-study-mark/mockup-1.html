@@ -309,6 +309,7 @@ const ensureGeneralMarked = () => { const v = viewings.find((x) => x.id === 2); 
 const ensureCameraman = () => { if (!viewings.some((x) => x.film === 5049)) addViewing({ title:'The Cameraman', service:'kanopy', rate:7, study:true, text:CAMERAMAN }); };
 const ensureSherlock28 = () => { ensureCameraman(); if (!viewings.some((x) => x.film === 4734 && x.on === '2026-09-28')) addViewing({ title:'Sherlock Jr.', on:'2026-09-28', text:SHERLOCK28 }); };
 const ensureGeneral29 = () => { ensureSherlock28(); if (!viewings.some((x) => x.film === 4698 && x.on === TODAY)) addViewing({ title:'The General', text:GENERAL29 }); };
+const ensureGeneral29Only = () => { if (!viewings.some((x) => x.film === 4698 && x.on === TODAY)) addViewing({ title:'The General', text:GENERAL29 }); };  // stories 12 and 13: the study-watch line alone, no Cameraman re-logged
 const ensureGeneralCleared = () => { ensureGeneral29(); const v = viewings.find((x) => x.id === 2); if (v) v.study = false; };
 const ensureSherlockMarked = () => { ensureGeneralCleared(); if (!viewings.some((x) => x.film === 4734 && x.on === '2026-09-28' && x.study)) addViewing({ title:'Sherlock Jr.', on:'2026-09-28', study:true, text:SHERLOCK_STUDY }); };
 const setWatched = (s) => { state.watched = s; state.rewatch = false; };
@@ -452,7 +453,7 @@ const STORIES = [
     ] },
   { n:12, title:'A second tag',
     text:'The General carries my reason in its 23rd-night note (its mark cleared after the study watch). "Give it another tag — shot construction — so I can find films about that." There is only the study mark: one word, one meaning. Your reason is in the note on the 23rd\'s line, where you can read it; there is no shot-construction tag or filter to select, in this build or in the mark\'s design.',
-    setup:() => { ensureGeneral29(); syncAll(); closeDrawer(); setWatched(null); openFilm('The General'); },
+    setup:() => { ensureGeneral29Only(); syncAll(); closeDrawer(); setWatched(null); openFilm('The General'); },
     coach:'The General is open, its reason in the 23rd\'s note. Press <b>Next</b>: the ask, and the answer.',
     beats:[
       { who:'you', text:'Give it another tag — shot construction — so I can find films about that.' },
@@ -460,7 +461,7 @@ const STORIES = [
     ] },
   { n:13, title:'The next exercise',
     text:'I have done The General\'s study watch and told you what I noticed about the long takes. "Turn that into my next study exercise." Not here: the notes-and-criticism loop is backlog 5, and this mark is its bookmark. What I can do today is reopen your words on the 29th\'s line and clear the old mark; there is no exercise to walk yet.',
-    setup:() => { ensureGeneral29(); syncAll(); closeDrawer(); setWatched(null); openFilm('The General'); },
+    setup:() => { ensureGeneral29Only(); syncAll(); closeDrawer(); setWatched(null); openFilm('The General'); },
     coach:'The General is open with the 29th\'s study-watch line. Press <b>Next</b>: the ask, and the answer.',
     beats:[
       { who:'you', text:'Turn that into my next study exercise.' },
