@@ -1,0 +1,127 @@
+== step 2: title search — catalog title, then TMDB title/original/alternatives (US/GB/en first, max 5) ==
+
+#123 'Él' (1953) dir='Luis Buñuel' tt0045361  asking: ['Él', 'This Strange Passion', '他', 'Kwellingen', 'Той', 'O Alucinado']
+  search 'Él': 1 → unmatched: 1852362209 'Él' (1955) None
+  search 'This Strange Passion': 5 → unmatched: 1109018139 'Strings of Passion' (2014) None; 1683372524 'Passion' (2023) None; 1834330434 'Strange Darling' (2024) None; 1501049587 'Passion Fish' (1992) None; 1831620360 'Strange Harvest' (2025) None
+  search '他': nothing
+  search 'Kwellingen': nothing
+  search 'Той': nothing
+  search 'O Alucinado': 5 → unmatched: 1499562962 'C/o Kancharapalem' (2018) None; 1726260760 'Pure O' (2024) None; 373922560 'O Lucky Man!' (1973) None; 1524318341 'O (Othello)' (2002) None; 1850986195 'Mamá o Papá' (2021) None
+
+#812 'Under the Heavens' (2020) dir='Gustavo Milan' tt11352002  asking: ['Under the Heavens', 'Seiva Bruta']
+  search 'Under the Heavens': 5 → unmatched: 1715023764 'Under the Influencer' (2023) None; 1679021267 'Under the Sun' (2016) None; 1818339202 'Under the Palm Tree' (2021) None; 1412258188 'Under the Tree' (2018) None; 1138963699 'Under the Shadow' (2016) None
+  search 'Seiva Bruta': 5 → unmatched: 1706922918 'Brutal Season' (2023) None; 920224385 'Brute Force' (1947) None; 1835036510 'Brute 1976' (2025) None; 1555007331 'Brutal Bridesmaids' (2021) None; 1613602087 'Brut Force' (2022) None
+
+#876 'Kid' (1984) dir='Hal Hartley' tt0087549  asking: ['Kid']
+  search 'Kid': 5 → unmatched: 614992889 'The Kid' (1921) None; 1426876564 'The Kid' (1921) None; 1458766346 'The Kid' (2019) None; 1514757661 'The Kid' (1960) None; 188702471 'The Kid' (2000) None
+
+#1625 'The Fountain' (2007) dir='Lena Dunham' tt3950812  asking: ['The Fountain']
+  search 'The Fountain': 5 → unmatched: 315781038 'The Fountain (2006)' (2006) None; 1274677533 'Fountain of Youth' (2017) None; 315886544 'The Fountainhead' (1949) None; 693485743 'Three Coins In the Fountain' (1954) None; 313827483 'The Harder They Fall' (1956) None
+
+#1689 'Factory' (1970) dir='Krzysztof Kieślowski' tt0067077  asking: ['Factory', 'Fabryka']
+  search 'Factory': 5 → unmatched: 589531950 'The Factory' (2011) None; 1565508884 'Factory Girl' (2006) None; 1542188404 'Dream Factory' (2020) None; 1692600661 'Animal Factory' (2000) None; 296111299 'The Dust Factory' (2004) None
+  search 'Fabryka': 1 → unmatched: 1693946311 'De Humani Corporis Fabrica' (2023) None
+
+#2174 'The Curve' (1999) dir='Edwige Shaki' tt0374560  asking: ['The Curve', 'La cambrure']
+  search 'The Curve': 5 → unmatched: 1619134091 'The Curve' (2020) None; 323669579 'The Curve (1998)' (1998) None; 1071347839 'Curve (2015)' (2015) None; 1439651893 'Behind the Curve' (2018) None; 570142505 'Trouble with the Curve' (2012) None
+  search 'La cambrure': 5 → unmatched: 1179249419 'La La Land' (2016) None; 1592557084 'La Danubio' (2021) None; 1554396391 'La Liste' (2017) None; 1229986507 'LA 92' (2017) None; 1864175067 'La Grazia' (2025) None
+
+#2915 'Kill!' (1968) dir='Kihachi Okamoto' tt0063186  asking: ['Kill!', '斬る', 'Kiru', 'La forteresse des samouraïs', '¡Matar!']
+  search 'Kill!': 5 → unmatched: 1754030018 'Kill' (2024) None; 1323070574 'Kill!' (2016) None; 1114213314 'Kill Dil' (2014) None; 1598860800 'Kill Zone' (2005) None; 485182125 'Kill List' (2012) None
+  search '斬る': nothing
+  search 'Kiru': 5 → unmatched: 1845943966 'Kirk Cameron: Connect' (2018) None; 1550688352 'Kirk Cameron: Connect' (2018) None; 1615631031 'Kiri and the Girl' (2021) None; 1760226441 'Brief Encounters / The Long Farewell: Two Films by Kira Muratova' (2024) None; 1079141054 "Kirk Franklin and the Family: Whatcha Lookin' 4" (1995) None
+  search 'La forteresse des samouraïs': nothing
+  search '¡Matar!': 5 → unmatched: 1676995493 'Matar a Pinochet' (2020) None; 1301647008 'Ribbons' (2017) None; 1805002218 'Electra' (2025) None; 797060748 'Mater Dolorosa' (2012) None; 602483567 'Mata Hari (1931)' (1931) None
+
+#3705 'King of the Hill' (1993) dir='Steven Soderbergh' tt0107322  asking: ['King of the Hill', 'König der Murmelspieler']
+  search 'King of the Hill': 5 → unmatched: 1035464475 'King of the Hill (1993)' (1993) None; 1815399556 'The King of Kings' (2025) None; 634135786 'King of Kings (1961)' (1961) None; 1620105584 'Motu Patlu: King of Kings' (2016) None; 321509957 'The Hill' (1965) None
+  search 'König der Murmelspieler': 5 → unmatched: 1338800021 'Der Todesking' (1990) None; 1031703172 "Wagner's Dream: The Making of the Metropolitan Opera's Der Ring des Nibelungen" (2012) None; 525568828 'The Sandman (Der Sandmann)' (2012) None; 1435278222 'The Samurai (Der Samurai)' (2018) None; 534488487 'Out of Time (Aus der Zeit)' (2007) None
+
+#4558 'JOKER: Put On a Happy Face' (2020) dir=None tt12920708  asking: ['JOKER: Put On a Happy Face', "הג'וקר: סיפורו של חיוך"]
+  search 'JOKER: Put On a Happy Face': 5 → unmatched: 1543522482 'Happy Face' (2021) None; 1480861897 'Joker' (2019) None; 6787040675 'Face 2 Face' (2017) None; 1848220073 'Put Your Soul on Your Hand and Walk' (2025) None; 1439344652 'Face 2 Face' (2017) None
+  search "הג'וקר: סיפורו של חיוך": nothing
+
+#4618 'Irezumi' (1982) dir='Yoichi Takabayashi' tt0084153  asking: ['Irezumi', '雪華葬刺し', 'Irezumi – Die tätowierte Frau', 'La femme tatouée', 'A tetoválás szelleme', 'De geest van de tatoeage']
+  search 'Irezumi': 1 → unmatched: 1568301650 'Irezumi' (2021) None
+  search '雪華葬刺し': nothing
+  search 'Irezumi – Die tätowierte Frau': nothing
+  search 'La femme tatouée': 5 → unmatched: 1043373043 'La Femme Nikita' (1991) None; 1593889068 'La Femme Qui Boit' (2001) None; 1729685982 'Femme' (2024) None; 1440343209 'Femme' (2018) None; 1040551103 'The Revenge of the Woman in Black (La vengeance de la femme en noir)' (1997) None
+  search 'A tetoválás szelleme': 5 → unmatched: 1870954255 'A Poet' (2026) None; 1639412157 'A Dickens of a Holiday!' (2022) None; 1533189085 'A**holes: A Theory' (2020) None; 1824114023 'A' (2017) None; 1792352914 'A Reluctant Heart' (2025) None
+  search 'De geest van de tatoeage': 5 → unmatched: 1115487003 'De Palma' (2016) None; 833610720 'De Nadie' (2005) None; 1582878472 'De Gaulle' (2021) None; 881009179 'Gol de Cuba' (2014) None; 1440884271 'Tour de Pharmacy' (2017) None
+
+#4647 'Under the Skin' (2014) dir='Jonathan Glazer' tt1441395  asking: ['Under the Skin', '皮下之慌', 'Pod skórą', 'Pobud v moey Shkure', 'Bajo la piel', 'Під шкірою']
+  search 'Under the Skin': 5 → unmatched: 858619452 'Under the Skin (2014)' (2014) None; 1646482768 'Under the Skin (2019)' (2019) None; 1793673981 'The Blues Under the Skin' (1973) None; 1729482642 'The Zone of Interest and Under the Skin 2-Pack' (2024) None; 1850332859 'Under My Skin' (2023) None
+  search '皮下之慌': 2 → unmatched: 1001845158 "保衛戰隊之出動喇!朋友! Let's go!" (2011) None; 790404285 '自古英雄出少年之岳飛 Young Hero Yue Fei: A Hero Beyond the Legend' (2012) None
+  search 'Pod skórą': 5 → unmatched: 1823751211 'Meeting with Pol Pot' (2025) None; 1701262387 'The Pod Generation' (2023) None; 1251354487 'Monterey Pop' (1968) None; 1268250204 'Pop Aye' (2017) None; 1546199900 'The Pom Pom Murders' (2021) None
+  search 'Pobud v moey Shkure': 5 → unmatched: 1484427364 'Ford v Ferrari' (2019) None; 496266365 'Henry V' (1944) None; 532832837 'V for Vendetta' (2006) None; 1725368286 'Ford v Holden' (2023) None; 297011502 'Saw V' (2008) None
+  search 'Bajo la piel': 5 → unmatched: 1721975579 'La Piel en Llamas' (2022) None; 1443024733 'Bao' (2018) None; 1213604509 'Banjo' (2016) None; 1608448419 'Red Pill' (2021) None; 1195401070 'The Red Pill' (2017) None
+  search 'Під шкірою': nothing
+
+#4929 'Django' (1966) dir='Sergio Corbucci' tt0060315  asking: ['Django', 'Ђанго', '쟝고', '속 황야의 무법자', 'Nimeni on Django', 'Django - hämnaren']
+  search 'Django': 5 → unmatched: 1278416989 'Django' (2012) None; 1314789544 'Django (2017)' (2017) None; 1444699804 'Django (1966)' (1966) None; 1217954531 'Django Unchained' (2012) None; 1647833739 'Django, En El Nombre del Hijo' (2019) None
+  search 'Ђанго': nothing
+  search '쟝고': nothing
+  search '속 황야의 무법자': nothing
+  search 'Nimeni on Django': 5 → unmatched: 1278416989 'Django' (2012) None; 1217954531 'Django Unchained' (2012) None; 1314789544 'Django (2017)' (2017) None; 1444699804 'Django (1966)' (1966) None; 1510206927 'Sukiyaki Western Django' (2019) None
+  search 'Django - hämnaren': 5 → unmatched: 1278416989 'Django' (2012) None; 1217954531 'Django Unchained' (2012) None; 1314789544 'Django (2017)' (2017) None; 1444699804 'Django (1966)' (1966) None; 1510206927 'Sukiyaki Western Django' (2019) None
+
+#4936 "Don't Torture a Duckling" (1972) dir='Lucio Fulci' tt0069019  asking: ["Don't Torture a Duckling", 'Non si sevizia un paperino', 'Fureur Meurtrière', 'The Long Night of Exorcism', 'Не тортуй каченя', 'O Estranho Segredo do Bosque dos Sonhos']
+  search "Don't Torture a Duckling": 5 → unmatched: 1797444143 "Don't Torture a Duckling" (2025) None; 1749195909 'Torture' (2021) None; 322879219 'Torture Garden' (1968) None; 291721256 'Tortured' (2008) None; 1444931434 'Tortured for Christ' (2018) None
+  search 'Non si sevizia un paperino': nothing
+  search 'Fureur Meurtrière': 1 → unmatched: 1543247321 'Le Choc Du Futur (aka the Shock of the Future)' (2020) None
+  search 'The Long Night of Exorcism': nothing
+  search 'Не тортуй каченя': nothing
+  search 'O Estranho Segredo do Bosque dos Sonhos': nothing
+
+#4972 'Ginger Snaps' (2000) dir='John Fawcett' tt0210070  asking: ['Ginger Snaps', 'Ginger - Verliebt in den Tod', 'Tentadora Maldição', 'Feroz', 'Ginger Snaps: La poseída', 'ジンジャー スナップス']
+  search 'Ginger Snaps': 5 → ambiguous: 1892282743 'Ginger Snaps' (2001) None; 1472331643 'Ginger Snaps' (2001) None; 1647282011 'Ginger Snaps 2' (2004) None; 301112737 'Ginger and Fred' (1986) None; 1760568609 'Ginger Ale Afternoon' (2024) None
+  search 'Ginger - Verliebt in den Tod': nothing
+  search 'Tentadora Maldição': nothing
+  search 'Feroz': 2 → unmatched: 1453494398 'Pandigai' (2017) None; 1108992773 'Dekh Tamasha Dekh' (2014) None
+  search 'Ginger Snaps: La poseída': 5 → ambiguous: 1892282743 'Ginger Snaps' (2001) None; 1472331643 'Ginger Snaps' (2001) None; 1647282011 'Ginger Snaps 2' (2004) None; 301112737 'Ginger and Fred' (1986) None; 1760568609 'Ginger Ale Afternoon' (2024) None
+  search 'ジンジャー スナップス': nothing
+
+#5019 'Lessons of Darkness' (1992) dir='Werner Herzog' tt0104706  asking: ['Lessons of Darkness', 'Lektionen in Finsternis', '問いかける焦土', 'Lições da Escuridão']
+  search 'Lessons of Darkness': 5 → unmatched: 1514730430 'Werner Herzog Film Collection: Lessons of Darkness' (1992) None; 1063527968 'Hearts of Darkness' (1991) None; 1716994588 'World of Darkness' (2017) None; 280526877 'Army of Darkness' (1992) None; 284621727 'Prince of Darkness' (1987) None
+  search 'Lektionen in Finsternis': 5 → unmatched: 1725352481 'Living in Delusionville' (2024) None; 1286892225 'In Exile' (2017) None; 1779844949 'Falling in Love in Niagara' (2024) None; 1330082159 'In Between' (2018) None; 1542005802 'In Plainview' (2021) None
+  search '問いかける焦土': nothing
+  search 'Lições da Escuridão': 5 → unmatched: 1567146913 'Da Yie' (2020) None; 1314744276 'The Curse of Da Linzer' (2018) None; 1542906024 'Koko-di Koko-da' (2020) None; 532795155 'The Da Vinci Code' (2006) None; 388090173 'Escanaba In da Moonlight' (2002) None
+
+#5074 'Pineapple Express' (2008) dir='David Gordon Green' tt0910936  asking: ['Pineapple Express', 'Superfumados', 'Alta Pedrada']
+  search 'Pineapple Express': 5 → ambiguous: 533284299 'Pineapple Express' (2008) None; 293561003 'Pineapple Express (Unrated)' (2008) None; 6803732630 'Superbad/Pineapple Express' (2026) None; 703796078 'This Is the End / Pineapple Express' (2013) None; 1739485968 'Mars Express' (2024) None
+  search 'Superfumados': nothing
+  search 'Alta Pedrada': 5 → unmatched: 1445806973 'Alto' (2019) None; 1451012705 'Alita: Battle Angel' (2019) None; 1283102738 'Serra Pelada: Gold Rush' (2013) None; 1562879954 'Alma de Héroe' (2019) None; 1454029231 'Alma' (2015) None
+
+#5126 'Late Night Trains' (1975) dir='Aldo Lado' tt0073836  asking: ['Late Night Trains', "L'ultimo treno della notte", 'Last House - Part II', "Don't Ride on Late Night Trains", 'Last Stop on the Night Train', 'Mädchen in den Krallen teuflischer Bestien']
+  search 'Late Night Trains': 5 → unmatched: 1737014858 'Late Night with the Devil' (2024) None; 1278466205 'Night Train Murders' (1975) None; 1657558901 'Night Train' (2023) None; 1883769060 'Late Shift' (2026) None; 1516012769 'The Night Train to Kathmandu' (1988) None
+  search "L'ultimo treno della notte": nothing
+  search 'Last House - Part II': 5 → unmatched: 776348955 'Gasland: Part II' (2013) None; 289039042 'The Godfather Part II' (1974) None; 1604476852 'The Souvenir Part II' (2021) None; 1566816885 'Dementia Part II' (2021) None; 1583568930 'The Last Exorcism Part II' (2013) None
+  search "Don't Ride on Late Night Trains": nothing
+  search 'Last Stop on the Night Train': nothing
+  search 'Mädchen in den Krallen teuflischer Bestien': nothing
+
+#5138 'Day of the Woman' (1978) dir='Meir Zarchi' tt0077713  asking: ['Day of the Woman', 'I Spit on Your Grave', 'The Housatonic Revenge', 'Blood Angel', 'Я плюю на ваши могилы', 'Non violentate Jennifer - I Spit on Your Grave']
+  search 'Day of the Woman': 5 → unmatched: 1071348839 'Day Out of Days' (2015) None; 1844047223 'Day of the Fight' (2024) None; 1661169871 'Woman of the Photographs' (2023) None; 1501989986 'Woman' (2020) None; 1699495888 'Simone: Woman of the Century' (2023) None
+  search 'I Spit on Your Grave': 5 → unmatched: 1223153983 'I Spit On Your Grave' (2010) None; 1795218591 'I Spit on Your Grave' (1978) None; 1223170739 'I Spit On Your Grave 2' (2013) None; 1796261548 'I Spit on Your Grave: Deja Vu' (2019) None; 1845391967 'I Spit on Your Grave | 2 Movie-Collection' (2025) None
+  search 'The Housatonic Revenge': 5 → unmatched: 1774304725 'Revenge' (2018) None; 1404238368 'Revenge' (2018) None; 282296295 'Revenge' (1990) None; 725035117 "Zatoichi's Revenge" (1965) None; 1466016628 'Revenge' (2019) None
+  search 'Blood Angel': 5 → unmatched: 334570842 'Blood Angels' (2005) None; 1576997913 'Angel' (2020) None; 1461902559 'Sorry Angel' (2019) None; 1605215186 'Red Angel' (1971) None; 1134770151 'Street Angel' (1928) None
+  search 'Я плюю на ваши могилы': nothing
+  search 'Non violentate Jennifer - I Spit on Your Grave': nothing
+
+#5140 'Zombie Flesh Eaters' (1979) dir='Lucio Fulci' tt0080057  asking: ['Zombie Flesh Eaters', 'Zombi 2', 'Woodoo', 'Zombie Flesh-Eaters', 'Zombie', 'Τα Ζόμπι Χτυπάνε Μεσάνυχτα']
+  search 'Zombie Flesh Eaters': 5 → unmatched: 1455173243 'Zombie' (1980) None; 1654052044 'The Bee-Eaters' (2020) None; 1762098515 'The Zombie Wedding' (2024) None; 1868977586 'Flesh and Bronze' (2023) None; 1132539466 'Live Flesh' (1998) None
+  search 'Zombi 2': 5 → unmatched: 1492511588 'Zombi Child' (2020) None; 1455173243 'Zombie' (1980) None; 1762098515 'The Zombie Wedding' (2024) None; 1517679088 'Zombie for Sale' (2020) None; 1790008148 'Zombie Repellant' (2025) None
+  search 'Woodoo': 5 → unmatched: 1661377943 'Wood' (2021) None; 527506299 'The Woods' (2011) None; 299461453 'The Woods' (2006) None; 1192160831 'The Tree of Wooden Clogs' (1978) None; 1307177500 'Miracle in the Woods' (2017) None
+  search 'Zombie Flesh-Eaters': 5 → unmatched: 1455173243 'Zombie' (1980) None; 1654052044 'The Bee-Eaters' (2020) None; 1762098515 'The Zombie Wedding' (2024) None; 1868977586 'Flesh and Bronze' (2023) None; 1132539466 'Live Flesh' (1998) None
+  search 'Zombie': 5 → unmatched: 1455173243 'Zombie' (1980) None; 1706559182 'Zombie Town' (2023) None; 1687892211 'Zombie Wars' (2020) None; 741878480 'Zombie Night' (2013) None; 1789637520 'Zombie Strain' (2025) None
+  search 'Τα Ζόμπι Χτυπάνε Μεσάνυχτα': nothing
+
+#5146 'Basket Case' (1982) dir='Frank Henenlotter' tt0083624  asking: ['Basket Case', 'Frères de sang', 'El Caso del Canasto', 'Veriveljet', 'To kalathi tou tromou', 'Существо в корзине']
+  search 'Basket Case': 5 → unmatched: 1376768461 'Basket Case (1982)' (1982) None; 1648610937 'Fruits Basket -prelude-' (2022) None; 437143990 "Paul's Case" (1980) None; 1470350832 'Cold Case Hammarskjöld' (2019) None; 1513104772 'The Collini Case' (2020) None
+  search 'Frères de sang': 5 → unmatched: 1363290332 'Alma de Sant Pere' (2016) None; 509098811 'I Never Sang for My Father' (1970) None; 305386910 'The Sand Pebbles' (2001) None; 1683175799 'San Francisco Stories' (2021) None; 1069557653 'Sand Castles' (2014) None
+  search 'El Caso del Canasto': 5 → unmatched: 1280739495 'El Canto del Colibri (Subtitled)' (2015) None; 1372868279 'El soborno del cielo' (2016) None; 1275710509 'Casa de Lava' (2017) None; 1596771905 'Yanka y El Espíritu del Volcán' (2018) None; 1365775470 'El secreto de Magdalena' (2015) None
+  search 'Veriveljet': nothing
+  search 'To kalathi tou tromou': 5 → unmatched: 1500780730 'Kaithi' (2019) None; 1072016920 'Good Morning Karachi' (2016) None; 1849986647 'Toe to Toe' (2021) None; 289686094 'Troop Beverly Hills' (1989) None; 1170755370 'Long Way to the Top' (2016) None
+  search 'Существо в корзине': nothing
+
+search calls made: 84

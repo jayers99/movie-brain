@@ -1,0 +1,22 @@
+== step 1: IMDb index, all 20 in batches of 5 ==
+  #123 'Él' (1953) tt0045361: NO INDEX ENTRY
+  #812 'Under the Heavens' (2020) tt11352002: NO INDEX ENTRY
+  #876 'Kid' (1984) tt0087549: NO INDEX ENTRY
+  #1625 'The Fountain' (2007) tt3950812: NO INDEX ENTRY
+  #1689 'Factory' (1970) tt0067077: NO INDEX ENTRY
+  #2174 'The Curve' (1999) tt0374560: NO INDEX ENTRY
+  #2915 'Kill!' (1968) tt0063186: NO INDEX ENTRY
+  #3705 'King of the Hill' (1993) tt0107322: NO INDEX ENTRY
+  #4558 'JOKER: Put On a Happy Face' (2020) tt12920708: NO INDEX ENTRY
+  #4618 'Irezumi' (1982) tt0084153: NO INDEX ENTRY
+  #4647 'Under the Skin' (2014) tt1441395: NO INDEX ENTRY
+  #4929 'Django' (1966) tt0060315: 498071403 'Django' (1966) 'Sergio Corbucci' removed=True
+  #4936 "Don't Torture a Duckling" (1972) tt0069019: 550296017 "Don't Torture a Duckling" (1972) 'Lucio Fulci' removed=True
+  #4972 'Ginger Snaps' (2000) tt0210070: 289557528 'Ginger Snaps' (2001) 'John Fawcett' removed=True
+  #5019 'Lessons of Darkness' (1992) tt0104706: 898136351 'Werner Herzog Film Collection: Lessons of Darkness' (1995) 'Werner Herzog' removed=True
+  #5074 'Pineapple Express' (2008) tt0910936: 296672025 'Pineapple Express' (2008) 'Unknown' removed=True
+  #5126 'Late Night Trains' (1975) tt0073836: 546292949 'Night Train Murders' (1975) 'Aldo Lado' removed=True
+  #5138 'Day of the Woman' (1978) tt0077713: 1460349297 'I Spit On Your Grave (1978)' (1978) 'Meir Zarchi' removed=True
+  #5140 'Zombie Flesh Eaters' (1979) tt0080057: 480082654 'Zombie' (1979) 'Lucio Fulci' removed=True
+  #5146 'Basket Case' (1982) tt0083624: 407596522 'Basket Case' (1982) 'Frank Henenlotter' removed=True
+
