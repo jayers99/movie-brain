@@ -143,9 +143,11 @@ def log_viewing(
     text: str | None,
     today: date,
     now: datetime,
+    study: bool = False,
 ) -> Outcome:
     # text None = "just mark the date" (--no-note): a viewing with no artefact. A dictation that
-    # was GIVEN but is blank is still a refusal.
+    # was GIVEN but is blank is still a refusal. `study` (backlog 48) marks the line the add
+    # writes — created or found — and is never cleared here.
     if text is not None and not text.strip():
         return _refused("the dictation is empty")
     on = on or today
@@ -195,8 +197,8 @@ def log_viewing(
         )
         return Outcome("no-film", line, 3)
     fid, (_, ftitle, fyear, _d) = res.film_id, canonical[res.film_id]
-    w = repo.add_viewing(fid, on, service, text.strip() if text is not None else None, rate, today)
-    rated = f" · rated {rate}" if rate is not None else ""
+    w = repo.add_viewing(fid, on, service, text.strip() if text is not None else None, rate, today, study=study)
+    rated = (f" · rated {rate}" if rate is not None else "") + (" · study" if study else "")
     if w.created:
         svc = f" · {service}" if service else ""
         line = (
@@ -210,6 +212,20 @@ def log_viewing(
         f"{f'note {w.note_count}' if text is not None else f'no new note ({w.note_count} kept)'}{dropped}{rated}"
     )
     return Outcome("added-to", line, 0, fid, w.viewing_id)
+
+
+def study(repo: Repository, viewing_id: int, *, off: bool) -> Outcome:
+    """Mark one line for study, or clear it (backlog 48). Idempotent: a repeated mark or clear
+    answers `already marked` / `already clear` and writes nothing; an unknown number refuses."""
+    got = repo.set_study(viewing_id, not off)
+    if got is None:
+        return _refused(f"no viewing #{viewing_id}")
+    if off:
+        tail = "mark cleared" if got["changed"] else "already clear"
+    else:
+        tail = "marked for study" if got["changed"] else "already marked"
+    line = f"STUDY     viewing #{viewing_id} (#{got['film_id']} '{got['title']}', {got['watched_on']}) · {tail}"
+    return Outcome("study", line, 0, cast(int, got["film_id"]), viewing_id)
 
 
 def remove(repo: Repository, viewing_id: int, note: int | None) -> Outcome:
@@ -238,9 +254,11 @@ def remove(repo: Repository, viewing_id: int, note: int | None) -> Outcome:
     return Outcome("removed", line, 0, cast(int, gone["film_id"]), viewing_id)
 
 
-def listing(repo: Repository, since: date | None, film_id: int | None) -> str:
-    rows = repo.list_viewings(since=since, film_id=film_id)
+def listing(repo: Repository, since: date | None, film_id: int | None, study_only: bool = False) -> str:
+    rows = repo.list_viewings(since=since, film_id=film_id, study_only=study_only)
     if not rows:
+        if study_only:
+            return "no viewing marked for study"
         return f"no viewing{' since ' + since.isoformat() if since else ''}"
     # Only with --film (finding 3): the note numbers "scratch that remark" and `remove --note N`
     # need, since nothing else ever prints them. One extra read, keyed by viewing id.
@@ -250,7 +268,7 @@ def listing(repo: Repository, since: date | None, film_id: int | None) -> str:
     out = []
     for r in rows:
         n = cast(int, r["notes"])
-        svc = f"  {r['service']}" if r["service"] else ""
+        svc = (f"  {r['service']}" if r["service"] else "") + ("  study" if r["study"] else "")
         rated = f"  rated {r['my_rating']}" if r["my_rating"] is not None else ""
         out.append(
             f"{r['watched_on']}  #{str(r['film_id']).ljust(5)} {r['title']} ({r['year'] or '-'}){svc}  "
