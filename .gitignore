@@ -11,3 +11,6 @@ dist/
 
 # copyrighted source texts live in ~/iCloud/movie-brain-corpus, never in the repo
 docs/raw/*.pdf
+
+# Local git worktrees (superpowers using-git-worktrees)
+.worktrees/
