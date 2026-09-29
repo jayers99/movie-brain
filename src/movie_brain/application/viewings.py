@@ -198,7 +198,11 @@ def log_viewing(
         return Outcome("no-film", line, 3)
     fid, (_, ftitle, fyear, _d) = res.film_id, canonical[res.film_id]
     w = repo.add_viewing(fid, on, service, text.strip() if text is not None else None, rate, today, study=study)
-    rated = (f" · rated {rate}" if rate is not None else "") + (" · study" if study else "")
+    # The tail says what THIS command did to the mark (point-C finding C5): `· study` when it set
+    # it, `· already marked` when the line already carried it — the same honesty `viewings study`
+    # has, so one line never reads as if the mark were set again.
+    mark = "" if not study else (" · study" if w.study_set else " · already marked")
+    rated = (f" · rated {rate}" if rate is not None else "") + mark
     if w.created:
         svc = f" · {service}" if service else ""
         line = (

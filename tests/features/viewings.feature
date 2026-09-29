@@ -172,24 +172,24 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
 
   # ---- the study mark (backlog 48): one mark on a viewing, set from the sentence or by number ----
 
-  Scenario: A dictation that names a reason to go back marks the line it logs
+  Scenario: Story 2 — a dictation that names a reason to go back marks the line it logs
     When I log "The Blue Angel" on "kino-film-collection" rating 7 for study saying "the tramline sequence — I need to watch that again"
     Then the outcome is "logged" naming "· rated 7 · study"
     And the last viewing is marked for study
 
-  Scenario: The flag on a same-day sentence marks the existing line and appends the note
+  Scenario: Story 9 — the flag on a same-day or --on sentence marks the existing line and appends the note
     When I log "The Blue Angel" saying "first words"
     And I log "The Blue Angel" for study saying "mark it — the cuts land on the seams"
     Then the outcome is "added-to" naming "· note 2 · study"
     And the last viewing is marked for study
 
-  Scenario: A past line is marked by its number
+  Scenario: Story 7 — a past line is marked or cleared by its number
     When I log "The Blue Angel" on 2026-09-23 saying "the shot construction"
     And I mark the last viewing for study
     Then the outcome is "study" naming "· marked for study"
     And the last viewing is marked for study
 
-  Scenario: Marking a marked line, or clearing a clear one, changes nothing
+  Scenario: Story 8 — marking a marked line, or clearing a clear one, changes nothing
     When I log "The Blue Angel" for study saying "marked"
     And I mark the last viewing for study
     Then the outcome is "study" naming "· already marked"
@@ -200,22 +200,22 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     When I clear the study mark on the last viewing
     Then the outcome is "study" naming "· already clear"
 
-  Scenario: A number that is not a line is refused
+  Scenario: Story 8 — a number that is not a line is refused
     When I mark viewing 40 for study
     Then the outcome is "refused" with exit 2 naming "no viewing #40"
     And nothing was written
 
-  Scenario: The listing shows the mark and can keep only marked rows
+  Scenario: Story 4 — the listing shows the mark and can keep only marked rows
     When I log "The Blue Angel" on 2026-09-23 on "kino-film-collection" for study saying "general"
     And I log "Solaris (1972)" saying "plain"
     Then the listing shows "2026-09-23  #" with "kino-film-collection  study  1 note"
     And the study-only listing names "The Blue Angel" and not "Solaris"
 
-  Scenario: The study-only listing says so when nothing is marked
+  Scenario: Story 4 — the study-only listing says so when nothing is marked
     When I log "The Blue Angel" saying "plain"
     Then the study-only listing reads "no viewing marked for study"
 
-  Scenario: Removing a viewing takes its mark with it
+  Scenario: Story 11 — removing a viewing takes its mark with it
     When I log "The Blue Angel" for study saying "marked"
     And I remove the last viewing
     Then the study-only listing reads "no viewing marked for study"
@@ -225,3 +225,17 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     And I log "The Blue Angel" saying "tonight"
     Then the film listing for "The Blue Angel" (1930) shows "viewing #1" and "viewing #2"
     And the plain listing shows no "viewing #"
+
+  Scenario: A reason sentence landing on an already-marked line says so instead of claiming the mark
+    When I log "The Blue Angel" for study saying "first reason"
+    And I log "The Blue Angel" for study saying "second reason"
+    Then the outcome is "added-to" naming "· note 2 · already marked"
+    And the last viewing is marked for study
+
+  Scenario: Story 11 — scratching the reason note leaves the mark; removing the line takes it
+    When I log "The Blue Angel" on 2026-09-23 saying "the night"
+    And I log "The Blue Angel" on 2026-09-23 for study saying "the reason"
+    And I remove note 2 of the last viewing
+    Then the last viewing is marked for study
+    When I remove the last viewing
+    Then the study-only listing reads "no viewing marked for study"

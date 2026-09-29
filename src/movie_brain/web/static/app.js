@@ -923,6 +923,20 @@
     const d = await r.json();
     if (seq !== drawerSeq) return;
     closeTrailer();  // a redraw (popstate, a step that was in flight) never happens under an open trailer
+    // A line logged with the drawer CLOSED reaches the list "on the next reload or drawer open"
+    // (viewing-log brief 2.2) — the second half was untrue until the study mark's point-C check
+    // (Codex F1): the detail just fetched is the truth, so patch the film's row from it and re-run
+    // the filters, exactly as the focus refresh does for an open drawer. It runs BEFORE the open film is set, so
+    // applyFilters' own URL sync rewrites the current entry without `film=` and Back still closes.
+    const fi = state.films.findIndex((f) => f.id === id);
+    if (fi >= 0) {
+      const p = state.films[fi];
+      if (p.my_rating !== d.my_rating || p.unseen !== d.unseen || p.watchlisted !== d.watchlisted
+        || p.last_watched !== d.last_watched || p.viewing_count !== d.viewing_count || !!p.study !== !!d.study) {
+        state.films[fi] = { ...p, my_rating: d.my_rating, unseen: d.unseen, watchlisted: d.watchlisted, last_watched: d.last_watched, viewing_count: d.viewing_count, study: d.study };
+        renderCounts(); applyFilters();
+      }
+    }
     body.innerHTML = detailHtml(d); drawnDetail = d;
     // Move on: the line rides with the film it was drawn for; any other film's draw ends it.
     if (movedOn && movedOn.at === id) body.querySelector('h2').insertAdjacentHTML('afterend', movedOnHtml(movedOn));

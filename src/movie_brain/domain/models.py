@@ -239,6 +239,7 @@ class ViewingWrite:
     created: bool
     note_count: int
     service: str | None
+    study_set: bool = False  # True only when THIS write put the study mark on the line (backlog 48)
 
 
 @dataclass(frozen=True)

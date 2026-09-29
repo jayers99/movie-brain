@@ -2838,23 +2838,27 @@ class Repository:
         here refuses."""
         with self._conn() as c:
             row = c.execute(
-                "SELECT id, service FROM viewing WHERE film_id = ? AND watched_on = ?",
+                "SELECT id, service, study FROM viewing WHERE film_id = ? AND watched_on = ?",
                 (film_id, watched_on.isoformat()),
             ).fetchone()
+            study_set = False
             if row is None:
                 cur = c.execute(
                     "INSERT INTO viewing (film_id, watched_on, service, logged_on, study) VALUES (?, ?, ?, ?, ?)",
                     (film_id, watched_on.isoformat(), service, today.isoformat(), int(study)),
                 )
-                vid, created, line_service = int(cur.lastrowid), True, service
+                vid, created, line_service, study_set = int(cur.lastrowid), True, service, study
             else:
                 vid, created = int(row["id"]), False
                 line_service = row["service"]
                 if service and row["service"] is None:
                     c.execute("UPDATE viewing SET service = ? WHERE id = ?", (service, vid))
                     line_service = service
-                if study:
+                if study and not row["study"]:
+                    # Only a line not yet marked is written (point-C finding C5: the line's tail
+                    # must say whether THIS command set the mark or found it there).
                     c.execute("UPDATE viewing SET study = 1 WHERE id = ?", (vid,))
+                    study_set = True
             if text is not None:
                 c.execute(
                     "INSERT INTO artefact (viewing_id, kind, text, added_on) VALUES (?, 'dictation', ?, ?)",
@@ -2864,7 +2868,7 @@ class Repository:
                 _write_rating(c, film_id, rate, today)
             c.execute("DELETE FROM unseen WHERE film_id = ?", (film_id,))
             n = int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (vid,)).fetchone()[0])
-            return ViewingWrite(vid, created, n, line_service)
+            return ViewingWrite(vid, created, n, line_service, study_set)
 
     def viewings_for(self, film_id: int) -> list[dict[str, object]]:
         with self._conn() as c:

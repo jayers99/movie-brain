@@ -281,3 +281,10 @@ def test_merge_keeps_the_mark_on_a_same_date_collision(repo):
     repo.add_viewing(loser, date(2026, 9, 20), None, "loser alone", None, TODAY, study=True)
     repo.merge_film(loser, survivor, TODAY)
     assert [(v["watched_on"], v["study"]) for v in repo.viewings_for(survivor)] == [("2026-09-27", True), ("2026-09-20", True)]
+
+
+def test_add_viewing_reports_whether_this_write_set_the_mark(repo, blue):
+    first = repo.add_viewing(blue, TODAY, None, "first", None, TODAY, study=True)
+    again = repo.add_viewing(blue, TODAY, None, "again", None, TODAY, study=True)
+    plain = repo.add_viewing(blue, TODAY, None, "plain", None, TODAY)
+    assert (first.study_set, again.study_set, plain.study_set) == (True, False, False)
