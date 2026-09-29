@@ -3546,7 +3546,9 @@ class Repository:
                 moved["old_rating"] = n_old
             # Viewings (brief 2.2): many rows per film, so a plain re-point — except that the
             # survivor may already hold that day, when the loser's notes join the survivor's line.
-            for row in c.execute("SELECT id, watched_on, service, study FROM viewing WHERE film_id = ?", (loser_id,)).fetchall():
+            for row in c.execute(
+                "SELECT id, watched_on, service, study FROM viewing WHERE film_id = ?", (loser_id,)
+            ).fetchall():
                 twin = c.execute(
                     "SELECT id FROM viewing WHERE film_id = ? AND watched_on = ?", (survivor_id, row["watched_on"])
                 ).fetchone()

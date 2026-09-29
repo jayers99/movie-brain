@@ -270,9 +270,13 @@ def listing(repo: Repository, since: date | None, film_id: int | None, study_onl
         n = cast(int, r["notes"])
         svc = (f"  {r['service']}" if r["service"] else "") + ("  study" if r["study"] else "")
         rated = f"  rated {r['my_rating']}" if r["my_rating"] is not None else ""
+        # With --film the row also names its VIEWING number (point-A gap check finding 1 of the
+        # study mark): `viewings study VID [--off]` and `remove VID` need it, and only the write-time
+        # LOGGED / ADDED-TO lines ever printed it before. The plain listing keeps its shape.
+        vid = f"  viewing #{r['id']}" if film_id is not None else ""
         out.append(
             f"{r['watched_on']}  #{str(r['film_id']).ljust(5)} {r['title']} ({r['year'] or '-'}){svc}  "
-            f"{n} note{'' if n == 1 else 's'}{rated}"
+            f"{n} note{'' if n == 1 else 's'}{rated}{vid}"
         )
         for i, a in enumerate(artefacts_by_viewing.get(cast(int, r["id"]), []), start=1):
             text = cast(str, a["text"])

@@ -342,3 +342,15 @@ def study_listing_names(ctx, yes, no):
 @then(parsers.parse('the study-only listing reads "{text}"'))
 def study_listing_reads(ctx, text):
     assert vw.listing(ctx["repo"], None, None, study_only=True) == text
+
+
+@then(parsers.parse('the film listing for "{title}" ({year:d}) shows "{a}" and "{b}"'))
+def film_listing_shows(ctx, title, year, a, b):
+    text = vw.listing(ctx["repo"], None, ctx["films"][(title, year)])
+    rows = [ln for ln in text.splitlines() if not ln.startswith("    note")]
+    assert any(ln.endswith(a) for ln in rows) and any(ln.endswith(b) for ln in rows), text
+
+
+@then(parsers.parse('the plain listing shows no "{text}"'))
+def plain_listing_lacks(ctx, text):
+    assert text not in vw.listing(ctx["repo"], None, None)

@@ -219,3 +219,9 @@ Feature: Viewings — one dictation becomes one deterministic write against the 
     When I log "The Blue Angel" for study saying "marked"
     And I remove the last viewing
     Then the study-only listing reads "no viewing marked for study"
+
+  Scenario: With --film every row names its viewing number, so a mark or a removal can read it
+    When I log "The Blue Angel" on 2026-09-23 saying "general"
+    And I log "The Blue Angel" saying "tonight"
+    Then the film listing for "The Blue Angel" (1930) shows "viewing #1" and "viewing #2"
+    And the plain listing shows no "viewing #"

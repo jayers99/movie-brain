@@ -124,7 +124,7 @@
 <div class="intro">
   <h1>The study mark — stories and mock-up</h1>
   <p>Your request the night after the log shipped: a tag on a viewing meaning <b>there is a technique here I must watch for a second time</b>. The General's note already says it in prose; this puts it on the line. The word is <b>study</b>: on a viewing's line it reads <span style="background:#1b1b1b;color:#fff;border-radius:999px;padding:0 7px;font-size:12px">study</span>; the Watched chip pressed a second time reads <b>To study</b>. It is set from the sentence that names the reason, or on a past line by its number; nothing clears it but you. "Rewatch" stays what it is — the 2004–08 chip.</p>
-  <p>Below: <b>nine stories</b> on your real films (a copy of the catalogue from 2026-09-29: eleven films carry a logged viewing), then <b>one mock-up</b> in two panes — the dictation session on the left, the dashboard on the right — in which the mark really works (in the page only; nothing is written anywhere). Press <b>Walk it</b> on a story, then <b>Next</b> to play each turn. Walk them in order the first time: the viewing numbers (#12, #13, #14) are what today's copy would hand out, and a later story assumes the earlier ones. What you log stays logged while you move between stories.</p>
+  <p>Below: <b>eleven stories</b> on your real films (a copy of the catalogue from 2026-09-29: eleven films carry a logged viewing), then <b>one mock-up</b> in two panes — the dictation session on the left, the dashboard on the right — in which the mark really works (in the page only; nothing is written anywhere). Press <b>Walk it</b> on a story, then <b>Next</b> to play each turn. Walk them in order the first time: the viewing numbers (#12, #13, #14) are what today's copy would hand out, and a later story assumes the earlier ones. What you log stays logged while you move between stories.</p>
 </div>
 
 <h2 class="sec">The stories</h2>
@@ -161,11 +161,11 @@
   <h2>What you should know before saying yes</h2>
   <ul>
     <li><b>One mark, one meaning.</b> <code>study</code> on a viewing's line means: there is a technique here to watch for a second time. It is not "I liked it" (that is the rating) and not the 2004–08 <b>Rewatch</b> chip (5★ then, unrated since), which is untouched and keeps its name.</li>
-    <li><b>Two ways to set it, both from a sentence to me.</b> A dictation that names a reason to go back sets it on the viewing it logs: <code>viewings add … --study</code> (story 2; the same flag marks last night's line when you add to it with <code>--on</code>, story 7). A past line is marked by its number: <code>viewings study VID</code> (story 1) — I read the number off <code>viewings list --film ID</code> first. <code>viewings study VID --off</code> clears it (story 5). A number that is not a line is refused and nothing is written; marking a marked line, or clearing a clear one, answers <i>already marked</i> / <i>already clear</i> and changes nothing (story 6).</li>
+    <li><b>Two ways to set it, both from a sentence to me — and your words decide which.</b> A sentence that names the reason goes through <code>viewings add … --study</code>: the words are kept whole as a note on that night's line — tonight (story 2), last night with <code>--on</code> (story 7), or the 23rd (story 1) — and the mark with them; your reason is never dropped. Bare words with nothing to keep ("mark it", "done with that one", "clear it") go by number: <code>viewings study VID</code> / <code>--off</code> (stories 5, 6, 10) — I read the number off <code>viewings list --film ID</code>, whose rows now end <code>viewing #N</code>. A number that is not a line is refused and nothing is written; marking a marked line, or clearing a clear one, answers <i>already marked</i> / <i>already clear</i> and changes nothing (story 6).</li>
     <li><b>I never infer it from praise.</b> "Still perfect, I'd watch it any day" is a viewing with no mark and no question (story 3). "Worth a rewatch for…", "need to watch again to see how…", "pay closer attention next time to…", "mark it for study" set it. A sentence that could go either way gets one yes-or-no question before anything runs.</li>
     <li><b>The mark lives on the viewing, not on the film.</b> A film is "to study" when any of its lines is marked. A second viewing of the same film writes its own line and touches no other — the mark stays until you clear it (story 5). Removing a viewing takes its mark with it; removing one note does not (story 9).</li>
     <li><b>Where you see it.</b> In the drawer, the word on the line, after the service and before your note; nothing to click. In the chip row, <b>Watched</b> now cycles: off → Watched → To study → off, the way Reachable, Rated, Criterion and Owned already do — the third state lists the films with a marked line, newest viewing first, and reads <i>Nothing marked for study yet</i> when there are none (story 4). No badge in the film's row, no new column. At the keyboard, <code>viewings list --study</code>.</li>
-    <li><b>The page refreshes itself</b> when you come back to it after a command, as it does for a dictation today: the drawer re-reads the open film on focus, so the mark shows without a reload (story 1). A reload shows the same — the mark is in the database.</li>
+    <li><b>The page refreshes the OPEN film</b> when you come back to it after a command, as it does for a dictation today: the drawer re-reads that film on focus and patches its row, so a mark set or cleared on the open film shows without a reload and the list behind the drawer agrees (stories 1, 5, 9). A film whose drawer is closed reaches the Watched and To study lists on the next reload or drawer open (story 4). A reload always shows what the database holds.</li>
     <li><b>Storage:</b> one column on the <code>viewing</code> table (migration 032, applied live only with your yes). No new table, no free-text tags, no tier or rank effect, no change to the rating, the watchlist or Unseen. Backlog 5 (the notes and criticism loop) is where the second watch's analysis will land — this mark is the bookmark for it.</li>
     <li><b>Failure:</b> a refused command writes nothing. If the dashboard is not running the mark still lands (it is a database fact) and the page reads it on its next open.</li>
   </ul>
@@ -188,7 +188,7 @@ const FILMS = [
   { id:4738, t:'Goodbye, Dragon Inn', y:2003, d:'Tsai Ming-liang', l:'Mandarin, Min Nan, Japanese', mc:83, rt:81, im:7.1, r:6, lists:1, best:'Kino Film Collection', old:null, wl:true },
   { id:4698, t:'The General', y:1926, d:'Buster Keaton', l:'None', mc:null, rt:92, im:8.1, r:8, lists:6, best:'Kino Film Collection', old:null, wl:false },
   { id:5049, t:'The Cameraman', y:1928, d:'Edward Sedgwick, Buster Keaton', l:'None, English', mc:null, rt:100, im:8.0, r:null, lists:1, best:'Kanopy', old:null, wl:false },
-  { id:3096, t:'Intolerance', y:1916, d:'D.W. Griffith', l:'None, English', mc:99, rt:97, im:7.7, r:null, lists:2, best:'Kanopy', old:null, wl:true },
+  { id:3096, t:'Intolerance', y:1916, d:'D.W. Griffith', l:'English', mc:99, rt:98, im:7.7, r:2, lists:3, best:'Kanopy', old:null, wl:true },
   { id:3221, t:'The Best Years of Our Lives', y:1946, d:'William Wyler', l:'English', mc:93, rt:97, im:8.1, r:null, lists:1, best:'Apple TV Store (iTunes)', old:{stars:5, on:'2004-05-05'}, wl:false, owned:true, unseen:true },
   { id:3222, t:'Band of Outsiders', y:1964, d:'Jean-Luc Godard', l:'French, English', mc:93, rt:94, im:7.6, r:null, lists:0, best:'Darkroom', old:{stars:5, on:'2004-08-23'}, wl:false },
   { id:3031, t:'Ikiru', y:1952, d:'Akira Kurosawa', l:'Japanese, Latin, English, French', mc:92, rt:98, im:8.3, r:null, lists:1, best:'Criterion Channel', old:{stars:5, on:'2004-06-18'}, wl:false },
@@ -245,7 +245,7 @@ function addViewing({ title, filmId, on, service, rate, study, text }) {
   if (v) { if (text) v.notes.push(text); if (service && !v.service) v.service = service; if (study) v.study = true;
     out = `ADDED-TO  viewing #${v.id} (#${f.id} '${esc(f.t)}', ${on}) · ${text ? 'note ' + v.notes.length : `no new note (${v.notes.length} kept)`}${tail}`; }
   else { v = { id: nextVid++, film: f.id, on, service: service || null, notes: text ? [text] : [], study: !!study, fresh: true }; viewings.push(v);
-    out = `<b>LOGGED</b>    #${f.id} '${esc(f.t)}' (${f.y}) · ${on}${service ? ' · ' + service : ''} · viewing #${v.id} · the one film with that title${tail}`; }
+    out = `<b>LOGGED</b>    #${f.id} '${esc(f.t)}' (${f.y}) · ${on}${service ? ' · ' + service : ''} · viewing #${v.id} · ${state.open === f.id ? 'matched the open film' : 'the one film with that title'}${tail}`; }
   if (rate != null) f.r = rate;
   render();
   return { line: out, exit: 0, v };
@@ -265,11 +265,11 @@ function removeViewing(vid) {
   const v = viewings[i], f = byId(v.film); viewings.splice(i, 1); render();
   return { line: `REMOVED   viewing #${vid} (#${f.id} '${esc(f.t)}', ${v.on}) and its ${v.notes.length} note${v.notes.length === 1 ? '' : 's'} · rating and Unseen untouched`, exit: 0 };
 }
-const listRow = (v) => { const f = byId(v.film); return `${v.on}  #${String(f.id).padEnd(5)} ${esc(f.t)} (${f.y})${v.service ? '  ' + v.service : ''}${v.study ? '  study' : ''}  ${v.notes.length} note${v.notes.length === 1 ? '' : 's'}${f.r != null ? '  rated ' + f.r : ''}`; };
+const listRow = (v, withVid) => { const f = byId(v.film); return `${v.on}  #${String(f.id).padEnd(5)} ${esc(f.t)} (${f.y})${v.service ? '  ' + v.service : ''}${v.study ? '  study' : ''}  ${v.notes.length} note${v.notes.length === 1 ? '' : 's'}${f.r != null ? '  rated ' + f.r : ''}${withVid ? '  viewing #' + v.id : ''}`; };
 function listViewings({ studyOnly, filmId } = {}) {
   let vs = viewings.filter((v) => (!studyOnly || v.study) && (!filmId || v.film === filmId)).sort((a, b) => b.on.localeCompare(a.on) || b.id - a.id);
   if (!vs.length) return studyOnly ? 'no viewing marked for study' : 'no viewing';
-  return vs.map((v) => listRow(v) + (filmId ? v.notes.map((n, i) => `\n    note ${i + 1}  ${esc(n.slice(0, 60))}${n.length > 60 ? '…' : ''}`).join('') : '')).join('\n');
+  return vs.map((v) => listRow(v, !!filmId) + (filmId ? v.notes.map((n, i) => `\n    note ${i + 1}  ${esc(n.slice(0, 60))}${n.length > 60 ? '…' : ''}`).join('') : '')).join('\n');
 }
 
 // ---- the stories ----
@@ -278,27 +278,25 @@ const CAMERAMAN = "I just watched The Cameraman on Kanopy. The tramline sequence
 const SHERLOCK28 = "Watched Sherlock Jr. again last night with my nephew — still perfect, I'd watch it any day.";
 const SHERLOCK_STUDY = "Actually, about Sherlock last night — mark it for study. The dream-projection sequence, how the cuts land on the seams.";
 const GENERAL29 = "Watched The General again tonight — the study watch. The long takes on the train, he never cuts away from the danger.";
+const GENERAL_MARK = "Mark The General for study — the shot construction, the way the train sequences are built.";
 // Prerequisites, so a story walked on its own still shows the numbers the cards name.
-const ensureGeneralMarked = () => { const v = viewings.find((x) => x.id === 2); if (v && !v.study) v.study = true; };
+const ensureGeneralMarked = () => { const v = viewings.find((x) => x.id === 2); if (!v || v.study) return; if (v.notes.includes(GENERAL_MARK)) v.study = true; else addViewing({ title:'The General', on:'2026-09-23', study:true, text:GENERAL_MARK }); };
 const ensureCameraman = () => { if (!viewings.some((x) => x.film === 5049)) addViewing({ title:'The Cameraman', service:'kanopy', rate:7, study:true, text:CAMERAMAN }); };
 const ensureSherlock28 = () => { ensureCameraman(); if (!viewings.some((x) => x.film === 4734 && x.on === '2026-09-28')) addViewing({ title:'Sherlock Jr.', on:'2026-09-28', text:SHERLOCK28 }); };
 const ensureGeneral29 = () => { ensureSherlock28(); if (!viewings.some((x) => x.film === 4698 && x.on === TODAY)) addViewing({ title:'The General', text:GENERAL29 }); };
 const setWatched = (s) => { state.watched = s; state.rewatch = false; };
 
 const STORIES = [
-  { n:1, title:'The General, marked after the fact',
-    text:'"Mark The General for study — the shot construction, the way the train sequences are built." No new viewing: that was the 23rd. I look up the line\'s number (<code>viewings list --film 4698</code>: viewing #2) and run <code>viewings study 2</code>. One line back: <i>marked for study</i>. Back in the browser the drawer has refreshed itself: the 23rd\'s line now reads <b>2026-09-23 · Kino Film Collection · study · "On September 23…" (2 notes)</b>. A reload shows the same.',
+  { n:1, title:'The General, marked after the fact — with the reason kept',
+    text:'"Mark The General for study — the shot construction, the way the train sequences are built." No new viewing: that was the 23rd. Your words are the reason, so they go on that night\'s line as a note, and the mark with them: <code>viewings add --title "The General" --on 2026-09-23 --study --text -</code> (the ladder finds the one General; no number to look up). One line back: <i>ADDED-TO · viewing #2 · note 3 · study</i>. Back in the browser the drawer has refreshed itself: the 23rd\'s line now reads <b>2026-09-23 · Kino Film Collection · study · "On September 23…" (3 notes)</b>, and the third note is what you just said. A reload shows the same.',
     setup:() => { closeDrawer(); setWatched(null); openFilm('The General'); },
-    coach:'The General is open, its line unmarked. Press <b>Next</b> to say it, watch me find the line\'s number, mark it, and the drawer update.',
+    coach:'The General is open, its line unmarked. Press <b>Next</b> to say it, watch the words join the 23rd\'s line with the mark, and the drawer update. Then click the quoted words to read the three notes.',
     beats:[
-      { who:'you', text:'Mark The General for study — the shot construction, the way the train sequences are built.' },
-      { who:'claude', text:'That was the 23rd\'s viewing — nothing new to log. I\'ll read the line\'s number first.' },
-      { who:'cmd', text:'movie-brain viewings list --film 4698' },
-      { who:'out', run:() => listViewings({ filmId:4698 }) },
-      { who:'claude', text:'Viewing #2. Marking it.' },
-      { who:'cmd', text:'movie-brain viewings study 2' },
-      { who:'out', run:() => studyViewing(2).line },
-      { who:'sys', text:'You switch back to the browser: the drawer re-read The General on focus and the 23rd\'s line carries "study" now. Reload the page in your head — the mark is in the database, not in the page.' },
+      { who:'you', text:GENERAL_MARK },
+      { who:'claude', text:'That was the 23rd\'s viewing — nothing new to log, but the reason is worth keeping: it goes on that night\'s line as a note, with the mark.' },
+      { who:'cmd', text:() => CMD_ADD({ title:'The General', on:'2026-09-23', study:true, text:GENERAL_MARK }) },
+      { who:'out', run:() => addViewing({ title:'The General', on:'2026-09-23', study:true, text:GENERAL_MARK }).line },
+      { who:'sys', text:'You switch back to the browser: the drawer re-read The General on focus and the 23rd\'s line carries "study" and three notes now. Reload the page in your head — the mark is in the database, not in the page.' },
     ] },
   { n:2, title:'A new watch that names its reason',
     text:'"I just watched The Cameraman on Kanopy. The tramline sequence — I need to watch that again for how it\'s cut. A seven." One film, one whole number, and a reason to go back: <code>viewings add … --rate 7 --study</code>. <i>LOGGED · #5049 \'The Cameraman\' (1928) · 2026-09-29 · kanopy · viewing #12 · … · rated 7 · study.</i> Never logged before; its drawer now has one line, marked, and a 7 in the box.',
@@ -324,10 +322,11 @@ const STORIES = [
       { who:'claude', text:'When a sentence could go either way — "I should see that again sometime" — I ask one question, "mark it for study?", and set nothing until you answer.' },
     ] },
   { n:4, title:'What is waiting to be studied',
-    text:'I press <b>Watched</b> once: 12 films, newest viewing first, The Cameraman at the top. I press it again and it reads <b>To study</b>: two films, The Cameraman then The General, the same newest-first order. A third press turns it off. At the keyboard, <code>viewings list --study</code> prints the same two lines, each with <code>study</code> after its service. Before anything is marked, To study shows one line: <i>Nothing marked for study yet.</i>',
+    text:'Back in the browser I reload the page — a viewing logged while the drawer was closed reaches the list on the next reload or drawer open (the log\'s rule since it shipped; only the OPEN film refreshes itself on focus). I press <b>Watched</b> once: 12 films, newest viewing first, The Cameraman at the top. I press it again and it reads <b>To study</b>: two films, The Cameraman then The General, the same newest-first order. A third press turns it off. At the keyboard, <code>viewings list --study</code> prints the same two lines, each with <code>study</code> after its service. Before anything is marked, To study shows one line: <i>Nothing marked for study yet.</i>',
     setup:() => { ensureSherlock28(); ensureGeneralMarked(); closeDrawer(); setWatched(null); },
-    coach:'Press <b>Watched</b> in the chip row yourself (it is real here), then press it again for <b>To study</b>, then once more for off. Press <b>Next</b> to see the same list from the command line.',
+    coach:'Press <b>Next</b> for the reload, then press <b>Watched</b> in the chip row yourself (it is real here), again for <b>To study</b>, once more for off; <b>Next</b> shows the same list from the command line.',
     beats:[
+      { who:'sys', text:'You reload the dashboard: The Cameraman\'s and Sherlock\'s lines were logged with the drawer closed, and the list reads the database on load (this mock-up\'s list is always current; the real one needs this reload).' },
       { who:'sys', act:() => setWatched('watched'), text:'Watched, pressed once: 12 films, The Cameraman first.' },
       { who:'sys', act:() => setWatched('study'), text:'Pressed again — To study: The Cameraman, The General.' },
       { who:'you', text:'What\'s waiting to be studied?' },
@@ -346,6 +345,9 @@ const STORIES = [
       { who:'out', run:() => addViewing({ title:'The General', text:GENERAL29 }).line },
       { who:'sys', text:'The drawer: two lines, the 29th above the 23rd; only the 23rd carries "study".' },
       { who:'you', text:'Done with that one, clear it.' },
+      { who:'claude', text:'Bare words, nothing to keep — by number. I\'ll read the line\'s number off the film\'s listing first.' },
+      { who:'cmd', text:'movie-brain viewings list --film 4698' },
+      { who:'out', run:() => listViewings({ filmId:4698 }) },
       { who:'cmd', text:'movie-brain viewings study 2 --off' },
       { who:'out', run:() => studyViewing(2, true).line },
       { who:'sys', text:'The General leaves To study — the list behind the drawer is The Cameraman alone now. Both of its lines stay in the drawer, neither marked. The drawer stays open on it, nothing white; ↑ ↓ carry on from the gap, as any dictation that drops the open film does today.' },
@@ -363,7 +365,7 @@ const STORIES = [
       { who:'cmd', text:'movie-brain viewings study 12' },
       { who:'out', run:() => studyViewing(12).line },
       { who:'you', text:'Mark Intolerance for study.' },
-      { who:'claude', text:'Intolerance has never been logged, and the mark lives on a viewing\'s line, not on the film. Nothing written — log the viewing first (a date is enough: --no-note), then the mark.' },
+      { who:'claude', text:'Intolerance (rated 2 last month, on your watchlist) has never been logged, and the mark lives on a viewing\'s line, not on the film. Nothing written — log the viewing first (a date is enough: --no-note), then the mark.' },
     ] },
   { n:7, title:'Last night\'s line, marked today',
     text:'"Actually, about Sherlock last night — mark it for study. The dream-projection sequence, how the cuts land on the seams." Same film, the 28th\'s line: one more note and the mark, no new viewing. <code>viewings add --title "Sherlock Jr." --on 2026-09-28 --study --text -</code> → <i>ADDED-TO · viewing #13 · note 2 · study.</i> To study now reads The Cameraman, Sherlock Jr. The 27th\'s line — your first Sherlock viewing — is untouched: the mark is on the night you noticed.',
@@ -395,6 +397,25 @@ const STORIES = [
       { who:'cmd', text:'movie-brain viewings remove 12' },
       { who:'out', run:() => removeViewing(12).line },
       { who:'sys', text:'The Cameraman left To study (and Watched). Its drawer stays open, nothing white in the list; the 7 is still in the box. Press ↓ and the drawer moves on from the gap.' },
+    ] },
+  { n:10, title:'I click the word study to clear it',
+    text:'The General is open, the 23rd\'s line reads <b>2026-09-23 · Kino Film Collection · study · "On September 23…" (3 notes)</b>. I click <code>study</code>. Nothing happens — it is a word on a line, not a button: the drawer reads the log and never writes it, the same as the note text beside it. To clear it I tell you: "done with The General, clear it" → <code>viewings study 2 --off</code>, and when I come back to the browser the word is gone.',
+    setup:() => { ensureGeneralMarked(); closeDrawer(); setWatched(null); openFilm('The General'); },
+    coach:'The General is open with its mark. Click the word <b>study</b> on the 23rd\'s line yourself — nothing moves, and the page says why. Press <b>Next</b> for the way it IS cleared.',
+    beats:[
+      { who:'sys', text:'(You clicked "study" — or will: it is a word on a line, not a button. The drawer reads the log and never writes it.)' },
+      { who:'you', text:'Done with The General, clear it.' },
+      { who:'cmd', text:'movie-brain viewings study 2 --off' },
+      { who:'out', run:() => studyViewing(2, true).line },
+      { who:'sys', text:'Back in the browser the word is gone from the 23rd\'s line; the three notes stay.' },
+    ] },
+  { n:11, title:'I look for the mark in the row and it is not there',
+    text:'Watched is on; The General and The Cameraman are in the list with the others. Neither row shows the mark — the Watched column is the last viewing\'s date, the title badges are lists and the old stars, nothing else changes. To see what is waiting I press Watched again: To study, two films.',
+    setup:() => { ensureSherlock28(); ensureGeneralMarked(); closeDrawer(); setWatched('watched'); },
+    coach:'Watched is on. Look at The General\'s and The Cameraman\'s rows: nothing marks them. Press <b>Watched</b> again yourself for To study. Press <b>Next</b> for the words.',
+    beats:[
+      { who:'sys', text:'Under Watched a marked and an unmarked film\'s rows look the same: the Watched column is the last viewing\'s date, the title badges are lists and the old stars. No badge, no column.' },
+      { who:'sys', act:() => setWatched('study'), text:'Watched pressed again — To study: the films with a marked line, and nothing else.' },
     ] },
 ];
 
@@ -481,6 +502,7 @@ $('#tbody').addEventListener('click', (e) => { if (e.target.closest('input')) re
 $('#backdrop').addEventListener('click', (e) => { const f = rowAt(e.clientX, e.clientY); if (f) openAt(f); else closeDrawer(); });
 $('#backdrop').addEventListener('mousemove', (e) => $('#backdrop').classList.toggle('hand', !!rowAt(e.clientX, e.clientY)));
 $('#drawer-close').addEventListener('click', closeDrawer);
+$('#drawer-body').addEventListener('click', (e) => { if (e.target.closest('.study')) toast('A word on a line, not a button — the drawer reads the log and never writes it. "Clear it" is the way: viewings study VID --off.'); });
 $('#chip-watched').addEventListener('click', () => { state.watched = state.watched == null ? 'watched' : state.watched === 'watched' ? 'study' : null; render(); });
 $('#chip-rewatch').addEventListener('click', () => { state.rewatch = !state.rewatch; render(); });
 document.addEventListener('keydown', (e) => {

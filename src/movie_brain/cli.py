@@ -778,7 +778,8 @@ def viewings_list_cmd(
     from movie_brain.application import viewings as vw
 
     since_date = _parse_day(since, "--since")
-    console.print(vw.listing(_repo(), since_date, film, study_only=study), markup=False, highlight=False, soft_wrap=True)
+    text = vw.listing(_repo(), since_date, film, study_only=study)
+    console.print(text, markup=False, highlight=False, soft_wrap=True)
 
 
 @viewings_app.command("open")
