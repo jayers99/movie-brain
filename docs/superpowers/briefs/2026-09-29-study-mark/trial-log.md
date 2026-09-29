@@ -27,7 +27,7 @@ Fifth trial of the version 2 process; the first whose point C is a dual run (Cla
 | 7 | The Rewatch chip is untouched, name included | renaming it is a separate decision you have not asked for; the exclusion is walked as story 8 |
 | 8 | No row badge, no column | the chip state is the finder; the row already carries the Watched date |
 | 9 | The plan goes straight to the build without a plan review by you | your entry prompt fixed the sequence; the stories are the contract you review |
-| 10 | Codex launcher: `-s read-only` replaced by `workspace-write` on the throwaway snapshot root, uv cache inside that root, reasoning effort `high`, `--ephemeral` | preflight run 1 (below): read-only cannot run `uv`, launch chromium or write a screenshot; the snapshot is a git-archive plus a database copy, never the repository, so "neither writes into the repository" holds; network stays off; `low` is the config default for chat and would handicap the second lineage against a Claude subagent at the session's own effort |
+| 10 | Codex launcher: `-s read-only` replaced by `danger-full-access` on the throwaway snapshot root, reasoning effort `high`, `--ephemeral` | preflight runs 1–2 (below): read-only cannot run `uv`, write a screenshot or a findings file; workspace-write cannot bind the dashboard's port or launch chromium (its seatbelt denies the mach bootstrap). The snapshot is a git-archive plus a database copy with no credentials, never the repository, so "neither writes into the repository" holds by the same means it holds for the Claude subagent — the prompt and the snapshot, not an OS sandbox; `low` is the config default for chat and would handicap the second lineage against a Claude subagent at the session's own effort |
 | 11 | Codex checker's port range 5710–5719, the Claude checker keeps 5700–5709 | the two run at the same time on the same snapshot |
 
 ## Surprises and corrections (misunderstood intent · implementation defect · changed preference · new opportunity)
@@ -52,4 +52,7 @@ Snapshot: `scripts/gap_check_snapshot.sh HEAD ~/.config/movie-brain/movie-brain.
 | Run | Sandbox | Elapsed | Steps ok | Failures (all harness) |
 |---|---|---|---|---|
 | 1 | `read-only`, `-C <project>` (the page's command) | 78 s | 1 read, 2 sqlite (films=5403, schema=31) | 3 dashboard: `uv` cannot initialise its cache (`~/.cache/uv … Operation not permitted`); 4 playwright: same, no browser; 5 write: `operation not permitted`; 6 stop: nothing to stop, port check `PermissionError` |
-| 2 | `workspace-write`, `-C <snapshot root>`, `UV_CACHE_DIR` inside the root | see below | | |
+| 2 | `workspace-write`, `-C <snapshot root>`, `UV_CACHE_DIR` inside the root | 86 s | 1, 2, 5 write | 3 dashboard: the server exits `Operation not permitted` (cannot bind its port); 4 playwright: chromium's mach bootstrap denied (`Permission denied (1100)`); 6 stop: nothing to stop |
+| 3 | `danger-full-access`, `-C <snapshot root>` | 76 s | all six (5251 films on port 5710; drawer opened on Fanny and Alexander; 177 KB screenshot; scratch file; server stopped, port free) | none |
+
+**Preflight passed on run 3.** The full record is `docs/superpowers/checks/codex-preflight-2026-09-29.md`; the launcher's default sandbox is now `danger-full-access` (decision 10).

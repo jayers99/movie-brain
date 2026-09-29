@@ -1,0 +1,13 @@
+# Codex preflight — 2026-09-29
+
+Step 1 of the two-lineage pilot (`docs/superpowers/specs/2026-09-29-two-lineage-gap-check.md`): before feature one, confirm that `codex exec` can do everything the gap checker needs on a snapshot, and record every failure as *harness*, never as *model*. Launcher `scripts/gap_check_codex.sh`; prompt `preflight-codex.md`; snapshot `scripts/gap_check_snapshot.sh HEAD ~/.config/movie-brain/movie-brain.db codex-preflight` (commit 40ac06a, the live database copied, schema 31). Codex CLI 0.159.0, model `gpt-6-astra` (the owner's config default), reasoning effort `high`.
+
+| Run | Sandbox | Working root | Elapsed | Steps ok | Failures (all harness) |
+|---|---|---|---|---|---|
+| 1 | `read-only` (the page's command) | the project snapshot | 78 s | 1 read, 2 sqlite (films=5403, schema=31) | 3 dashboard: `uv` cannot initialise its cache (`~/.cache/uv/… Operation not permitted`), so nothing under `uv run` starts; 4 playwright: the same; 5 write: `operation not permitted`; 6 stop: nothing was running, and a port probe raised `PermissionError` |
+| 2 | `workspace-write`, `UV_CACHE_DIR` inside the root | the snapshot root (project + config + findings) | 86 s | 1, 2, 5 write | 3 dashboard: the server exits with `Operation not permitted` (it cannot bind its port); 4 playwright: chromium cannot start — `bootstrap_check_in org.chromium.Chromium.MachPortRendezvousServer: Permission denied (1100)` (the seatbelt denies the mach service its renderers register); 6 stop: nothing to stop |
+| 3 | `danger-full-access` | the snapshot root | 76 s | all six: films listed 5251 on port 5710; chromium launched, the drawer opened on Fanny and Alexander, a 177 KB screenshot written; the scratch file written; the server stopped and the port confirmed free | none |
+
+**What this settles.** No sandboxed Codex mode can reach the app: `read-only` cannot run `uv`, and `workspace-write` cannot bind a local port or launch chromium. The launcher's default is therefore `danger-full-access`, and the Codex checker is held by the same two things that hold the Claude subagent — the prompt (read nothing outside the two directories, run no `git`, look for no credential, never write into the project) and the snapshot itself (a `git archive` plus a database copy with no `credentials.toml`, never the repository or the working tree). "Read-only" is a prompt rule on both sides, not an OS guarantee on either; the pilot's "same inputs" holds.
+
+**Preflight passed** on run 3, so the pilot proceeds to its first feature: backlog 48 (the study mark), point C. The three findings files and logs are in the session scratchpad under `gap-check/codex-preflight/` (`FINDINGS-codex-run1.md`, `-run2.md`, `FINDINGS-codex.md`).
