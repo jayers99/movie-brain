@@ -125,7 +125,8 @@ def test_story_9_the_watched_chip_and_column(dash: Page):
     assert titles(dash) == ["The Blue Angel", "I Am Cuba"]
     dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").wait_for()
     assert dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").inner_text().strip() == "2026-09-25"
-    chip.click(); chip.click()  # a cycle chip since the study mark: Watched → To study → off
+    chip.click()  # a cycle chip since the study mark: Watched → To study → off
+    chip.click()
     expect(chip).not_to_have_class("chip active")
     dash.locator('#films thead th[data-col="last_watched"]').click()  # asc: earliest logged first, never-logged last
     assert titles(dash)[:2] == ["I Am Cuba", "The Blue Angel"]
@@ -230,7 +231,8 @@ def test_study_story_4_newest_viewing_first_under_to_study(dash: Page, server):
     _, repo = server
     cuba = [v for v in repo.list_viewings(film_id=IDS["I Am Cuba"])][0]
     repo.set_study(int(cuba["id"]), True)  # Cuba's 25th is now marked; Blue Angel's last viewing is the 27th
-    dash.goto(dash.url.split("?")[0] + "?chips=study"); dash.wait_for_selector("#films tbody[data-count]")
+    dash.goto(dash.url.split("?")[0] + "?chips=study")
+    dash.wait_for_selector("#films tbody[data-count]")
     expect(study_chip(dash)).to_have_text("To study")
     assert titles(dash) == ["The Blue Angel", "I Am Cuba"]
 
@@ -239,8 +241,10 @@ def test_study_the_empty_state_under_to_study_reads_nothing_marked_yet(page: Pag
     base, repo = server
     for v in repo.list_viewings(study_only=True):
         repo.set_study(int(v["id"]), False)
-    page.goto(base); page.wait_for_selector("#films tbody[data-count]")
-    study_chip(page).click(); study_chip(page).click()
+    page.goto(base)
+    page.wait_for_selector("#films tbody[data-count]")
+    study_chip(page).click()
+    study_chip(page).click()
     expect(study_chip(page)).to_have_text("To study")
     expect(page.locator("#films tbody tr.empty-state")).to_contain_text("Nothing marked for study yet.")
 
@@ -257,7 +261,8 @@ def test_study_a_mark_set_behind_the_pages_back_shows_on_focus(dash: Page, serve
 
 def test_study_story_9_a_removed_line_leaves_to_study_and_the_drawer_stays_open(dash: Page, server):
     _, repo = server
-    dash.goto(dash.url.split("?")[0] + "?chips=study"); dash.wait_for_selector("#films tbody[data-count]")
+    dash.goto(dash.url.split("?")[0] + "?chips=study")
+    dash.wait_for_selector("#films tbody[data-count]")
     assert titles(dash) == ["The Blue Angel"]
     open_film(dash, "The Blue Angel")
     marked = repo.list_viewings(study_only=True)[0]
