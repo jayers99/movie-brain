@@ -73,3 +73,11 @@ Run 2026-09-29 on a snapshot of 5678c82 (the 0.9 draft) with a copy of the live 
 | 8 | The mock-up's Intolerance row is not today's Intolerance (rated 2, 3 lists, RT 98) (story-untrue) | fixed | the row and the grounding read from the running copy; story 6 says "rated 2 last month, on the watchlist" — the builder's slip: one of eighteen rows was typed, not probed |
 
 Agent minutes: 11 · Findings: 8 · Fixed: 6 · Stories added: 2 · Declined: 0 · Not checked: the skill's reading of the sentences (by hand at point C); `merge_film` and the API shapes (nothing built at point A); the new chip state, empty state and drawer word on the real page (point C).
+
+### Scoped re-check (point A, same day)
+
+Relaunched with `Re-check only findings: 1–8` on a snapshot of ba2f11d (the branch head after the fix wave, so the checker could run the real verbs and the real chip). About 11 agent minutes; the feature's 224 tests passed on the snapshot. **8 of 8 closed** — each with fresh evidence: the `viewing #N` rows, story 1 and 7 run for real (`ADDED-TO … note 3 · study` / `note 2 · study`), the reload measured (Watched 11 → 12), stories 5 and 9 replayed on the real page, the word clicked, the row read, rung 1's line, today's Intolerance. One NEW low finding (9): in story 5 The General is the last row under To study, so after `--off` ↓ from the gap does nothing on the real page (↑ works) while the mock-up's ↓ opened The Cameraman — fixed: the mock-up's gap rule now clamps as the real `trackOpenIndex` does, and story 5 says which arrow works and why.
+
+Owner cost across both runs: zero minutes.
+
+**Summary line for the owner:** Checked: 8 findings, 6 fixed, 2 stories added, 0 declined; re-check closed all 8, one new slip in the mock-up's arrow rule fixed. Not checked: the skill's reading of your sentences (by hand at point C).

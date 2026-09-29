@@ -350,7 +350,7 @@ const STORIES = [
       { who:'out', run:() => listViewings({ filmId:4698 }) },
       { who:'cmd', text:'movie-brain viewings study 2 --off' },
       { who:'out', run:() => studyViewing(2, true).line },
-      { who:'sys', text:'The General leaves To study — the list behind the drawer is The Cameraman alone now. Both of its lines stay in the drawer, neither marked. The drawer stays open on it, nothing white; ↑ ↓ carry on from the gap, as any dictation that drops the open film does today.' },
+      { who:'sys', text:'The General leaves To study — the list behind the drawer is The Cameraman alone now. Both of its lines stay in the drawer, neither marked. The drawer stays open on it, nothing white. The General was the last row, so ↑ carries on from the gap (to The Cameraman) and ↓, with nothing below, does nothing — press them and see; the arrows\' rule at the end of any list.' },
     ] },
   { n:6, title:'A line that is not there, and one that already is',
     text:'"Mark viewing 40 for study." <i>REFUSED · no viewing #40 — nothing written.</i> "Mark The Cameraman for study" a second time: <code>viewings study 12</code> answers <i>already marked</i> and changes nothing; <code>--off</code> on a clear line answers <i>already clear</i> the same way. "Mark Intolerance for study": never logged, and the mark lives on a line, not on a film — I say so and write nothing; a viewing first, then the mark.',
@@ -514,7 +514,7 @@ document.addEventListener('keydown', (e) => {
   let i;
   if (here >= 0) i = here + (e.key === 'ArrowDown' ? 1 : -1);
   else if (state.openIndex == null) return;
-  else { const gap = Math.min(state.openIndex, R.length - 1); i = e.key === 'ArrowDown' ? gap : gap - 1; }
+  else { const gap = Math.min(state.openIndex, R.length); i = e.key === 'ArrowDown' ? gap : gap - 1; }  // the real trackOpenIndex clamps to length, so ↓ at the end does nothing
   if (i >= 0 && i < R.length) openAt(R[i]);
 });
 $('#log').innerHTML = '<div class="beat sys">Press Walk it on a story above, then Next.</div>';
