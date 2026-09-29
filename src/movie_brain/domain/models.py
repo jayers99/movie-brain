@@ -395,6 +395,7 @@ class FilmView:
     # many there are, for the Watched column and chip; the lines themselves are detail-only.
     last_watched: str | None = None
     viewing_count: int = 0
+    study: bool = False  # any viewing marked for study (backlog 48) — a read, never stored per film
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)

@@ -475,10 +475,13 @@ def _old_rating_by_film(c: sqlite3.Connection) -> dict[int, dict[str, object]]:
     return out
 
 
-def _viewing_stats_by_film(c: sqlite3.Connection) -> dict[int, tuple[str, int]]:
+def _viewing_stats_by_film(c: sqlite3.Connection) -> dict[int, tuple[str, int, bool]]:
+    """Per film: last viewing, how many, and whether ANY line is marked for study (backlog 48)."""
     return {
-        int(r["film_id"]): (str(r["last"]), int(r["n"]))
-        for r in c.execute("SELECT film_id, MAX(watched_on) AS last, COUNT(*) AS n FROM viewing GROUP BY film_id")
+        int(r["film_id"]): (str(r["last"]), int(r["n"]), bool(r["study"]))
+        for r in c.execute(
+            "SELECT film_id, MAX(watched_on) AS last, COUNT(*) AS n, MAX(study) AS study FROM viewing GROUP BY film_id"
+        )
     }
 
 
@@ -595,7 +598,7 @@ def _row_to_view(
     audit: tuple[dict[str, object] | None, dict[str, object] | None] = (None, None),
     criterion_option: dict[str, object] | None = None,
     store_option: dict[str, object] | None = None,
-    viewing: tuple[str, int] | None = None,
+    viewing: tuple[str, int, bool] | None = None,
 ) -> FilmView:
     view = FilmView(
         id=row["id"],
@@ -632,6 +635,7 @@ def _row_to_view(
         verdict=audit[1],
         last_watched=viewing[0] if viewing else None,
         viewing_count=viewing[1] if viewing else 0,
+        study=viewing[2] if viewing else False,
     )
     # The Criterion option's landing page is this film's own listing URL (the LEFT JOIN in
     # _VIEW_SQL); a fresh dict per film, never a mutation of the option shared across the build.
@@ -2822,13 +2826,16 @@ class Repository:
 
     # viewings (brief 2026-09-21-viewing-log/brief-2.md) ------------------------------
     def add_viewing(
-        self, film_id: int, watched_on: date, service: str | None, text: str | None, rate: int | None, today: date
+        self, film_id: int, watched_on: date, service: str | None, text: str | None, rate: int | None, today: date,
+        study: bool = False,
     ) -> ViewingWrite:
         """One transaction: the day's viewing (created, or found), one `dictation` artefact
         (none when `text` is None — a viewing is a date, everything else optional),
-        the 0–10 when a number was said, and the Unseen mark cleared. A line's service is set
-        once and never overwritten. Validation (film canonical, slug known, text non-blank,
-        rate 0–10) is the caller's — application/viewings.py — so nothing here refuses."""
+        the 0–10 when a number was said, the Unseen mark cleared, and — with `study` — the line
+        marked for study (backlog 48: set here, on a created OR found line; never cleared here).
+        A line's service is set once and never overwritten. Validation (film canonical, slug
+        known, text non-blank, rate 0–10) is the caller's — application/viewings.py — so nothing
+        here refuses."""
         with self._conn() as c:
             row = c.execute(
                 "SELECT id, service FROM viewing WHERE film_id = ? AND watched_on = ?",
@@ -2836,8 +2843,8 @@ class Repository:
             ).fetchone()
             if row is None:
                 cur = c.execute(
-                    "INSERT INTO viewing (film_id, watched_on, service, logged_on) VALUES (?, ?, ?, ?)",
-                    (film_id, watched_on.isoformat(), service, today.isoformat()),
+                    "INSERT INTO viewing (film_id, watched_on, service, logged_on, study) VALUES (?, ?, ?, ?, ?)",
+                    (film_id, watched_on.isoformat(), service, today.isoformat(), int(study)),
                 )
                 vid, created, line_service = int(cur.lastrowid), True, service
             else:
@@ -2846,6 +2853,8 @@ class Repository:
                 if service and row["service"] is None:
                     c.execute("UPDATE viewing SET service = ? WHERE id = ?", (service, vid))
                     line_service = service
+                if study:
+                    c.execute("UPDATE viewing SET study = 1 WHERE id = ?", (vid,))
             if text is not None:
                 c.execute(
                     "INSERT INTO artefact (viewing_id, kind, text, added_on) VALUES (?, 'dictation', ?, ?)",
@@ -2861,7 +2870,7 @@ class Repository:
         with self._conn() as c:
             out: list[dict[str, object]] = []
             for v in c.execute(
-                "SELECT v.id, v.watched_on, v.service, s.name AS service_name FROM viewing v "
+                "SELECT v.id, v.watched_on, v.service, v.study, s.name AS service_name FROM viewing v "
                 "LEFT JOIN movie_service s ON s.slug = v.service WHERE v.film_id = ? "
                 "ORDER BY v.watched_on DESC, v.id DESC",
                 (film_id,),
@@ -2872,7 +2881,10 @@ class Repository:
                         "SELECT id, kind, text, added_on FROM artefact WHERE viewing_id = ? ORDER BY added_on, id", (v["id"],)
                     )
                 ]
-                out.append({"id": int(v["id"]), "watched_on": str(v["watched_on"]), "service": v["service"], "service_name": v["service_name"], "artefacts": arts})
+                out.append({
+                    "id": int(v["id"]), "watched_on": str(v["watched_on"]), "service": v["service"],
+                    "service_name": v["service_name"], "study": bool(v["study"]), "artefacts": arts,
+                })
             return out
 
     def remove_viewing(self, viewing_id: int) -> dict[str, object] | None:
@@ -2901,6 +2913,26 @@ class Repository:
                 return None
             return int(c.execute("SELECT COUNT(*) FROM artefact WHERE viewing_id = ?", (viewing_id,)).fetchone()[0])
 
+    def set_study(self, viewing_id: int, on: bool) -> dict[str, object] | None:
+        """Mark one line for study, or clear it (backlog 48). None when the viewing does not
+        exist; else the film and date the line belongs to and whether anything changed — a
+        repeated mark or clear is idempotent (`already marked` / `already clear`)."""
+        with self._conn() as c:
+            row = c.execute(
+                "SELECT v.film_id, v.watched_on, v.study, f.title FROM viewing v "
+                "JOIN films f ON f.id = v.film_id WHERE v.id = ?",
+                (viewing_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            changed = bool(row["study"]) != on
+            if changed:
+                c.execute("UPDATE viewing SET study = ? WHERE id = ?", (int(on), viewing_id))
+            return {
+                "film_id": int(row["film_id"]), "title": str(row["title"]),
+                "watched_on": str(row["watched_on"]), "changed": changed,
+            }
+
     def remove_artefact(self, viewing_id: int, n: int) -> dict[str, object] | None:
         with self._conn() as c:
             row = c.execute(
@@ -2924,9 +2956,11 @@ class Repository:
                 "watched_on": str(row["watched_on"]), "notes_left": len(ids) - 1,
             }
 
-    def list_viewings(self, since: date | None = None, film_id: int | None = None) -> list[dict[str, object]]:
+    def list_viewings(
+        self, since: date | None = None, film_id: int | None = None, study_only: bool = False
+    ) -> list[dict[str, object]]:
         sql = (
-            "SELECT v.id, v.film_id, f.title, f.year, v.watched_on, v.service, r.score, "
+            "SELECT v.id, v.film_id, f.title, f.year, v.watched_on, v.service, v.study, r.score, "
             "(SELECT COUNT(*) FROM artefact a WHERE a.viewing_id = v.id) AS notes "
             "FROM viewing v JOIN films f ON f.id = v.film_id LEFT JOIN my_ratings r ON r.film_id = v.film_id WHERE 1=1"
         )
@@ -2935,10 +2969,16 @@ class Repository:
             sql += " AND v.watched_on >= ?"; args.append(since.isoformat())
         if film_id is not None:
             sql += " AND v.film_id = ?"; args.append(film_id)
+        if study_only:
+            sql += " AND v.study = 1"
         sql += " ORDER BY v.watched_on DESC, v.id DESC"
         with self._conn() as c:
             return [
-                {"id": int(r["id"]), "film_id": int(r["film_id"]), "title": str(r["title"]), "year": r["year"], "watched_on": str(r["watched_on"]), "service": r["service"], "notes": int(r["notes"]), "my_rating": r["score"]}
+                {
+                    "id": int(r["id"]), "film_id": int(r["film_id"]), "title": str(r["title"]), "year": r["year"],
+                    "watched_on": str(r["watched_on"]), "service": r["service"], "study": bool(r["study"]),
+                    "notes": int(r["notes"]), "my_rating": r["score"],
+                }
                 for r in c.execute(sql, args)
             ]
 
@@ -3506,7 +3546,7 @@ class Repository:
                 moved["old_rating"] = n_old
             # Viewings (brief 2.2): many rows per film, so a plain re-point — except that the
             # survivor may already hold that day, when the loser's notes join the survivor's line.
-            for row in c.execute("SELECT id, watched_on, service FROM viewing WHERE film_id = ?", (loser_id,)).fetchall():
+            for row in c.execute("SELECT id, watched_on, service, study FROM viewing WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT id FROM viewing WHERE film_id = ? AND watched_on = ?", (survivor_id, row["watched_on"])
                 ).fetchone()
@@ -3515,8 +3555,12 @@ class Repository:
                     moved["viewing"] = moved.get("viewing", 0) + 1
                 else:
                     # A same-date collision: set the survivor's line's service only if it had
-                    # none (the "set only if the line had none" rule — never overwrite one).
-                    c.execute("UPDATE viewing SET service = COALESCE(service, ?) WHERE id = ?", (row["service"], twin["id"]))
+                    # none (the "set only if the line had none" rule — never overwrite one); the
+                    # study mark (backlog 48) survives if either side carried it.
+                    c.execute(
+                        "UPDATE viewing SET service = COALESCE(service, ?), study = MAX(study, ?) WHERE id = ?",
+                        (row["service"], int(row["study"]), twin["id"]),
+                    )
                     # Move loser's artefacts to survivor's viewing, preserving their added_on
                     # (immutable: the day the owner said them, never a merge artifact).
                     n_art = c.execute("UPDATE artefact SET viewing_id = ? WHERE viewing_id = ?", (twin["id"], row["id"])).rowcount
