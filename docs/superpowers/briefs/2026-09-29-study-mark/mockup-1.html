@@ -410,7 +410,7 @@ function rowHtml(f) {
 }
 function noteHtml(v) {
   if (!v.notes.length) return '';
-  const first = v.notes[0].replace(/\s+/g, ' ').slice(0, 42).trim();
+  const first = v.notes[0].replace(/\s+/g, ' ').trim().slice(0, 42);
   return ` <span class="sep">·</span> <details><summary>"${esc(first)}…"${v.notes.length > 1 ? ` (${v.notes.length} notes)` : ''}</summary>${v.notes.map((n) => `<span class="txt">${esc(n)}</span>`).join('')}</details>`;
 }
 function watchedHtml(f) {
