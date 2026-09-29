@@ -126,6 +126,9 @@ _PREDICATES: dict[str, Predicate] = {
     "rewatch": lambda v, _: rewatch(v),
     "shop": lambda v, _: shop(v),
     "watched": lambda v, _: v.viewing_count > 0,
+    # The Watched chip's second state (backlog 48): any viewing marked for study — a read of the
+    # lines, never a rental and never the 2004–08 Rewatch rule.
+    "study": lambda v, _: v.study,
 }
 
 CHIPS: tuple[str, ...] = tuple(_PREDICATES)
