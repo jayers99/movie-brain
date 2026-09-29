@@ -69,6 +69,8 @@
     shop: (f) => !f.owned && f.my_rating == null && f.cheapcharts_url != null && !f.wishlisted
       && !((f.criterion && !f.departed) || (f.services || []).some((s) => s.kind === 'svod' && s.subscribed)),
     watched: (f) => (f.viewing_count || 0) > 0,
+    // The Watched chip's second state (backlog 48): any of the film's viewings marked for study.
+    study: (f) => !!f.study,
   };
 
   // ---- filtering / sorting ----
@@ -105,7 +107,7 @@
         const c = canonScore(b) - canonScore(a);
         if (c !== 0) return c;
       }
-      if (state.chips.has('watched')) {  // Watched on: last viewing desc leads (the On-a-list precedent)
+      if (state.chips.has('watched') || state.chips.has('study')) {  // Watched or To study on: last viewing desc leads (the On-a-list precedent)
         const la = a.last_watched || '', lb = b.last_watched || '';
         if (la !== lb) return lb.localeCompare(la);
       }
@@ -205,7 +207,7 @@
       return;
     }
     if (state.filtered.length === 0) {
-      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">${state.chips.has('watched') && !state.films.some((f) => f.viewing_count > 0) ? 'No viewing logged yet.' : 'No film matches.'}</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">${state.chips.has('study') && !state.films.some((f) => f.study) ? 'Nothing marked for study yet.' : state.chips.has('watched') && !state.films.some((f) => f.viewing_count > 0) ? 'No viewing logged yet.' : 'No film matches.'}</td></tr>`;
       return;
     }
     const total = state.filtered.length;
@@ -692,7 +694,10 @@
     const viewingLines = (d.viewings || []).map((v) => {
       const notes = notesHtml(v);
       const svc = v.service_name || v.service;
-      return `<li class="viewing">${esc(v.watched_on)}${svc ? ` <span class="sep">·</span> ${esc(svc)}` : ''}${notes ? ` <span class="sep">·</span> ${notes}` : ''}</li>`;
+      // The study mark (backlog 48): one word after the service (after the date when the line has
+      // none), before the note — never a button; the verb is its only writer.
+      const study = v.study ? ' <span class="sep">·</span> <span class="study">study</span>' : '';
+      return `<li class="viewing">${esc(v.watched_on)}${svc ? ` <span class="sep">·</span> ${esc(svc)}` : ''}${study}${notes ? ` <span class="sep">·</span> ${notes}` : ''}</li>`;
     });
     const rentalLines = (d.old_ratings || []).map((o) => `<li class="rental">${esc(o.rented_on || '—')} <span class="sep">·</span> rented <span class="sep">·</span> <span class="old-stars" aria-label="${o.stars} of 5 stars">${'★'.repeat(o.stars)}${'☆'.repeat(5 - o.stars)}</span></li>`);
     const lines = viewingLines.concat(rentalLines);
@@ -1266,7 +1271,7 @@
       || JSON.stringify(prev.viewings) !== JSON.stringify(d.viewings);
     if (!changed) return;
     const i = state.films.findIndex((f) => f.id === id);
-    if (i >= 0) state.films[i] = { ...state.films[i], my_rating: d.my_rating, unseen: d.unseen, last_watched: d.last_watched, viewing_count: d.viewing_count, watchlisted: d.watchlisted };
+    if (i >= 0) state.films[i] = { ...state.films[i], my_rating: d.my_rating, unseen: d.unseen, last_watched: d.last_watched, viewing_count: d.viewing_count, study: d.study, watchlisted: d.watchlisted };
     const scrollTop = drawer.scrollTop;
     body.innerHTML = detailHtml(d); drawnDetail = d;
     drawer.scrollTop = scrollTop;

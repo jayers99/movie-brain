@@ -48,7 +48,8 @@ def seed(repo: Repository) -> None:
     # earlier day, so the Watched column and sort have a real order to pin, not a same-day tie.
     # Love and Anarchy has only the old 2004-08 rentals above — no viewing was ever logged for
     # it, so it stays out of the Watched chip.
-    repo.add_viewing(blue, date(2026, 9, 21), "kino-film-collection", "Pretty good — bottom of tier one.", None, TODAY)
+    # The 21st's line is marked for study (backlog 48): the word on the line, the chip's second state.
+    repo.add_viewing(blue, date(2026, 9, 21), "kino-film-collection", "Pretty good — bottom of tier one.", None, TODAY, study=True)
     repo.add_viewing(blue, TODAY, "kino-film-collection", "I just watched The Blue Angel. It's an early German sound film.", 6, TODAY)
     repo.add_viewing(blue, TODAY, None, "One more thing — the Dietrich songs are the best part.", 7, TODAY)
     repo.add_viewing(cuba, date(2026, 9, 25), None, "Still astonishing, the camera work.", None, TODAY)
@@ -113,7 +114,7 @@ def test_a_duplicate_rental_row_shows_once(dash: Page):
 
 
 def test_story_9_the_watched_chip_and_column(dash: Page):
-    chip = dash.locator('#chips .chip[data-chip="watched"]')
+    chip = dash.locator('#chips .chip[data-group="watched"]')
     expect(chip).to_have_text("Watched")
     assert dash.locator('#films thead th.sortable[data-col="last_watched"]').inner_text().strip() == "Watched"
     chip.click()
@@ -124,7 +125,8 @@ def test_story_9_the_watched_chip_and_column(dash: Page):
     assert titles(dash) == ["The Blue Angel", "I Am Cuba"]
     dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").wait_for()
     assert dash.locator("#films tbody tr[data-id]", has_text="I Am Cuba").locator("td.c-watched").inner_text().strip() == "2026-09-25"
-    chip.click()
+    chip.click(); chip.click()  # a cycle chip since the study mark: Watched → To study → off
+    expect(chip).not_to_have_class("chip active")
     dash.locator('#films thead th[data-col="last_watched"]').click()  # asc: earliest logged first, never-logged last
     assert titles(dash)[:2] == ["I Am Cuba", "The Blue Angel"]
     assert titles(dash)[-1] in ("Dragon Inn", "Solaris", "Love and Anarchy")
@@ -138,7 +140,7 @@ def test_the_empty_state_under_watched_reads_no_viewing_logged_yet(page: Page, s
     for v in repo.list_viewings():
         repo.remove_viewing(int(v["id"]))
     page.goto(base); page.wait_for_selector("#films tbody[data-count]")
-    page.locator('#chips .chip[data-chip="watched"]').click()
+    page.locator('#chips .chip[data-group="watched"]').click()
     expect(page.locator("#films tbody tr.empty-state")).to_contain_text("No viewing logged yet.")
 
 
@@ -184,3 +186,84 @@ def test_a_focus_refresh_with_nothing_changed_leaves_an_open_note_and_the_scroll
     lines = dash.locator("#drawer .ratings .watched li")
     expect(lines).to_have_count(4)
     expect(lines.nth(1)).to_contain_text("2026-09-26")
+
+
+# ---- the study mark (backlog 48, brief 2026-09-29-study-mark) ------------------------------
+
+
+def study_chip(page: Page):
+    return page.locator('#chips .chip[data-group="watched"]')
+
+
+def test_study_story_1_a_marked_line_carries_the_word_and_an_unmarked_one_does_not(dash: Page):
+    open_film(dash, "The Blue Angel")
+    lines = dash.locator("#drawer .ratings .watched li")
+    expect(lines.nth(1)).to_contain_text("2026-09-21")
+    expect(lines.nth(1).locator(".study")).to_have_text("study")
+    expect(lines.nth(0)).to_contain_text("2026-09-27")
+    expect(lines.nth(0).locator(".study")).to_have_count(0)
+    # The word sits between the service and the note, never as a button.
+    assert lines.nth(1).locator("button").count() == 0
+    assert "Kino Film Collection · study ·" in " ".join(lines.nth(1).inner_text().split())
+
+
+def test_study_story_4_the_watched_chip_cycles_off_watched_to_study_off(dash: Page):
+    chip = study_chip(dash)
+    expect(chip).to_have_text("Watched")
+    chip.click()
+    expect(chip).to_have_text("Watched")
+    expect(chip).to_have_class("chip active")
+    assert "chips=watched" in dash.url
+    assert titles(dash) == ["The Blue Angel", "I Am Cuba"]
+    chip.click()
+    expect(chip).to_have_text("To study")
+    expect(chip).to_have_class("chip active")
+    assert "chips=study" in dash.url and "chips=watched" not in dash.url
+    assert titles(dash) == ["The Blue Angel"]  # any line marked; Cuba has none
+    chip.click()
+    expect(chip).to_have_text("Watched")
+    expect(chip).not_to_have_class("chip active")
+    assert "chips=" not in dash.url
+
+
+def test_study_story_4_newest_viewing_first_under_to_study(dash: Page, server):
+    _, repo = server
+    cuba = [v for v in repo.list_viewings(film_id=IDS["I Am Cuba"])][0]
+    repo.set_study(int(cuba["id"]), True)  # Cuba's 25th is now marked; Blue Angel's last viewing is the 27th
+    dash.goto(dash.url.split("?")[0] + "?chips=study"); dash.wait_for_selector("#films tbody[data-count]")
+    expect(study_chip(dash)).to_have_text("To study")
+    assert titles(dash) == ["The Blue Angel", "I Am Cuba"]
+
+
+def test_study_the_empty_state_under_to_study_reads_nothing_marked_yet(page: Page, server):
+    base, repo = server
+    for v in repo.list_viewings(study_only=True):
+        repo.set_study(int(v["id"]), False)
+    page.goto(base); page.wait_for_selector("#films tbody[data-count]")
+    study_chip(page).click(); study_chip(page).click()
+    expect(study_chip(page)).to_have_text("To study")
+    expect(page.locator("#films tbody tr.empty-state")).to_contain_text("Nothing marked for study yet.")
+
+
+def test_study_a_mark_set_behind_the_pages_back_shows_on_focus(dash: Page, server):
+    _, repo = server
+    open_film(dash, "I Am Cuba")
+    expect(dash.locator("#drawer .ratings .watched li").first.locator(".study")).to_have_count(0)
+    cuba = repo.list_viewings(film_id=IDS["I Am Cuba"])[0]
+    repo.set_study(int(cuba["id"]), True)  # `viewings study N`, out of the page's sight
+    dash.evaluate("window.dispatchEvent(new Event('focus'))")
+    expect(dash.locator("#drawer .ratings .watched li").first.locator(".study")).to_have_text("study")
+
+
+def test_study_story_9_a_removed_line_leaves_to_study_and_the_drawer_stays_open(dash: Page, server):
+    _, repo = server
+    dash.goto(dash.url.split("?")[0] + "?chips=study"); dash.wait_for_selector("#films tbody[data-count]")
+    assert titles(dash) == ["The Blue Angel"]
+    open_film(dash, "The Blue Angel")
+    marked = repo.list_viewings(study_only=True)[0]
+    repo.remove_viewing(int(marked["id"]))  # `viewings remove N`: the mark goes with the line
+    dash.evaluate("window.dispatchEvent(new Event('focus'))")
+    expect(dash.locator("#films tbody tr[data-id]")).to_have_count(0)
+    expect(dash.locator("#drawer")).to_be_visible()
+    expect(dash.locator("#drawer h2")).to_contain_text("The Blue Angel")
+    expect(dash.locator("#drawer .ratings input.rating")).to_have_value("7")
