@@ -81,12 +81,8 @@ def test_summary_shows_the_linked_total_gap(repo):
     assert (s["old_ratings_linked"], s["old_ratings"]) == (1, 2)
 
 
-def test_rewatch_is_an_old_five_star_with_no_rating_today(repo):
-    fid = _film(repo, "Alpha", 1950)
-    view = repo.get_view(fid)
-    assert view is not None
-    loved = replace(view, old_rating={"stars": 5, "rented_on": None})
-    assert matches(loved, ["rewatch"], TODAY)
-    assert not matches(replace(loved, my_rating=8), ["rewatch"], TODAY)  # served: rated today
-    assert not matches(replace(view, old_rating={"stars": 4, "rented_on": None}), ["rewatch"], TODAY)
-    assert not matches(view, ["rewatch"], TODAY)
+def test_rewatch_is_no_longer_a_chip(repo):
+    # The Rewatch chip (old-ratings spec O7) was removed 2026-09-30 at the owner's request; the
+    # old stars stay a watching signal in the row badge and the drawer's rental lines.
+    from movie_brain.domain.filters import CHIPS
+    assert "rewatch" not in CHIPS

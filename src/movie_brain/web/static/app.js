@@ -60,8 +60,6 @@
     owned: (f) => f.owned,
     not_owned: (f) => !f.owned,
     multi_list: (f) => (f.lists || []).length >= state.cfg.canned_thresholds.multi_list,
-    // Loved then, not judged since (old-ratings spec O7): a pending request a rating today serves.
-    rewatch: (f) => f.old_rating != null && f.old_rating.stars === 5 && f.my_rating == null,
     // A film worth buying (mirrors domain/filters.py::shop): not owned, not rated, on no streaming
     // service I have, holding a store id — and not yet wishlisted, so a film leaves the list the
     // moment it is wishlisted. Raw fields only: the Apple store row is itself `subscribed`, so the

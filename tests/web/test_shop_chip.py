@@ -208,9 +208,9 @@ def test_shop_leaves_out_a_service_i_have_and_a_store_listing_without_a_store_id
     assert "Under the Skin" not in shown  # TMDB lists the store; movie-brain holds no store id, so no button either
 
 
-def test_the_chip_sits_after_rewatch_and_clear_resets_it(shop: Page):
+def test_the_chip_sits_after_on_a_list_and_clear_resets_it(shop: Page):
     labels = shop.locator("#chips .chip").all_inner_texts()
-    assert labels[labels.index("Rewatch") + 1] == "Shop"
+    assert labels[labels.index("On a list") + 1] == "Shop"  # Rewatch sat between them until 2026-09-30
     shop.click(SHOP_CHIP)
     shop.click("#chips-clear")
     expect(shop.locator(SHOP_CHIP)).to_have_class("chip")

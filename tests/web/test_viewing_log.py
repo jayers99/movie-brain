@@ -338,13 +338,13 @@ def test_study_story_7_the_second_watch_keeps_the_mark_and_off_clears_it(dash: P
     expect(dash.locator("#drawer h2")).to_contain_text("I Am Cuba")
 
 
-def test_study_story_10_the_rewatch_chip_is_untouched_by_a_mark(dash: Page, server):
+def test_study_story_10_there_is_no_rewatch_chip_and_the_marks_live_under_to_study(dash: Page, server):
+    # The Rewatch chip was removed 2026-09-30 (it confused with "To study"); the 5★-then badge stays.
     _, repo = server
-    rewatch = dash.locator('#chips .chip[data-chip="rewatch"]')
-    rewatch.click()
-    assert titles(dash) == ["Love and Anarchy"]  # 5★ then, unrated since — the only such film in the seed
+    expect(dash.locator('#chips .chip[data-chip="rewatch"]')).to_have_count(0)
+    assert "5★ then" in dash.locator("#films tbody tr[data-id]", has_text="Love and Anarchy").inner_text()
     cuba = repo.list_viewings(film_id=IDS["I Am Cuba"])[0]
     repo.set_study(int(cuba["id"]), True)
     dash.reload(); dash.wait_for_selector("#films tbody[data-count]")
-    assert titles(dash) == ["Love and Anarchy"]
-    expect(rewatch).to_have_text("Rewatch")
+    study_chip(dash).click(); study_chip(dash).click()
+    assert titles(dash) == ["The Blue Angel", "I Am Cuba"]
