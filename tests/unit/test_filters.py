@@ -53,7 +53,6 @@ def test_chip_names_are_stable():
         "owned",
         "not_owned",
         "multi_list",
-        "rewatch",
         "shop",
         "watched",
         "study",
@@ -70,8 +69,6 @@ def test_study_chip_is_any_line_marked_never_a_rental_or_a_plain_viewing():
     assert matches(view(viewing_count=2, last_watched="2026-09-29", study=True), ["study"], date(2026, 9, 29))
     assert not matches(view(viewing_count=1, last_watched="2026-09-29"), ["study"], date(2026, 9, 29))
     assert not matches(view(old_rating={"stars": 5, "rented_on": "2005-01-12"}), ["study"], date(2026, 9, 29))
-    # The mark never feeds the 2004–08 Rewatch chip.
-    assert not matches(view(viewing_count=1, study=True), ["rewatch"], date(2026, 9, 29))
 
 
 SVOD = {"name": "MUBI", "subscribed": False, "kind": "svod", "quality": 1, "has_apple_app": False}

@@ -122,3 +122,7 @@ Relaunched with `Re-check only findings: Claude 1, 2, 3, 4, 5, 7 and Codex F1, F
 Owner cost across point C: zero minutes.
 
 **Summary line for the owner:** Point C, two checkers: 21 findings (7 Claude, 14 Codex, 3 shared), 13 fixed, 2 stories added, 3 declined with reasons; re-check closed all 18, two numbering leftovers fixed. Not checked: the skill driven by a live agent — that is your hands-on test.
+
+## After delivery (2026-09-30)
+
+Migration 032 applied live on his "proceed"; merged and pushed on his "yes merge push". His first look at the real page raised two things: he expected a button in the drawer (the design has none — decision 1, story 6; offered as a small addition, his call, not taken up), and the Rewatch chip confused him and he saw no use for it — **he asked for it to be removed outright**, which was done the same day on `chore/CHORE-49-remove-rewatch-chip` (the 5★-then badge and the drawer's rental lines stay; story 10 of this brief and the mock-up's live Rewatch chip are now history). His first real mark: The Last Laugh's 27 September line, with his reason as its note. Escaped defects from the checkers' point of view: none — both of his remarks were decisions the brief made and named, not defects the checks missed; the pilot ledger's cell reads 0 (two design objections).
