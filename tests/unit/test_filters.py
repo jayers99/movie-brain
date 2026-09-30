@@ -56,12 +56,22 @@ def test_chip_names_are_stable():
         "rewatch",
         "shop",
         "watched",
+        "study",
     )
 
 
 def test_watched_chip_is_a_logged_viewing_not_a_rental():
     assert matches(view(viewing_count=1, last_watched="2026-09-27"), ["watched"], date(2026, 9, 27))
     assert not matches(view(old_rating={"stars": 5, "rented_on": "2005-01-12"}), ["watched"], date(2026, 9, 27))
+
+
+def test_study_chip_is_any_line_marked_never_a_rental_or_a_plain_viewing():
+    # The Watched chip's second state (backlog 48): a film with a marked line, whatever came after.
+    assert matches(view(viewing_count=2, last_watched="2026-09-29", study=True), ["study"], date(2026, 9, 29))
+    assert not matches(view(viewing_count=1, last_watched="2026-09-29"), ["study"], date(2026, 9, 29))
+    assert not matches(view(old_rating={"stars": 5, "rented_on": "2005-01-12"}), ["study"], date(2026, 9, 29))
+    # The mark never feeds the 2004–08 Rewatch chip.
+    assert not matches(view(viewing_count=1, study=True), ["rewatch"], date(2026, 9, 29))
 
 
 SVOD = {"name": "MUBI", "subscribed": False, "kind": "svod", "quality": 1, "has_apple_app": False}

@@ -138,6 +138,7 @@ col.col-watched { width:104px; }
 #drawer .ratings .watched .txt { display:block; margin:4px 0 6px 14px; padding-left:8px; border-left:2px solid var(--line); white-space:pre-wrap; color:#333; }
 #drawer .ratings .watched .sep { color:#c0c0c0; }
 #drawer .ratings .watched .none { color:var(--muted); }
+#drawer .ratings .watched .study { background:#1b1b1b; color:#fff; border-radius:999px; padding:0 7px; font-size:11px; vertical-align:1px; letter-spacing:.2px; }
 #drawer .best-source a { color:inherit; }
 #drawer p.links a { margin-right:6px; }
 /* Open = the whole cast, one per line, roles throughout; the inline six hide while it is open. */

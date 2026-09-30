@@ -702,10 +702,14 @@ def viewings_add_cmd(
     no_note: Annotated[
         bool, typer.Option("--no-note", help="Just mark the date: write the viewing with no note (nothing is read).")
     ] = False,
+    study: Annotated[
+        bool,
+        typer.Option("--study", help="Mark the line for study: a technique here to watch for a second time."),
+    ] = False,
 ) -> None:
-    """Log ONE viewing from a dictation. Writes a viewing, a note, the rating (if said) and clears
-    Unseen in one transaction; refuses and writes nothing otherwise (exit 2), or stops to ask
-    (exit 3: AMBIGUOUS / NO-FILM)."""
+    """Log ONE viewing from a dictation. Writes a viewing, a note, the rating (if said), the
+    study mark (if asked) and clears Unseen in one transaction; refuses and writes nothing
+    otherwise (exit 2), or stops to ask (exit 3: AMBIGUOUS / NO-FILM)."""
     import sys
 
     from movie_brain.application import viewings as vw
@@ -728,8 +732,22 @@ def viewings_add_cmd(
             raise typer.Exit(2) from exc
     out = vw.log_viewing(
         _repo(), title=title, film_id=film, year=year, on=on_date, service=service,
-        rate=rate_n, text=body, today=date.today(), now=datetime.now(),
+        rate=rate_n, text=body, today=date.today(), now=datetime.now(), study=study,
     )
+    console.print(out.line, markup=False, highlight=False, soft_wrap=True)
+    raise typer.Exit(out.exit_code)
+
+
+@viewings_app.command("study")
+def viewings_study_cmd(
+    viewing_id: Annotated[int, typer.Argument(help="The viewing number (read it off `viewings list --film ID`).")],
+    off: Annotated[bool, typer.Option("--off", help="Clear the mark instead of setting it.")] = False,
+) -> None:
+    """Mark one past viewing for study — a technique there to watch for a second time — or clear
+    it with --off. Idempotent; an unknown number refuses and writes nothing."""
+    from movie_brain.application import viewings as vw
+
+    out = vw.study(_repo(), viewing_id, off=off)
     console.print(out.line, markup=False, highlight=False, soft_wrap=True)
     raise typer.Exit(out.exit_code)
 
@@ -754,12 +772,14 @@ def viewings_remove_cmd(
 def viewings_list_cmd(
     since: Annotated[str | None, typer.Option("--since", help="Only viewings on or after this date.")] = None,
     film: Annotated[int | None, typer.Option("--film", help="Only this film's viewings.")] = None,
+    study: Annotated[bool, typer.Option("--study", help="Only viewings marked for study.")] = False,
 ) -> None:
-    """Every logged viewing, newest first: date, film, service, notes, rating."""
+    """Every logged viewing, newest first: date, film, service, study mark, notes, rating."""
     from movie_brain.application import viewings as vw
 
     since_date = _parse_day(since, "--since")
-    console.print(vw.listing(_repo(), since_date, film), markup=False, highlight=False, soft_wrap=True)
+    text = vw.listing(_repo(), since_date, film, study_only=study)
+    console.print(text, markup=False, highlight=False, soft_wrap=True)
 
 
 @viewings_app.command("open")

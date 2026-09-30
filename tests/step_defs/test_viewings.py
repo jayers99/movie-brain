@@ -120,7 +120,7 @@ def unseen_and_watchlisted(ctx, title, year):
 _HOW = re.compile(
     r'^(?:film "(?P<ftitle>[^"]+)" \((?P<fyear>\d{4})\)(?: titled "(?P<mismatch_title>[^"]+)")?'
     r'|film id (?P<fid>\d+)|the merged twin of "(?P<mtitle>[^"]+)" \((?P<myear>\d{4})\)|"(?P<title>[^"]+)")'
-    r'(?: year (?P<year>\d{4}))?(?: on (?P<on>\d{4}-\d{2}-\d{2}))?(?: on "(?P<service>[^"]+)")?(?: rating (?P<rate>-?\d+))? saying "(?P<text>[^"]*)"$'
+    r'(?: year (?P<year>\d{4}))?(?: on (?P<on>\d{4}-\d{2}-\d{2}))?(?: on "(?P<service>[^"]+)")?(?: rating (?P<rate>-?\d+))?(?P<study> for study)? saying "(?P<text>[^"]*)"$'
 )
 
 
@@ -148,6 +148,7 @@ def i_log(ctx, rest):
         text=g["text"],
         today=ctx["today"],
         now=NOW,
+        study=bool(g["study"]),
     )
     if ctx["out"].viewing_id is not None:
         ctx["last_vid"] = ctx["out"].viewing_id
@@ -293,3 +294,63 @@ def last_viewing_no_notes(ctx, title, year):
 def outcome_nothing_new(ctx):
     o = ctx["out"]
     assert o.kind == "added-to" and "no new note (0 kept)" in o.line, o
+
+
+# ---- the study mark (backlog 48) ----
+
+
+@when("I mark the last viewing for study")
+def mark_last(ctx):
+    ctx["before"] = _snapshot(ctx)
+    ctx["out"] = vw.study(ctx["repo"], ctx["last_vid"], off=False)
+
+
+@when(parsers.parse("I mark viewing {vid:d} for study"))
+def mark_vid(ctx, vid):
+    ctx["before"] = _snapshot(ctx)
+    ctx["out"] = vw.study(ctx["repo"], vid, off=False)
+
+
+@when("I clear the study mark on the last viewing")
+def clear_last(ctx):
+    ctx["out"] = vw.study(ctx["repo"], ctx["last_vid"], off=True)
+
+
+@then("the last viewing is marked for study")
+def last_marked(ctx):
+    assert _q(ctx, "SELECT study FROM viewing WHERE id = ?", ctx["last_vid"]) == [(1,)]
+
+
+@then("the last viewing is not marked for study")
+def last_not_marked(ctx):
+    assert _q(ctx, "SELECT study FROM viewing WHERE id = ?", ctx["last_vid"]) == [(0,)]
+
+
+@then(parsers.parse('the listing shows "{a}" with "{b}"'))
+def listing_shows(ctx, a, b):
+    text = vw.listing(ctx["repo"], None, None)
+    line = next(ln for ln in text.splitlines() if ln.startswith(a))
+    assert b in line, line
+
+
+@then(parsers.parse('the study-only listing names "{yes}" and not "{no}"'))
+def study_listing_names(ctx, yes, no):
+    text = vw.listing(ctx["repo"], None, None, study_only=True)
+    assert yes in text and no not in text, text
+
+
+@then(parsers.parse('the study-only listing reads "{text}"'))
+def study_listing_reads(ctx, text):
+    assert vw.listing(ctx["repo"], None, None, study_only=True) == text
+
+
+@then(parsers.parse('the film listing for "{title}" ({year:d}) shows "{a}" and "{b}"'))
+def film_listing_shows(ctx, title, year, a, b):
+    text = vw.listing(ctx["repo"], None, ctx["films"][(title, year)])
+    rows = [ln for ln in text.splitlines() if not ln.startswith("    note")]
+    assert any(ln.endswith(a) for ln in rows) and any(ln.endswith(b) for ln in rows), text
+
+
+@then(parsers.parse('the plain listing shows no "{text}"'))
+def plain_listing_lacks(ctx, text):
+    assert text not in vw.listing(ctx["repo"], None, None)

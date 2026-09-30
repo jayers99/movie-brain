@@ -1,0 +1,9 @@
+# Two-lineage pilot — per-feature numbers
+
+Spec: `../specs/2026-09-29-two-lineage-gap-check.md` (step 4 names the numbers; "Reading the result" names the stop rules). Preflight: `codex-preflight-2026-09-29.md`. One row per feature; the full triage table lives in each feature's `trial-log.md`. The primary number is accepted fixes per owner minute, not findings. Three features = feasibility and cost only; no conclusion about lineage before ten.
+
+| # | Feature (point C) | Claude: findings / minutes | Codex: findings / minutes | both | claude-only | codex-only | duplicate | false-positive | unverifiable | true-declined | fixed | stories added | builder triage min | builder fix min | owner min on checker output | escaped defects (owner's hands-on) | notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | Study mark, backlog 48 — `briefs/2026-09-29-study-mark/trial-log.md` | 7 / 14 | 14 / 13.6 | 3 | 4 | 11 | 0 | 0 | 0 | 3 (C6, F3, F4) | 13 | 2 | 6 | ~40 | 0 | to fill after his test | Codex opened the copy read-only and worked in memory; one harness slip (the launcher let Codex's sign-off overwrite its own findings file; recovered from the log, launcher fixed). Codex's confirmed findings covered 3 of Claude's 7 (43%). Cost per codex-only true finding: 13.6 agent minutes ÷ 11 ≈ 1.2 min; Claude's cost per true finding: 14 ÷ 7 = 2 min. |
+
+**Stop rules, feature 1:** owner minutes on checker output 0 (limit 2 per feature) · Codex missed 57% of the Claude checker's confirmed findings (stop at > 80% missed) · codex-only true findings 11 (the zero-yield rule needs ten consecutive features). **Continue rule** (cost per codex-only true finding at or below the Claude checker's cost per true finding): met on feature 1. Nothing here is a conclusion; one feature is not a sample.

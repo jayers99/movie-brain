@@ -72,6 +72,10 @@ if [ ! -x "$PROJECT/.venv/bin/python" ]; then
 fi
 
 LOG="${FINDINGS}.log"
+# The prompt tells the checker to WRITE the findings file itself; Codex's last message is kept
+# BESIDE it, never on top of it — on the first live run (2026-09-29) `--output-last-message`
+# pointed at the findings path and the checker's one-line sign-off overwrote 14 findings.
+LAST="${FINDINGS}.last-message.md"
 echo "codex $(codex --version 2>/dev/null) · model $MODEL · effort $EFFORT · sandbox $SANDBOX · root $ROOT · prompt $FILLED" | tee "$LOG"
 START=$(date +%s)
 set +e
@@ -79,10 +83,12 @@ MOVIE_BRAIN_CONFIG_DIR="$CONFIG" codex exec \
   -C "$ROOT" -s "$SANDBOX" -m "$MODEL" -c "model_reasoning_effort=\"$EFFORT\"" \
   -c "shell_environment_policy.inherit=\"all\"" \
   --skip-git-repo-check --ephemeral --color never \
-  --output-last-message "$FINDINGS" - < "$FILLED" >> "$LOG" 2>&1
+  --output-last-message "$LAST" - < "$FILLED" >> "$LOG" 2>&1
 RC=$?
 set -e
 END=$(date +%s)
-echo "elapsed=$((END - START))s exit=$RC findings=$FINDINGS log=$LOG"
+# A checker that only answered in its last message (the preflight's shape) still yields a file.
+if [ ! -s "$FINDINGS" ] && [ -s "$LAST" ]; then cp "$LAST" "$FINDINGS"; fi
+echo "elapsed=$((END - START))s exit=$RC findings=$FINDINGS last=$LAST log=$LOG"
 [ -s "$FINDINGS" ] || echo "WARNING: no findings file was written (harness failure — see $LOG)" >&2
 exit $RC

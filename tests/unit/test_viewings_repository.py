@@ -211,3 +211,80 @@ def test_drawer_signal_is_trusted_for_two_minutes(repo, blue):
     assert repo.drawer_film(now + timedelta(seconds=121)) is None
     repo.set_drawer_film(None, now)
     assert repo.drawer_film(now) is None
+
+
+# ---- the study mark (backlog 48, migration 032) ----------------------------------------
+
+
+def test_a_line_written_with_study_reads_back_marked(repo, blue):
+    w = repo.add_viewing(blue, TODAY, "kino-film-collection", "the tramline sequence", 7, TODAY, study=True)
+    assert repo.viewings_for(blue)[0]["study"] is True
+    assert _q(repo, "SELECT study FROM viewing WHERE id = ?", w.viewing_id) == [(1,)]
+    plain = repo.add_viewing(blue, date(2026, 9, 20), None, "plain", None, TODAY)
+    assert [v["study"] for v in repo.viewings_for(blue)] == [True, False]
+    assert plain.viewing_id != w.viewing_id
+
+
+def test_study_on_an_appended_line_marks_the_existing_viewing(repo, blue):
+    w1 = repo.add_viewing(blue, TODAY, None, "first words", None, TODAY)
+    w2 = repo.add_viewing(blue, TODAY, None, "mark it", None, TODAY, study=True)
+    assert w2.viewing_id == w1.viewing_id and not w2.created
+    assert repo.viewings_for(blue)[0]["study"] is True
+    # A later plain append never clears it.
+    repo.add_viewing(blue, TODAY, None, "more", None, TODAY)
+    assert repo.viewings_for(blue)[0]["study"] is True
+
+
+def test_set_study_on_off_is_idempotent_and_refuses_an_unknown_line(repo, blue):
+    w = repo.add_viewing(blue, TODAY, None, "words", None, TODAY)
+    assert repo.set_study(w.viewing_id, True) == {"film_id": blue, "title": "The Blue Angel", "watched_on": "2026-09-27", "changed": True}
+    assert repo.set_study(w.viewing_id, True) == {"film_id": blue, "title": "The Blue Angel", "watched_on": "2026-09-27", "changed": False}
+    assert repo.viewings_for(blue)[0]["study"] is True
+    assert repo.set_study(w.viewing_id, False)["changed"] is True
+    assert repo.set_study(w.viewing_id, False)["changed"] is False
+    assert repo.viewings_for(blue)[0]["study"] is False
+    assert repo.set_study(40, True) is None
+
+
+def test_list_viewings_carries_the_mark_and_can_keep_only_marked_rows(repo, blue):
+    cuba = repo.create_film(Film("I Am Cuba", 1964, None, ""))
+    repo.add_viewing(blue, date(2026, 9, 23), None, "general", None, TODAY, study=True)
+    repo.add_viewing(cuba, TODAY, None, "cuba", None, TODAY)
+    rows = repo.list_viewings()
+    assert [(r["title"], r["study"]) for r in rows] == [("I Am Cuba", False), ("The Blue Angel", True)]
+    assert [r["title"] for r in repo.list_viewings(study_only=True)] == ["The Blue Angel"]
+    assert repo.list_viewings(study_only=True, film_id=cuba) == []
+
+
+def test_the_list_payload_says_a_film_is_to_study_when_any_line_is_marked(repo, blue):
+    repo.add_viewing(blue, date(2026, 9, 23), None, "marked night", None, TODAY, study=True)
+    repo.add_viewing(blue, TODAY, None, "later, unmarked", None, TODAY)
+    view = repo.get_view(blue, TODAY)
+    assert view.study is True and view.viewing_count == 2 and view.last_watched == "2026-09-27"
+    assert [v.study for v in repo.list_views(TODAY) if v.id == blue] == [True]
+    repo.set_study(repo.viewings_for(blue)[1]["id"], False)
+    assert repo.get_view(blue, TODAY).study is False
+
+
+def test_removing_a_viewing_takes_its_mark_with_it(repo, blue):
+    w = repo.add_viewing(blue, TODAY, None, "words", None, TODAY, study=True)
+    repo.remove_viewing(w.viewing_id)
+    assert repo.get_view(blue, TODAY).study is False
+    assert _q(repo, "SELECT COUNT(*) FROM viewing") == [(0,)]
+
+
+def test_merge_keeps_the_mark_on_a_same_date_collision(repo):
+    survivor = repo.create_film(Film("Godzilla", 1954, None, ""))
+    loser = repo.create_film(Film("Gojira", 1954, None, ""))
+    repo.add_viewing(loser, TODAY, None, "loser today", None, TODAY, study=True)
+    repo.add_viewing(survivor, TODAY, None, "survivor today", None, TODAY)
+    repo.add_viewing(loser, date(2026, 9, 20), None, "loser alone", None, TODAY, study=True)
+    repo.merge_film(loser, survivor, TODAY)
+    assert [(v["watched_on"], v["study"]) for v in repo.viewings_for(survivor)] == [("2026-09-27", True), ("2026-09-20", True)]
+
+
+def test_add_viewing_reports_whether_this_write_set_the_mark(repo, blue):
+    first = repo.add_viewing(blue, TODAY, None, "first", None, TODAY, study=True)
+    again = repo.add_viewing(blue, TODAY, None, "again", None, TODAY, study=True)
+    plain = repo.add_viewing(blue, TODAY, None, "plain", None, TODAY)
+    assert (first.study_set, again.study_set, plain.study_set) == (True, False, False)
