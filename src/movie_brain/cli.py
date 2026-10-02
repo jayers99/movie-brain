@@ -1442,14 +1442,19 @@ def review_revisits() -> None:
 @review_app.command("resolve")
 def review_resolve(
     review_id: Annotated[int, typer.Argument(help="match_review id (see `review list`).")],
-    film: Annotated[int | None, typer.Option("--film", help="Match to / merge into this film id.")] = None,
+    film: Annotated[
+        int | None, typer.Option("--film", help="Match to / merge into this film id (criterion rows: give it the id).")
+    ] = None,
     tmdb_id: Annotated[int | None, typer.Option("--tmdb-id", help="Claim this TMDB id (tmdb no-match rows).")] = None,
     create: Annotated[bool, typer.Option("--create", help="Create a new film from the staged/owned title.")] = False,
     dismiss: Annotated[bool, typer.Option("--dismiss", help="Close the row; it is never re-queued.")] = False,
     pick: Annotated[
         str | None, typer.Option("--pick", help="Key the film to candidate A/B/C off the review detail.")
     ] = None,
-    tt: Annotated[str | None, typer.Option("--tt", help="Key the film to this IMDb id (ranked or not).")] = None,
+    tt: Annotated[
+        str | None,
+        typer.Option("--tt", help="Key the film to this IMDb id (criterion rows: add or find the work by it)."),
+    ] = None,
     none: Annotated[
         bool, typer.Option("--none", help="Standing 'no such work' verdict: verified unkeyed.")
     ] = False,
@@ -1485,7 +1490,7 @@ def review_resolve(
         err.print(str(exc))
         raise typer.Exit(1) from exc
     console.print(f"review {review_id}: {outcome}")
-    if create:
+    if create or outcome.startswith("created film"):
         _enrich_after_add(repo, 1)
 
 

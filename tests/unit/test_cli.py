@@ -1352,6 +1352,7 @@ def test_review_resolve_create_enriches_the_film_it_made_and_other_actions_do_no
     r = runner.invoke(app, ["review", "resolve", "7", "--create"])
     assert r.exit_code == 0, r.output
     assert len(calls) == 1 and calls[0]["skip_catalog"] is True and "enriching the 1 new film…" in r.output
+    monkeypatch.setattr("movie_brain.cli.resolve_review", lambda repo, rid, **kw: "dismissed")
     r = runner.invoke(app, ["review", "resolve", "7", "--dismiss"])
     assert r.exit_code == 0 and len(calls) == 1
 
@@ -1534,3 +1535,19 @@ def test_criterion_bridge_catalog_failure_exits_1(config_dir, monkeypatch):
     r = runner.invoke(app, ["criterion", "bridge", "--apply"])
     assert r.exit_code == 1
     assert "empty page" in r.output
+
+
+def test_review_resolve_tt_that_creates_a_criterion_film_enriches_it(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    monkeypatch.setattr(
+        "movie_brain.cli.resolve_review",
+        lambda repo, rid, **kw: "created film 12 'The Hole' (1960) from LeTrou60, keyed",
+    )
+    r = runner.invoke(app, ["review", "resolve", "7", "--tt", "tt9000501"])
+    assert r.exit_code == 0, r.output
+    assert len(calls) == 1 and calls[0]["skip_catalog"] is True
+    monkeypatch.setattr("movie_brain.cli.resolve_review", lambda repo, rid, **kw: "keyed imdb tt1 tmdb 2")
+    r = runner.invoke(app, ["review", "resolve", "7", "--tt", "tt0000001"])
+    assert r.exit_code == 0 and len(calls) == 1  # keying an existing film is not an add

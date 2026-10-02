@@ -21,6 +21,7 @@ from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.tmdb import TmdbFacts
 
 scenarios("../features/criterion_walk.feature")
+scenarios("../features/criterion_review.feature")
 
 LAST = date(2026, 9, 20)  # the last VHX walk: every seeded listing's last_seen
 TODAY = date(2026, 10, 3)
@@ -441,3 +442,67 @@ def unchanged(ctx):
 def asked_no_director(ctx, title):
     q = next(q for q in ctx["fetcher"].queries if q.title == _q_title(title))
     assert q.director is None
+
+
+# --- review resolution (Task 6) ------------------------------------------------------------
+
+
+def _resolve(ctx, mediaid, **kw):
+    (row,) = _open_rows(ctx, mediaid)
+    ctx["warnings"] = []
+    try:
+        ctx["outcome"] = resolve_review(
+            ctx["repo"], int(row["id"]), today=ctx["day"], client=ctx["tmdb"], warn=ctx["warnings"].append, **kw
+        )
+    except ValueError as exc:
+        ctx["refusal"] = str(exc)
+
+
+@when(parsers.parse('the owner resolves the review for "{mediaid}" with --film "{title}"'))
+def resolve_film(ctx, mediaid, title):
+    _resolve(ctx, mediaid, film_id=_fid(ctx, title))
+
+
+@when(parsers.parse('the owner resolves the review for "{mediaid}" with --create'))
+def resolve_create(ctx, mediaid):
+    _resolve(ctx, mediaid, create=True)
+
+
+@when(parsers.parse('the owner resolves the review for "{mediaid}" with --tt "{tt}"'))
+def resolve_tt(ctx, mediaid, tt):
+    _resolve(ctx, mediaid, tt=tt)
+
+
+@when(parsers.parse('the owner resolves the review for "{mediaid}" with --none'))
+def resolve_none(ctx, mediaid):
+    _resolve(ctx, mediaid, none=True)
+
+
+@then(parsers.parse('the resolution is refused naming the film "{title}"'))
+def refused_naming(ctx, title):
+    assert ctx["refusal"] is not None and f"film {_fid(ctx, title)}" in ctx["refusal"], ctx["refusal"]
+
+
+@then("the resolution is refused")
+def refused(ctx):
+    assert ctx["refusal"] is not None
+
+
+@then(parsers.parse('the resolution warned that it resembles "{text}"'))
+def warned(ctx, text):
+    assert any("gate 3" in w and text in w for w in ctx["warnings"]), ctx["warnings"]
+
+
+@then(parsers.parse('there are {n:d} films titled "{title}"'))
+def n_films_titled(ctx, n, title):
+    assert _q(ctx, "SELECT COUNT(*) FROM films WHERE title = ?", title) == [(n,)]
+
+
+@then(parsers.parse('the {year:d} film "{title}" holds criterion id "{mediaid}"'))
+def year_film_mediaid(ctx, year, title, mediaid):
+    assert ("criterion", mediaid) in ctx["repo"].external_ids_all(_fid(ctx, title, year))
+
+
+@then(parsers.parse('the {year:d} film "{title}" holds imdb "{tt}"'))
+def year_film_imdb(ctx, year, title, tt):
+    assert ctx["repo"].external_ids_for(_fid(ctx, title, year)).get("imdb") == tt
