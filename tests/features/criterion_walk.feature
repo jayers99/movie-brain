@@ -175,11 +175,14 @@ Feature: The Criterion walk — a catalog item IS the film holding its mediaid (
 
   Scenario: A held mediaid is listed on its holder whatever review rows mention it
     Given the last walk listed "Test Pattern" (2019) as "gpRRkq27"
+    And the last walk listed "Nadja" (1994) as "7xCZH5br"
     And a film "Test Pattern Twin" (2019) holding no ids
     And an open criterion "id-conflict" review names "gpRRkq27" for "Test Pattern Twin"
     And Criterion lists "Test Pattern" (2021) as "gpRRkq27"
+    And Criterion lists "Nadja" (1994) as "7xCZH5br"
     When the walk runs
     Then the film "Test Pattern" is current on Criterion
+    And the film "Test Pattern" has a criterion claim "gpRRkq27" titled "Test Pattern" for 2021
     And JW Player was asked 0 times in all
 
   Scenario: A resolver lookup that fails is weather — no review row, and the next walk resolves it

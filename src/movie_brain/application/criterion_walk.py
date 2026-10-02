@@ -152,6 +152,9 @@ def walk_criterion(
     7. the gate ladder: a holder → joins it; a refusal → a review row named by the gate;
        weather → skipped; clear → staged for creation unless it resembles (gate 3 over this
        walk's own staged titles) or keys like a film this walk is already creating → review.
+
+    Any exception other than resolver/TMDB weather (a bug, an unexpected answer) fails the whole
+    walk with nothing written — deliberately conservative; the night's other steps still run.
     """
     holders = repo.criterion_mediaid_holders()
     if not holders and repo.current_films(AUTHORITY):
