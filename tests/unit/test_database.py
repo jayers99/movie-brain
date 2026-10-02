@@ -2634,7 +2634,7 @@ def test_record_bridge_writes_ids_listing_urls_and_reviews_together(repo):
     fid = repo.film_id_by_key(Film("Test Pattern", 2019, None, "").key)
     other = repo.create_film(Film("Somebody Else", 2001, None, ""))
     repo.record_bridge(
-        [(fid, "gpRRkq27", "https://www.criterionchannel.com/films/gpRRkq27/test-pattern")],
+        [(fid, "gpRRkq27", "https://www.criterionchannel.com/films/gpRRkq27/test-pattern", "https://www.criterionchannel.com/test-pattern")],
         [ReviewEntry("id-conflict", other, "gpRRkq27", f'{{"holder": {fid}}}')],
         date(2026, 10, 2),
     )
@@ -2651,12 +2651,12 @@ def test_record_bridge_is_all_or_nothing(repo):
     b = repo.create_film(Film("B", 2002, None, ""))
     repo.set_external_id(b, "criterion", "SAMEID00", d)
     with pytest.raises(sqlite3.IntegrityError):
-        repo.record_bridge([(a, "AAAAAAAA", "u1"), (a, "SAMEID00", "u2")], [], d)  # second binding clashes
+        repo.record_bridge([(a, "AAAAAAAA", "u1", "o1"), (a, "SAMEID00", "u2", "o2")], [], d)  # second binding clashes
     assert ("criterion", "AAAAAAAA") not in repo.external_ids_all(a)
 
 
 def test_record_bridge_same_film_same_id_twice_is_one_row(repo):
     d = date(2026, 9, 20)
     a = repo.create_film(Film("A", 2001, None, ""))
-    repo.record_bridge([(a, "AAAAAAAA", "u1"), (a, "AAAAAAAA", "u1")], [], d)
+    repo.record_bridge([(a, "AAAAAAAA", "u1", "o1"), (a, "AAAAAAAA", "u1", "o1")], [], d)
     assert repo.external_ids_all(a).count(("criterion", "AAAAAAAA")) == 1

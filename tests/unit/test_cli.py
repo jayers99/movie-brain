@@ -433,6 +433,34 @@ def test_review_list_shows_candidate_lines(config_dir):
     assert "A tt0083658" in r.output
 
 
+def test_review_list_shows_what_criterion_showed_for_a_criterion_row(config_dir, monkeypatch):
+    from datetime import date
+
+    from movie_brain.application.criterion_walk import criterion_detail
+    from movie_brain.domain.models import Film, ReviewEntry
+    from movie_brain.infrastructure.criterion_site import CatalogItem, JwMedia
+    from movie_brain.infrastructure.database import Repository
+
+    monkeypatch.setenv("COLUMNS", "250")
+    repo = Repository(config_dir / "movie-brain.db")
+    item = CatalogItem("AbCd1234", "K-ON! The Movie", 2011, 6600)
+    media = JwMedia("AbCd1234", "K-ON! The Movie", None, "2011-12-03", ("Naoko Yamada",), None, None, None, "movie")
+    repo.append_reviews(
+        "criterion",
+        [ReviewEntry("no-match", None, "AbCd1234", criterion_detail(item, media, reason="no-match"))],
+        date(2026, 10, 2),
+    )
+    nodir = CatalogItem("ZzZz9999", "Nameless", None, 100)
+    repo.append_reviews(
+        "criterion", [ReviewEntry("no-match", None, "ZzZz9999", criterion_detail(nodir, None, reason="no-match"))],
+        date(2026, 10, 2),
+    )
+    r = runner.invoke(app, ["review", "list", "--authority", "criterion"])
+    assert r.exit_code == 0, r.output
+    assert "K-ON! The Movie (2011)" in r.output and "Naoko Yamada" in r.output
+    assert "None" not in r.output and "Nameless" in r.output
+
+
 def test_review_list_marks_a_series_film(config_dir):
     from datetime import date
 
@@ -1560,6 +1588,21 @@ def test_criterion_bridge_says_what_retry_and_two_ids_mean(config_dir, monkeypat
     )
     r = runner.invoke(app, ["criterion", "bridge"])
     assert "two ids" not in r.output and "no usable answer" not in r.output
+
+
+def test_criterion_bridge_names_each_two_id_film(config_dir, monkeypatch):
+    from movie_brain.application.criterion_bridge import BridgeReport, TwoIdLine
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", lambda session, **kw: [])
+    lines = [TwoIdLine(1285, "DR. DOLITTLE: LION'S DEN: English Version", ["YM0kT8PG", "BgC4kIqZ"])]
+    monkeypatch.setattr(
+        "movie_brain.application.criterion_bridge.run_bridge",
+        lambda *a, **kw: BridgeReport({"film": 2}, [], 0, kw["apply"], 0, 1, lines),
+    )
+    for args in (["criterion", "bridge"], ["criterion", "bridge", "--apply"]):
+        r = runner.invoke(app, args)
+        assert r.exit_code == 0, r.output
+        assert "  two ids: #1285 DR. DOLITTLE: LION'S DEN: English Version — YM0kT8PG, BgC4kIqZ" in r.output
 
 
 def test_criterion_bridge_catalog_failure_exits_1(config_dir, monkeypatch):

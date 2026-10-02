@@ -218,3 +218,10 @@ def claimant(ctx, title, reason):
 @then(parsers.parse("the bridge bound {n:d} ids on {m:d} film"))
 def multi(ctx, n, m):
     assert ctx["report"].multi == m
+
+
+@then(parsers.parse('the report names "{title}" with ids "{ids}"'))
+def names_two_ids(ctx, title, ids):
+    assert [(m.film_id, m.title, m.mediaids) for m in ctx["report"].multi_films] == [
+        (_fid(ctx, title), title, ids.split(", "))
+    ]

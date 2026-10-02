@@ -948,20 +948,35 @@ class Repository:
                 out.append(BridgeTarget(fid, str(r["value"]), str(f["title"]), f["year"]))
             return sorted(out, key=lambda t: (t.film_id, t.url))
 
-    def record_bridge(self, bindings: list[tuple[int, str, str]], reviews: list[ReviewEntry], seen: date) -> None:
+    def record_bridge(
+        self, bindings: list[tuple[int, str, str, str]], reviews: list[ReviewEntry], seen: date
+    ) -> None:
         """The bridge's whole write in ONE transaction: mediaid ids, the forwarded listing URL,
-        and the clash review rows. Any failure rolls every row back."""
+        and the clash review rows. Any failure rolls every row back. A binding is (film, mediaid,
+        new listing URL, the OLD link it came from). A film's listing is rewritten ONCE, from the
+        binding whose old link is the listing's current URL (the link the drawer shows today);
+        a listing matching none takes the film's first binding. Every mediaid still binds."""
         day = seen.isoformat()
         with self._conn() as c:
-            for film_id, mediaid, listing_url in bindings:
+            chosen: dict[int, str] = {}
+            exact: set[int] = set()
+            for film_id, _mediaid, listing_url, old_url in bindings:
+                row = c.execute(
+                    "SELECT url FROM listings WHERE film_id = ? AND source = 'criterion'", (film_id,)
+                ).fetchone()
+                if row is not None and row["url"] == old_url and film_id not in exact:
+                    chosen[film_id] = listing_url
+                    exact.add(film_id)
+                else:
+                    chosen.setdefault(film_id, listing_url)
+            for film_id, mediaid, _listing_url, _old_url in bindings:
                 c.execute(
                     "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'criterion', ?, ?) "
                     "ON CONFLICT(film_id, authority, value) DO NOTHING",
                     (film_id, mediaid, day),
                 )
-                c.execute(
-                    "UPDATE listings SET url = ? WHERE film_id = ? AND source = 'criterion'", (listing_url, film_id)
-                )
+            for film_id, url in chosen.items():
+                c.execute("UPDATE listings SET url = ? WHERE film_id = ? AND source = 'criterion'", (url, film_id))
             for e in reviews:
                 c.execute(
                     "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "

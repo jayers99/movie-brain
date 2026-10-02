@@ -126,3 +126,19 @@ Feature: Criterion bridge — give every stored film its new Criterion id before
     When I run the bridge with apply
     Then the film "Hidden Film" holds no criterion id
     And the bridge counted 1 "tombstoned"
+
+  Scenario: A film holding two ids keeps the link it already showed (Dr. Dolittle's English page, not the German one)
+    Given a Criterion film "Dr. Dolittle: English" (1967) at old link "dr-dolittle-lion-s-den-english-version"
+    And the film "Dr. Dolittle: English" also holds old link "dr-dolittle-lion-s-den-german-version"
+    And the old link "dr-dolittle-lion-s-den-english-version" forwards to "/films/YM0kT8PG/dr-dolittle-lion-s-den-english-version"
+    And the old link "dr-dolittle-lion-s-den-german-version" forwards to "/films/BgC4kIqZ/dr-dolittle-lion-s-den-german-version"
+    When I run the bridge with apply
+    Then the film "Dr. Dolittle: English" is listed at "https://www.criterionchannel.com/films/YM0kT8PG/dr-dolittle-lion-s-den-english-version"
+    And the film "Dr. Dolittle: English" holds criterion id "YM0kT8PG"
+    And the film "Dr. Dolittle: English" holds criterion id "BgC4kIqZ"
+
+  Scenario: The report names each film holding two ids, with its mediaids in old-link order
+    Given the film "Test Pattern" also holds old link "test-pattern-2"
+    And the old link "test-pattern-2" forwards to "/films/Zz99Zz99/test-pattern-cut"
+    When I run the bridge
+    Then the report names "Test Pattern" with ids "gpRRkq27, Zz99Zz99"

@@ -16,6 +16,7 @@ from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.application.catch_up import CatchUpReport, catch_up
 from movie_brain.application.cheapcharts import audit_itunes_ids, recheck_itunes_ids, resolve_itunes_ids
 from movie_brain.application.criterion_directors import fill_criterion_directors
+from movie_brain.application.criterion_walk import parse_criterion_detail
 from movie_brain.application.embed import embed_films
 from movie_brain.application.enrich import enrich_credits
 from movie_brain.application.export import write_csv
@@ -715,6 +716,8 @@ def criterion_bridge_cmd(
         + (f" · two ids {report.multi}" if report.multi else ""),
         markup=False, highlight=False,
     )
+    for m in report.multi_films or []:
+        console.print(f"  two ids: #{m.film_id} {m.title} — {', '.join(m.mediaids)}", markup=False, highlight=False)
     kinds = {k: sum(1 for d in report.drift if d.kind == k) for k in ("year", "title", "both")}
     console.print(
         f"drift: {len(report.drift)} films ({kinds['year']} year · {kinds['title']} title · {kinds['both']} both)",
@@ -1420,6 +1423,15 @@ def review_list(
         detail = r["detail"]
         d = parse_review_detail(str(detail)) if detail is not None else None
         detail_cell = d.reason if d is not None else str(detail or "")
+        if str(r["authority"]) == "criterion":
+            crit = parse_criterion_detail(str(detail) if detail is not None else None)
+            if crit is not None:
+                shown = f"{crit['title']} ({crit['year']})" if crit.get("title") and crit.get("year") else (
+                    crit.get("title") or (f"({crit['year']})" if crit.get("year") else "")
+                )
+                director = crit.get("director")
+                director = ", ".join(director) if isinstance(director, list) else director
+                detail_cell = " · ".join(str(x) for x in (detail_cell, shown, director) if x)
         if d is not None:
             parsed[r["id"]] = d
         table.add_row(str(r["id"]), str(r["authority"]), str(r["reason"]), film, str(r["value"] or ""), detail_cell)

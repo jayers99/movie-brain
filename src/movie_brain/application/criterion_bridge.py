@@ -104,6 +104,13 @@ class DriftLine:
     kind: str  # title | year | both
 
 
+@dataclass(frozen=True)
+class TwoIdLine:
+    film_id: int
+    title: str
+    mediaids: list[str]  # in old-link order
+
+
 @dataclass
 class BridgeReport:
     counts: dict[str, int]
@@ -112,6 +119,7 @@ class BridgeReport:
     applied: bool
     reopened: int
     multi: int = 0  # films that bound more than one distinct mediaid in this run
+    multi_films: list[TwoIdLine] | None = None  # those films, named (None reads as none)
 
 
 def run_bridge(
@@ -178,7 +186,7 @@ def run_bridge(
     hidden = repo.disposed_film_ids()
 
     counts: dict[str, int] = {}
-    bindings: list[tuple[int, str, str]] = []
+    bindings: list[tuple[int, str, str, str]] = []
     bound_urls: list[str] = []
     reviews: list[ReviewEntry] = []
     drift: list[DriftLine] = []
@@ -194,7 +202,7 @@ def run_bridge(
             holder = holders.get(f.mediaid)
             if holder is None:
                 holders[f.mediaid] = t.film_id
-                bindings.append((t.film_id, f.mediaid, BASE + urlparse(f.location).path))
+                bindings.append((t.film_id, f.mediaid, BASE + urlparse(f.location).path, t.url))
                 bound_urls.append(t.url)
             elif holder == t.film_id:
                 kind = "same-film"
@@ -222,8 +230,10 @@ def run_bridge(
         for url in bound_urls:
             obs[url].applied = True
         rewrite_observations(path, obs.values())
-    bound_ids: dict[int, set[str]] = {}
-    for film_id, mediaid, _url in bindings:
-        bound_ids.setdefault(film_id, set()).add(mediaid)
-    multi = sum(1 for ids in bound_ids.values() if len(ids) > 1)
-    return BridgeReport(counts, drift, len(reviews), apply, reopened, multi)
+    bound_ids: dict[int, list[str]] = {}
+    for film_id, mediaid, _url, _old in bindings:
+        ids = bound_ids.setdefault(film_id, [])
+        if mediaid not in ids:
+            ids.append(mediaid)
+    two = [TwoIdLine(fid, titles[fid][0], ids) for fid, ids in bound_ids.items() if len(ids) > 1]
+    return BridgeReport(counts, drift, len(reviews), apply, reopened, len(two), two)
