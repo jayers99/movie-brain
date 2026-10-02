@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
-from movie_brain.infrastructure.criterion_site import Forward, classify_forward
+from movie_brain.domain.models import ReviewEntry
+from movie_brain.infrastructure.criterion_site import BASE, CatalogItem, Forward, classify_forward
+from movie_brain.infrastructure.database import Repository
 
 BRIDGE_FILE = "criterion-bridge.jsonl"
 FRESH_FOR = timedelta(hours=24)
@@ -42,8 +45,12 @@ def load_observations(path: Path) -> dict[str, Observation]:
         try:
             raw = json.loads(line)
             obs = Observation(
-                url=str(raw["url"]), film_id=int(raw["film_id"]), status=raw["status"],
-                location=raw["location"], asked_at=str(raw["asked_at"]), applied=bool(raw.get("applied", False)),
+                url=str(raw["url"]),
+                film_id=int(raw["film_id"]),
+                status=raw["status"],
+                location=raw["location"],
+                asked_at=str(raw["asked_at"]),
+                applied=bool(raw.get("applied", False)),
             )
         except (ValueError, KeyError, TypeError):
             continue  # a half-written line from an interrupted run: that URL is asked again
@@ -84,3 +91,108 @@ def is_fresh(obs: Observation, now: datetime) -> bool:
     except ValueError:
         return False
     return now - asked < FRESH_FOR
+
+
+@dataclass(frozen=True)
+class DriftLine:
+    film_id: int
+    title: str
+    year: int | None
+    cat_title: str
+    cat_year: int | None
+    kind: str  # title | year | both
+
+
+@dataclass
+class BridgeReport:
+    counts: dict[str, int]
+    drift: list[DriftLine]
+    reviews: int
+    applied: bool
+    reopened: int
+
+
+def run_bridge(
+    repo: Repository,
+    config_dir: Path,
+    catalog: list[CatalogItem],
+    ask: Callable[[str], Forward],
+    now: datetime,
+    apply: bool,
+    retry: bool,
+) -> BridgeReport:
+    path = config_dir / BRIDGE_FILE
+    obs = load_observations(path)
+
+    reopened = 0
+    for o in obs.values():
+        if o.applied and o.forward.mediaid and ("criterion", o.forward.mediaid) not in repo.external_ids_all(o.film_id):
+            o.applied = False
+            reopened += 1
+
+    targets = repo.criterion_old_urls()
+    for t in targets:
+        o = obs.get(t.url)
+        reuse = o is not None and (not apply or is_fresh(o, now)) and not (retry and o.forward.kind == "retry")
+        if reuse:
+            assert o is not None
+            o.film_id = t.film_id
+            continue
+        f = ask(t.url)
+        o = Observation(t.url, t.film_id, f.status, f.location, now.isoformat())
+        append_observation(path, o)
+        obs[t.url] = o
+
+    holders = {
+        v: repo.canonical_film_id(fid)
+        for v, fid in repo.external_id_holders("criterion").items()
+        if not v.startswith("http")
+    }
+    open_keys = {(str(r["reason"]), r["film_id"], r["value"]) for r in repo.open_reviews("criterion")}
+    decided = repo.resolved_review_keys("criterion")
+    by_mediaid = {c.mediaid: c for c in catalog}
+    titles = {t.film_id: (t.title, t.year) for t in targets}
+
+    counts: dict[str, int] = {}
+    bindings: list[tuple[int, str, str]] = []
+    bound_urls: list[str] = []
+    reviews: list[ReviewEntry] = []
+    drift: list[DriftLine] = []
+    for t in targets:
+        o = obs[t.url]
+        f = o.forward
+        kind = f.kind
+        if kind == "film":
+            assert f.mediaid is not None
+            holder = holders.get(f.mediaid)
+            if holder is None:
+                holders[f.mediaid] = t.film_id
+                bindings.append((t.film_id, f.mediaid, BASE + urlparse(f.location).path))
+                bound_urls.append(t.url)
+            elif holder == t.film_id:
+                kind = "same-film"
+                bound_urls.append(t.url)
+            else:
+                kind = "held"
+                key = ("id-conflict", t.film_id, f.mediaid)
+                if key not in open_keys and key not in decided:
+                    open_keys.add(key)
+                    reviews.append(
+                        ReviewEntry("id-conflict", t.film_id, f.mediaid, json.dumps({"holder": holder, "url": t.url}))
+                    )
+            if kind in ("film", "same-film") and f.mediaid in by_mediaid:
+                cat = by_mediaid[f.mediaid]
+                title, year = titles[t.film_id]
+                diff_t, diff_y = cat.title != title, cat.year != year
+                if diff_t or diff_y:
+                    dk = "both" if diff_t and diff_y else ("title" if diff_t else "year")
+                    if not any(d.film_id == t.film_id for d in drift):
+                        drift.append(DriftLine(t.film_id, title, year, cat.title, cat.year, dk))
+        counts[kind] = counts.get(kind, 0) + 1
+
+    if apply:
+        repo.record_bridge(bindings, reviews, now.date())
+        for url in bound_urls:
+            obs[url].applied = True
+        rewrite_observations(path, obs.values())
+    return BridgeReport(counts, drift, len(reviews), apply, reopened)
