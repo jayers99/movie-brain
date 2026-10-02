@@ -143,7 +143,10 @@ def fetch_catalog(
         resp = _get(session, CATALOG_URL, pacer, sleep, params=params)
         if resp.status_code != 200:
             raise CriterionError(f"catalog: HTTP {resp.status_code}")
-        body = resp.json()
+        try:
+            body = resp.json()
+        except (ValueError, requests.exceptions.JSONDecodeError) as exc:
+            raise CriterionError(f"catalog: malformed JSON — {exc}") from exc
         items = body.get("items") or []
         if not items:
             raise CriterionError("catalog: empty page — site changed?")
@@ -162,12 +165,18 @@ def fetch_catalog(
     for it in raw:
         if it.get("contentType") != "film" or it.get("mediaid") in taken:
             continue
-        taken.add(it["mediaid"])
+        try:
+            mediaid = it["mediaid"]
+            title = it["title"]
+            duration = int(it.get("duration") or 0)
+        except (KeyError, ValueError, TypeError) as exc:
+            raise CriterionError(f"catalog: malformed film item — {exc}") from exc
+        taken.add(mediaid)
         films.append(CatalogItem(
-            it["mediaid"],
-            it["title"],
+            mediaid,
+            title,
             _year(it.get("release_date")),
-            int(it.get("duration") or 0),
+            duration,
         ))
     return films
 
@@ -182,7 +191,14 @@ def fetch_media(
         return None
     if resp.status_code != 200:
         raise CriterionError(f"jw media {mediaid}: HTTP {resp.status_code}")
-    item = (resp.json().get("playlist") or [{}])[0]
+    try:
+        body = resp.json()
+    except (ValueError, requests.exceptions.JSONDecodeError) as exc:
+        raise CriterionError(f"jw media {mediaid}: malformed JSON — {exc}") from exc
+    playlist = body.get("playlist") or []
+    if not playlist:
+        raise CriterionError(f"jw media {mediaid}: empty playlist")
+    item = playlist[0]
     return JwMedia(
         mediaid=str(item.get("mediaid") or mediaid),
         title=str(item.get("title") or ""),
@@ -231,11 +247,18 @@ def fetch_leaving(
         page = _get(session, BASE + path, pacer, sleep)
         if page.status_code != 200:
             raise CriterionError(f"{path}: HTTP {page.status_code}")
-        for pid in dict.fromkeys(_PLAYLIST_ID.findall(page.text)):
+        pids = list(dict.fromkeys(_PLAYLIST_ID.findall(page.text)))
+        if not pids:
+            raise CriterionError(f"{path}: no playlistID found")
+        for pid in pids:
             pl = _get(session, JW_PLAYLIST_URL.format(pid), pacer, sleep, params={"page_limit": 500})
             if pl.status_code != 200:
                 raise CriterionError(f"playlist {pid}: HTTP {pl.status_code}")
-            for item in pl.json().get("playlist") or []:
+            try:
+                body = pl.json()
+            except (ValueError, requests.exceptions.JSONDecodeError) as exc:
+                raise CriterionError(f"playlist {pid}: malformed JSON — {exc}") from exc
+            for item in body.get("playlist") or []:
                 mediaid = item.get("mediaid")
                 if not mediaid:
                     continue

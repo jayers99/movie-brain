@@ -269,3 +269,33 @@ def test_head_does_not_follow_the_redirect():
 def test_head_network_error_is_retry():
     responses.head("https://www.criterionchannel.com/x", body=requests.ConnectionError("down"))
     assert head_old_url(requests.Session(), "https://www.criterionchannel.com/x", Pacer(0)).kind == "retry"
+
+
+@responses.activate
+def test_catalog_200_with_non_json_body_raises():
+    responses.get(CATALOG_URL, body="not json", status=200)
+    with pytest.raises(CriterionError):
+        fetch_catalog(requests.Session(), sleep=_no_sleep)
+
+
+@responses.activate
+def test_catalog_film_item_missing_mediaid_raises():
+    item = {"contentType": "film", "duration": 100, "release_date": "1972-01-01", "title": "A"}
+    responses.get(CATALOG_URL, json=_page([item], None, 1))
+    with pytest.raises(CriterionError):
+        fetch_catalog(requests.Session(), sleep=_no_sleep)
+
+
+@responses.activate
+def test_jw_media_200_with_empty_playlist_raises():
+    responses.get(JW_MEDIA_URL.format("L5Z3RaiC"), json={"playlist": []})
+    with pytest.raises(CriterionError):
+        fetch_media(requests.Session(), "L5Z3RaiC", sleep=_no_sleep)
+
+
+@responses.activate
+def test_leaving_page_with_no_playlist_ids_raises():
+    responses.get(BASE + "/", body=(FIX / "home-2026-10-01.html").read_text())
+    responses.get(BASE + "/discover/leaving-october-31", body="<html>no playlist here</html>")
+    with pytest.raises(CriterionError):
+        fetch_leaving(requests.Session(), sleep=_no_sleep)
