@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from pytest_bdd import given, parsers, scenarios, then, when
@@ -46,8 +46,8 @@ def _ask(ctx):
     return ask
 
 
-def _run(ctx, apply=False, retry=False):
-    ctx["report"] = run_bridge(ctx["repo"], ctx["dir"], ctx["catalog"], _ask(ctx), NOW, apply=apply, retry=retry)
+def _run(ctx, apply=False, retry=False, now=NOW):
+    ctx["report"] = run_bridge(ctx["repo"], ctx["dir"], ctx["catalog"], _ask(ctx), now, apply=apply, retry=retry)
 
 
 @given(parsers.parse('a Criterion film "{title}" ({year:d}) at old link "{slug}"'))
@@ -97,6 +97,11 @@ def run_dry(ctx):
 @when("I run the bridge with apply")
 def run_apply(ctx):
     _run(ctx, apply=True)
+
+
+@when("I run the bridge with apply a day later")
+def run_apply_later(ctx):
+    _run(ctx, apply=True, now=NOW + timedelta(hours=25))
 
 
 @when("I run the bridge with retry")

@@ -73,3 +73,15 @@ Feature: Criterion bridge — give every stored film its new Criterion id before
     And the database loses the criterion id "gpRRkq27"
     And I run the bridge
     Then the bridge reopened 1 line
+
+  Scenario: A settled link is not asked again a day later
+    When I run the bridge with apply
+    And I run the bridge with apply a day later
+    Then the site was asked 1 time
+    And the film "Test Pattern" holds criterion id "gpRRkq27"
+    And the bridge counted 1 "same-film"
+
+  Scenario: An unsettled answer older than a day is asked again on apply
+    When I run the bridge
+    And I run the bridge with apply a day later
+    Then the site was asked 2 times

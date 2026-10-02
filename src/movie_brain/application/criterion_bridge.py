@@ -125,15 +125,24 @@ def run_bridge(
     obs = load_observations(path)
 
     reopened = 0
+    settled: set[str] = set()
     for o in obs.values():
-        if o.applied and o.forward.mediaid and ("criterion", o.forward.mediaid) not in repo.external_ids_all(o.film_id):
+        if not o.applied:
+            continue
+        mid = o.forward.mediaid
+        if mid and ("criterion", mid) in repo.external_ids_all(repo.canonical_film_id(o.film_id)):
+            settled.add(o.url)
+        else:
             o.applied = False
             reopened += 1
 
     targets = repo.criterion_old_urls()
     for t in targets:
         o = obs.get(t.url)
-        reuse = o is not None and (not apply or is_fresh(o, now)) and not (retry and o.forward.kind == "retry")
+        if o is not None and t.url in settled:
+            reuse = True
+        else:
+            reuse = o is not None and (not apply or is_fresh(o, now)) and not (retry and o.forward.kind == "retry")
         if reuse:
             assert o is not None
             o.film_id = t.film_id
