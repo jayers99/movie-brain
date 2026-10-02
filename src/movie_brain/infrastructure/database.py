@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
+from urllib.parse import urlparse
 
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.credits import build_credits
@@ -18,6 +19,7 @@ from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import (
     BridgeTarget,
     CreditsTarget,
+    CriterionWalk,
     EmbedTarget,
     Film,
     FilmCredits,
@@ -37,6 +39,7 @@ from movie_brain.domain.models import (
     TmdbCredits,
     TrailerTarget,
     ViewingWrite,
+    WalkWrite,
     YearBackfillTarget,
     film_key,
 )
@@ -65,6 +68,7 @@ from movie_brain.domain.thumbprint import edition_label, title_norm
 from movie_brain.domain.trailers import Trailer
 from movie_brain.domain.watch import apple_tv_url, best_source, watch_url
 from movie_brain.infrastructure.cheapcharts import product_url
+from movie_brain.infrastructure.criterion_site import CRITERION_FILM_URL
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -939,6 +943,158 @@ class Repository:
                     "VALUES ('criterion', ?, ?, ?, ?, ?)",
                     (e.film_id, e.value, e.reason, e.detail, day),
                 )
+
+    # the Criterion walk (spec 2026-10-01 D2, D4, D6, D7, D10) ---------------------------
+    def criterion_mediaid_holders(self) -> dict[str, int]:
+        """mediaid → the CANONICAL film holding it. Old `http…` links are not mediaids. Every
+        film is read, disposed included — the UNIQUE guard is blind to dispositions — and a
+        merged-away holder answers as its survivor, so the walk lists the live identity."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, value FROM external_ids WHERE authority = 'criterion' AND value NOT LIKE 'http%'"
+            ).fetchall()
+            return {str(r["value"]): self._canonical_in(c, int(r["film_id"])) for r in rows}
+
+    def criterion_review_values(self) -> set[str]:
+        """Every value a criterion review row names, open or resolved: an unknown mediaid in this
+        set is a human's (open = waiting for him, resolved = a standing decision), so the walk
+        never asks JW about it again (D5)."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT value FROM match_review WHERE authority = 'criterion' AND value IS NOT NULL"
+            ).fetchall()
+            return {str(r["value"]) for r in rows}
+
+    @staticmethod
+    def _criterion_id(c: sqlite3.Connection, film_id: int, mediaid: str, day: str) -> None:
+        # Claim authority (migration 012): several per film are legal; UNIQUE(authority, value)
+        # still raises when ANOTHER film holds the mediaid.
+        c.execute(
+            "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'criterion', ?, ?) "
+            "ON CONFLICT(film_id, authority, value) DO NOTHING",
+            (film_id, mediaid, day),
+        )
+
+    @staticmethod
+    def _criterion_claim(
+        c: sqlite3.Connection, film_id: int, mediaid: str, title: str, year: int | None, day: str
+    ) -> None:
+        # D4: what Criterion printed goes in the claim, never on the film; INSERT OR IGNORE keeps
+        # the FIRST title and year seen for a mediaid.
+        c.execute(
+            "INSERT OR IGNORE INTO claim (film_id, authority, value, title_ingested, year_claimed, "
+            "edition_label, first_seen) VALUES (?, 'criterion', ?, ?, ?, ?, ?)",
+            (film_id, mediaid, title, year, edition_label(title), day),
+        )
+
+    def bind_criterion_mediaid(self, film_id: int, mediaid: str, title: str, year: int | None, seen: date) -> None:
+        """`review resolve` on a criterion row: the mediaid and Criterion's claim on one film,
+        together. Raises IntegrityError when another film holds the mediaid."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            self._criterion_id(c, film_id, mediaid, day)
+            self._criterion_claim(c, film_id, mediaid, title, year, day)
+
+    def create_criterion_film(self, film: Film, mediaid: str, title: str, year: int | None, seen: date) -> int | None:
+        """`review resolve --create/--tt` on a criterion row: a new film born holding its mediaid
+        and Criterion's claim, in ONE transaction. None on a `films.key` collision — nothing written."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(key) DO NOTHING",
+                (str(uuid.uuid4()), film.title, film.year, film.director, film.key),
+            )
+            if cur.rowcount == 0:
+                return None
+            film_id = int(c.execute("SELECT id FROM films WHERE key = ?", (film.key,)).fetchone()["id"])
+            self._criterion_id(c, film_id, mediaid, day)
+            self._criterion_claim(c, film_id, mediaid, title, year, day)
+            return film_id
+
+    @staticmethod
+    def _criterion_listing_url(c: sqlite3.Connection, film_id: int, mediaids: list[str]) -> str:
+        """D10: keep a stored link already on one of tonight's mediaids (the bridge's slugged
+        `/films/<id>/<slug>`); otherwise the bare `/films/<id>`, which the site forwards."""
+        row = c.execute("SELECT url FROM listings WHERE film_id = ? AND source = 'criterion'", (film_id,)).fetchone()
+        if row is not None:
+            path = urlparse(str(row["url"])).path
+            if any(path == f"/films/{m}" or path.startswith(f"/films/{m}/") for m in mediaids):
+                return str(row["url"])
+        return CRITERION_FILM_URL.format(mediaids[0])
+
+    @staticmethod
+    def _walk_leaving(c: sqlite3.Connection, leaving: dict[str, str] | None, day: str) -> None:
+        """D7, the write's last step. A listing this walk did not stamp never keeps a Leaving
+        label. With labels in hand they replace the old ones, keyed by mediaid; None (the
+        leaving pages failed tonight) keeps the labels of the films still listed."""
+        c.execute("UPDATE listings SET leaving_date = NULL WHERE source = 'criterion' AND last_seen < ?", (day,))
+        if leaving is None:
+            return
+        c.execute("UPDATE listings SET leaving_date = NULL WHERE source = 'criterion'")
+        for mediaid, label in leaving.items():
+            c.execute(
+                "UPDATE listings SET leaving_date = ? WHERE source = 'criterion' AND last_seen = ? "
+                "AND film_id IN (SELECT film_id FROM external_ids WHERE authority = 'criterion' AND value = ?)",
+                (label, day, mediaid),
+            )
+
+    def record_criterion_walk(self, walk: CriterionWalk, seen: date) -> WalkWrite:
+        """The walk's whole write in ONE transaction (spec D6): new films, mediaids, claims,
+        listings against the pre-batch currency frontier, review rows, leaving labels and
+        `films_fetched_at`. Any failure rolls every row back: Criterion is then exactly as it was.
+
+        A film listed under two mediaids tonight (Eve's Bayou: theatrical and director's cut)
+        gets ONE listing — listings are per film × source — and both claims; its listing is
+        written once, so the second item can never count as an arrival."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            row = c.execute("SELECT MAX(last_seen) AS m FROM listings WHERE source = 'criterion'").fetchone()
+            frontier = None if row["m"] is None else str(row["m"])
+            new_ids: list[int] = []
+            for nf in walk.created:
+                cur = c.execute(
+                    "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(key) DO NOTHING",
+                    (str(uuid.uuid4()), nf.title, nf.year, nf.director, nf.key),
+                )
+                if cur.rowcount == 0:  # staging checked the key; only a concurrent writer gets here
+                    raise sqlite3.IntegrityError(f"films.key {nf.key!r} was taken during the walk")
+                new_ids.append(int(c.execute("SELECT id FROM films WHERE key = ?", (nf.key,)).fetchone()["id"]))
+            mediaids: dict[int, list[str]] = {}
+            for wl in walk.listings:
+                film_id = new_ids[wl.new] if wl.new is not None else wl.film_id
+                if film_id is None:
+                    raise ValueError(f"walk listing {wl.mediaid} names no film")
+                if wl.bind:
+                    self._criterion_id(c, film_id, wl.mediaid, day)
+                self._criterion_claim(c, film_id, wl.mediaid, wl.title, wl.year, day)
+                mediaids.setdefault(film_id, []).append(wl.mediaid)
+            arrived = 0
+            for film_id, ids in mediaids.items():
+                url = self._criterion_listing_url(c, film_id, ids)
+                if self._write_listing(c, film_id, "criterion", url, day, frontier):
+                    arrived += 1
+            for e in walk.reviews:
+                c.execute(
+                    "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "
+                    "VALUES ('criterion', ?, ?, ?, ?, ?)",
+                    (e.film_id, e.value, e.reason, e.detail, day),
+                )
+            departed = 0
+            if frontier is not None and frontier < day:
+                departed = int(
+                    c.execute(
+                        "SELECT COUNT(*) AS n FROM listings WHERE source = 'criterion' AND last_seen = ?", (frontier,)
+                    ).fetchone()["n"]
+                )
+            c.execute(
+                "INSERT INTO meta (key, value) VALUES ('films_fetched_at', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (day,),
+            )
+            self._walk_leaving(c, walk.leaving, day)
+        return WalkWrite(arrived, departed, tuple(zip(new_ids, walk.created, strict=True)))
 
     def has_listing(self, film_id: int, source: str) -> bool:
         """This film carries a listing from `source` — the same subquery `_TMDB_TARGET_SELECT`
