@@ -69,3 +69,23 @@ def test_recover_from_killed_run_with_no_trailing_newline(tmp_path):
     # Both valid URLs should load; the fragment is skipped
     got = load_observations(p)
     assert set(got.keys()) == {"https://www.criterionchannel.com/a", "https://www.criterionchannel.com/c"}
+
+
+def test_the_bridge_reports_progress_while_it_asks(repo, config_dir, monkeypatch):
+    from datetime import UTC, date, datetime
+
+    from movie_brain.application import criterion_bridge
+    from movie_brain.domain.models import Film
+    from movie_brain.infrastructure.criterion_site import Forward
+
+    monkeypatch.setattr(criterion_bridge, "PROGRESS_EVERY", 2)
+    for slug in ("a-film", "b-film", "c-film"):
+        repo.record_catalog(
+            "criterion", [Film(slug, 1960, None, f"https://www.criterionchannel.com/{slug}")], date(2026, 9, 20)
+        )
+    lines: list[str] = []
+    criterion_bridge.run_bridge(
+        repo, config_dir, [], lambda url: Forward(404, None, None, "gone"),
+        datetime(2026, 10, 2, 9, 0, tzinfo=UTC), apply=False, retry=False, progress=lines.append,
+    )
+    assert lines == ["asked 2 links so far (3 stored)"]

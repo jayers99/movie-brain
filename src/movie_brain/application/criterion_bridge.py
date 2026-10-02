@@ -21,6 +21,7 @@ from movie_brain.infrastructure.database import Repository
 
 BRIDGE_FILE = "criterion-bridge.jsonl"
 FRESH_FOR = timedelta(hours=24)
+PROGRESS_EVERY = 250  # one line per this many links asked: the run takes about half an hour
 
 
 @dataclass
@@ -121,6 +122,7 @@ def run_bridge(
     now: datetime,
     apply: bool,
     retry: bool,
+    progress: Callable[[str], None] | None = None,
 ) -> BridgeReport:
     path = config_dir / BRIDGE_FILE
     obs = load_observations(path)
@@ -138,6 +140,7 @@ def run_bridge(
             reopened += 1
 
     targets = repo.criterion_old_urls()
+    asked = 0
     for t in targets:
         existing: Observation | None = obs.get(t.url)
         if existing is not None and t.url in settled:
@@ -153,6 +156,9 @@ def run_bridge(
             existing.film_id = t.film_id
             continue
         f = ask(t.url)
+        asked += 1
+        if progress is not None and asked % PROGRESS_EVERY == 0:
+            progress(f"asked {asked} links so far ({len(targets)} stored)")
         o = Observation(t.url, t.film_id, f.status, f.location, now.isoformat())
         append_observation(path, o)
         obs[t.url] = o
@@ -167,6 +173,10 @@ def run_bridge(
     by_mediaid = {c.mediaid: c for c in catalog}
     titles = {t.film_id: (t.title, t.year) for t in targets}
 
+    # Targets are canonical films, so a disposed one is tombstoned: a film the owner hid never
+    # gains an id (Plan A review, parked; 0 such old links live on 2026-10-02).
+    hidden = repo.disposed_film_ids()
+
     counts: dict[str, int] = {}
     bindings: list[tuple[int, str, str]] = []
     bound_urls: list[str] = []
@@ -176,6 +186,8 @@ def run_bridge(
         o = obs[t.url]
         f = o.forward
         kind = f.kind
+        if kind == "film" and t.film_id in hidden:
+            kind = "tombstoned"
         if kind == "film":
             assert f.mediaid is not None
             assert f.location is not None

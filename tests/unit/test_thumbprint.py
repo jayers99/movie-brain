@@ -339,9 +339,9 @@ def test_audit_editions_blocks_on_a_tt_held_by_a_disposed_film(repo):
     assert g.verdict == "conflict" and f"tt0083658 held by #{ghost}" in g.detail
 
 
-def test_audit_editions_defers_a_film_criterion_still_lists(repo):
-    """`record_catalog` upserts ON CONFLICT(films.key): re-keying a listed film would mint a
-    duplicate on the next walk."""
+def test_audit_editions_no_longer_defers_a_film_criterion_lists(repo):
+    """Spec 2026-10-01 D12: the walk matches Criterion by mediaid, never `films.key`, so
+    re-keying a Criterion-listed film can no longer mint a duplicate on the next walk."""
     from datetime import date
 
     from movie_brain.application.repair import EditionContract, audit_editions
@@ -355,8 +355,7 @@ def test_audit_editions_defers_a_film_criterion_still_lists(repo):
     )
     contract = {fid: EditionContract(fid, "Scenes from a Marriage", 1974, "tt6725014", "133919")}
     (g,) = audit_editions(repo, contract)
-    assert g.verdict == "conflict"
-    assert g.detail == "criterion listing — re-key deferred to the ingester switch"
+    assert "criterion listing" not in g.detail
 
 
 def test_repair_editions_stops_the_batch_when_survivor_keying_refuses_after_the_merge(repo, monkeypatch):

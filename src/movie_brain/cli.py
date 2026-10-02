@@ -698,6 +698,7 @@ def criterion_bridge_cmd(
         repo, cfg.config_dir, catalog,
         lambda url: criterion_site.head_old_url(session, url, pacer),
         datetime.now(UTC), apply=apply, retry=retry,
+        progress=lambda m: console.print(m, markup=False, highlight=False),
     )
     c = report.counts
     head = (f"APPLIED — ids written, {report.reviews} clash reviews queued" if apply
@@ -707,6 +708,7 @@ def criterion_bridge_cmd(
         f"links: {sum(c.values())} · film {c.get('film', 0)} · same film {c.get('same-film', 0)} · "
         f"clash {c.get('held', 0)} · extra {c.get('supplement', 0)} · gone {c.get('gone', 0)} · "
         f"retry {c.get('retry', 0)} · reopened {report.reopened}"
+        + (f" · tombstoned {c['tombstoned']}" if c.get("tombstoned") else "")
         + (f" · two ids {report.multi}" if report.multi else ""),
         markup=False, highlight=False,
     )

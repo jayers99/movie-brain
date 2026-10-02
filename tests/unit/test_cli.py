@@ -1493,7 +1493,7 @@ def test_criterion_bridge_wires_the_use_case(config_dir, monkeypatch):
     def fake_catalog(session, **kw):
         return []
 
-    def fake_run(repo, cfg_dir, catalog, ask, now, apply, retry):
+    def fake_run(repo, cfg_dir, catalog, ask, now, apply, retry, progress=None):
         seen.update(apply=apply, retry=retry, cfg_dir=cfg_dir)
         return BridgeReport({"film": 1}, [DriftLine(56, "Test Pattern", 2019, "Test Pattern", 2021, "year")], 0, apply, 0)
 

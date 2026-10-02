@@ -89,6 +89,11 @@ def interrupted(ctx, n):
     ctx["stop_after"] = None
 
 
+@given(parsers.parse('the film "{title}" is tombstoned'))
+def tombstoned(ctx, title):
+    ctx["repo"].tombstone_film(_fid(ctx, title), date(2026, 9, 21), note="hidden by hand")
+
+
 @when("I run the bridge")
 def run_dry(ctx):
     _run(ctx)

@@ -118,3 +118,11 @@ Feature: Criterion bridge — give every stored film its new Criterion id before
     Then the bridge bound 2 ids on 1 film
     And the film "Test Pattern" holds criterion id "gpRRkq27"
     And the film "Test Pattern" holds criterion id "Zz99Zz99"
+
+  Scenario: A tombstoned film never gains a new id (Plan A review, parked)
+    Given a Criterion film "Hidden Film" (1960) at old link "hidden-film"
+    And the old link "hidden-film" forwards to "/films/H1dden01/hidden-film"
+    And the film "Hidden Film" is tombstoned
+    When I run the bridge with apply
+    Then the film "Hidden Film" holds no criterion id
+    And the bridge counted 1 "tombstoned"
