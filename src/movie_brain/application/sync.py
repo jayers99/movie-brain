@@ -45,7 +45,8 @@ class SyncResult:
     tmdb_first_checked: int = 0
     tmdb_reviewed: int = 0  # films the resolver sent to a durable A/B/C review row
     omdb_unkeyed: int = 0  # films skipped by the OMDb loop for holding no IMDb id (never title-searched)
-    catch_up: CatchUpReport | None = None  # the chain at the tail (credits, vectors, store ids, trailers)
+    # the chain at the tail (credits, vectors, store ids, trailers, Criterion directors)
+    catch_up: CatchUpReport | None = None
     criterion_walked: bool = False  # the Criterion walk ran and committed tonight
     criterion_failed: bool = False  # it ran and wrote nothing (spec D6); the rest of the night still ran
     criterion_arrived: int = 0
