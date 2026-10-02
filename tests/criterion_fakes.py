@@ -26,6 +26,12 @@ def captured_media() -> JwMedia:
     return parse_media(copy.deepcopy(_CAPTURE), "L5Z3RaiC")
 
 
+def captured(mediaid: str) -> JwMedia:
+    """A JW record exactly as JW answered (`tests/fixtures/criterion/jw-media.<mediaid>.json`):
+    `3ehCWylD` and `5pVD2vhU` were asked on 2026-10-02 for the directors step (spec D8)."""
+    return parse_media(json.loads((FIX / f"jw-media.{mediaid}.json").read_text()), mediaid)
+
+
 def media_like(mediaid: str, title: str, directors: Iterable[str] = (), title_original: str | None = None) -> JwMedia:
     body = copy.deepcopy(_CAPTURE)
     body["playlist"][0].update(
