@@ -163,7 +163,12 @@ def fetch_catalog(
         if it.get("contentType") != "film" or it.get("mediaid") in taken:
             continue
         taken.add(it["mediaid"])
-        films.append(CatalogItem(it["mediaid"], it["title"], _year(it.get("release_date")), int(it.get("duration") or 0)))
+        films.append(CatalogItem(
+            it["mediaid"],
+            it["title"],
+            _year(it.get("release_date")),
+            int(it.get("duration") or 0),
+        ))
     return films
 
 
