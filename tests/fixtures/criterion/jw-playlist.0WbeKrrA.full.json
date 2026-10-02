@@ -1,0 +1,2618 @@
+{
+ "title": "October Leaving Soon See All Playlist : primary : hkVzyJNz",
+ "description": "",
+ "kind": "MANUAL",
+ "feedid": "0WbeKrrA",
+ "siteid": "TXXJgKqJ",
+ "links": {
+  "first": "https://cdn.jwplayer.com/v2/playlists/0WbeKrrA?page_limit=500&format=json&internal=false&page_offset=1",
+  "last": "https://cdn.jwplayer.com/v2/playlists/0WbeKrrA?page_limit=500&format=json&internal=false&page_offset=1"
+ },
+ "playlist": [
+  {
+   "title": "Zabriskie Point",
+   "mediaid": "Tg73fdO2",
+   "link": "https://cdn.jwplayer.com/previews/Tg73fdO2",
+   "image": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6827,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1790075013,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/Tg73fdO2/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/Tg73fdO2/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/Tg73fdO2/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "wjh3Hu8z",
+   "playlist_collections_appears_in": "DDL7UP5u",
+   "playlist_related": "Y28Nbz7P",
+   "playlist_supplements": "7MLBc8S3",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "34876",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Michelangelo Antonioni\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en-US\"]",
+   "license_end_date_time": "2026-11-01T04:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "18dcb997-0dc2-4e69-ad23-1ded878c5f8d",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "1970-02-05",
+   "starring": "[\"Mark Frechette\",\"Daria Halprin\",\"Rod Taylor\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Zabriskie Point",
+   "trailer": "",
+   "vimeo_id": ""
+  },
+  {
+   "title": "Eve’s Bayou",
+   "mediaid": "6tfyfj2f",
+   "link": "https://cdn.jwplayer.com/previews/6tfyfj2f",
+   "image": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6900,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1790020447,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/6tfyfj2f/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/6tfyfj2f/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/6tfyfj2f/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "nJ8zU8mh",
+   "playlist_collections_appears_in": "5PjhAAD7",
+   "playlist_related": "VFTVARID",
+   "playlist_supplements": "gchyBC7U",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "32658",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Kasi Lemmons\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "c293be10-d7e3-40c1-967c-462073c311ee",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "1997-11-07",
+   "starring": "[\"Jurnee Smollett\",\"Meagan Good\",\"Samuel L. Jackson\"]",
+   "title_original": "Eve’s Bayou",
+   "title_short": "",
+   "title_sort": "eve’s bayou",
+   "trailer": "",
+   "vimeo_id": "2010729"
+  },
+  {
+   "title": "Lisztomania",
+   "mediaid": "WDv8u7b0",
+   "link": "https://cdn.jwplayer.com/previews/WDv8u7b0",
+   "image": "https://cdn.jwplayer.com/v2/media/WDv8u7b0/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/WDv8u7b0/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/WDv8u7b0/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/WDv8u7b0/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/WDv8u7b0/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/WDv8u7b0/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/WDv8u7b0/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6180,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1789691551,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/WDv8u7b0/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/WDv8u7b0/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/WDv8u7b0/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "TZd22wdp",
+   "playlist_collections_appears_in": "WgEDrcjL",
+   "playlist_related": "WjyYiMWf",
+   "playlist_supplements": "b0XU1kEP",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"GB\"]",
+   "criterion_id": "35813",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Ken Russell\"]",
+   "drm": "true",
+   "genre": "Biography",
+   "genre_2": "Music",
+   "introduction_primary": "",
+   "language": "[\"en-GB\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "8d55a541-ecb4-4c7f-9673-d4c8dc186915",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "1975-10-10",
+   "starring": "[\"Roger Daltrey\",\"Sara Kestelman\",\"Ringo Starr\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Lisztomania",
+   "trailer": "",
+   "vimeo_id": ""
+  },
+  {
+   "title": "Clockwatchers",
+   "mediaid": "YknuefBP",
+   "link": "https://cdn.jwplayer.com/previews/YknuefBP",
+   "image": "https://cdn.jwplayer.com/v2/media/YknuefBP/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/YknuefBP/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/YknuefBP/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/YknuefBP/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/YknuefBP/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/YknuefBP/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/YknuefBP/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5755,
+   "content_source_type": "renditions",
+   "pubdate": 1777608000,
+   "updated": 1789691351,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/YknuefBP/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/YknuefBP/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/YknuefBP/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "31474",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Jill Sprecher\"]",
+   "drm": "true",
+   "genre": "Comedy",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-05-01T04:00:00Z",
+   "nexspec_id": "4d3dadae-bc88-4837-ae51-d7d0eaeb90f2",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "yVO06jpa",
+   "playlist_collections_appears_in": "PrnYVVNn",
+   "playlist_related": "HQ47qfaO",
+   "playlist_supplements": "1xdZo2L0",
+   "rating": "",
+   "release_date": "1997-06-12",
+   "starring": "[\"Toni Collette\",\"Parker Posey\",\"Lisa Kudrow\"]",
+   "title_original": "Clockwatchers",
+   "title_short": "",
+   "title_sort": "clockwatchers",
+   "trailer": "",
+   "vimeo_id": "1614053"
+  },
+  {
+   "title": "Dream Lover",
+   "mediaid": "HZIOso4t",
+   "link": "https://cdn.jwplayer.com/previews/HZIOso4t",
+   "image": "https://cdn.jwplayer.com/v2/media/HZIOso4t/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HZIOso4t/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HZIOso4t/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HZIOso4t/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HZIOso4t/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HZIOso4t/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HZIOso4t/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6180,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1789691551,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/HZIOso4t/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/HZIOso4t/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/HZIOso4t/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "uB6oOp9P",
+   "playlist_collections_appears_in": "qa8jX5nD",
+   "playlist_related": "LkLDD8ye",
+   "playlist_supplements": "zCZFkSB3",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "33669",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Nicholas Kazan\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "Thriller",
+   "introduction_primary": "",
+   "language": "[\"en\",\"de\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "b4ee067c-b346-47ce-a2fb-96a130415dd5",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "1994-05-06",
+   "starring": "[\"James Spader\",\"Mädchen Amick\",\"Fredric Lehne\"]",
+   "title_original": "Dream Lover",
+   "title_short": "",
+   "title_sort": "dream lover",
+   "trailer": "",
+   "vimeo_id": "2638332"
+  },
+  {
+   "title": "24 Hour Party People",
+   "mediaid": "h3WnP6UF",
+   "link": "https://cdn.jwplayer.com/previews/h3WnP6UF",
+   "image": "https://cdn.jwplayer.com/v2/media/h3WnP6UF/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/h3WnP6UF/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/h3WnP6UF/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/h3WnP6UF/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/h3WnP6UF/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/h3WnP6UF/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/h3WnP6UF/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 7020,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1790032559,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/h3WnP6UF/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/h3WnP6UF/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/h3WnP6UF/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "1f2ac641-f62b-4711-814c-ee593027ad14",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"GB\"]",
+   "criterion_id": "34216",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Michael Winterbottom\"]",
+   "drm": "true",
+   "genre": "Comedy",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "NtQckrvg",
+   "playlist_collections_appears_in": "jieZiRkC",
+   "playlist_related": "vJ85cosm",
+   "playlist_supplements": "pF3jFXXA",
+   "rating": "",
+   "release_date": "2002-04-05",
+   "starring": "[\"Steve Coogan\",\"Paddy Considine\",\"Sean Harris\"]",
+   "title_original": "24 Hour Party People",
+   "title_short": "",
+   "title_sort": "24 hour party people",
+   "trailer": "urYeJk8F",
+   "vimeo_id": "3073155"
+  },
+  {
+   "title": "K-ON! The Movie",
+   "mediaid": "VBLiQBrA",
+   "link": "https://cdn.jwplayer.com/previews/VBLiQBrA",
+   "image": "https://cdn.jwplayer.com/v2/media/VBLiQBrA/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/VBLiQBrA/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/VBLiQBrA/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/VBLiQBrA/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/VBLiQBrA/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/VBLiQBrA/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/VBLiQBrA/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6600,
+   "content_source_type": "renditions",
+   "pubdate": 1777608000,
+   "updated": 1789691428,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/VBLiQBrA/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/VBLiQBrA/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/VBLiQBrA/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "e90012ee-eb50-4ecd-ad06-a9027488e54f",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"JP\"]",
+   "criterion_id": "35745",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Naoko Yamada\"]",
+   "drm": "true",
+   "genre": "Animation",
+   "genre_2": "Action",
+   "introduction_primary": "",
+   "language": "[\"ja\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-05-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "EHT1rd7u",
+   "playlist_collections_appears_in": "adqT6wk7",
+   "playlist_related": "VyvxVpkc",
+   "playlist_supplements": "IID4H9jB",
+   "rating": "",
+   "release_date": "2011-01-01",
+   "starring": "[\"Aki Toyosaki\",\"Yoko Hisaka\",\"Satomi Sato\"]",
+   "title_original": "K-On! The Movie",
+   "title_short": "",
+   "title_sort": "k-on!: the movie",
+   "trailer": "Qf02TVQP",
+   "vimeo_id": "4006886"
+  },
+  {
+   "title": "Amadeus",
+   "mediaid": "vujqNwMr",
+   "link": "https://cdn.jwplayer.com/previews/vujqNwMr",
+   "image": "https://cdn.jwplayer.com/v2/media/vujqNwMr/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/vujqNwMr/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/vujqNwMr/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/vujqNwMr/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/vujqNwMr/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/vujqNwMr/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/vujqNwMr/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 9600,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1790075064,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/vujqNwMr/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/vujqNwMr/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/vujqNwMr/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "98aa730a-c803-44c4-932c-2fb7cf8bb424",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "34958",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Miloš Forman\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "IGMnfXMH",
+   "playlist_collections_appears_in": "gqZHRPel",
+   "playlist_related": "QAN3jnLr",
+   "playlist_supplements": "5uJWh74S",
+   "rating": "",
+   "release_date": "1984-09-19",
+   "starring": "[\"F. Murray Abraham\",\"Tom Hulce\",\"Elizabeth Berridge\"]",
+   "title_original": "Amadeus",
+   "title_short": "",
+   "title_sort": "amadeus",
+   "trailer": "",
+   "vimeo_id": "3531406"
+  },
+  {
+   "title": "Ladies and Gentlemen, the Fabulous Stains",
+   "mediaid": "fifeC8Fb",
+   "link": "https://cdn.jwplayer.com/previews/fifeC8Fb",
+   "image": "https://cdn.jwplayer.com/v2/media/fifeC8Fb/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/fifeC8Fb/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/fifeC8Fb/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/fifeC8Fb/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/fifeC8Fb/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/fifeC8Fb/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/fifeC8Fb/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5220,
+   "content_source_type": "renditions",
+   "pubdate": 1788235200,
+   "updated": 1790074963,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/fifeC8Fb/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/fifeC8Fb/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/fifeC8Fb/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "36081",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Lou Adler\"]",
+   "drm": "true",
+   "genre": "Music",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en-US\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-09-01T04:00:00Z",
+   "nexspec_id": "9928194d-1294-438a-b85d-74df17416045",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "50lpFBzp",
+   "playlist_collections_appears_in": "jAJ7Gjih",
+   "playlist_related": "NR58TITt",
+   "playlist_supplements": "3DDIWvIP",
+   "rating": "",
+   "release_date": "1982-01-01",
+   "starring": "[\"Diane Lane\",\"Ray Winstone\",\"Peter Donat\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Ladies and Gentlemen, the Fabulous Stains",
+   "trailer": "",
+   "vimeo_id": ""
+  },
+  {
+   "title": "The Night of the Hunter",
+   "mediaid": "pH6QX6Zq",
+   "link": "https://cdn.jwplayer.com/previews/pH6QX6Zq",
+   "image": "https://cdn.jwplayer.com/v2/media/pH6QX6Zq/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/pH6QX6Zq/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/pH6QX6Zq/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/pH6QX6Zq/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/pH6QX6Zq/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/pH6QX6Zq/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/pH6QX6Zq/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5584,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1790519835,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/pH6QX6Zq/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/pH6QX6Zq/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/pH6QX6Zq/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[\"Commentary: Terry Sanders, Robert Gitt, F. X. Feeney, and Preston Neal Jones\"]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "27525",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Charles Laughton\"]",
+   "drm": "true",
+   "genre": "Thriller",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T04:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "2454d10a-9043-4113-8677-fe7e10f8de6d",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "DMIblUVO",
+   "playlist_collections_appears_in": "2G8WCnHP",
+   "playlist_related": "6ZB6ovgL",
+   "playlist_supplements": "i2dTTQo7",
+   "rating": "",
+   "release_date": "1955-11-24",
+   "starring": "[\"Robert Mitchum\",\"Shelley Winters\",\"Lillian Gish\"]",
+   "title_original": "The Night of the Hunter",
+   "title_short": "",
+   "title_sort": "night of the hunter",
+   "trailer": "eNoefIY3",
+   "vimeo_id": "465661"
+  },
+  {
+   "title": "Another Hayride",
+   "mediaid": "bA6RFoVP",
+   "link": "https://cdn.jwplayer.com/previews/bA6RFoVP",
+   "image": "https://cdn.jwplayer.com/v2/media/bA6RFoVP/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/bA6RFoVP/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/bA6RFoVP/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/bA6RFoVP/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/bA6RFoVP/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/bA6RFoVP/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/bA6RFoVP/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 1076,
+   "content_source_type": "renditions",
+   "pubdate": 1698811200,
+   "updated": 1789690348,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/bA6RFoVP/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/bA6RFoVP/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/bA6RFoVP/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "34063",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Matt Wolf\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "Shorts",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2023-11-01T04:00:00Z",
+   "nexspec_id": "6996874a-66ea-4502-a774-a9121f2c5b95",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "4PcrNIdu",
+   "playlist_collections_appears_in": "XKP8OFhh",
+   "playlist_related": "07qZ2gJ1",
+   "playlist_supplements": "a5SVBBOY",
+   "rating": "",
+   "release_date": "2021-01-19",
+   "starring": "[]",
+   "title_original": "Another Hayride",
+   "title_short": "",
+   "title_sort": "another hayride",
+   "trailer": "",
+   "vimeo_id": "2942043"
+  },
+  {
+   "title": "Baby Doll",
+   "mediaid": "zfDaM2e8",
+   "link": "https://cdn.jwplayer.com/previews/zfDaM2e8",
+   "image": "https://cdn.jwplayer.com/v2/media/zfDaM2e8/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/zfDaM2e8/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/zfDaM2e8/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/zfDaM2e8/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/zfDaM2e8/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/zfDaM2e8/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/zfDaM2e8/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6879,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1789691537,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/zfDaM2e8/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/zfDaM2e8/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/zfDaM2e8/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "29006",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Elia Kazan\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "1222e385-0a96-499e-8549-b2b14551626b",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "x0dpgzQw",
+   "playlist_collections_appears_in": "4TaU0mP7",
+   "playlist_related": "OK6seANI",
+   "playlist_supplements": "nTFzecRA",
+   "rating": "",
+   "release_date": "1956-12-29",
+   "starring": "[\"Carroll Baker\",\"Karl Malden\",\"Eli Wallach\"]",
+   "title_original": "Baby Doll",
+   "title_short": "",
+   "title_sort": "baby doll",
+   "trailer": "",
+   "vimeo_id": "1821735"
+  },
+  {
+   "title": "Bayard & Me",
+   "mediaid": "CdzKRV1z",
+   "link": "https://cdn.jwplayer.com/previews/CdzKRV1z",
+   "image": "https://cdn.jwplayer.com/v2/media/CdzKRV1z/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/CdzKRV1z/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/CdzKRV1z/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/CdzKRV1z/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/CdzKRV1z/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/CdzKRV1z/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/CdzKRV1z/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 968,
+   "content_source_type": "renditions",
+   "pubdate": 1698811200,
+   "updated": 1789690352,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/CdzKRV1z/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/CdzKRV1z/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/CdzKRV1z/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "34064",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Matt Wolf\"]",
+   "drm": "true",
+   "genre": "Shorts",
+   "genre_2": "Documentary",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2023-11-01T04:00:00Z",
+   "nexspec_id": "d0f68180-7dc8-45bd-86b1-a500122f03bb",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "Q4vyao1l",
+   "playlist_collections_appears_in": "qpC1Uq98",
+   "playlist_related": "q2F1M12H",
+   "playlist_supplements": "LRht2lap",
+   "rating": "",
+   "release_date": "2017-01-20",
+   "starring": "[]",
+   "title_original": "Bayard & Me",
+   "title_short": "",
+   "title_sort": "bayard & me",
+   "trailer": "",
+   "vimeo_id": "2942044"
+  },
+  {
+   "title": "Bloody Nose, Empty Pockets",
+   "mediaid": "StyEwy0x",
+   "link": "https://cdn.jwplayer.com/previews/StyEwy0x",
+   "image": "https://cdn.jwplayer.com/v2/media/StyEwy0x/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/StyEwy0x/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/StyEwy0x/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/StyEwy0x/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/StyEwy0x/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/StyEwy0x/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/StyEwy0x/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5902,
+   "content_source_type": "renditions",
+   "pubdate": 1777608000,
+   "updated": 1790469233,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/StyEwy0x/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/StyEwy0x/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/StyEwy0x/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "82993b10-24db-4eb3-886b-86198195b18a",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "35579",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Turner Ross\",\"Bill Ross IV\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-05-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "FQh4KpQE",
+   "playlist_collections_appears_in": "G5Bw4fHD",
+   "playlist_related": "dJD1M3eh",
+   "playlist_supplements": "L1a9hko8",
+   "rating": "",
+   "release_date": "2020-01-01",
+   "starring": "[\"Peter Elwell\",\"Michael Martin\",\"Shay Walker\"]",
+   "title_original": "Bloody Nose, Empty Pockets",
+   "title_short": "",
+   "title_sort": "bloody nose, empty pockets",
+   "trailer": "YJIs2zgc",
+   "vimeo_id": "4006916"
+  },
+  {
+   "title": "The Buddy Holly Story",
+   "mediaid": "mzGArPyE",
+   "link": "https://cdn.jwplayer.com/previews/mzGArPyE",
+   "image": "https://cdn.jwplayer.com/v2/media/mzGArPyE/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/mzGArPyE/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/mzGArPyE/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/mzGArPyE/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/mzGArPyE/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/mzGArPyE/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/mzGArPyE/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6840,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1789691554,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/mzGArPyE/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/mzGArPyE/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/mzGArPyE/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "NBGuiHqX",
+   "playlist_collections_appears_in": "mjW53Tg4",
+   "playlist_related": "Al577ueB",
+   "playlist_supplements": "AmBNodoM",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "35827",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Steve Rash\"]",
+   "drm": "true",
+   "genre": "Biography",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en-US\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "a61b8fc5-03c9-48ec-9715-5d9605e5e5bc",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "1978-05-18",
+   "starring": "[\"Gary Busey\",\"Don Stroud\",\"Charles Martin Smith\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Buddy Holly Story, The",
+   "trailer": "",
+   "vimeo_id": ""
+  },
+  {
+   "title": "D.O.A.",
+   "mediaid": "qhD4lrxb",
+   "link": "https://cdn.jwplayer.com/previews/qhD4lrxb",
+   "image": "https://cdn.jwplayer.com/v2/media/qhD4lrxb/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qhD4lrxb/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qhD4lrxb/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qhD4lrxb/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qhD4lrxb/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qhD4lrxb/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qhD4lrxb/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 4980,
+   "content_source_type": "renditions",
+   "pubdate": 1777608000,
+   "updated": 1790284118,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/qhD4lrxb/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/qhD4lrxb/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/qhD4lrxb/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "8d5f1c1f-f975-4329-8226-0d4fcaf65582",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "35785",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Rudolph Maté\"]",
+   "drm": "true",
+   "genre": "Thriller",
+   "genre_2": "Crime",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-05-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "5sLqcvUc",
+   "playlist_collections_appears_in": "SOZ4uiWD",
+   "playlist_related": "ncdZA7yv",
+   "playlist_supplements": "sH1QEe7N",
+   "rating": "",
+   "release_date": "1949-04-21",
+   "starring": "[\"Edmond O'Brien\",\"Pamela Britton\",\"Luther Adler\"]",
+   "title_original": "D.O.A.",
+   "title_short": "",
+   "title_sort": "d.o.a.",
+   "trailer": "",
+   "vimeo_id": "4006908"
+  },
+  {
+   "title": "Duet for Cannibals",
+   "mediaid": "tgjx0avh",
+   "link": "https://cdn.jwplayer.com/previews/tgjx0avh",
+   "image": "https://cdn.jwplayer.com/v2/media/tgjx0avh/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/tgjx0avh/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/tgjx0avh/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/tgjx0avh/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/tgjx0avh/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/tgjx0avh/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/tgjx0avh/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6333,
+   "content_source_type": "renditions",
+   "pubdate": 1764565200,
+   "updated": 1790033613,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/tgjx0avh/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/tgjx0avh/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/tgjx0avh/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "52e394f7-1611-4878-ab22-71b1f67a3f48",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"SE\"]",
+   "criterion_id": "35456",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Susan Sontag\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"sv\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2025-12-01T05:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "zSO7d9qI",
+   "playlist_collections_appears_in": "msx3y3rJ",
+   "playlist_related": "r2PdF5qQ",
+   "playlist_supplements": "hXGsfxRw",
+   "rating": "",
+   "release_date": "1969-09-01",
+   "starring": "[\"Lars Ekborg\",\"Gösta Ekman\",\"Adriana Asti\"]",
+   "title_original": "Duet for Cannibals",
+   "title_short": "",
+   "title_sort": "duet for cannibals",
+   "trailer": "0QIn0zzk",
+   "vimeo_id": "3874891"
+  },
+  {
+   "title": "House of Cardin",
+   "mediaid": "y3Immozq",
+   "link": "https://cdn.jwplayer.com/previews/y3Immozq",
+   "image": "https://cdn.jwplayer.com/v2/media/y3Immozq/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/y3Immozq/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/y3Immozq/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/y3Immozq/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/y3Immozq/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/y3Immozq/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/y3Immozq/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6112,
+   "content_source_type": "renditions",
+   "pubdate": 1777608000,
+   "updated": 1789691438,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/y3Immozq/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/y3Immozq/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/y3Immozq/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "9e06216c-4bab-4160-87b4-4550e7ca283e",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"US\", \"FR\"]",
+   "criterion_id": "35580",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"P. David Ebersole\",\"Todd Hughes\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\",\"fr\",\"it\",\"ja\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-05-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "Ip2Hx6hE",
+   "playlist_collections_appears_in": "AtdTTyiF",
+   "playlist_related": "fTbhu3Nf",
+   "playlist_supplements": "bxipazt0",
+   "rating": "",
+   "release_date": "2019-01-01",
+   "starring": "[]",
+   "title_original": "House of Cardin",
+   "title_short": "",
+   "title_sort": "house of cardin",
+   "trailer": "Z29qRQ4u",
+   "vimeo_id": "4006918"
+  },
+  {
+   "title": "I Remember: A Film About Joe Brainard",
+   "mediaid": "rbwYy1U4",
+   "link": "https://cdn.jwplayer.com/previews/rbwYy1U4",
+   "image": "https://cdn.jwplayer.com/v2/media/rbwYy1U4/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/rbwYy1U4/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/rbwYy1U4/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/rbwYy1U4/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/rbwYy1U4/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/rbwYy1U4/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/rbwYy1U4/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 1440,
+   "content_source_type": "renditions",
+   "pubdate": 1698811200,
+   "updated": 1789690351,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/rbwYy1U4/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/rbwYy1U4/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/rbwYy1U4/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "34065",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Matt Wolf\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "Shorts",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2023-11-01T04:00:00Z",
+   "nexspec_id": "0fc794e4-21ba-47c3-8059-afd3e5554498",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "7rrJOM5g",
+   "playlist_collections_appears_in": "JH9NMMfI",
+   "playlist_related": "XlAtzig9",
+   "playlist_supplements": "MbVhA50F",
+   "rating": "",
+   "release_date": "2012-06-30",
+   "starring": "[]",
+   "title_original": "I Remember: A Film About Joe Brainard",
+   "title_short": "",
+   "title_sort": "i remember: a film about joe brainard",
+   "trailer": "",
+   "vimeo_id": "2942045"
+  },
+  {
+   "title": "Monologue",
+   "mediaid": "sjqlVhXd",
+   "link": "https://cdn.jwplayer.com/previews/sjqlVhXd",
+   "image": "https://cdn.jwplayer.com/v2/media/sjqlVhXd/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/sjqlVhXd/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/sjqlVhXd/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/sjqlVhXd/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/sjqlVhXd/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/sjqlVhXd/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/sjqlVhXd/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 7642,
+   "content_source_type": "renditions",
+   "pubdate": 1761969600,
+   "updated": 1789690667,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/sjqlVhXd/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/sjqlVhXd/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/sjqlVhXd/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"IN\"]",
+   "criterion_id": "34892",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Adoor Gopalakrishnan\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"ml\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2025-11-01T04:00:00Z",
+   "nexspec_id": "31e7f380-e7f0-4bd5-9501-7a45e4aa4ea9",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "rico7ygM",
+   "playlist_collections_appears_in": "0kqPy7rY",
+   "playlist_related": "K0FYgI4b",
+   "playlist_supplements": "fvqcJoV3",
+   "rating": "",
+   "release_date": "1987-10-01",
+   "starring": "[\"Ashokan\",\"Mammootty\",\"Shobana\"]",
+   "title_original": "Anantaram",
+   "title_short": "",
+   "title_sort": "monologue",
+   "trailer": "",
+   "vimeo_id": "3846323"
+  },
+  {
+   "title": "Nowhere Boy",
+   "mediaid": "93uuz0Q7",
+   "link": "https://cdn.jwplayer.com/previews/93uuz0Q7",
+   "image": "https://cdn.jwplayer.com/v2/media/93uuz0Q7/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/93uuz0Q7/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/93uuz0Q7/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/93uuz0Q7/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/93uuz0Q7/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/93uuz0Q7/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/93uuz0Q7/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5820,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1789691549,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/93uuz0Q7/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/93uuz0Q7/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/93uuz0Q7/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "32GXbVFo",
+   "playlist_collections_appears_in": "9wq8IFtM",
+   "playlist_related": "zSGTIraW",
+   "playlist_supplements": "M20CIXBc",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"GB\"]",
+   "criterion_id": "36013",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Sam Taylor-Johnson\"]",
+   "drm": "true",
+   "genre": "Biography",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en-GB\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "ca25c717-79ab-4dd4-86dc-7c8330b6c941",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "2009-10-29",
+   "starring": "[\"Aaron Taylor-Johnson\",\"Anne-Marie Duff\",\"Kristin Scott Thomas\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Nowhere Boy",
+   "trailer": "",
+   "vimeo_id": ""
+  },
+  {
+   "title": "Re-Wind",
+   "mediaid": "0wMFVBnA",
+   "link": "https://cdn.jwplayer.com/previews/0wMFVBnA",
+   "image": "https://cdn.jwplayer.com/v2/media/0wMFVBnA/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0wMFVBnA/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0wMFVBnA/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0wMFVBnA/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0wMFVBnA/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0wMFVBnA/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0wMFVBnA/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 3886,
+   "content_source_type": "renditions",
+   "pubdate": 1772341200,
+   "updated": 1789691331,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/0wMFVBnA/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/0wMFVBnA/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/0wMFVBnA/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"JP\"]",
+   "criterion_id": "35614",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Hisayasu Sato\"]",
+   "drm": "true",
+   "genre": "Horror",
+   "genre_2": "Thriller",
+   "introduction_primary": "",
+   "language": "[\"ja\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-03-01T05:00:00Z",
+   "nexspec_id": "58079d13-55d3-4a8b-ae16-b326a2b11104",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "usS3SyiK",
+   "playlist_collections_appears_in": "gG5jKNjX",
+   "playlist_related": "nNJPso2i",
+   "playlist_supplements": "gWvFUOFh",
+   "rating": "",
+   "release_date": "1988-01-01",
+   "starring": "[\"Kiyomi Ito\",\"Kazuhiro Sano\",\"Sayaka Hitomi\"]",
+   "title_original": "Re-Wind",
+   "title_short": "",
+   "title_sort": "re-wind",
+   "trailer": "",
+   "vimeo_id": "3955412"
+  },
+  {
+   "title": "Riotsville, USA",
+   "mediaid": "HU9xVW87",
+   "link": "https://cdn.jwplayer.com/previews/HU9xVW87",
+   "image": "https://cdn.jwplayer.com/v2/media/HU9xVW87/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HU9xVW87/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HU9xVW87/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HU9xVW87/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HU9xVW87/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HU9xVW87/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/HU9xVW87/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5459,
+   "content_source_type": "renditions",
+   "pubdate": 1777608000,
+   "updated": 1789691406,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/HU9xVW87/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/HU9xVW87/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/HU9xVW87/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "ed5608a1-c91a-4160-bcd7-bfb7de883212",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "35795",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Sierra Pettengill\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-05-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "dAcgK3kT",
+   "playlist_collections_appears_in": "pzqB74HU",
+   "playlist_related": "w2sns01a",
+   "playlist_supplements": "plGOOrNe",
+   "rating": "",
+   "release_date": "2022-01-01",
+   "starring": "[]",
+   "title_original": "Riotsville, U.S.A.",
+   "title_short": "",
+   "title_sort": "riotsville u.s.a.",
+   "trailer": "GkhuVYtG",
+   "vimeo_id": "4006902"
+  },
+  {
+   "title": "Shadow Kill",
+   "mediaid": "K5DB9lyS",
+   "link": "https://cdn.jwplayer.com/previews/K5DB9lyS",
+   "image": "https://cdn.jwplayer.com/v2/media/K5DB9lyS/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/K5DB9lyS/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/K5DB9lyS/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/K5DB9lyS/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/K5DB9lyS/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/K5DB9lyS/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/K5DB9lyS/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5400,
+   "content_source_type": "renditions",
+   "pubdate": 1761969600,
+   "updated": 1789690665,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/K5DB9lyS/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/K5DB9lyS/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/K5DB9lyS/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"IN\"]",
+   "criterion_id": "34894",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Adoor Gopalakrishnan\"]",
+   "drm": "true",
+   "genre": "Crime",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"ml\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2025-11-01T04:00:00Z",
+   "nexspec_id": "6a48f73a-3a82-4642-8e34-82701b80833d",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "0bQfICKn",
+   "playlist_collections_appears_in": "FCNBKccZ",
+   "playlist_related": "vj1uErkk",
+   "playlist_supplements": "ql0f8q6w",
+   "rating": "",
+   "release_date": "2002-09-07",
+   "starring": "[\"Oduvil Unnikrishnan\",\"Sukumari\",\"Narain\"]",
+   "title_original": "Nizhalkuthu",
+   "title_short": "",
+   "title_sort": "shadow kill",
+   "trailer": "",
+   "vimeo_id": "3846313"
+  },
+  {
+   "title": "Shadowless Tower",
+   "mediaid": "XkGVBSTH",
+   "link": "https://cdn.jwplayer.com/previews/XkGVBSTH",
+   "image": "https://cdn.jwplayer.com/v2/media/XkGVBSTH/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/XkGVBSTH/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/XkGVBSTH/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/XkGVBSTH/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/XkGVBSTH/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/XkGVBSTH/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/XkGVBSTH/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 8608,
+   "content_source_type": "renditions",
+   "pubdate": 1730433600,
+   "updated": 1789690415,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/XkGVBSTH/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/XkGVBSTH/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/XkGVBSTH/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"CN\"]",
+   "criterion_id": "34760",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Zhang Lü\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"cmn\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2024-11-01T04:00:00Z",
+   "nexspec_id": "dd75f186-8044-4558-999e-ba6326ceed62",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "RbkV6GvR",
+   "playlist_collections_appears_in": "f2eWBfHY",
+   "playlist_related": "qteA9s4Z",
+   "playlist_supplements": "tJijB9HD",
+   "rating": "",
+   "release_date": "2023-01-01",
+   "starring": "[\"Xin Baiqing\",\"Huang Yao\",\"Tian Zhuangzhuang\"]",
+   "title_original": "The Shadowless Tower",
+   "title_short": "",
+   "title_sort": "shadowless tower",
+   "trailer": "cz2Irfxd",
+   "vimeo_id": "3407766"
+  },
+  {
+   "title": "The Spirit of ’45",
+   "mediaid": "dU62j70B",
+   "link": "https://cdn.jwplayer.com/previews/dU62j70B",
+   "image": "https://cdn.jwplayer.com/v2/media/dU62j70B/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dU62j70B/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dU62j70B/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dU62j70B/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dU62j70B/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dU62j70B/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dU62j70B/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5923,
+   "content_source_type": "renditions",
+   "pubdate": 1777608000,
+   "updated": 1789691441,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/dU62j70B/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/dU62j70B/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/dU62j70B/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "contentType": "film",
+   "nexspec_id": "a1d17b87-2049-4b65-8c87-1028602a170f",
+   "commentary_tracks": "[]",
+   "content_warnings": "",
+   "country": "[\"GB\"]",
+   "criterion_id": "35741",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Ken Loach\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-05-01T04:00:00Z",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "J0voKANI",
+   "playlist_collections_appears_in": "6rqqFznW",
+   "playlist_related": "GXskb9XE",
+   "playlist_supplements": "lmcPaSSI",
+   "rating": "",
+   "release_date": "2013-03-15",
+   "starring": "[]",
+   "title_original": "The Spirit of ’45",
+   "title_short": "",
+   "title_sort": "spirit of ’45",
+   "trailer": "",
+   "vimeo_id": "4006882"
+  },
+  {
+   "title": "Velvet Goldmine",
+   "mediaid": "afBAbse8",
+   "link": "https://cdn.jwplayer.com/previews/afBAbse8",
+   "image": "https://cdn.jwplayer.com/v2/media/afBAbse8/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/afBAbse8/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/afBAbse8/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/afBAbse8/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/afBAbse8/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/afBAbse8/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/afBAbse8/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 7380,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1789690991,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/afBAbse8/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/afBAbse8/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/afBAbse8/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"GB\", \"US\"]",
+   "criterion_id": "35154",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Todd Haynes\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\",\"fr\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "dd8c3e70-3eeb-4c87-916d-50286540eacc",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "bkCljOa5",
+   "playlist_collections_appears_in": "pn43qvCN",
+   "playlist_related": "mIhUKbT8",
+   "playlist_supplements": "iiqO8SKb",
+   "rating": "",
+   "release_date": "1998-10-16",
+   "starring": "[\"Ewan McGregor\",\"Toni Collette\",\"Christian Bale\"]",
+   "title_original": "Velvet Goldmine",
+   "title_short": "",
+   "title_sort": "velvet goldmine",
+   "trailer": "",
+   "vimeo_id": "3717604"
+  },
+  {
+   "title": "Who Killed Teddy Bear?",
+   "mediaid": "0CuhvKML",
+   "link": "https://cdn.jwplayer.com/previews/0CuhvKML",
+   "image": "https://cdn.jwplayer.com/v2/media/0CuhvKML/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0CuhvKML/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0CuhvKML/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0CuhvKML/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0CuhvKML/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0CuhvKML/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/0CuhvKML/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 5719,
+   "content_source_type": "renditions",
+   "pubdate": 1772341200,
+   "updated": 1789691341,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/0CuhvKML/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/0CuhvKML/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/0CuhvKML/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "35629",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Joseph Cates\"]",
+   "drm": "true",
+   "genre": "Crime",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-03-01T05:00:00Z",
+   "nexspec_id": "f8441529-f748-42c8-9df5-e30092843070",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "ysPKWj9Q",
+   "playlist_collections_appears_in": "OUyZ7qi2",
+   "playlist_related": "bS7L2j96",
+   "playlist_supplements": "Xm4snQNV",
+   "rating": "",
+   "release_date": "1965-01-01",
+   "starring": "[\"Sal Mineo\",\"Juliet Prowse\",\"Jan Murray\"]",
+   "title_original": "Who Killed Teddy Bear",
+   "title_short": "",
+   "title_sort": "who killed teddy bear?",
+   "trailer": "",
+   "vimeo_id": "3955413"
+  }
+ ],
+ "feed_instance_id": "295a8e3f-4503-4468-bedb-8b93a8f21ca8"
+}
