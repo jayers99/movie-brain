@@ -437,7 +437,7 @@ def test_review_list_shows_what_criterion_showed_for_a_criterion_row(config_dir,
     from datetime import date
 
     from movie_brain.application.criterion_walk import criterion_detail
-    from movie_brain.domain.models import Film, ReviewEntry
+    from movie_brain.domain.models import ReviewEntry
     from movie_brain.infrastructure.criterion_site import CatalogItem, JwMedia
     from movie_brain.infrastructure.database import Repository
 
