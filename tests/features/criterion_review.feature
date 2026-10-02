@@ -89,3 +89,19 @@ Feature: Settling a criterion review row (spec 2026-10-01 D9, story 7)
     And the owner resolves the review for "Gh0stEnt" with --none
     Then the resolution is refused
     And there is 1 open criterion "no-record" review for "Gh0stEnt"
+
+  Scenario: A film I held all along whose new id waited for me rejoins without a false arrival
+    Given the last walk listed "Nadja" (1994) as "7xCZH5br"
+    And the last walk listed "K-ON! The Movie" (2011) under its old link only
+    And Criterion lists "Nadja" (1994) as "7xCZH5br"
+    And Criterion lists "K-ON! The Movie" (2011) as "VBLiQBrA"
+    And JW knows "VBLiQBrA" as "K-ON! The Movie" directed by "Naoko Yamada"
+    And the resolver matches "K-ON! The Movie" to "tt9000601" (tmdb 9601) directed by "Naoko Yamada"
+    And TMDB knows "tt9000601" as film 9601 "K-ON! The Movie" (2011)
+    When the walk runs
+    Then there is 1 open criterion "corpus-veto" review for "VBLiQBrA"
+    And the film "K-ON! The Movie" is not current on Criterion
+    When the owner resolves the review for "VBLiQBrA" with --film "K-ON! The Movie"
+    And the walk runs again the next day
+    Then the film "K-ON! The Movie" is current on Criterion
+    And no film arrived on Criterion today

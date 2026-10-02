@@ -4,7 +4,7 @@ seeded as the bridge leaves them: holding their mediaid, listed on the last VHX 
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -194,3 +194,43 @@ def test_binding_and_creating_by_hand_respect_the_one_holder_rule(repo):
     assert new is not None and ("criterion", "VBLiQBrA") in repo.external_ids_all(new)
     assert repo.create_criterion_film(Film("K-ON! The Movie", 2011, None, ""), "Other001", "x", 2011, TODAY) is None
     assert repo.film_id_for_external("criterion", "Other001") is None  # a refused create writes nothing
+
+
+# Review finding 1: a film Criterion carried all along whose new mediaid did not bind on the first
+# walk departs that night (D13); when it binds within the relaunch grace window it rejoins quietly.
+def _two_nights(repo, second):
+    a = _listed(repo, "Nadja", 1994, ["7xCZH5br"])
+    b = _listed(repo, "K-ON! The Movie", 2011, ["VBLiQBrA"])
+    first = repo.record_criterion_walk(_walk(_item(a, "7xCZH5br")), TODAY)
+    assert (first.arrived, first.departed) == (0, 1)
+    return b, repo.record_criterion_walk(_walk(_item(a, "7xCZH5br"), _item(b, "VBLiQBrA")), second)
+
+
+def test_a_film_held_all_along_rejoins_quietly_inside_the_grace_window(repo):
+    b, second = _two_nights(repo, TODAY + timedelta(days=1))
+    assert second.arrived == 0
+    assert _q(repo, "SELECT COUNT(*) FROM availability_transitions") == [(0,)]
+    assert _q(repo, "SELECT last_seen FROM listings WHERE film_id = ?", b) == [("2026-10-04",)]
+
+
+def test_a_return_after_the_grace_window_is_an_arrival(repo):
+    b, second = _two_nights(repo, TODAY + timedelta(days=31))
+    assert second.arrived == 1
+    assert _q(repo, "SELECT film_id, appeared_on FROM availability_transitions") == [(b, "2026-11-03")]
+
+
+def test_a_film_gone_before_the_relaunch_still_arrives_inside_the_window(repo):
+    a = _listed(repo, "Nadja", 1994, ["7xCZH5br"])
+    old = _listed(repo, "Old Friend", 1960, ["OldFrnd1"], on=date(2026, 9, 1))
+    repo.record_criterion_walk(_walk(_item(a, "7xCZH5br")), TODAY)
+    second = repo.record_criterion_walk(_walk(_item(a, "7xCZH5br"), _item(old, "OldFrnd1")), TODAY + timedelta(days=1))
+    assert second.arrived == 1
+    assert _q(repo, "SELECT film_id, appeared_on FROM availability_transitions") == [(old, "2026-10-04")]
+
+
+def test_the_relaunch_metas_are_written_once_by_the_first_walk(repo):
+    a = _listed(repo, "Nadja", 1994, ["7xCZH5br"])
+    repo.record_criterion_walk(_walk(_item(a, "7xCZH5br")), TODAY)
+    repo.record_criterion_walk(_walk(_item(a, "7xCZH5br")), TODAY + timedelta(days=2))
+    assert repo.get_meta("criterion_relaunch_frontier") == "2026-09-20"
+    assert repo.get_meta("criterion_relaunch_first_walk") == "2026-10-03"

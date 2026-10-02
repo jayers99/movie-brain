@@ -710,7 +710,14 @@ class Repository:
 
     @staticmethod
     def _write_listing(
-        c: sqlite3.Connection, film_id: int, source: str, url: str, day: str, frontier: str | None
+        c: sqlite3.Connection,
+        film_id: int,
+        source: str,
+        url: str,
+        day: str,
+        frontier: str | None,
+        *,
+        quiet: bool = False,
     ) -> bool:
         """Upsert one listing row; append an availability transition on insert or reappearance.
 
@@ -718,9 +725,11 @@ class Repository:
         (per-source MAX(last_seen) for criterion, the tmdb refresh stamp for TMDB-fed
         sources). A row strictly older than it was displayed as departed, so going
         current again is a transition; None (fresh DB) means only true inserts fire.
+        quiet = the caller knows this reappearance is not news (the Criterion relaunch's
+        grace window): the row is written, no transition fires.
         """
         row = c.execute("SELECT last_seen FROM listings WHERE film_id = ? AND source = ?", (film_id, source)).fetchone()
-        is_transition = row is None or (frontier is not None and row["last_seen"] < frontier)
+        is_transition = not quiet and (row is None or (frontier is not None and row["last_seen"] < frontier))
         c.execute(
             "INSERT INTO listings (film_id, source, url, first_seen, last_seen) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
@@ -1039,6 +1048,27 @@ class Repository:
                 (label, day, mediaid),
             )
 
+    # A film carried all along whose new mediaid binds only after the first walk (a review, a
+    # resolver outage) departed that night; inside this many days its return is not an arrival.
+    RELAUNCH_GRACE_DAYS = 30
+
+    @staticmethod
+    def _relaunch_window(c: sqlite3.Connection, frontier: str | None, seen: date) -> str | None:
+        """Store the relaunch metas once (the first walk's pre-batch frontier — the VHX era's
+        last walk, since the bridge never touches last_seen — and that walk's day); return the
+        relaunch frontier while `seen` is inside the grace window, else None."""
+        keys = ("criterion_relaunch_frontier", "criterion_relaunch_first_walk")
+        if frontier is not None:
+            for key, value in zip(keys, (frontier, seen.isoformat()), strict=True):
+                c.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING", (key, value))
+        rows = dict(c.execute("SELECT key, value FROM meta WHERE key IN (?, ?)", keys).fetchall())
+        if len(rows) < 2:
+            return None
+        first = date.fromisoformat(str(rows[keys[1]]))
+        if seen > first + timedelta(days=Repository.RELAUNCH_GRACE_DAYS):
+            return None
+        return str(rows[keys[0]])
+
     def record_criterion_walk(self, walk: CriterionWalk, seen: date) -> WalkWrite:
         """The walk's whole write in ONE transaction (spec D6): new films, mediaids, claims,
         listings against the pre-batch currency frontier, review rows, leaving labels and
@@ -1046,11 +1076,16 @@ class Repository:
 
         A film listed under two mediaids tonight (Eve's Bayou: theatrical and director's cut)
         gets ONE listing — listings are per film × source — and both claims; its listing is
-        written once, so the second item can never count as an arrival."""
+        written once, so the second item can never count as an arrival.
+
+        For RELAUNCH_GRACE_DAYS after the first walk, a film whose listing was last seen on the
+        VHX era's last walk rejoins quietly — no transition, not an arrival — because its new
+        mediaid merely waited (a review, a resolver outage) while Criterion carried it all along."""
         day = seen.isoformat()
         with self._conn() as c:
             row = c.execute("SELECT MAX(last_seen) AS m FROM listings WHERE source = 'criterion'").fetchone()
             frontier = None if row["m"] is None else str(row["m"])
+            relaunch = self._relaunch_window(c, frontier, seen)
             new_ids: list[int] = []
             for nf in walk.created:
                 cur = c.execute(
@@ -1073,7 +1108,14 @@ class Repository:
             arrived = 0
             for film_id, ids in mediaids.items():
                 url = self._criterion_listing_url(c, film_id, ids)
-                if self._write_listing(c, film_id, "criterion", url, day, frontier):
+                quiet = relaunch is not None and (
+                    c.execute(
+                        "SELECT 1 FROM listings WHERE film_id = ? AND source = 'criterion' AND last_seen = ?",
+                        (film_id, relaunch),
+                    ).fetchone()
+                    is not None
+                )
+                if self._write_listing(c, film_id, "criterion", url, day, frontier, quiet=quiet):
                     arrived += 1
             for e in walk.reviews:
                 c.execute(
