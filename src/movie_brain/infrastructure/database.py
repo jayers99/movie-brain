@@ -16,6 +16,7 @@ from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.credits import build_credits
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import (
+    BridgeTarget,
     CreditsTarget,
     EmbedTarget,
     Film,
@@ -903,6 +904,41 @@ class Repository:
                 "SELECT film_id, value FROM external_ids WHERE authority = ? ORDER BY film_id", (authority,)
             ).fetchall()
             return {str(r["value"]): int(r["film_id"]) for r in rows}
+
+    def criterion_old_urls(self) -> list[BridgeTarget]:
+        """Every stored old Criterion link (an `http…` value; a bare mediaid is not one), on its
+        CANONICAL film, ordered by that film then the link — the bridge's deterministic order."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, value FROM external_ids WHERE authority = 'criterion' AND value LIKE 'http%'"
+            ).fetchall()
+            out: list[BridgeTarget] = []
+            for r in rows:
+                fid = self._canonical_in(c, int(r["film_id"]))
+                f = c.execute("SELECT title, year FROM films WHERE id = ?", (fid,)).fetchone()
+                out.append(BridgeTarget(fid, str(r["value"]), str(f["title"]), f["year"]))
+            return sorted(out, key=lambda t: (t.film_id, t.url))
+
+    def record_bridge(self, bindings: list[tuple[int, str, str]], reviews: list[ReviewEntry], seen: date) -> None:
+        """The bridge's whole write in ONE transaction: mediaid ids, the forwarded listing URL,
+        and the clash review rows. Any failure rolls every row back."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            for film_id, mediaid, listing_url in bindings:
+                c.execute(
+                    "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'criterion', ?, ?) "
+                    "ON CONFLICT(film_id, authority, value) DO NOTHING",
+                    (film_id, mediaid, day),
+                )
+                c.execute(
+                    "UPDATE listings SET url = ? WHERE film_id = ? AND source = 'criterion'", (listing_url, film_id)
+                )
+            for e in reviews:
+                c.execute(
+                    "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "
+                    "VALUES ('criterion', ?, ?, ?, ?, ?)",
+                    (e.film_id, e.value, e.reason, e.detail, day),
+                )
 
     def has_listing(self, film_id: int, source: str) -> bool:
         """This film carries a listing from `source` — the same subquery `_TMDB_TARGET_SELECT`

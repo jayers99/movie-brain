@@ -331,6 +331,16 @@ class ReviewEntry:
 
 
 @dataclass(frozen=True)
+class BridgeTarget:
+    """One stored old Criterion link and the canonical film that holds it (spec D3)."""
+
+    film_id: int
+    url: str
+    title: str
+    year: int | None
+
+
+@dataclass(frozen=True)
 class FilmView:
     id: int
     title: str
