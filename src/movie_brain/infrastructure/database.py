@@ -199,6 +199,14 @@ class RepairFilm(NamedTuple):
     omdb_found: bool
 
 
+class DirectorTarget(NamedTuple):
+    """One film the owner sees no director for, and the Criterion id to ask JW about (D8)."""
+
+    film_id: int
+    title: str
+    mediaid: str
+
+
 _ONE_ROW_TABLES = (
     "omdb",
     "tmdb",
@@ -228,6 +236,14 @@ _TMDB_TARGET_SELECT = (
 # tombstoned films are hidden outright, merged losers are aliased onto their survivor
 # (films_for_matching) rather than surfaced under their own id.
 _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
+
+# The film's OMDb record names no director: no row, a not-found row (payload NULL) or "N/A" —
+# the exact expression the dashboard's COALESCE reads (`films_view`), so "no director" here is
+# "no director on screen". `films.id` (not an alias) so the UPDATE can use it too.
+_NO_OMDB_DIRECTOR = (
+    "NOT EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = films.id "
+    "AND NULLIF(json_extract(o.payload, '$.Director'), 'N/A') IS NOT NULL)"
+)
 
 # A series is keyed by its IMDb id alone (memo Q2): TMDB movie and TV ids share one integer
 # namespace and the providers endpoint is movie-only, so a series must never enter a TMDB
@@ -973,6 +989,36 @@ class Repository:
                 "SELECT DISTINCT value FROM match_review WHERE authority = 'criterion' AND value IS NOT NULL"
             ).fetchall()
             return {str(r["value"]) for r in rows}
+
+    def films_needing_criterion_director(self) -> list[DirectorTarget]:
+        """Films holding a Criterion mediaid whose director the owner sees nowhere: no
+        `films.director` and no OMDb director (spec 2026-10-01 D8). Old `http…` links are not
+        mediaids, so nothing qualifies before `criterion bridge --apply`. A film holding two
+        mediaids is asked by the lowest — one JW call per film. Disposed films are not shown,
+        so they are not asked. No stamp: a film JW names no director for comes back next run."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT films.id, films.title, MIN(x.value) AS mediaid FROM films "
+                "JOIN external_ids x ON x.film_id = films.id AND x.authority = 'criterion' "
+                "AND x.value NOT LIKE 'http%' "
+                f"WHERE films.director IS NULL AND {_NO_OMDB_DIRECTOR} "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = films.id) "
+                "GROUP BY films.id ORDER BY films.id"
+            ).fetchall()
+        return [DirectorTarget(int(r["id"]), str(r["title"]), str(r["mediaid"])) for r in rows]
+
+    def fill_criterion_director(self, film_id: int, director: str) -> bool:
+        """Write Criterion's director into a blank no one fills — guarded in the UPDATE itself,
+        so a director that appeared since the worklist was read (ours or OMDb's) is never
+        overwritten or shadowed. True when written."""
+        if not director:
+            raise ValueError("an empty director is never written — leave the film NULL")
+        with self._conn() as c:
+            cur = c.execute(
+                f"UPDATE films SET director = ? WHERE id = ? AND director IS NULL AND {_NO_OMDB_DIRECTOR}",
+                (director, film_id),
+            )
+            return cur.rowcount == 1
 
     @staticmethod
     def _criterion_id(c: sqlite3.Connection, film_id: int, mediaid: str, day: str) -> None:
