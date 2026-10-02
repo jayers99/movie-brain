@@ -1272,6 +1272,43 @@ def test_enrich_trailers_is_dry_run_by_default_and_prints_the_report(config_dir,
     assert "dry run" not in r.output
 
 
+def test_enrich_criterion_directors_is_dry_run_by_default_and_prints_the_report(config_dir, monkeypatch):
+    from movie_brain.application.criterion_directors import DirectorsReport
+    from movie_brain.infrastructure.criterion_site import HttpCriterionSite
+
+    calls = {}
+
+    def fake(repo, site, **kw):
+        calls.update(kw, site=site)
+        return DirectorsReport(scanned=3, filled=1, no_director=0, gone=1, failed=1)
+
+    monkeypatch.setattr("movie_brain.cli.fill_criterion_directors", fake)
+    r = runner.invoke(app, ["enrich", "criterion-directors"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is False and isinstance(calls["site"], HttpCriterionSite)
+    assert "scanned: 3 · filled: 1 · no director: 0 · not on JW: 1 · failed: 1" in r.output and "dry run" in r.output
+
+    r = runner.invoke(app, ["enrich", "criterion-directors", "--apply"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is True and "dry run" not in r.output
+
+
+def test_the_catch_up_chain_hands_the_directors_step_a_jw_site(repo, monkeypatch):
+    import movie_brain.cli as cli
+    from movie_brain.application.catch_up import CatchUpReport
+    from movie_brain.infrastructure.criterion_site import HttpCriterionSite
+
+    seen = {}
+
+    def fake_catch_up(repo, today, **kw):
+        seen.update(kw)
+        return CatchUpReport()
+
+    monkeypatch.setattr(cli, "catch_up", fake_catch_up)
+    cli._catch_up_chain()(repo, None)
+    assert isinstance(seen["criterion"], HttpCriterionSite)
+
+
 # ---- a film gets its full enrichment when it is added (owner ruling 2026-09-20) ----
 
 

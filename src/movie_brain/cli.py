@@ -6,6 +6,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
+import requests
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -14,6 +15,7 @@ from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.application.catch_up import CatchUpReport, catch_up
 from movie_brain.application.cheapcharts import audit_itunes_ids, recheck_itunes_ids, resolve_itunes_ids
+from movie_brain.application.criterion_directors import fill_criterion_directors
 from movie_brain.application.embed import embed_films
 from movie_brain.application.enrich import enrich_credits
 from movie_brain.application.export import write_csv
@@ -56,6 +58,7 @@ from movie_brain.domain.models import ServiceMeta
 from movie_brain.infrastructure.cheapcharts import CheapChartsAccount, CheapChartsClient, Pacer
 from movie_brain.infrastructure.config import Config, load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.credentials import load_credentials
+from movie_brain.infrastructure.criterion_site import HttpCriterionSite
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.embeddings import SemanticUnavailable, SentenceTransformerEmbedder
 from movie_brain.infrastructure.itunes import ItunesLookup
@@ -187,7 +190,7 @@ def _catch_up_chain() -> Callable[[Repository, TmdbClient | None], CatchUpReport
     def chain(repo: Repository, tmdb: TmdbClient | None) -> CatchUpReport:
         return catch_up(
             repo, date.today(), tmdb=tmdb, cheapcharts=CheapChartsClient(), itunes=ItunesLookup(),
-            embedder=embedder, log=_plain,
+            embedder=embedder, criterion=HttpCriterionSite(requests.Session()), log=_plain,
         )
 
     return chain
@@ -1747,6 +1750,25 @@ def enrich_trailers_cmd(
         f"scanned: {report.scanned} · YouTube trailer: {report.with_youtube} · Apple preview only: {report.apple_only}"
         f" · nothing: {report.nothing} · failed: {report.failed}"
         + (" · ABORTED" if report.aborted else "")
+        + ("" if apply else "   (dry run — nothing written)")
+    )
+
+
+@enrich_app.command("criterion-directors")
+def enrich_criterion_directors_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Write the directors (default: dry-run).")] = False,
+) -> None:
+    """Fill a director from Criterion's own record (JW Player) for every film that holds a
+    Criterion id and shows no director at all — neither ours nor OMDb's.
+
+    One JW call per film; a director anyone can already see is never changed. A film Criterion
+    names nobody for is asked again next time. Runs by itself at the tail of every sync (the
+    catch-up chain); this verb is the same step by hand. Dry-run by default.
+    """
+    report = fill_criterion_directors(_repo(), HttpCriterionSite(requests.Session()), apply=apply, log=_plain)
+    console.print(
+        f"scanned: {report.scanned} · filled: {report.filled} · no director: {report.no_director}"
+        f" · not on JW: {report.gone} · failed: {report.failed}"
         + ("" if apply else "   (dry run — nothing written)")
     )
 

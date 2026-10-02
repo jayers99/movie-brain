@@ -10,6 +10,7 @@ verb that creates films. The order is load-bearing:
 
   credits → vectors   (the vector is made from the prose the credits call brings)
   store id → trailers (Apple's preview is found by store id)
+  … → directors       (Criterion's director into a blank no one fills — spec 2026-10-01 D8 — last: it feeds nothing)
 
 The store-id step is only cheap because a CheapCharts miss is remembered (`store_lookup`, migration
 029). Every step is the verb's own use case run with apply, under its own tripwire: one source
@@ -23,6 +24,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from movie_brain.application.cheapcharts import ResolveReport, resolve_itunes_ids
+from movie_brain.application.criterion_directors import DirectorsReport, MediaSource, fill_criterion_directors
 from movie_brain.application.embed import EmbedReport, embed_films
 from movie_brain.application.enrich import EnrichReport, enrich_credits
 from movie_brain.application.trailers import PreviewSource, TrailerReport, enrich_trailers
@@ -40,14 +42,16 @@ class CatchUpReport:
     embedded: EmbedReport | None = None
     store: ResolveReport | None = None
     trailers: TrailerReport | None = None
+    directors: DirectorsReport | None = None
 
     def line(self) -> str:
-        t = self.trailers
+        t, d = self.trailers, self.directors
         return " · ".join([
             f"credits: {self.credits.enriched}" if self.credits else "credits: skipped",
             f"vectors: {self.embedded.embedded}" if self.embedded else "vectors: skipped",
             f"store ids: {self.store.resolved} of {self.store.scanned}" if self.store else "store ids: skipped",
             f"trailers: {t.with_youtube + t.apple_only} of {t.scanned}" if t else "trailers: skipped",
+            f"directors: {d.filled} of {d.scanned}" if d else "directors: skipped",
         ])
 
 
@@ -59,6 +63,7 @@ def catch_up(
     cheapcharts: CheapChartsClient | None,
     itunes: PreviewSource | None,
     embedder: Embedder | None,
+    criterion: MediaSource | None = None,
     log: Callable[[str], None],
 ) -> CatchUpReport:
     def step[R](name: str, run: Callable[[], R]) -> R | None:
@@ -81,4 +86,9 @@ def catch_up(
         store = step("store ids", lambda: resolve_itunes_ids(repo, cheapcharts, today, apply=True, log=log))
     if tmdb is not None and itunes is not None:
         trailers = step("trailers", lambda: enrich_trailers(repo, tmdb, itunes, today, apply=True, log=log))
-    return CatchUpReport(credits, embedded, store, trailers)
+    directors = None
+    if criterion is not None:
+        directors = step(
+            "criterion directors", lambda: fill_criterion_directors(repo, criterion, apply=True, log=log)
+        )
+    return CatchUpReport(credits, embedded, store, trailers, directors)
