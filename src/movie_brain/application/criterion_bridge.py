@@ -138,14 +138,18 @@ def run_bridge(
 
     targets = repo.criterion_old_urls()
     for t in targets:
-        o = obs.get(t.url)
-        if o is not None and t.url in settled:
+        existing: Observation | None = obs.get(t.url)
+        if existing is not None and t.url in settled:
             reuse = True
         else:
-            reuse = o is not None and (not apply or is_fresh(o, now)) and not (retry and o.forward.kind == "retry")
+            reuse = (
+                existing is not None
+                and (not apply or is_fresh(existing, now))
+                and not (retry and existing.forward.kind == "retry")
+            )
         if reuse:
-            assert o is not None
-            o.film_id = t.film_id
+            assert existing is not None
+            existing.film_id = t.film_id
             continue
         f = ask(t.url)
         o = Observation(t.url, t.film_id, f.status, f.location, now.isoformat())
@@ -173,6 +177,7 @@ def run_bridge(
         kind = f.kind
         if kind == "film":
             assert f.mediaid is not None
+            assert f.location is not None
             holder = holders.get(f.mediaid)
             if holder is None:
                 holders[f.mediaid] = t.film_id
