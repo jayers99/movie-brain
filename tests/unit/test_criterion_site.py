@@ -16,7 +16,10 @@ from movie_brain.infrastructure.criterion_site import (
     CATALOG_URL,
     CatalogItem,
     CriterionError,
+    JW_MEDIA_URL,
+    JwMedia,
     fetch_catalog,
+    fetch_media,
 )
 
 FIX = Path(__file__).parent.parent / "fixtures" / "criterion"
@@ -130,3 +133,41 @@ def test_sends_the_user_agent():
     responses.get(CATALOG_URL, json=_page(first, None, len(first)))
     fetch_catalog(requests.Session(), sleep=_no_sleep)
     assert responses.calls[0].request.headers["User-Agent"] == "movie-brain/0.1 (personal watchlist tool)"
+
+
+@responses.activate
+def test_media_record_decodes_its_json_string_lists():
+    responses.get(JW_MEDIA_URL.format("L5Z3RaiC"), json=_load("jw-media.L5Z3RaiC.json"))
+    m = fetch_media(requests.Session(), "L5Z3RaiC", sleep=_no_sleep)
+    assert m == JwMedia(
+        mediaid="L5Z3RaiC",
+        title="2 or 3 Things I Know About Her",
+        title_original="2 ou 3 choses que je sais d'elle",
+        release_date="1967-03-17",
+        directors=("Jean-Luc Godard",),
+        criterion_id="1333",
+        license_start="2019-04-08T04:00:00Z",
+        license_end=None,
+        content_type="film",
+    )
+
+
+@responses.activate
+def test_media_404_is_an_answer_not_an_error():
+    responses.get(JW_MEDIA_URL.format("ZZZZZZZZ"), status=404, json={"message": "['ZZZZZZZZ']: id not found in index."})
+    assert fetch_media(requests.Session(), "ZZZZZZZZ", sleep=_no_sleep) is None
+
+
+@responses.activate
+def test_media_5xx_is_weather():
+    responses.get(JW_MEDIA_URL.format("L5Z3RaiC"), status=503)
+    with pytest.raises(CriterionError):
+        fetch_media(requests.Session(), "L5Z3RaiC", sleep=_no_sleep)
+
+
+@responses.activate
+def test_media_with_a_broken_director_string_has_no_directors():
+    body = _load("jw-media.L5Z3RaiC.json")
+    body["playlist"][0]["director"] = "not json"
+    responses.get(JW_MEDIA_URL.format("L5Z3RaiC"), json=body)
+    assert fetch_media(requests.Session(), "L5Z3RaiC", sleep=_no_sleep).directors == ()
