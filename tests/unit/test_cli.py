@@ -26,18 +26,44 @@ def test_sync_requires_api_key(config_dir):
     assert "OMDB_API_KEY" in r.output
 
 
-def test_sync_propagates_exit_code(config_dir, monkeypatch):
+def test_sync_propagates_exit_code_and_keeps_full_as_a_habit(config_dir, monkeypatch):
     (config_dir / "omdb-api-key.txt").write_text("k")
     calls = {}
 
     def fake_sync(repo, api_key, today, **kw):
         calls.update(kw, api_key=api_key)
-        return SyncResult(1, False, 0, 0, False, False)
+        return SyncResult(1, 0, 0, False, False)
 
     monkeypatch.setattr("movie_brain.cli.sync", fake_sync)
     r = runner.invoke(app, ["sync", "--full"])
     assert r.exit_code == 1
-    assert calls["force_full"] is True and calls["ratings_only"] is False and calls["api_key"] == "k"
+    assert "force_full" not in calls and calls["ratings_only"] is False and calls["api_key"] == "k"
+
+
+def test_sync_prints_the_criterion_line(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    monkeypatch.setattr(
+        "movie_brain.cli.sync",
+        lambda repo, api_key, today, **kw: SyncResult(
+            0, 10, 2, False, False, criterion_walked=True, criterion_arrived=3, criterion_departed=2,
+            criterion_reviews=1,
+        ),
+    )
+    r = runner.invoke(app, ["sync"])
+    assert r.exit_code == 0, r.output
+    assert "criterion — arrived 3 · left 2 · to review 1" in r.output
+    assert "full walk" not in r.output and "not asked" not in r.output
+
+
+def test_sync_says_when_the_criterion_walk_failed(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    monkeypatch.setattr(
+        "movie_brain.cli.sync",
+        lambda repo, api_key, today, **kw: SyncResult(1, 10, 2, False, False, criterion_failed=True),
+    )
+    r = runner.invoke(app, ["sync"])
+    assert r.exit_code == 1
+    assert "nothing written for Criterion" in r.output
 
 
 def test_import_legacy_and_status(config_dir, tmp_path):
@@ -1255,7 +1281,7 @@ def _capture_sync(monkeypatch, calls):
 
     def fake_sync(repo, api_key, today, **kw):
         calls.append(kw)
-        return SyncResult(0, False, 10, 2, False, False, catch_up=CatchUpReport(credits=EnrichReport(2, 2)))
+        return SyncResult(0, 10, 2, False, False, catch_up=CatchUpReport(credits=EnrichReport(2, 2)))
 
     monkeypatch.setattr("movie_brain.cli.sync", fake_sync)
 

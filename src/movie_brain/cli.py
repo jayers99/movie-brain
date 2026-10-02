@@ -43,7 +43,7 @@ from movie_brain.application.repair_keys import (
     repair_nomatch,
 )
 from movie_brain.application.review import resolve_review
-from movie_brain.application.sync import SOURCE, sync
+from movie_brain.application.sync import SOURCE, SyncResult, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
 from movie_brain.application.trailers import enrich_trailers
 from movie_brain.application.wishlist import (
@@ -217,9 +217,26 @@ def _enrich_after_add(repo: Repository, created: int | None) -> None:
         console.print(f"caught up — {result.catch_up.line()}")
 
 
+def _criterion_line(result: SyncResult) -> str | None:
+    """Spec D11's one line, plus how many new films waited unasked when there were any."""
+    if result.criterion_failed:
+        return "criterion — the walk failed; nothing written for Criterion (the reason is above)"
+    if not result.criterion_walked:
+        return None
+    line = (
+        f"criterion — arrived {result.criterion_arrived} · left {result.criterion_departed} · "
+        f"to review {result.criterion_reviews}"
+    )
+    if result.criterion_skipped:
+        line += f" · not asked tonight {result.criterion_skipped}"
+    return line
+
+
 @app.command("sync")
 def sync_cmd(
-    full: Annotated[bool, typer.Option("--full", help="Force a complete catalog re-walk.")] = False,
+    full: Annotated[
+        bool, typer.Option("--full", help="Kept for habit — every sync walks the whole catalog.")
+    ] = False,
     ratings_only: Annotated[
         bool, typer.Option("--ratings-only", help="Skip Criterion; refresh OMDb ratings only.")
     ] = False,
@@ -237,7 +254,6 @@ def sync_cmd(
         _repo(),
         api_key,
         date.today(),
-        force_full=full,
         ratings_only=ratings_only,
         tmdb_token=load_tmdb_token(cfg),
         config_dir=cfg.config_dir,
@@ -245,10 +261,13 @@ def sync_cmd(
         catch_up=_catch_up_chain(),
     )
     console.print(
-        f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk} · "
+        f"films: {result.films} · looked up: {result.looked_up} · "
         f"availability refreshed: {result.tmdb_refreshed} · promoted: {result.mc_promoted} · "
         f"keyed: {result.tmdb_matched} · review: {result.tmdb_reviewed}"
     )
+    line = _criterion_line(result)
+    if line is not None:
+        console.print(line, markup=False, highlight=False)
     if result.catch_up is not None:
         console.print(f"caught up — {result.catch_up.line()}")
     raise typer.Exit(result.exit_code)
