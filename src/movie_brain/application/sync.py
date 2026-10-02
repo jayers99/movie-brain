@@ -143,7 +143,10 @@ def sync(
             walk = walk_criterion(repo, site or HttpCriterionSite(session), fetcher, tmdb_client, today, log=log)
         except Exception as exc:  # noqa: BLE001 — one source's weather never breaks another (spec D6)
             walk_failed = True
-            log(f"criterion walk failed — nothing written for Criterion; the rest of the sync runs: {exc}")
+            log(
+                "criterion walk failed — nothing written for Criterion; the rest of the sync runs: "
+                f"{type(exc).__name__}: {exc}"
+            )
 
     mc_promoted = 0
     if not ratings_only and not skip_catalog and config_dir is not None:

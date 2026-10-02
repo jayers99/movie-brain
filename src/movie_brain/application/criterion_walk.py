@@ -190,7 +190,9 @@ def walk_criterion(
         if media is None:
             reviews.append(_review(NO_RECORD, item, None))
             continue
-        q = make_query(item.title, item.year, "criterion", director=_director(media))
+        q = make_query(
+            item.title, item.year, "criterion", director=_director(media), runtime_min=item.duration_s // 60 or None
+        )
         try:
             verdict = resolve(q, fetcher.fetch(q))
         except WEATHER as exc:
