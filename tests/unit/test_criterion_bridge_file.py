@@ -54,3 +54,18 @@ def test_freshness_is_24_hours():
 
 def test_missing_file_is_empty(tmp_path):
     assert load_observations(tmp_path / "nope.jsonl") == {}
+
+
+def test_recover_from_killed_run_with_no_trailing_newline(tmp_path):
+    """A killed run leaves a last line with no trailing newline.
+    The next append must not glue its JSON onto the fragment."""
+    p = tmp_path / "criterion-bridge.jsonl"
+    # Simulate a completed observation + a killed run that left no trailing newline
+    append_observation(p, _obs("https://www.criterionchannel.com/a"))
+    with p.open("a") as fh:
+        fh.write('{"url": "https://www.criterionchannel.com/b", "film_id": 7, "sta')
+    # Now append a second valid observation (the bridge resumes)
+    append_observation(p, _obs("https://www.criterionchannel.com/c"))
+    # Both valid URLs should load; the fragment is skipped
+    got = load_observations(p)
+    assert set(got.keys()) == {"https://www.criterionchannel.com/a", "https://www.criterionchannel.com/c"}

@@ -52,6 +52,16 @@ def load_observations(path: Path) -> dict[str, Observation]:
 
 
 def append_observation(path: Path, obs: Observation) -> None:
+    # If file exists, is non-empty, and does not end in "\n", prepend a newline
+    # to recover from a killed run that left no trailing newline
+    if path.exists() and path.stat().st_size > 0:
+        content = path.read_text()
+        if not content.endswith("\n"):
+            with path.open("a") as fh:
+                fh.write("\n")
+                fh.flush()
+                os.fsync(fh.fileno())
+
     with path.open("a") as fh:
         fh.write(json.dumps(asdict(obs)) + "\n")
         fh.flush()
