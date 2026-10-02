@@ -17,13 +17,16 @@ from movie_brain.infrastructure.criterion_site import (
     CATALOG_URL,
     CatalogItem,
     CriterionError,
+    Forward,
     JW_MEDIA_URL,
     JW_PLAYLIST_URL,
     JwMedia,
     Leaving,
+    classify_forward,
     fetch_catalog,
     fetch_leaving,
     fetch_media,
+    head_old_url,
     label_from_slug,
 )
 
@@ -226,3 +229,44 @@ def test_an_expiry_on_another_day_is_reported_not_trusted():
     first = playlist["playlist"][0]["mediaid"]
     assert result.labels[first] == "October 31"
     assert len(result.mismatches) == 1 and first in result.mismatches[0]
+
+
+@pytest.mark.parametrize(
+    "location",
+    [
+        "/films/gpRRkq27/test-pattern",
+        "https://www.criterionchannel.com/films/gpRRkq27/test-pattern",
+        "/films/gpRRkq27",
+        "/films/gpRRkq27/",
+    ],
+)
+def test_a_film_forward_yields_its_mediaid_absolute_or_relative(location):
+    f = classify_forward(307, location)
+    assert (f.kind, f.mediaid) == ("film", "gpRRkq27")
+
+
+def test_a_supplement_forward_has_no_film():
+    f = classify_forward(307, "/supplements/3ekwz1ry/contras-city")
+    assert (f.kind, f.mediaid) == ("supplement", None)
+
+
+def test_404_is_gone_and_anything_else_is_retry():
+    assert classify_forward(404, None).kind == "gone"
+    assert classify_forward(200, None).kind == "retry"
+    assert classify_forward(None, None).kind == "retry"
+    assert classify_forward(307, "/somewhere-else").kind == "retry"
+
+
+@responses.activate
+def test_head_does_not_follow_the_redirect():
+    responses.head("https://www.criterionchannel.com/test-pattern", status=307,
+                   headers={"Location": "/films/gpRRkq27/test-pattern"})
+    f = head_old_url(requests.Session(), "https://www.criterionchannel.com/test-pattern", Pacer(0))
+    assert f == Forward(307, "/films/gpRRkq27/test-pattern", "gpRRkq27", "film")
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_head_network_error_is_retry():
+    responses.head("https://www.criterionchannel.com/x", body=requests.ConnectionError("down"))
+    assert head_old_url(requests.Session(), "https://www.criterionchannel.com/x", Pacer(0)).kind == "retry"
