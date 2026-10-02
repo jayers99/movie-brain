@@ -110,6 +110,7 @@ class BridgeReport:
     reviews: int
     applied: bool
     reopened: int
+    multi: int = 0  # films that bound more than one distinct mediaid in this run
 
 
 def run_bridge(
@@ -209,4 +210,8 @@ def run_bridge(
         for url in bound_urls:
             obs[url].applied = True
         rewrite_observations(path, obs.values())
-    return BridgeReport(counts, drift, len(reviews), apply, reopened)
+    bound_ids: dict[int, set[str]] = {}
+    for film_id, mediaid, _url in bindings:
+        bound_ids.setdefault(film_id, set()).add(mediaid)
+    multi = sum(1 for ids in bound_ids.values() if len(ids) > 1)
+    return BridgeReport(counts, drift, len(reviews), apply, reopened, multi)

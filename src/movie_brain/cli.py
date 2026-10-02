@@ -687,7 +687,8 @@ def criterion_bridge_cmd(
     console.print(
         f"links: {sum(c.values())} · film {c.get('film', 0)} · same film {c.get('same-film', 0)} · "
         f"clash {c.get('held', 0)} · extra {c.get('supplement', 0)} · gone {c.get('gone', 0)} · "
-        f"retry {c.get('retry', 0)} · reopened {report.reopened}",
+        f"retry {c.get('retry', 0)} · reopened {report.reopened}"
+        + (f" · two ids {report.multi}" if report.multi else ""),
         markup=False, highlight=False,
     )
     kinds = {k: sum(1 for d in report.drift if d.kind == k) for k in ("year", "title", "both")}
@@ -699,6 +700,11 @@ def criterion_bridge_cmd(
         console.print(
             f"  #{d.film_id:<6} {d.title} ({d.year})  →  {d.cat_title} ({d.cat_year})  {d.kind}",
             markup=False, highlight=False, soft_wrap=True,
+        )
+    if c.get("retry", 0) > 0:
+        console.print(
+            f"{c['retry']} links got no usable answer — rerun with --retry to ask them again",
+            markup=False, highlight=False,
         )
 
 

@@ -1478,6 +1478,26 @@ def test_criterion_bridge_wires_the_use_case(config_dir, monkeypatch):
     assert "DRY RUN" in r.output and "#56" in r.output and "2019" in r.output and "2021" in r.output
 
 
+def test_criterion_bridge_says_what_retry_and_two_ids_mean(config_dir, monkeypatch):
+    from movie_brain.application.criterion_bridge import BridgeReport
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", lambda session, **kw: [])
+    monkeypatch.setattr(
+        "movie_brain.application.criterion_bridge.run_bridge",
+        lambda *a, **kw: BridgeReport({"film": 2, "retry": 3}, [], 0, False, 0, 1),
+    )
+    r = runner.invoke(app, ["criterion", "bridge"])
+    assert r.exit_code == 0, r.output
+    assert "two ids 1" in r.output
+    assert "3 links got no usable answer — rerun with --retry to ask them again" in r.output
+    monkeypatch.setattr(
+        "movie_brain.application.criterion_bridge.run_bridge",
+        lambda *a, **kw: BridgeReport({"film": 2}, [], 0, False, 0),
+    )
+    r = runner.invoke(app, ["criterion", "bridge"])
+    assert "two ids" not in r.output and "no usable answer" not in r.output
+
+
 def test_criterion_bridge_catalog_failure_exits_1(config_dir, monkeypatch):
     from movie_brain.infrastructure.criterion_site import CriterionError
 

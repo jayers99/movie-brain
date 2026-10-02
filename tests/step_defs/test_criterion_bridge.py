@@ -99,6 +99,22 @@ def run_apply(ctx):
     _run(ctx, apply=True)
 
 
+@when("I run the bridge with apply but the answers cannot be marked")
+def run_apply_crash(ctx):
+    from movie_brain.application import criterion_bridge
+
+    def boom(path, observations):
+        raise RuntimeError("killed before the answers were marked")
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(criterion_bridge, "rewrite_observations", boom)
+    try:
+        with pytest.raises(RuntimeError):
+            _run(ctx, apply=True)
+    finally:
+        mp.undo()
+
+
 @when("I run the bridge with apply a day later")
 def run_apply_later(ctx):
     _run(ctx, apply=True, now=NOW + timedelta(hours=25))
@@ -176,3 +192,24 @@ def open_reviews(ctx, n, reason):
 @then(parsers.parse("the bridge reopened {n:d} line"))
 def reopened(ctx, n):
     assert ctx["report"].reopened == n
+
+
+@then(parsers.parse('the observation for "{slug}" is applied'))
+def obs_applied(ctx, slug):
+    assert load_observations(ctx["dir"] / BRIDGE_FILE)[SITE + slug].applied is True
+
+
+@then(parsers.parse('the observation for "{slug}" is not applied'))
+def obs_not_applied(ctx, slug):
+    assert load_observations(ctx["dir"] / BRIDGE_FILE)[SITE + slug].applied is False
+
+
+@then(parsers.parse('the film "{title}" is the claimant of the open criterion "{reason}" review'))
+def claimant(ctx, title, reason):
+    rows = [r for r in ctx["repo"].open_reviews("criterion") if r["reason"] == reason]
+    assert [r["film_id"] for r in rows] == [_fid(ctx, title)]
+
+
+@then(parsers.parse("the bridge bound {n:d} ids on {m:d} film"))
+def multi(ctx, n, m):
+    assert ctx["report"].multi == m

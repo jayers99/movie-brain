@@ -85,3 +85,36 @@ Feature: Criterion bridge — give every stored film its new Criterion id before
     When I run the bridge
     And I run the bridge with apply a day later
     Then the site was asked 2 times
+
+  Scenario: A crash after the database write and before the answers are marked is healed on the next run
+    Given a Criterion film "Lone Wolf and Cub: Sword of Vengeance" (1972) at old link "sword-of-vengeance"
+    And the old link "sword-of-vengeance" forwards to "/films/rLiSVzkD/lone-wolf-and-cub"
+    And a Criterion film "Lone Wolf and Cub: Baby Cart at the River Styx" (1972) at old link "river-styx"
+    And the old link "river-styx" forwards to "/films/rLiSVzkD/lone-wolf-and-cub"
+    When I run the bridge with apply but the answers cannot be marked
+    Then the film "Test Pattern" holds criterion id "gpRRkq27"
+    And the observation for "test-pattern" is not applied
+    When I run the bridge with apply
+    Then the film "Test Pattern" holds criterion id "gpRRkq27"
+    And the bridge counted 2 "same-film"
+    And the bridge counted 1 "held"
+    And the observation for "test-pattern" is applied
+    And there is 1 open criterion "id-conflict" review
+
+  Scenario: The lower film id wins a shared id, whatever the link order
+    Given a Criterion film "Zeta Film" (1960) at old link "zzz-last"
+    And the old link "zzz-last" forwards to "/films/Sh4reD01/shared"
+    And a Criterion film "Alpha Film" (1960) at old link "aaa-first"
+    And the old link "aaa-first" forwards to "/films/Sh4reD01/shared"
+    When I run the bridge with apply
+    Then the film "Zeta Film" holds criterion id "Sh4reD01"
+    And the film "Alpha Film" holds no criterion id
+    And the film "Alpha Film" is the claimant of the open criterion "id-conflict" review
+
+  Scenario: A film whose old links forward to two different ids gets both and is counted
+    Given the film "Test Pattern" also holds old link "test-pattern-2"
+    And the old link "test-pattern-2" forwards to "/films/Zz99Zz99/test-pattern-cut"
+    When I run the bridge with apply
+    Then the bridge bound 2 ids on 1 film
+    And the film "Test Pattern" holds criterion id "gpRRkq27"
+    And the film "Test Pattern" holds criterion id "Zz99Zz99"
