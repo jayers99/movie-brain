@@ -107,3 +107,13 @@ Gap check per `checks/README.md`: point A on this spec + the brief before the ow
 ## 7. Out of scope
 
 Series and supplements (excluded as before); Criterion's editorial shelves (`/new`, themed playlists); per-film licence-end refresh for every film (D7 reads the playlists only); any change to the dashboard; Criterion 24/7 live channel.
+
+## 8. Build split (owner ruling 2026-10-01)
+
+Three plans, built in rollout order, each in its own session, all on this branch:
+
+- **Plan A — adapter + bridge.** `infrastructure/criterion.py` rewritten (D1, the JW media and leaving fetchers, D7's parser), `criterion bridge` (D3) with its review rows. The sync is NOT touched: the old adapter's imports stay until Plan B, so the suite stays green. Rollout steps 1–2 (backup, bridge dry run) can run live as soon as A is merged into the branch.
+- **Plan B — the walk.** D2, D4–D6, D9–D13: staging, reservations, `record_criterion_walk`, review resolution for criterion rows, `SyncResult` counts, the removals, the lifted blocker, the docs. Rollout steps 3–4.
+- **Plan C — directors.** D8's chain step and `enrich criterion-directors`.
+
+Point C of the gap check runs once, after Plan C, before rollout step 3.
