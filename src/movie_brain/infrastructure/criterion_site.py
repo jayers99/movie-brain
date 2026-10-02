@@ -28,6 +28,7 @@ JW_MEDIA_URL = "https://cdn.jwplayer.com/v2/media/{}"
 JW_DELAY_S = 0.25
 JW_PLAYLIST_URL = "https://cdn.jwplayer.com/v2/playlists/{}"
 BRIDGE_DELAY_S = 0.4
+CRITERION_FILM_URL = BASE + "/films/{}"  # a new film's listing link; the site 308s it to the slugged page (D10)
 
 _DATED = re.compile(r'href="(/discover/(leaving-[a-z]+-\d{1,2}))"')
 _PLAYLIST_ID = re.compile(r'\\"playlistID\\":\\"([A-Za-z0-9]{8})\\"')
@@ -100,6 +101,17 @@ def _blank(raw: object) -> str | None:
     return str(raw) if raw not in (None, "") else None
 
 
+def _json_object(resp: requests.Response, what: str) -> dict[str, Any]:
+    """The body as a JSON object, or CriterionError — never an AttributeError further down."""
+    try:
+        body = resp.json()
+    except (ValueError, requests.exceptions.JSONDecodeError) as exc:
+        raise CriterionError(f"{what}: malformed JSON — {exc}") from exc
+    if not isinstance(body, dict):
+        raise CriterionError(f"{what}: expected a JSON object, got {type(body).__name__}")
+    return body
+
+
 def _get(
     session: requests.Session,
     url: str,
@@ -143,10 +155,7 @@ def fetch_catalog(
         resp = _get(session, CATALOG_URL, pacer, sleep, params=params)
         if resp.status_code != 200:
             raise CriterionError(f"catalog: HTTP {resp.status_code}")
-        try:
-            body = resp.json()
-        except (ValueError, requests.exceptions.JSONDecodeError) as exc:
-            raise CriterionError(f"catalog: malformed JSON — {exc}") from exc
+        body = _json_object(resp, "catalog")
         items = body.get("items") or []
         if not items:
             raise CriterionError("catalog: empty page — site changed?")
@@ -181,22 +190,10 @@ def fetch_catalog(
     return films
 
 
-def fetch_media(
-    session: requests.Session, mediaid: str, pacer: Pacer | None = None, sleep: Callable[[float], None] = time.sleep
-) -> JwMedia | None:
-    """One film's JW record. None = JW answered 404 (no such id) — an answer, not weather."""
-    pacer = pacer or Pacer(JW_DELAY_S, sleep=sleep)
-    resp = _get(session, JW_MEDIA_URL.format(mediaid), pacer, sleep)
-    if resp.status_code == 404:
-        return None
-    if resp.status_code != 200:
-        raise CriterionError(f"jw media {mediaid}: HTTP {resp.status_code}")
-    try:
-        body = resp.json()
-    except (ValueError, requests.exceptions.JSONDecodeError) as exc:
-        raise CriterionError(f"jw media {mediaid}: malformed JSON — {exc}") from exc
+def parse_media(body: dict[str, Any], mediaid: str) -> JwMedia:
+    """One JW `/v2/media/<id>` answer → the fields the walk reads. An empty playlist raises."""
     playlist = body.get("playlist") or []
-    if not playlist:
+    if not playlist or not isinstance(playlist[0], dict):
         raise CriterionError(f"jw media {mediaid}: empty playlist")
     item = playlist[0]
     return JwMedia(
@@ -210,6 +207,19 @@ def fetch_media(
         license_end=_blank(item.get("license_end_date_time")),
         content_type=str(item.get("contentType") or ""),
     )
+
+
+def fetch_media(
+    session: requests.Session, mediaid: str, pacer: Pacer | None = None, sleep: Callable[[float], None] = time.sleep
+) -> JwMedia | None:
+    """One film's JW record. None = JW answered 404 (no such id) — an answer, not weather."""
+    pacer = pacer or Pacer(JW_DELAY_S, sleep=sleep)
+    resp = _get(session, JW_MEDIA_URL.format(mediaid), pacer, sleep)
+    if resp.status_code == 404:
+        return None
+    if resp.status_code != 200:
+        raise CriterionError(f"jw media {mediaid}: HTTP {resp.status_code}")
+    return parse_media(_json_object(resp, f"jw media {mediaid}"), mediaid)
 
 
 def label_from_slug(slug: str) -> str | None:
@@ -229,22 +239,37 @@ def _expiry_label(license_end: str | None) -> str | None:
     return f"{moment.strftime('%B')} {moment.day}"
 
 
+def _soonest(label: str, today: date) -> tuple[int, int]:
+    """Order key for a leaving label: months ahead of today's month, then the day. Of two dated
+    pages naming one film, the one that comes first is the useful date."""
+    month, day = label.split()
+    return ((_MONTHS.index(month.lower()) + 1 - today.month) % 12, int(day))
+
+
 def fetch_leaving(
-    session: requests.Session, pacer: Pacer | None = None, sleep: Callable[[float], None] = time.sleep
+    session: requests.Session,
+    pacer: Pacer | None = None,
+    sleep: Callable[[float], None] = time.sleep,
+    *,
+    site_pacer: Pacer | None = None,
+    today: date | None = None,
 ) -> Leaving:
     """Labels from every DATED leaving page the home page links (D7). The label is the page's
-    own slug; each film's `license_end_date_time` is only a cross-check, reported on mismatch."""
+    own slug; each film's `license_end_date_time` is only a cross-check, reported on mismatch.
+    criterionchannel.com pages wait the site's pace (`site_pacer`), the JW playlists JW's
+    (`pacer`). A film on two dated pages keeps the sooner date. A playlist with a next page
+    raises: no two-page answer has ever been captured, so the walk keeps last-known labels."""
     pacer = pacer or Pacer(JW_DELAY_S, sleep=sleep)
-    home = _get(session, BASE + "/", pacer, sleep)
+    site_pacer = site_pacer or Pacer(CATALOG_DELAY_S, sleep=sleep)
+    today = today or date.today()
+    home = _get(session, BASE + "/", site_pacer, sleep)
     if home.status_code != 200:
         raise CriterionError(f"home page: HTTP {home.status_code}")
-    pages = sorted({(path, slug) for path, slug in _DATED.findall(home.text) if label_from_slug(slug)})
+    pages = sorted({(path, label) for path, slug in _DATED.findall(home.text) if (label := label_from_slug(slug))})
     labels: dict[str, str] = {}
     mismatches: list[str] = []
-    for path, slug in pages:
-        label = label_from_slug(slug)
-        assert label is not None
-        page = _get(session, BASE + path, pacer, sleep)
+    for path, label in pages:
+        page = _get(session, BASE + path, site_pacer, sleep)
         if page.status_code != 200:
             raise CriterionError(f"{path}: HTTP {page.status_code}")
         pids = list(dict.fromkeys(_PLAYLIST_ID.findall(page.text)))
@@ -254,15 +279,16 @@ def fetch_leaving(
             pl = _get(session, JW_PLAYLIST_URL.format(pid), pacer, sleep, params={"page_limit": 500})
             if pl.status_code != 200:
                 raise CriterionError(f"playlist {pid}: HTTP {pl.status_code}")
-            try:
-                body = pl.json()
-            except (ValueError, requests.exceptions.JSONDecodeError) as exc:
-                raise CriterionError(f"playlist {pid}: malformed JSON — {exc}") from exc
+            body = _json_object(pl, f"playlist {pid}")
+            if (body.get("links") or {}).get("next"):
+                raise CriterionError(f"playlist {pid}: more than 500 films — the next page is not read")
             for item in body.get("playlist") or []:
                 mediaid = item.get("mediaid")
                 if not mediaid:
                     continue
-                labels[mediaid] = label
+                held = labels.get(mediaid)
+                if held is None or _soonest(label, today) < _soonest(held, today):
+                    labels[mediaid] = label
                 expiry = _expiry_label(item.get("license_end_date_time"))
                 if expiry is not None and expiry != label:
                     mismatches.append(f"{mediaid} {item.get('title')!r}: page says {label}, expiry says {expiry}")
@@ -290,3 +316,23 @@ def head_old_url(session: requests.Session, url: str, pacer: Pacer) -> Forward:
     except requests.RequestException:
         return Forward(None, None, None, "retry")
     return classify_forward(resp.status_code, resp.headers.get("Location"))
+
+
+class HttpCriterionSite:
+    """The live site behind the nightly walk: one pacer per host — www.criterionchannel.com
+    (the catalog and the leaving pages, 1 s apart) and cdn.jwplayer.com (0.25 s apart)."""
+
+    def __init__(self, session: requests.Session, sleep: Callable[[float], None] = time.sleep) -> None:
+        self.session = session
+        self.sleep = sleep
+        self.site_pacer = Pacer(CATALOG_DELAY_S, sleep=sleep)
+        self.jw_pacer = Pacer(JW_DELAY_S, sleep=sleep)
+
+    def catalog(self) -> list[CatalogItem]:
+        return fetch_catalog(self.session, self.site_pacer, self.sleep)
+
+    def media(self, mediaid: str) -> JwMedia | None:
+        return fetch_media(self.session, mediaid, self.jw_pacer, self.sleep)
+
+    def leaving(self) -> Leaving:
+        return fetch_leaving(self.session, self.jw_pacer, self.sleep, site_pacer=self.site_pacer)

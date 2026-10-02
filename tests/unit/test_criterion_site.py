@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import json
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -15,11 +16,13 @@ from movie_brain.infrastructure.cheapcharts import Pacer
 from movie_brain.infrastructure.criterion_site import (
     BASE,
     CATALOG_URL,
+    CRITERION_FILM_URL,
     JW_MEDIA_URL,
     JW_PLAYLIST_URL,
     CatalogItem,
     CriterionError,
     Forward,
+    HttpCriterionSite,
     JwMedia,
     classify_forward,
     fetch_catalog,
@@ -27,6 +30,7 @@ from movie_brain.infrastructure.criterion_site import (
     fetch_media,
     head_old_url,
     label_from_slug,
+    parse_media,
 )
 
 FIX = Path(__file__).parent.parent / "fixtures" / "criterion"
@@ -299,3 +303,95 @@ def test_leaving_page_with_no_playlist_ids_raises():
     responses.get(BASE + "/discover/leaving-october-31", body="<html>no playlist here</html>")
     with pytest.raises(CriterionError):
         fetch_leaving(requests.Session(), sleep=_no_sleep)
+
+
+# --- Plan B: parked findings from Plan A's reviews, and the walk's site object -------------
+
+
+@responses.activate
+def test_a_catalog_body_that_is_a_list_raises_criterion_error():
+    responses.get(CATALOG_URL, json=[])
+    with pytest.raises(CriterionError, match="JSON object"):
+        fetch_catalog(requests.Session(), sleep=_no_sleep)
+
+
+@responses.activate
+def test_a_media_body_that_is_a_list_raises_criterion_error():
+    responses.get(JW_MEDIA_URL.format("L5Z3RaiC"), json=[])
+    with pytest.raises(CriterionError, match="JSON object"):
+        fetch_media(requests.Session(), "L5Z3RaiC", sleep=_no_sleep)
+
+
+@responses.activate
+def test_site_pages_wait_the_site_pace_and_the_playlist_the_jw_pace():
+    _leaving_mocks()
+    site_sleeps: list[float] = []
+    jw_sleeps: list[float] = []
+    fetch_leaving(
+        requests.Session(),
+        pacer=Pacer(0.25, sleep=jw_sleeps.append, clock=lambda: 0.0),
+        sleep=_no_sleep,
+        site_pacer=Pacer(1.0, sleep=site_sleeps.append, clock=lambda: 0.0),
+    )
+    assert site_sleeps == [1.0]  # home page, then the dated page one site-second later
+    assert jw_sleeps == []  # one playlist call: nothing to wait for
+
+
+def _playlist_page(pid: str) -> str:
+    # The RSC payload escapes its quotes; this is the token the parser reads, verbatim.
+    return '<script>p(\\"playlistID\\":\\"' + pid + '\\")</script>'
+
+
+@responses.activate
+def test_a_film_on_two_dated_pages_keeps_the_sooner_date():
+    # 'august' sorts before 'september', so the old last-page-wins code labelled September 30.
+    responses.get(BASE + "/", body='<a href="/discover/leaving-august-31"></a><a href="/discover/leaving-september-30"></a>')
+    one = _load("jw-playlist.0WbeKrrA.full.json")
+    one["playlist"] = one["playlist"][:1]  # Zabriskie Point, Tg73fdO2
+    for slug, pid in (("leaving-august-31", "AugPl001"), ("leaving-september-30", "SepPl001")):
+        responses.get(BASE + "/discover/" + slug, body=_playlist_page(pid))
+        responses.get(JW_PLAYLIST_URL.format(pid), json=one)
+    result = fetch_leaving(requests.Session(), sleep=_no_sleep, today=date(2026, 8, 20))
+    assert result.labels == {"Tg73fdO2": "August 31"}
+
+
+@responses.activate
+def test_a_playlist_with_a_next_page_raises_rather_than_cut_it_short():
+    playlist = _load("jw-playlist.0WbeKrrA.full.json")
+    playlist["links"]["next"] = playlist["links"]["first"].replace("page_offset=1", "page_offset=501")
+    responses.get(BASE + "/", body=(FIX / "home-2026-10-01.html").read_text())
+    responses.get(BASE + "/discover/leaving-october-31", body=(FIX / "leaving-october-31.html").read_text())
+    responses.get(JW_PLAYLIST_URL.format("0WbeKrrA"), json=playlist)
+    with pytest.raises(CriterionError, match="next page"):
+        fetch_leaving(requests.Session(), sleep=_no_sleep)
+
+
+def test_parse_media_reads_the_captured_record():
+    m = parse_media(_load("jw-media.L5Z3RaiC.json"), "L5Z3RaiC")
+    assert (m.mediaid, m.title, m.directors, m.criterion_id) == (
+        "L5Z3RaiC", "2 or 3 Things I Know About Her", ("Jean-Luc Godard",), "1333",
+    )
+    assert m.title_original == "2 ou 3 choses que je sais d'elle"
+
+
+def test_parse_media_with_an_empty_playlist_raises():
+    with pytest.raises(CriterionError, match="empty playlist"):
+        parse_media({"playlist": []}, "L5Z3RaiC")
+
+
+@responses.activate
+def test_the_http_site_answers_the_walk_through_the_three_readers():
+    last = _load("all-films-results.lastpage.json")
+    last["total"] = len(last["items"])  # served as the only page
+    responses.get(CATALOG_URL, json=last)
+    responses.get(JW_MEDIA_URL.format("L5Z3RaiC"), json=_load("jw-media.L5Z3RaiC.json"))
+    responses.get(BASE + "/", body='<html><a href="/discover/leaving-soon"></a></html>')
+    site = HttpCriterionSite(requests.Session(), sleep=_no_sleep)
+    films = {i["mediaid"] for i in last["items"] if i["contentType"] == "film"}
+    assert {c.mediaid for c in site.catalog()} == films
+    assert site.media("L5Z3RaiC").directors == ("Jean-Luc Godard",)
+    assert site.leaving().labels == {}
+
+
+def test_a_new_films_link_is_its_bare_film_page():
+    assert CRITERION_FILM_URL.format("gpRRkq27") == "https://www.criterionchannel.com/films/gpRRkq27"
