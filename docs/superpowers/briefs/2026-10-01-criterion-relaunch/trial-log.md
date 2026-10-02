@@ -52,3 +52,9 @@ Snapshot: `git archive 4754c6c` + a read-only copy of the live DB taken 2026-10-
 | 14 | No Playwright replay of the stories on a post-sync catalogue (gap-unpictured) | codex 11 | codex-only | true-declined | the owner's hands-on test is that replay |
 | 15 | #1777's JW answer has no saved capture (provenance) | codex 12 | codex-only | fixed | `jw-media.dYbj5nMq.json` captured |
 | 16–21 | Exclusion stories 12, 13, 14, 15, 17, 16 have no walkable card (exclusion-to-walk) | codex 13–16, 18, 19 | codex-only | true-declined | each is already a story card stating the outcome; nothing to click for a terminal feature |
+
+Agent minutes: Claude 12.2 · Codex 15.8 · Findings: 7 + 19 → 21 rows · Fixed: 11 (6 of them story text) · Stories added: 1 (19, after the re-check) · Declined: 10 · Owner decision: 1 (departed films — rule kept as it was) · Not checked: real review rows and arrivals through the resolver (no TMDB token in the snapshot), check 6 (no credentials), Darwin repair (not yet done)
+
+### Scoped re-check (snapshot 3b5d531)
+
+Claude (findings 1, 2, 3, 4, 6, 7), 4.1 min: closed 1, 2, 3, 4, 6; 7 half-open — the dry run names the two-id films, but the declined unbind verb had no exclusion card → story 19 added. Codex (its 1, 2, 3, 4, 5, 6, 8, 9, 12), 4.9 min: all nine closed; it confirmed the Darwin repair is a stated prerequisite, not yet done. Labels for the pilot: both 5 · claude-only 2 · codex-only 14 · duplicate 0 · false-positive 0 · unverifiable 0 · true-declined 10.
