@@ -5,7 +5,6 @@ Feature: TMDB availability
 
   Background:
     Given a fresh repository
-    And the Criterion browse page exposes a token
     And the Criterion catalog has films "Trio (1950)"
     And OMDb knows every film
 

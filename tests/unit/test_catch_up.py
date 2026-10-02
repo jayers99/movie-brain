@@ -11,6 +11,7 @@ import pytest
 from movie_brain.application import catch_up as module
 from movie_brain.application.catch_up import catch_up
 from movie_brain.application.cheapcharts import ResolveReport
+from movie_brain.application.criterion_directors import DirectorsReport
 from movie_brain.application.embed import EmbedReport
 from movie_brain.application.enrich import EnrichReport
 from movie_brain.application.trailers import TrailerReport
@@ -32,26 +33,31 @@ def calls(monkeypatch):
     monkeypatch.setattr(module, "embed_films", fake("embed", EmbedReport(scanned=3, embedded=2, skipped_no_prose=1)))
     monkeypatch.setattr(module, "resolve_itunes_ids", fake("store", ResolveReport(scanned=3, resolved=1)))
     monkeypatch.setattr(module, "enrich_trailers", fake("trailers", TrailerReport(scanned=3, with_youtube=2, nothing=1)))
+    monkeypatch.setattr(module, "fill_criterion_directors", fake("directors", DirectorsReport(scanned=3, filled=2, no_director=1)))
     return seen
 
 
 def test_the_full_boat_runs_in_order_and_applies(repo, calls):
-    report = catch_up(repo, D, tmdb=object(), cheapcharts=object(), itunes=object(), embedder=object(), log=lambda m: None)
+    report = catch_up(
+        repo, D, tmdb=object(), cheapcharts=object(), itunes=object(), embedder=object(), criterion=object(),
+        log=lambda m: None,
+    )
     # The store id comes BEFORE the trailer (Apple's preview is found by store id), credits before
-    # the vector (the vector is made from the prose credits bring).
-    assert [name for name, _ in calls] == ["credits", "embed", "store", "trailers"]
+    # the vector (the vector is made from the prose credits bring). Directors feed nothing: last.
+    assert [name for name, _ in calls] == ["credits", "embed", "store", "trailers", "directors"]
     assert all(kw["apply"] is True for _, kw in calls)
     assert (report.credits.enriched, report.embedded.embedded, report.store.resolved, report.trailers.with_youtube) == (3, 2, 1, 2)
-    assert report.line() == "credits: 3 · vectors: 2 · store ids: 1 of 3 · trailers: 2 of 3"
+    assert report.directors.filled == 2
+    assert report.line() == "credits: 3 · vectors: 2 · store ids: 1 of 3 · trailers: 2 of 3 · directors: 2 of 3"
 
 
 def test_a_missing_dependency_skips_its_steps_and_says_so(repo, calls):
     logged: list[str] = []
     report = catch_up(repo, D, tmdb=None, cheapcharts=object(), itunes=object(), embedder=None, log=logged.append)
     assert [name for name, _ in calls] == ["store"]
-    assert report.credits is None and report.embedded is None and report.trailers is None
+    assert report.credits is None and report.embedded is None and report.trailers is None and report.directors is None
     assert any("no TMDB token" in m for m in logged) and any("semantic" in m for m in logged)
-    assert report.line() == "credits: skipped · vectors: skipped · store ids: 1 of 3 · trailers: skipped"
+    assert report.line() == "credits: skipped · vectors: skipped · store ids: 1 of 3 · trailers: skipped · directors: skipped"
 
 
 def test_one_step_failing_never_stops_the_others(repo, calls, monkeypatch):
@@ -60,6 +66,24 @@ def test_one_step_failing_never_stops_the_others(repo, calls, monkeypatch):
 
     monkeypatch.setattr(module, "resolve_itunes_ids", boom)
     logged: list[str] = []
-    report = catch_up(repo, D, tmdb=object(), cheapcharts=object(), itunes=object(), embedder=object(), log=logged.append)
-    assert [name for name, _ in calls] == ["credits", "embed", "trailers"]
+    report = catch_up(
+        repo, D, tmdb=object(), cheapcharts=object(), itunes=object(), embedder=object(), criterion=object(),
+        log=logged.append,
+    )
+    assert [name for name, _ in calls] == ["credits", "embed", "trailers", "directors"]
     assert report.store is None and any("store ids failed" in m and "exploded" in m for m in logged)
+
+
+def test_the_directors_step_failing_is_logged_and_swallowed(repo, calls, monkeypatch):
+    def boom(*a, **kw):
+        raise RuntimeError("jw exploded")
+
+    monkeypatch.setattr(module, "fill_criterion_directors", boom)
+    logged: list[str] = []
+    report = catch_up(
+        repo, D, tmdb=object(), cheapcharts=object(), itunes=object(), embedder=object(), criterion=object(),
+        log=logged.append,
+    )
+    assert [name for name, _ in calls] == ["credits", "embed", "store", "trailers"]
+    assert report.directors is None and any("criterion directors failed" in m and "jw exploded" in m for m in logged)
+    assert report.line().endswith("· directors: skipped")

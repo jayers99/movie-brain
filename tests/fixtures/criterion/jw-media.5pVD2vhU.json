@@ -1,0 +1,101 @@
+{
+ "title": "The Horse in Focus",
+ "description": "",
+ "kind": "Single Item",
+ "siteid": "TXXJgKqJ",
+ "playlist": [
+  {
+   "title": "The Horse in Focus",
+   "mediaid": "5pVD2vhU",
+   "link": "https://cdn.jwplayer.com/previews/5pVD2vhU",
+   "image": "https://cdn.jwplayer.com/v2/media/5pVD2vhU/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/5pVD2vhU/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/5pVD2vhU/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/5pVD2vhU/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/5pVD2vhU/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/5pVD2vhU/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/5pVD2vhU/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "siteid": "TXXJgKqJ",
+   "duration": 1020,
+   "content_source_type": "renditions",
+   "pubdate": 1554696000,
+   "updated": 1790254515,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/5pVD2vhU/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/5pVD2vhU/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/5pVD2vhU/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"SE\"]",
+   "criterion_id": "29296",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Various\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "Shorts",
+   "introduction_primary": "",
+   "language": "[\"sv\"]",
+   "license_end_date_time": "",
+   "license_start_date_time": "2019-04-08T04:00:00Z",
+   "nexspec_id": "51a25ed3-d0cd-4258-9bf0-db9821d76dc1",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "9JP4FMuA",
+   "playlist_collections_appears_in": "Beoao1sX",
+   "playlist_related": "gIbVczED",
+   "playlist_supplements": "x2mBgJ8M",
+   "rating": "",
+   "release_date": "1956-01-01",
+   "starring": "[]",
+   "title_original": "Hästen i centrum",
+   "title_short": "",
+   "title_sort": "horse in focus",
+   "trailer": "",
+   "vimeo_id": "464972"
+  }
+ ],
+ "feed_instance_id": "26c94ea5-b2b0-43ed-9b54-43f583f36771"
+}

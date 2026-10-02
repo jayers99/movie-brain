@@ -331,6 +331,64 @@ class ReviewEntry:
 
 
 @dataclass(frozen=True)
+class BridgeTarget:
+    """One stored old Criterion link and the canonical film that holds it (spec D3)."""
+
+    film_id: int
+    url: str
+    title: str
+    year: int | None
+
+
+@dataclass(frozen=True)
+class NewFilm:
+    """A film the Criterion walk will create (spec D5): TMDB's title and year, Criterion's
+    director, the resolver's IMDb id and TMDB id to key it with once it exists."""
+
+    title: str
+    year: int | None
+    director: str | None
+    tt: str
+    tmdb_id: int | None
+
+    @property
+    def key(self) -> str:
+        return film_key(self.title, self.year)
+
+
+@dataclass(frozen=True)
+class WalkListing:
+    """One catalog item the walk lists, with what Criterion printed for it (the claim). `film_id`
+    is the canonical film the mediaid names, or None when the item names `created[new]`. `bind`:
+    this walk gives that film the mediaid (it was unknown this morning)."""
+
+    mediaid: str
+    title: str
+    year: int | None
+    film_id: int | None = None
+    new: int | None = None
+    bind: bool = False
+
+
+@dataclass(frozen=True)
+class CriterionWalk:
+    """Everything one walk will write, staged with no writes (spec D6). `leaving` None = the
+    leaving pages could not be read tonight: keep the last-known labels (D7)."""
+
+    listings: tuple[WalkListing, ...]
+    created: tuple[NewFilm, ...] = ()
+    reviews: tuple[ReviewEntry, ...] = ()
+    leaving: dict[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class WalkWrite:
+    arrived: int
+    departed: int
+    created: tuple[tuple[int, NewFilm], ...]  # (new film id, what it was staged as) — for keying
+
+
+@dataclass(frozen=True)
 class FilmView:
     id: int
     title: str

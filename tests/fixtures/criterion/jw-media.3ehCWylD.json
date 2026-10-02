@@ -1,0 +1,101 @@
+{
+ "title": "Keeping Secrets Will Destroy You",
+ "description": "",
+ "kind": "Single Item",
+ "siteid": "TXXJgKqJ",
+ "playlist": [
+  {
+   "title": "Keeping Secrets Will Destroy You",
+   "mediaid": "3ehCWylD",
+   "link": "https://cdn.jwplayer.com/previews/3ehCWylD",
+   "image": "https://cdn.jwplayer.com/v2/media/3ehCWylD/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/3ehCWylD/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/3ehCWylD/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/3ehCWylD/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/3ehCWylD/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/3ehCWylD/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/3ehCWylD/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "siteid": "TXXJgKqJ",
+   "duration": 2820,
+   "content_source_type": "renditions",
+   "pubdate": 1709269200,
+   "updated": 1789690428,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/3ehCWylD/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/3ehCWylD/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/3ehCWylD/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "34323",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Ryan Daly\",\"Will Oldham\"]",
+   "drm": "true",
+   "genre": "Musical",
+   "genre_2": "Shorts",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2027-03-01T04:59:59Z",
+   "license_start_date_time": "2024-03-01T05:00:00Z",
+   "nexspec_id": "8be7f120-2dda-4a19-8b78-c2383991c41c",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "7XI3wis9",
+   "playlist_collections_appears_in": "olEEQZxd",
+   "playlist_related": "d7AGjVxA",
+   "playlist_supplements": "QxZNbsq3",
+   "rating": "",
+   "release_date": "2023-01-01",
+   "starring": "[]",
+   "title_original": "Keeping Secrets Will Destroy You",
+   "title_short": "",
+   "title_sort": "keeping secrets will destroy you",
+   "trailer": "",
+   "vimeo_id": "3108987"
+  }
+ ],
+ "feed_instance_id": "a9e66349-03fa-48f6-bac2-edb7f726f5bf"
+}

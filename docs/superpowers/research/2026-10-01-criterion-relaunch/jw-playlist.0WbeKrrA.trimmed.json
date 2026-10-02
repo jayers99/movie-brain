@@ -1,0 +1,200 @@
+{
+ "title": "October Leaving Soon See All Playlist : primary : hkVzyJNz",
+ "description": "",
+ "kind": "MANUAL",
+ "feedid": "0WbeKrrA",
+ "siteid": "TXXJgKqJ",
+ "links": {
+  "first": "https://cdn.jwplayer.com/v2/playlists/0WbeKrrA?page_limit=500&format=json&internal=false&page_offset=1",
+  "last": "https://cdn.jwplayer.com/v2/playlists/0WbeKrrA?page_limit=500&format=json&internal=false&page_offset=1"
+ },
+ "playlist": [
+  {
+   "title": "Zabriskie Point",
+   "mediaid": "Tg73fdO2",
+   "link": "https://cdn.jwplayer.com/previews/Tg73fdO2",
+   "image": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/Tg73fdO2/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6827,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1790075013,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/Tg73fdO2/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/Tg73fdO2/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/Tg73fdO2/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "wjh3Hu8z",
+   "playlist_collections_appears_in": "DDL7UP5u",
+   "playlist_related": "Y28Nbz7P",
+   "playlist_supplements": "7MLBc8S3",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "34876",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Michelangelo Antonioni\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en-US\"]",
+   "license_end_date_time": "2026-11-01T04:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "18dcb997-0dc2-4e69-ad23-1ded878c5f8d",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "1970-02-05",
+   "starring": "[\"Mark Frechette\",\"Daria Halprin\",\"Rod Taylor\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Zabriskie Point",
+   "trailer": "",
+   "vimeo_id": ""
+  },
+  {
+   "title": "Eve’s Bayou",
+   "mediaid": "6tfyfj2f",
+   "link": "https://cdn.jwplayer.com/previews/6tfyfj2f",
+   "image": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/6tfyfj2f/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "0WbeKrrA",
+   "siteid": "TXXJgKqJ",
+   "duration": 6900,
+   "content_source_type": "renditions",
+   "pubdate": 1785556800,
+   "updated": 1790020447,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/6tfyfj2f/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/6tfyfj2f/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/6tfyfj2f/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "playlist_categories_appears_in": "nJ8zU8mh",
+   "playlist_collections_appears_in": "5PjhAAD7",
+   "playlist_related": "VFTVARID",
+   "playlist_supplements": "gchyBC7U",
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "32658",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Kasi Lemmons\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en\"]",
+   "license_end_date_time": "2026-11-01T03:59:59Z",
+   "license_start_date_time": "2026-08-01T04:00:00Z",
+   "nexspec_id": "c293be10-d7e3-40c1-967c-462073c311ee",
+   "paywall": "subscriber",
+   "rating": "",
+   "release_date": "1997-11-07",
+   "starring": "[\"Jurnee Smollett\",\"Meagan Good\",\"Samuel L. Jackson\"]",
+   "title_original": "Eve’s Bayou",
+   "title_short": "",
+   "title_sort": "eve’s bayou",
+   "trailer": "",
+   "vimeo_id": "2010729"
+  }
+ ],
+ "feed_instance_id": "74168498-bb7d-412a-8580-d221ed725cd2"
+}

@@ -11,12 +11,15 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
+from urllib.parse import urlparse
 
 from movie_brain.domain.audit import VERDICTS, AuditFlag, AuditSubject
 from movie_brain.domain.credits import build_credits
 from movie_brain.domain.filters import NEW_ARRIVAL_DAYS
 from movie_brain.domain.models import (
+    BridgeTarget,
     CreditsTarget,
+    CriterionWalk,
     EmbedTarget,
     Film,
     FilmCredits,
@@ -36,6 +39,7 @@ from movie_brain.domain.models import (
     TmdbCredits,
     TrailerTarget,
     ViewingWrite,
+    WalkWrite,
     YearBackfillTarget,
     film_key,
 )
@@ -64,6 +68,7 @@ from movie_brain.domain.thumbprint import edition_label, title_norm
 from movie_brain.domain.trailers import Trailer
 from movie_brain.domain.watch import apple_tv_url, best_source, watch_url
 from movie_brain.infrastructure.cheapcharts import product_url
+from movie_brain.infrastructure.criterion_site import CRITERION_FILM_URL
 
 MISS_RETRY_DAYS = 30
 MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
@@ -194,6 +199,14 @@ class RepairFilm(NamedTuple):
     omdb_found: bool
 
 
+class DirectorTarget(NamedTuple):
+    """One film the owner sees no director for, and the Criterion id to ask JW about (D8)."""
+
+    film_id: int
+    title: str
+    mediaid: str
+
+
 _ONE_ROW_TABLES = (
     "omdb",
     "tmdb",
@@ -223,6 +236,14 @@ _TMDB_TARGET_SELECT = (
 # tombstoned films are hidden outright, merged losers are aliased onto their survivor
 # (films_for_matching) rather than surfaced under their own id.
 _NOT_DISPOSED = "NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = f.id)"
+
+# The film's OMDb record names no director: no row, a not-found row (payload NULL) or "N/A" —
+# the exact expression the dashboard's COALESCE reads (`films_view`), so "no director" here is
+# "no director on screen". `films.id` (not an alias) so the UPDATE can use it too.
+_NO_OMDB_DIRECTOR = (
+    "NOT EXISTS (SELECT 1 FROM omdb o WHERE o.film_id = films.id "
+    "AND NULLIF(json_extract(o.payload, '$.Director'), 'N/A') IS NOT NULL)"
+)
 
 # A series is keyed by its IMDb id alone (memo Q2): TMDB movie and TV ids share one integer
 # namespace and the providers endpoint is movie-only, so a series must never enter a TMDB
@@ -705,7 +726,14 @@ class Repository:
 
     @staticmethod
     def _write_listing(
-        c: sqlite3.Connection, film_id: int, source: str, url: str, day: str, frontier: str | None
+        c: sqlite3.Connection,
+        film_id: int,
+        source: str,
+        url: str,
+        day: str,
+        frontier: str | None,
+        *,
+        quiet: bool = False,
     ) -> bool:
         """Upsert one listing row; append an availability transition on insert or reappearance.
 
@@ -713,9 +741,11 @@ class Repository:
         (per-source MAX(last_seen) for criterion, the tmdb refresh stamp for TMDB-fed
         sources). A row strictly older than it was displayed as departed, so going
         current again is a transition; None (fresh DB) means only true inserts fire.
+        quiet = the caller knows this reappearance is not news (the Criterion relaunch's
+        grace window): the row is written, no transition fires.
         """
         row = c.execute("SELECT last_seen FROM listings WHERE film_id = ? AND source = ?", (film_id, source)).fetchone()
-        is_transition = row is None or (frontier is not None and row["last_seen"] < frontier)
+        is_transition = not quiet and (row is None or (frontier is not None and row["last_seen"] < frontier))
         c.execute(
             "INSERT INTO listings (film_id, source, url, first_seen, last_seen) VALUES (?, ?, ?, ?, ?) "
             "ON CONFLICT(film_id, source) DO UPDATE SET url=excluded.url, last_seen=excluded.last_seen",
@@ -903,6 +933,271 @@ class Repository:
                 "SELECT film_id, value FROM external_ids WHERE authority = ? ORDER BY film_id", (authority,)
             ).fetchall()
             return {str(r["value"]): int(r["film_id"]) for r in rows}
+
+    def criterion_old_urls(self) -> list[BridgeTarget]:
+        """Every stored old Criterion link (an `http…` value; a bare mediaid is not one), on its
+        CANONICAL film, ordered by that film then the link — the bridge's deterministic order."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, value FROM external_ids WHERE authority = 'criterion' AND value LIKE 'http%'"
+            ).fetchall()
+            out: list[BridgeTarget] = []
+            for r in rows:
+                fid = self._canonical_in(c, int(r["film_id"]))
+                f = c.execute("SELECT title, year FROM films WHERE id = ?", (fid,)).fetchone()
+                out.append(BridgeTarget(fid, str(r["value"]), str(f["title"]), f["year"]))
+            return sorted(out, key=lambda t: (t.film_id, t.url))
+
+    def record_bridge(
+        self, bindings: list[tuple[int, str, str, str]], reviews: list[ReviewEntry], seen: date
+    ) -> None:
+        """The bridge's whole write in ONE transaction: mediaid ids, the forwarded listing URL,
+        and the clash review rows. Any failure rolls every row back. A binding is (film, mediaid,
+        new listing URL, the OLD link it came from). A film's listing is rewritten ONCE, from the
+        binding whose old link is the listing's current URL (the link the drawer shows today);
+        a listing matching none takes the film's first binding. Every mediaid still binds."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            chosen: dict[int, str] = {}
+            exact: set[int] = set()
+            for film_id, _mediaid, listing_url, old_url in bindings:
+                row = c.execute(
+                    "SELECT url FROM listings WHERE film_id = ? AND source = 'criterion'", (film_id,)
+                ).fetchone()
+                if row is not None and row["url"] == old_url and film_id not in exact:
+                    chosen[film_id] = listing_url
+                    exact.add(film_id)
+                else:
+                    chosen.setdefault(film_id, listing_url)
+            for film_id, mediaid, _listing_url, _old_url in bindings:
+                c.execute(
+                    "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'criterion', ?, ?) "
+                    "ON CONFLICT(film_id, authority, value) DO NOTHING",
+                    (film_id, mediaid, day),
+                )
+            for film_id, url in chosen.items():
+                c.execute("UPDATE listings SET url = ? WHERE film_id = ? AND source = 'criterion'", (url, film_id))
+            for e in reviews:
+                c.execute(
+                    "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "
+                    "VALUES ('criterion', ?, ?, ?, ?, ?)",
+                    (e.film_id, e.value, e.reason, e.detail, day),
+                )
+
+    # the Criterion walk (spec 2026-10-01 D2, D4, D6, D7, D10) ---------------------------
+    def criterion_mediaid_holders(self) -> dict[str, int]:
+        """mediaid → the CANONICAL film holding it. Old `http…` links are not mediaids. Every
+        film is read, disposed included — the UNIQUE guard is blind to dispositions — and a
+        merged-away holder answers as its survivor, so the walk lists the live identity."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT film_id, value FROM external_ids WHERE authority = 'criterion' AND value NOT LIKE 'http%'"
+            ).fetchall()
+            return {str(r["value"]): self._canonical_in(c, int(r["film_id"])) for r in rows}
+
+    def criterion_review_values(self) -> set[str]:
+        """Every value a criterion review row names, open or resolved: an unknown mediaid in this
+        set is a human's (open = waiting for him, resolved = a standing decision), so the walk
+        never asks JW about it again (D5)."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT DISTINCT value FROM match_review WHERE authority = 'criterion' AND value IS NOT NULL"
+            ).fetchall()
+            return {str(r["value"]) for r in rows}
+
+    def films_needing_criterion_director(self) -> list[DirectorTarget]:
+        """Films holding a Criterion mediaid whose director the owner sees nowhere: no
+        `films.director` and no OMDb director (spec 2026-10-01 D8). Old `http…` links are not
+        mediaids, so nothing qualifies before `criterion bridge --apply`. A film holding two
+        mediaids is asked by the lowest — one JW call per film. Disposed films are not shown,
+        so they are not asked. No stamp: a film JW names no director for comes back next run."""
+        with self._conn() as c:
+            rows = c.execute(
+                "SELECT films.id, films.title, MIN(x.value) AS mediaid FROM films "
+                "JOIN external_ids x ON x.film_id = films.id AND x.authority = 'criterion' "
+                "AND x.value NOT LIKE 'http%' "
+                f"WHERE films.director IS NULL AND {_NO_OMDB_DIRECTOR} "
+                "AND NOT EXISTS (SELECT 1 FROM film_disposition d WHERE d.film_id = films.id) "
+                "GROUP BY films.id ORDER BY films.id"
+            ).fetchall()
+        return [DirectorTarget(int(r["id"]), str(r["title"]), str(r["mediaid"])) for r in rows]
+
+    def fill_criterion_director(self, film_id: int, director: str) -> bool:
+        """Write Criterion's director into a blank no one fills — guarded in the UPDATE itself,
+        so a director that appeared since the worklist was read (ours or OMDb's) is never
+        overwritten or shadowed. True when written."""
+        if not director:
+            raise ValueError("an empty director is never written — leave the film NULL")
+        with self._conn() as c:
+            cur = c.execute(
+                f"UPDATE films SET director = ? WHERE id = ? AND director IS NULL AND {_NO_OMDB_DIRECTOR}",
+                (director, film_id),
+            )
+            return cur.rowcount == 1
+
+    @staticmethod
+    def _criterion_id(c: sqlite3.Connection, film_id: int, mediaid: str, day: str) -> None:
+        # Claim authority (migration 012): several per film are legal; UNIQUE(authority, value)
+        # still raises when ANOTHER film holds the mediaid.
+        c.execute(
+            "INSERT INTO external_ids (film_id, authority, value, first_seen) VALUES (?, 'criterion', ?, ?) "
+            "ON CONFLICT(film_id, authority, value) DO NOTHING",
+            (film_id, mediaid, day),
+        )
+
+    @staticmethod
+    def _criterion_claim(
+        c: sqlite3.Connection, film_id: int, mediaid: str, title: str, year: int | None, day: str
+    ) -> None:
+        # D4: what Criterion printed goes in the claim, never on the film; INSERT OR IGNORE keeps
+        # the FIRST title and year seen for a mediaid.
+        c.execute(
+            "INSERT OR IGNORE INTO claim (film_id, authority, value, title_ingested, year_claimed, "
+            "edition_label, first_seen) VALUES (?, 'criterion', ?, ?, ?, ?, ?)",
+            (film_id, mediaid, title, year, edition_label(title), day),
+        )
+
+    def bind_criterion_mediaid(self, film_id: int, mediaid: str, title: str, year: int | None, seen: date) -> None:
+        """`review resolve` on a criterion row: the mediaid and Criterion's claim on one film,
+        together. Raises IntegrityError when another film holds the mediaid."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            self._criterion_id(c, film_id, mediaid, day)
+            self._criterion_claim(c, film_id, mediaid, title, year, day)
+
+    def create_criterion_film(self, film: Film, mediaid: str, title: str, year: int | None, seen: date) -> int | None:
+        """`review resolve --create/--tt` on a criterion row: a new film born holding its mediaid
+        and Criterion's claim, in ONE transaction. None on a `films.key` collision — nothing written."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            cur = c.execute(
+                "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(key) DO NOTHING",
+                (str(uuid.uuid4()), film.title, film.year, film.director, film.key),
+            )
+            if cur.rowcount == 0:
+                return None
+            film_id = int(c.execute("SELECT id FROM films WHERE key = ?", (film.key,)).fetchone()["id"])
+            self._criterion_id(c, film_id, mediaid, day)
+            self._criterion_claim(c, film_id, mediaid, title, year, day)
+            return film_id
+
+    @staticmethod
+    def _criterion_listing_url(c: sqlite3.Connection, film_id: int, mediaids: list[str]) -> str:
+        """D10: keep a stored link already on one of tonight's mediaids (the bridge's slugged
+        `/films/<id>/<slug>`); otherwise the bare `/films/<id>`, which the site forwards."""
+        row = c.execute("SELECT url FROM listings WHERE film_id = ? AND source = 'criterion'", (film_id,)).fetchone()
+        if row is not None:
+            path = urlparse(str(row["url"])).path
+            if any(path == f"/films/{m}" or path.startswith(f"/films/{m}/") for m in mediaids):
+                return str(row["url"])
+        return CRITERION_FILM_URL.format(mediaids[0])
+
+    @staticmethod
+    def _walk_leaving(c: sqlite3.Connection, leaving: dict[str, str] | None, day: str) -> None:
+        """D7, the write's last step. A listing this walk did not stamp never keeps a Leaving
+        label. With labels in hand they replace the old ones, keyed by mediaid; None (the
+        leaving pages failed tonight) keeps the labels of the films still listed."""
+        c.execute("UPDATE listings SET leaving_date = NULL WHERE source = 'criterion' AND last_seen < ?", (day,))
+        if leaving is None:
+            return
+        c.execute("UPDATE listings SET leaving_date = NULL WHERE source = 'criterion'")
+        for mediaid, label in leaving.items():
+            c.execute(
+                "UPDATE listings SET leaving_date = ? WHERE source = 'criterion' AND last_seen = ? "
+                "AND film_id IN (SELECT film_id FROM external_ids WHERE authority = 'criterion' AND value = ?)",
+                (label, day, mediaid),
+            )
+
+    # A film carried all along whose new mediaid binds only after the first walk (a review, a
+    # resolver outage) departed that night; inside this many days its return is not an arrival.
+    RELAUNCH_GRACE_DAYS = 30
+
+    @staticmethod
+    def _relaunch_window(c: sqlite3.Connection, frontier: str | None, seen: date) -> str | None:
+        """Store the relaunch metas once (the first walk's pre-batch frontier — the VHX era's
+        last walk, since the bridge never touches last_seen — and that walk's day); return the
+        relaunch frontier while `seen` is inside the grace window, else None."""
+        keys = ("criterion_relaunch_frontier", "criterion_relaunch_first_walk")
+        if frontier is not None:
+            for key, value in zip(keys, (frontier, seen.isoformat()), strict=True):
+                c.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING", (key, value))
+        rows = dict(c.execute("SELECT key, value FROM meta WHERE key IN (?, ?)", keys).fetchall())
+        if len(rows) < 2:
+            return None
+        first = date.fromisoformat(str(rows[keys[1]]))
+        if seen > first + timedelta(days=Repository.RELAUNCH_GRACE_DAYS):
+            return None
+        return str(rows[keys[0]])
+
+    def record_criterion_walk(self, walk: CriterionWalk, seen: date) -> WalkWrite:
+        """The walk's whole write in ONE transaction (spec D6): new films, mediaids, claims,
+        listings against the pre-batch currency frontier, review rows, leaving labels and
+        `films_fetched_at`. Any failure rolls every row back: Criterion is then exactly as it was.
+
+        A film listed under two mediaids tonight (Eve's Bayou: theatrical and director's cut)
+        gets ONE listing — listings are per film × source — and both claims; its listing is
+        written once, so the second item can never count as an arrival.
+
+        For RELAUNCH_GRACE_DAYS after the first walk, a film whose listing was last seen on the
+        VHX era's last walk rejoins quietly — no transition, not an arrival — because its new
+        mediaid merely waited (a review, a resolver outage) while Criterion carried it all along."""
+        day = seen.isoformat()
+        with self._conn() as c:
+            row = c.execute("SELECT MAX(last_seen) AS m FROM listings WHERE source = 'criterion'").fetchone()
+            frontier = None if row["m"] is None else str(row["m"])
+            relaunch = self._relaunch_window(c, frontier, seen)
+            new_ids: list[int] = []
+            for nf in walk.created:
+                cur = c.execute(
+                    "INSERT INTO films (guid, title, year, director, key) VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(key) DO NOTHING",
+                    (str(uuid.uuid4()), nf.title, nf.year, nf.director, nf.key),
+                )
+                if cur.rowcount == 0:  # staging checked the key; only a concurrent writer gets here
+                    raise sqlite3.IntegrityError(f"films.key {nf.key!r} was taken during the walk")
+                new_ids.append(int(c.execute("SELECT id FROM films WHERE key = ?", (nf.key,)).fetchone()["id"]))
+            mediaids: dict[int, list[str]] = {}
+            for wl in walk.listings:
+                film_id = new_ids[wl.new] if wl.new is not None else wl.film_id
+                if film_id is None:
+                    raise ValueError(f"walk listing {wl.mediaid} names no film")
+                if wl.bind:
+                    self._criterion_id(c, film_id, wl.mediaid, day)
+                self._criterion_claim(c, film_id, wl.mediaid, wl.title, wl.year, day)
+                mediaids.setdefault(film_id, []).append(wl.mediaid)
+            arrived = 0
+            for film_id, ids in mediaids.items():
+                url = self._criterion_listing_url(c, film_id, ids)
+                quiet = relaunch is not None and (
+                    c.execute(
+                        "SELECT 1 FROM listings WHERE film_id = ? AND source = 'criterion' AND last_seen = ?",
+                        (film_id, relaunch),
+                    ).fetchone()
+                    is not None
+                )
+                if self._write_listing(c, film_id, "criterion", url, day, frontier, quiet=quiet):
+                    arrived += 1
+            for e in walk.reviews:
+                c.execute(
+                    "INSERT INTO match_review (authority, film_id, value, reason, detail, created_at) "
+                    "VALUES ('criterion', ?, ?, ?, ?, ?)",
+                    (e.film_id, e.value, e.reason, e.detail, day),
+                )
+            departed = 0
+            if frontier is not None and frontier < day:
+                departed = int(
+                    c.execute(
+                        "SELECT COUNT(*) AS n FROM listings WHERE source = 'criterion' AND last_seen = ?", (frontier,)
+                    ).fetchone()["n"]
+                )
+            c.execute(
+                "INSERT INTO meta (key, value) VALUES ('films_fetched_at', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (day,),
+            )
+            self._walk_leaving(c, walk.leaving, day)
+        return WalkWrite(arrived, departed, tuple(zip(new_ids, walk.created, strict=True)))
 
     def has_listing(self, film_id: int, source: str) -> bool:
         """This film carries a listing from `source` — the same subquery `_TMDB_TARGET_SELECT`

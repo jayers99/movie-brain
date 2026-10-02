@@ -2,7 +2,6 @@ Feature: Watchlist films are refreshed nightly and arrivals are detected
 
   Background:
     Given a fresh repository
-    And the Criterion browse page exposes a token
     And the Criterion catalog has films "Alpha (1950)" and "Bravo (1960)"
     And OMDb knows every film
 

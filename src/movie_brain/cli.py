@@ -6,6 +6,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated
 
+import requests
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -14,6 +15,8 @@ from movie_brain.application.audit import run_audit
 from movie_brain.application.backfill_imdb import backfill_imdb
 from movie_brain.application.catch_up import CatchUpReport, catch_up
 from movie_brain.application.cheapcharts import audit_itunes_ids, recheck_itunes_ids, resolve_itunes_ids
+from movie_brain.application.criterion_directors import fill_criterion_directors
+from movie_brain.application.criterion_walk import parse_criterion_detail
 from movie_brain.application.embed import embed_films
 from movie_brain.application.enrich import enrich_credits
 from movie_brain.application.export import write_csv
@@ -43,7 +46,7 @@ from movie_brain.application.repair_keys import (
     repair_nomatch,
 )
 from movie_brain.application.review import resolve_review
-from movie_brain.application.sync import SOURCE, sync
+from movie_brain.application.sync import SOURCE, SyncResult, sync
 from movie_brain.application.thumbprint import ReviewDetail, backfill_claims, parse_review_detail
 from movie_brain.application.trailers import enrich_trailers
 from movie_brain.application.wishlist import (
@@ -56,6 +59,7 @@ from movie_brain.domain.models import ServiceMeta
 from movie_brain.infrastructure.cheapcharts import CheapChartsAccount, CheapChartsClient, Pacer
 from movie_brain.infrastructure.config import Config, load_api_key, load_config, load_tmdb_token
 from movie_brain.infrastructure.credentials import load_credentials
+from movie_brain.infrastructure.criterion_site import HttpCriterionSite
 from movie_brain.infrastructure.database import PendingMigrations, Repository, init_db, pending_migrations
 from movie_brain.infrastructure.embeddings import SemanticUnavailable, SentenceTransformerEmbedder
 from movie_brain.infrastructure.itunes import ItunesLookup
@@ -108,6 +112,8 @@ audit_app = typer.Typer(help="Data audit: read-only consistency checks; the huma
 app.add_typer(audit_app, name="audit")
 services_app = typer.Typer(help="The service registry: quality, Apple TV app, subscription.")
 app.add_typer(services_app, name="services")
+criterion_app = typer.Typer(help="Criterion Channel after the 2026-10 relaunch: bridge stored films to their new ids.")
+app.add_typer(criterion_app, name="criterion")
 console = Console()
 err = Console(stderr=True)
 
@@ -185,7 +191,7 @@ def _catch_up_chain() -> Callable[[Repository, TmdbClient | None], CatchUpReport
     def chain(repo: Repository, tmdb: TmdbClient | None) -> CatchUpReport:
         return catch_up(
             repo, date.today(), tmdb=tmdb, cheapcharts=CheapChartsClient(), itunes=ItunesLookup(),
-            embedder=embedder, log=_plain,
+            embedder=embedder, criterion=HttpCriterionSite(requests.Session()), log=_plain,
         )
 
     return chain
@@ -194,7 +200,7 @@ def _catch_up_chain() -> Callable[[Repository, TmdbClient | None], CatchUpReport
 def _enrich_after_add(repo: Repository, created: int | None) -> None:
     """A film gets its FULL enrichment when it is added (owner ruling 2026-09-20): everything a
     sync does to a new film — keying, OMDb, the provider first-check, then credits, vectors, store
-    ids and trailers — without walking Criterion or starting the weekly provider refresh. Every
+    ids, trailers and Criterion directors — without walking Criterion or starting the weekly provider refresh. Every
     step is a worklist, so this also picks up whatever an earlier interrupted run left behind.
     Never changes the calling verb's exit code. `created=None` is `enrich all`, run by hand."""
     if created == 0:
@@ -215,9 +221,26 @@ def _enrich_after_add(repo: Repository, created: int | None) -> None:
         console.print(f"caught up — {result.catch_up.line()}")
 
 
+def _criterion_line(result: SyncResult) -> str | None:
+    """Spec D11's one line, plus how many new films waited unasked when there were any."""
+    if result.criterion_failed:
+        return "criterion — the walk failed; nothing written for Criterion (the reason is above)"
+    if not result.criterion_walked:
+        return None
+    line = (
+        f"criterion — arrived {result.criterion_arrived} · left {result.criterion_departed} · "
+        f"to review {result.criterion_reviews}"
+    )
+    if result.criterion_skipped:
+        line += f" · not asked tonight {result.criterion_skipped}"
+    return line
+
+
 @app.command("sync")
 def sync_cmd(
-    full: Annotated[bool, typer.Option("--full", help="Force a complete catalog re-walk.")] = False,
+    full: Annotated[
+        bool, typer.Option("--full", help="Kept for habit — every sync walks the whole catalog.")
+    ] = False,
     ratings_only: Annotated[
         bool, typer.Option("--ratings-only", help="Skip Criterion; refresh OMDb ratings only.")
     ] = False,
@@ -235,7 +258,6 @@ def sync_cmd(
         _repo(),
         api_key,
         date.today(),
-        force_full=full,
         ratings_only=ratings_only,
         tmdb_token=load_tmdb_token(cfg),
         config_dir=cfg.config_dir,
@@ -243,10 +265,13 @@ def sync_cmd(
         catch_up=_catch_up_chain(),
     )
     console.print(
-        f"films: {result.films} · looked up: {result.looked_up} · full walk: {result.full_walk} · "
+        f"films: {result.films} · looked up: {result.looked_up} · "
         f"availability refreshed: {result.tmdb_refreshed} · promoted: {result.mc_promoted} · "
         f"keyed: {result.tmdb_matched} · review: {result.tmdb_reviewed}"
     )
+    line = _criterion_line(result)
+    if line is not None:
+        console.print(line, markup=False, highlight=False)
     if result.catch_up is not None:
         console.print(f"caught up — {result.catch_up.line()}")
     raise typer.Exit(result.exit_code)
@@ -640,6 +665,74 @@ def films_add_cmd(
     if apply:
         _enrich_after_add(repo, int(outcome.kind == "created"))
     raise typer.Exit(outcome.exit_code)
+
+
+@criterion_app.command("bridge")
+def criterion_bridge_cmd(
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Write the ids (default: dry run, answers kept on disk).")
+    ] = False,
+    retry: Annotated[
+        bool, typer.Option("--retry", help="Ask again the links whose last answer failed.")
+    ] = False,
+) -> None:
+    """Give every stored Criterion film its new id, by asking each old link where it forwards.
+
+    One catalog walk (for the drift table), then one quick check per old link, 0.4 s apart —
+    about 25–30 minutes. Answers are kept in <config_dir>/criterion-bridge.jsonl, so an
+    interrupted run resumes and an --apply within a day replays them without asking again."""
+    from datetime import UTC, datetime
+
+    import requests
+
+    from movie_brain.application import criterion_bridge
+    from movie_brain.infrastructure import criterion_site
+    from movie_brain.infrastructure.cheapcharts import Pacer
+
+    cfg = load_config()
+    repo = _repo()
+    session = requests.Session()
+    try:
+        catalog = criterion_site.fetch_catalog(session)
+    except criterion_site.CriterionError as exc:
+        console.print(f"FAILED    catalog walk: {exc} — nothing asked, nothing written", markup=False, highlight=False)
+        raise typer.Exit(1) from exc
+    pacer = Pacer(criterion_site.BRIDGE_DELAY_S)
+    report = criterion_bridge.run_bridge(
+        repo, cfg.config_dir, catalog,
+        lambda url: criterion_site.head_old_url(session, url, pacer),
+        datetime.now(UTC), apply=apply, retry=retry,
+        progress=lambda m: console.print(m, markup=False, highlight=False),
+    )
+    c = report.counts
+    head = (f"APPLIED — ids written, {report.reviews} clash reviews queued" if apply
+            else "DRY RUN — nothing written (add --apply)")
+    console.print(head, markup=False, highlight=False)
+    console.print(
+        f"links: {sum(c.values())} · film {c.get('film', 0)} · same film {c.get('same-film', 0)} · "
+        f"clash {c.get('held', 0)} · extra {c.get('supplement', 0)} · gone {c.get('gone', 0)} · "
+        f"retry {c.get('retry', 0)} · reopened {report.reopened}"
+        + (f" · tombstoned {c['tombstoned']}" if c.get("tombstoned") else "")
+        + (f" · two ids {report.multi}" if report.multi else ""),
+        markup=False, highlight=False,
+    )
+    for m in report.multi_films or []:
+        console.print(f"  two ids: #{m.film_id} {m.title} — {', '.join(m.mediaids)}", markup=False, highlight=False)
+    kinds = {k: sum(1 for d in report.drift if d.kind == k) for k in ("year", "title", "both")}
+    console.print(
+        f"drift: {len(report.drift)} films ({kinds['year']} year · {kinds['title']} title · {kinds['both']} both)",
+        markup=False, highlight=False,
+    )
+    for d in report.drift:
+        console.print(
+            f"  #{d.film_id:<6} {d.title} ({d.year})  →  {d.cat_title} ({d.cat_year})  {d.kind}",
+            markup=False, highlight=False, soft_wrap=True,
+        )
+    if c.get("retry", 0) > 0:
+        console.print(
+            f"{c['retry']} links got no usable answer — rerun with --retry to ask them again",
+            markup=False, highlight=False,
+        )
 
 
 def _parse_day(raw: str | None, flag: str) -> date | None:
@@ -1330,6 +1423,15 @@ def review_list(
         detail = r["detail"]
         d = parse_review_detail(str(detail)) if detail is not None else None
         detail_cell = d.reason if d is not None else str(detail or "")
+        if str(r["authority"]) == "criterion":
+            crit = parse_criterion_detail(str(detail) if detail is not None else None)
+            if crit is not None:
+                shown = f"{crit['title']} ({crit['year']})" if crit.get("title") and crit.get("year") else (
+                    crit.get("title") or (f"({crit['year']})" if crit.get("year") else "")
+                )
+                director = crit.get("director")
+                director = ", ".join(director) if isinstance(director, list) else director
+                detail_cell = " · ".join(str(x) for x in (detail_cell, shown, director) if x)
         if d is not None:
             parsed[r["id"]] = d
         table.add_row(str(r["id"]), str(r["authority"]), str(r["reason"]), film, str(r["value"] or ""), detail_cell)
@@ -1357,14 +1459,19 @@ def review_revisits() -> None:
 @review_app.command("resolve")
 def review_resolve(
     review_id: Annotated[int, typer.Argument(help="match_review id (see `review list`).")],
-    film: Annotated[int | None, typer.Option("--film", help="Match to / merge into this film id.")] = None,
+    film: Annotated[
+        int | None, typer.Option("--film", help="Match to / merge into this film id (criterion rows: give it the id).")
+    ] = None,
     tmdb_id: Annotated[int | None, typer.Option("--tmdb-id", help="Claim this TMDB id (tmdb no-match rows).")] = None,
     create: Annotated[bool, typer.Option("--create", help="Create a new film from the staged/owned title.")] = False,
     dismiss: Annotated[bool, typer.Option("--dismiss", help="Close the row; it is never re-queued.")] = False,
     pick: Annotated[
         str | None, typer.Option("--pick", help="Key the film to candidate A/B/C off the review detail.")
     ] = None,
-    tt: Annotated[str | None, typer.Option("--tt", help="Key the film to this IMDb id (ranked or not).")] = None,
+    tt: Annotated[
+        str | None,
+        typer.Option("--tt", help="Key the film to this IMDb id (criterion rows: add or find the work by it)."),
+    ] = None,
     none: Annotated[
         bool, typer.Option("--none", help="Standing 'no such work' verdict: verified unkeyed.")
     ] = False,
@@ -1400,7 +1507,7 @@ def review_resolve(
         err.print(str(exc))
         raise typer.Exit(1) from exc
     console.print(f"review {review_id}: {outcome}")
-    if create:
+    if create or outcome.startswith("created film"):
         _enrich_after_add(repo, 1)
 
 
@@ -1619,7 +1726,7 @@ def enrich_credits_cmd(
 @enrich_app.command("all")
 def enrich_all_cmd() -> None:
     """Everything a new film needs, for every film still missing any of it: keying, OMDb, the
-    provider first-check, then credits, search vectors, store ids and trailers.
+    provider first-check, then credits, search vectors, store ids, trailers and Criterion directors.
 
     This is what runs by itself at the tail of every sync and after every verb that creates films
     (owned import, lists create, oldratings create, review resolve --create); the verb exists for
@@ -1655,6 +1762,25 @@ def enrich_trailers_cmd(
         f"scanned: {report.scanned} · YouTube trailer: {report.with_youtube} · Apple preview only: {report.apple_only}"
         f" · nothing: {report.nothing} · failed: {report.failed}"
         + (" · ABORTED" if report.aborted else "")
+        + ("" if apply else "   (dry run — nothing written)")
+    )
+
+
+@enrich_app.command("criterion-directors")
+def enrich_criterion_directors_cmd(
+    apply: Annotated[bool, typer.Option("--apply", help="Write the directors (default: dry-run).")] = False,
+) -> None:
+    """Fill a director from Criterion's own record (JW Player) for every film that holds a
+    Criterion id and shows no director at all — neither ours nor OMDb's.
+
+    One JW call per film; a director anyone can already see is never changed. A film Criterion
+    names nobody for is asked again next time. Runs by itself at the tail of every sync (the
+    catch-up chain); this verb is the same step by hand. Dry-run by default.
+    """
+    report = fill_criterion_directors(_repo(), HttpCriterionSite(requests.Session()), apply=apply, log=_plain)
+    console.print(
+        f"scanned: {report.scanned} · filled: {report.filled} · no director: {report.no_director}"
+        f" · not on JW: {report.gone} · failed: {report.failed}"
         + ("" if apply else "   (dry run — nothing written)")
     )
 

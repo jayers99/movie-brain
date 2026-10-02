@@ -6,7 +6,7 @@ from datetime import date
 import pytest
 
 from movie_brain.application.embed import embed_films
-from movie_brain.domain.models import CastRow, CrewRow, Film, McTitle, OmdbRating, ReviewEntry, TmdbCredits
+from movie_brain.domain.models import BridgeTarget, CastRow, CrewRow, Film, McTitle, OmdbRating, ReviewEntry, TmdbCredits
 from movie_brain.domain.search import EMBED_MODEL, W_TAG, Filter, trigram_query
 from movie_brain.infrastructure.database import (
     KEY_AUTHORITIES,
@@ -2606,3 +2606,57 @@ def test_drop_external_claim_removes_one_claim_row_and_refuses_a_key_authority(r
     assert repo.external_ids_all(fid) == [("imdb", "tt0052357"), ("itunes", "999")]
     with pytest.raises(ValueError):
         repo.drop_external_claim(fid, "imdb", "tt0052357")
+
+
+def test_criterion_old_urls_lists_urls_only_by_canonical_film(repo):
+    d = date(2026, 9, 20)
+    repo.record_catalog("criterion", [Film("Test Pattern", 2019, None, "https://www.criterionchannel.com/test-pattern")], d)
+    fid = repo.film_id_by_key(Film("Test Pattern", 2019, None, "").key)
+    repo.set_external_id(fid, "criterion", "gpRRkq27", d)  # an id row is not an old URL
+    assert repo.criterion_old_urls() == [
+        BridgeTarget(fid, "https://www.criterionchannel.com/test-pattern", "Test Pattern", 2019)
+    ]
+
+
+def test_criterion_old_urls_follow_a_merge_to_the_survivor(repo):
+    d = date(2026, 9, 20)
+    repo.record_catalog("criterion", [Film("Eve's Bayou", 1997, None, "https://www.criterionchannel.com/eves-bayou")], d)
+    survivor = repo.film_id_by_key(Film("Eve's Bayou", 1997, None, "").key)
+    loser = repo.create_film(Film("EVE'S BAYOU: Director's Cut", 1997, None, ""))
+    repo.set_external_id(loser, "criterion", "https://www.criterionchannel.com/eves-bayou-directors-cut", d)
+    repo.merge_film(loser, survivor, d)
+    assert {t.film_id for t in repo.criterion_old_urls()} == {survivor}
+
+
+def test_record_bridge_writes_ids_listing_urls_and_reviews_together(repo):
+    d = date(2026, 9, 20)
+    repo.record_catalog("criterion", [Film("Test Pattern", 2019, None, "https://www.criterionchannel.com/test-pattern")], d)
+    fid = repo.film_id_by_key(Film("Test Pattern", 2019, None, "").key)
+    other = repo.create_film(Film("Somebody Else", 2001, None, ""))
+    repo.record_bridge(
+        [(fid, "gpRRkq27", "https://www.criterionchannel.com/films/gpRRkq27/test-pattern", "https://www.criterionchannel.com/test-pattern")],
+        [ReviewEntry("id-conflict", other, "gpRRkq27", f'{{"holder": {fid}}}')],
+        date(2026, 10, 2),
+    )
+    assert ("criterion", "gpRRkq27") in repo.external_ids_all(fid)
+    conn = sqlite3.connect(repo.db_path)
+    url = conn.execute("SELECT url FROM listings WHERE film_id = ? AND source = 'criterion'", (fid,)).fetchone()[0]
+    assert url == "https://www.criterionchannel.com/films/gpRRkq27/test-pattern"
+    assert [r["reason"] for r in repo.open_reviews("criterion")] == ["id-conflict"]
+
+
+def test_record_bridge_is_all_or_nothing(repo):
+    d = date(2026, 9, 20)
+    a = repo.create_film(Film("A", 2001, None, ""))
+    b = repo.create_film(Film("B", 2002, None, ""))
+    repo.set_external_id(b, "criterion", "SAMEID00", d)
+    with pytest.raises(sqlite3.IntegrityError):
+        repo.record_bridge([(a, "AAAAAAAA", "u1", "o1"), (a, "SAMEID00", "u2", "o2")], [], d)  # second binding clashes
+    assert ("criterion", "AAAAAAAA") not in repo.external_ids_all(a)
+
+
+def test_record_bridge_same_film_same_id_twice_is_one_row(repo):
+    d = date(2026, 9, 20)
+    a = repo.create_film(Film("A", 2001, None, ""))
+    repo.record_bridge([(a, "AAAAAAAA", "u1", "o1"), (a, "AAAAAAAA", "u1", "o1")], [], d)
+    assert repo.external_ids_all(a).count(("criterion", "AAAAAAAA")) == 1

@@ -1,0 +1,101 @@
+{
+ "title": "2 or 3 Things I Know About Her",
+ "description": "",
+ "kind": "Single Item",
+ "siteid": "TXXJgKqJ",
+ "playlist": [
+  {
+   "title": "2 or 3 Things I Know About Her",
+   "mediaid": "L5Z3RaiC",
+   "link": "https://cdn.jwplayer.com/previews/L5Z3RaiC",
+   "image": "https://cdn.jwplayer.com/v2/media/L5Z3RaiC/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/L5Z3RaiC/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/L5Z3RaiC/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/L5Z3RaiC/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/L5Z3RaiC/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/L5Z3RaiC/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/L5Z3RaiC/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "siteid": "TXXJgKqJ",
+   "duration": 5245,
+   "content_source_type": "renditions",
+   "pubdate": 1554696000,
+   "updated": 1790017468,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/L5Z3RaiC/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/L5Z3RaiC/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/L5Z3RaiC/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"FR\"]",
+   "criterion_id": "1333",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Jean-Luc Godard\"]",
+   "drm": "true",
+   "genre": "Drama",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"fr\"]",
+   "license_end_date_time": "",
+   "license_start_date_time": "2019-04-08T04:00:00Z",
+   "nexspec_id": "d9185037-3aa4-48b0-aef4-36d3d7adb816",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "AfN1feDA",
+   "playlist_collections_appears_in": "bGMGvyfx",
+   "playlist_related": "NQrg261B",
+   "playlist_supplements": "TMPYCpFM",
+   "rating": "",
+   "release_date": "1967-03-17",
+   "starring": "[\"Marina Vlady\",\"Anny Duperey\",\"Joseph Gerhard\"]",
+   "title_original": "2 ou 3 choses que je sais d'elle",
+   "title_short": "",
+   "title_sort": "2 or 3 things i know about her",
+   "trailer": "xtOi9TuN",
+   "vimeo_id": "461043"
+  }
+ ],
+ "feed_instance_id": "c156b3ee-4e8a-4779-a4d9-2c82b44a0d6c"
+}

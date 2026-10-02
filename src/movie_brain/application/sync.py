@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from pathlib import Path
 
@@ -11,10 +11,10 @@ import requests
 
 from movie_brain.application.availability import TmdbStepResult, tmdb_step
 from movie_brain.application.catch_up import CatchUpReport
+from movie_brain.application.criterion_walk import CriterionSite, WalkReport, walk_criterion
 from movie_brain.application.keying import KeyStepResult, key_films
 from movie_brain.application.metacritic import DEFAULT_TOP_N, MC_TOP_N_KEY, promote_top_n
-from movie_brain.domain.models import merge_yearless
-from movie_brain.infrastructure.criterion import CatalogError, fetch_films, fetch_leaving, fetch_token, page_one_matches
+from movie_brain.infrastructure.criterion_site import HttpCriterionSite
 from movie_brain.infrastructure.database import Repository
 from movie_brain.infrastructure.metacritic import CARDS_PER_PAGE
 from movie_brain.infrastructure.omdb import AuthError, OmdbClient, QuotaExceeded
@@ -33,7 +33,6 @@ def _stderr(msg: str) -> None:
 @dataclass(frozen=True)
 class SyncResult:
     exit_code: int
-    full_walk: bool
     films: int
     looked_up: int
     quota_hit: bool
@@ -46,7 +45,27 @@ class SyncResult:
     tmdb_first_checked: int = 0
     tmdb_reviewed: int = 0  # films the resolver sent to a durable A/B/C review row
     omdb_unkeyed: int = 0  # films skipped by the OMDb loop for holding no IMDb id (never title-searched)
-    catch_up: CatchUpReport | None = None  # the chain at the tail (credits, vectors, store ids, trailers)
+    # the chain at the tail (credits, vectors, store ids, trailers, Criterion directors)
+    catch_up: CatchUpReport | None = None
+    criterion_walked: bool = False  # the Criterion walk ran and committed tonight
+    criterion_failed: bool = False  # it ran and wrote nothing (spec D6); the rest of the night still ran
+    criterion_arrived: int = 0
+    criterion_departed: int = 0
+    criterion_reviews: int = 0
+    criterion_skipped: int = 0  # new films not asked about tonight (no resolver, or its lookups failed)
+
+
+def _with_walk(result: SyncResult, walk: WalkReport | None, failed: bool) -> SyncResult:
+    if walk is None:
+        return replace(result, criterion_failed=failed)
+    return replace(
+        result,
+        criterion_walked=True,
+        criterion_arrived=walk.arrived,
+        criterion_departed=walk.departed,
+        criterion_reviews=walk.reviews,
+        criterion_skipped=walk.skipped,
+    )
 
 
 def _resolve_imdb_id(
@@ -83,64 +102,33 @@ def sync(
     today: date,
     *,
     session: requests.Session | None = None,
-    delay_s: float = 0.25,
-    force_full: bool = False,
     ratings_only: bool = False,
-    max_age_days: int = 7,
     tmdb_token: str | None = None,
     config_dir: Path | None = None,
     notifier: Callable[[str, str], None] | None = None,
     fetcher: CandidateFetcher | None = None,
     skip_catalog: bool = False,
     catch_up: Callable[[Repository, TmdbClient | None], CatchUpReport | None] | None = None,
+    site: CriterionSite | None = None,
     log: Callable[[str], None] = _stderr,
 ) -> SyncResult:
-    """`skip_catalog` is the AFTER-ADD mode (owner ruling 2026-09-20: a film gets its full
+    """One night. Step 1 is the Criterion walk (`application/criterion_walk.py`, spec 2026-10-01):
+    every catalog item matched to a film by its mediaid, unknown ones resolved and gated, all of it
+    written in one transaction. A walk that fails writes nothing for Criterion; the rest of the
+    night still runs and the sync exits 1 (D6 — one source's weather never breaks another). Every
+    sync walks the whole catalog: there is no cheap check any more (D11).
+
+    `skip_catalog` is the AFTER-ADD mode (owner ruling 2026-09-20: a film gets its full
     enrichment when it is added): a verb that has just created films runs everything a sync does
     to a new film — keying, OMDb, the provider first-check, the catch-up chain — without walking
     Criterion, promoting Metacritic titles or starting the weekly provider refresh. `catch_up` is
     the chain itself (`application/catch_up.py`), handed in by the CLI so that nothing here builds
-    a CheapCharts client or loads a model; it runs last, under its own tripwire."""
+    a CheapCharts client or loads a model; it runs last, under its own tripwire. `site` is the
+    Criterion site the walk reads (default: the live `HttpCriterionSite` on `session`)."""
     session = session or requests.Session()
-    known = [f for _, f in repo.current_films(SOURCE)]
-    full_walk = False
-
-    if ratings_only:
-        if not known:
-            log("no stored catalog — run once without --ratings-only first")
-            return SyncResult(1, False, 0, 0, False, False)
-    elif skip_catalog:
-        pass
-    else:
-        try:
-            token = fetch_token(session)
-            fetched_at = repo.get_meta("films_fetched_at")
-            raw_total_meta = repo.get_meta("films_raw_total")
-            reuse = False
-            if not force_full and known and fetched_at:
-                age = (today - date.fromisoformat(fetched_at)).days
-                expected_total = int(raw_total_meta) if raw_total_meta else None
-                reuse = 0 <= age <= max_age_days and page_one_matches(session, token, known, expected_total)
-            if reuse:
-                films = known
-                raw_total = None
-            else:
-                fetched = fetch_films(session, token, delay_s=delay_s)
-                films = merge_yearless(fetched, known)
-                raw_total = len(fetched)
-                full_walk = True
-        except (CatalogError, requests.RequestException) as exc:
-            log(f"catalog fetch failed, database unchanged: {exc}")
-            return SyncResult(1, False, 0, 0, False, False)
-
-        repo.record_catalog(SOURCE, films, today)
-        if full_walk and raw_total is not None:
-            repo.set_meta("films_fetched_at", today.isoformat())
-            repo.set_meta("films_raw_total", str(raw_total))
-        try:
-            repo.set_leaving(SOURCE, fetch_leaving(session, token, delay_s=delay_s))
-        except Exception as exc:  # noqa: BLE001 — any failure here must not abort the run
-            log(f"leaving-soon fetch failed, keeping last-known departures: {exc}")
+    if ratings_only and not repo.current_films(SOURCE):
+        log("no stored catalog — run once without --ratings-only first")
+        return SyncResult(1, 0, 0, False, False)
 
     tmdb_client = TmdbClient(tmdb_token, session=session) if tmdb_token else None
     arbiter = TmdbArbiter(tmdb_client) if tmdb_client is not None else None
@@ -148,6 +136,18 @@ def sync(
     cache = None
     if fetcher is None and config_dir is not None:
         fetcher, cache = session_fetcher(config_dir, tmdb_client, omdb_client)
+
+    walk: WalkReport | None = None
+    walk_failed = False
+    if not ratings_only and not skip_catalog:
+        try:
+            walk = walk_criterion(repo, site or HttpCriterionSite(session), fetcher, tmdb_client, today, log=log)
+        except Exception as exc:  # noqa: BLE001 — one source's weather never breaks another (spec D6)
+            walk_failed = True
+            log(
+                "criterion walk failed — nothing written for Criterion; the rest of the sync runs: "
+                f"{type(exc).__name__}: {exc}"
+            )
 
     mc_promoted = 0
     if not ratings_only and not skip_catalog and config_dir is not None:
@@ -199,8 +199,10 @@ def sync(
             continue
         except AuthError as exc:
             log(f"OMDb rejected the API key: {exc}")
-            return SyncResult(
-                2, full_walk, len(repo.current_films(SOURCE)), looked_up, False, False, mc_promoted=mc_promoted
+            return _with_walk(
+                SyncResult(2, len(repo.current_films(SOURCE)), looked_up, False, False, mc_promoted=mc_promoted),
+                walk,
+                walk_failed,
             )
         except requests.RequestException as exc:
             log(f"lookup failed for {film.title!r}: {exc}")
@@ -246,20 +248,23 @@ def sync(
         except Exception as exc:  # noqa: BLE001 — alerts must never affect the sync outcome
             log(f"notification failed: {exc}")
 
-    return SyncResult(
-        0,
-        full_walk,
-        len(repo.current_films(SOURCE)),
-        looked_up,
-        quota_hit,
-        failing,
-        keyed.keyed,
-        keyed.reviewed + keyed.held + keyed.failed,
-        tmdb.refreshed,
-        tmdb.watchlist_refreshed,
-        mc_promoted,
-        tmdb.first_checked,
-        keyed.reviewed,
-        unkeyed,
-        caught_up,
+    return _with_walk(
+        SyncResult(
+            1 if walk_failed else 0,
+            len(repo.current_films(SOURCE)),
+            looked_up,
+            quota_hit,
+            failing,
+            tmdb_matched=keyed.keyed,
+            tmdb_missed=keyed.reviewed + keyed.held + keyed.failed,
+            tmdb_refreshed=tmdb.refreshed,
+            tmdb_watchlist_refreshed=tmdb.watchlist_refreshed,
+            mc_promoted=mc_promoted,
+            tmdb_first_checked=tmdb.first_checked,
+            tmdb_reviewed=keyed.reviewed,
+            omdb_unkeyed=unkeyed,
+            catch_up=caught_up,
+        ),
+        walk,
+        walk_failed,
     )

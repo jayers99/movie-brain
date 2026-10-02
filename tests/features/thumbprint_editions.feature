@@ -52,14 +52,13 @@ Feature: Thumbprint T2 — edition-year films fold into their work
     When I run repair editions --apply answering yes
     Then the edition film's verdict is "conflict" and it has no disposition and year 2016
 
-  Scenario: a film Criterion still lists is never re-keyed → conflict, nothing written
+  Scenario: a film Criterion lists can now be re-keyed (walk matches by mediaid, not key)
     Given an edition film "SCENES FROM A MARRIAGE: Theatrical Version" year 1973 from "criterion" slug "https://c/sfam-theatrical"
     And the edition film has a criterion listing
     And the edition contract says the work is "Scenes from a Marriage" 1974 tt "tt6725014" tmdb "133919"
     When I run repair editions --apply answering yes
-    Then the edition film's verdict is "conflict" and it has no disposition and year 1973
-    And the edition film is still titled "SCENES FROM A MARRIAGE: Theatrical Version" and holds no imdb id
-    And the editions report says twin 0, no-twin 0, conflict 1, csv-mismatch 0, applied 0
+    Then the edition film is titled "Scenes from a Marriage" year 1974 with imdb "tt6725014" and tmdb "133919" and no disposition
+    And the editions report says twin 0, no-twin 1, conflict 0, csv-mismatch 0, applied 1
 
   Scenario: a second apply is a no-op
     Given an edition film "Blade Runner (The Final Cut)" year 2007 from "apple-tv" slug "Blade Runner (The Final Cut)"
@@ -115,14 +114,13 @@ Feature: Thumbprint T2 — edition-year films fold into their work
     When I run repair editions --apply answering yes
     Then the editions report says twin 0, no-twin 0, conflict 0, csv-mismatch 0, applied 0
 
-  Scenario: a same-year edition Criterion still lists is never re-keyed → conflict, nothing written
+  Scenario: a same-year edition Criterion lists can now be re-keyed (walk matches by mediaid, not key)
     Given an edition film "FANNY AND ALEXANDER: Theatrical Version" year 1982 from "criterion" slug "https://c/fanny-theatrical"
     And the edition film has a criterion listing
     And the edition contract says the work is "Fanny and Alexander" 1982 tt "tt0083922" tmdb "5961"
     When I run repair editions --apply answering yes
-    Then the edition film's verdict is "conflict" and it has no disposition and year 1982
-    And the edition film is still titled "FANNY AND ALEXANDER: Theatrical Version" and holds no imdb id
-    And the editions report says twin 0, no-twin 0, conflict 1, csv-mismatch 0, applied 0
+    Then the edition film is titled "Fanny and Alexander" year 1982 with imdb "tt0083922" and tmdb "5961" and no disposition
+    And the editions report says twin 0, no-twin 1, conflict 0, csv-mismatch 0, applied 1
 
   Scenario: a same-title same-year film with the wrong tmdb id blocks rather than merges
     Given an edition film "Overlord [re-release]" year 2006 from "metacritic" slug "overlord-re-release"

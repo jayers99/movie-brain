@@ -97,7 +97,15 @@ def resolve_review(
     here would be circular depending on which module a caller happens to import first; lists.py
     imports nothing from this module today, but the same local convention is followed anyway
     so a future import there can never introduce that cycle by accident.
+
+    A `criterion` row (spec 2026-10-01 D9) names a Criterion mediaid the walk could not place:
+    `--film` binds it to that film, `--tt` runs the `films add` ladder from the given id and
+    `--create` mints from the row's own Criterion facts (`application/criterion_review.py`); the
+    bridge's `id-conflict` rows accept `--dismiss` only. The next walk lists whatever film now
+    holds the mediaid.
     """
+    from movie_brain.application.criterion_review import resolve_criterion_row
+    from movie_brain.application.criterion_walk import AUTHORITY as CRITERION_AUTHORITY
     from movie_brain.application.lists import AUTHORITY as LIST_AUTHORITY
     from movie_brain.application.metacritic import AUTHORITY as MC_AUTHORITY
     from movie_brain.application.metacritic import create_from_staged
@@ -133,6 +141,15 @@ def resolve_review(
 
     if dismiss:
         outcome = "dismissed"
+    elif authority == CRITERION_AUTHORITY:
+        # Spec D9: a mediaid, not a film — --pick/--none key a film, and --tmdb-id claims one.
+        if pick is not None or none or tmdb_id is not None or series:
+            raise ValueError("criterion rows accept --film, --create, --tt or --dismiss")
+        if value is None:
+            raise ValueError(f"criterion review {review_id} names no id")
+        outcome = resolve_criterion_row(
+            repo, row, today=today, film_id=film_id, create=create, tt=tt, client=client, warn=warn
+        )
     elif pick is not None or tt is not None or none:
         if authority != TMDB_AUTHORITY or rid is None:
             raise ValueError("--pick/--tt/--none apply to tmdb rows for a film")

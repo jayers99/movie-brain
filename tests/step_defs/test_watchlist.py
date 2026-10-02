@@ -7,13 +7,13 @@ from datetime import date, timedelta
 
 import pytest
 import responses
+from criterion_fakes import FakeSite, seed_known
 from pytest_bdd import given, parsers, scenarios, then, when
 
 from movie_brain.application.availability import META_REFRESHED_AT
 from movie_brain.application.sync import SOURCE, sync
 from movie_brain.domain.models import Film
 from movie_brain.domain.thumbprint import Candidate
-from movie_brain.infrastructure.criterion import API_URL, BROWSE_URL
 from movie_brain.infrastructure.omdb import OMDB_URL
 from movie_brain.infrastructure.tmdb import TMDB_API
 
@@ -31,19 +31,15 @@ def parse_titles(text: str) -> list[Film]:
     return films
 
 
-def movie_item(f: Film) -> dict:
-    return {
-        "name": f.title,
-        "metadata": {"year_released": f.year, "director": f.director},
-        "_links": {"collection_page": {"href": f.url}},
-    }
-
-
 @pytest.fixture
-def ctx(repo):
+def ctx(repo, monkeypatch):
     rs = responses.RequestsMock(assert_all_requests_are_fired=False)
     rs.start()
-    yield {"repo": repo, "rs": rs, "result": None, "flags": {}}
+    site = FakeSite()
+    # These scenarios test the TMDB step. Criterion is a fake listing the films a scenario
+    # names, each holding its mediaid as `criterion bridge --apply` leaves it.
+    monkeypatch.setattr("movie_brain.application.sync.HttpCriterionSite", lambda *a, **kw: site)
+    yield {"repo": repo, "rs": rs, "result": None, "flags": {}, "site": site}
     rs.stop()
     rs.reset()
 
@@ -53,43 +49,9 @@ def fresh(ctx):
     pass
 
 
-@given("the Criterion browse page exposes a token")
-def token(ctx):
-    ctx["rs"].get(BROWSE_URL, body='<script>window.TOKEN = "tok";</script>')
-
-
 @given(parsers.parse("the Criterion catalog has films {films}"))
 def catalog(ctx, films):
-    flist = parse_titles(films)
-    ctx["catalog_films"] = flist
-    if ctx["flags"].get("catalog_registered"):
-        # A scenario-level line replaces the Background's films; the callback below
-        # reads ctx["catalog_films"] at request time, so it must be registered once.
-        return
-    ctx["flags"]["catalog_registered"] = True
-
-    def movies(request):
-        current = ctx["catalog_films"]
-        return (
-            200,
-            {},
-            json.dumps(
-                {
-                    "total": len(current),
-                    "_links": {"next": {"href": None}},
-                    "_embedded": {"collections": [movie_item(f) for f in current]},
-                }
-            ),
-        )
-
-    def categories(request):
-        return (200, {}, '{"_links": {"next": {"href": null}}, "_embedded": {"collections": []}}')
-
-    ctx["rs"].add_callback(
-        responses.GET,
-        API_URL,
-        callback=lambda r: movies(r) if "type%5B%5D=movie" in r.url else categories(r),
-    )
+    ctx["site"].items = seed_known(ctx["repo"], parse_titles(films), TODAY - timedelta(days=30))
 
 
 @given("OMDb knows every film")

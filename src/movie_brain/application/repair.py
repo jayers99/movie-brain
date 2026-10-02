@@ -736,11 +736,6 @@ def _edition_blockers(
         holder = repo.film_id_by_key(key)
         if holder is not None and holder not in allowed and repo.canonical_film_id(holder) not in allowed:
             blockers.append(f"key {key!r} held by #{holder}")
-        if repo.has_listing(rekey_id, "criterion"):
-            # `record_catalog` upserts ON CONFLICT(films.key): re-keying a film Criterion still
-            # lists makes the next walk mint a fresh film under the old key and strand this one.
-            # Deferred to the ingester switch, where the resolver — not the key — owns identity.
-            blockers.append("criterion listing — re-key deferred to the ingester switch")
     if twin is not None and twin.imdb_id and twin.imdb_id != c.tt:
         # The twin merge writes the contract tt onto the survivor; a survivor already keyed to a
         # DIFFERENT work is not this work's twin, and silently keeping its id hides the mismatch.

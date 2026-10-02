@@ -26,18 +26,44 @@ def test_sync_requires_api_key(config_dir):
     assert "OMDB_API_KEY" in r.output
 
 
-def test_sync_propagates_exit_code(config_dir, monkeypatch):
+def test_sync_propagates_exit_code_and_keeps_full_as_a_habit(config_dir, monkeypatch):
     (config_dir / "omdb-api-key.txt").write_text("k")
     calls = {}
 
     def fake_sync(repo, api_key, today, **kw):
         calls.update(kw, api_key=api_key)
-        return SyncResult(1, False, 0, 0, False, False)
+        return SyncResult(1, 0, 0, False, False)
 
     monkeypatch.setattr("movie_brain.cli.sync", fake_sync)
     r = runner.invoke(app, ["sync", "--full"])
     assert r.exit_code == 1
-    assert calls["force_full"] is True and calls["ratings_only"] is False and calls["api_key"] == "k"
+    assert "force_full" not in calls and calls["ratings_only"] is False and calls["api_key"] == "k"
+
+
+def test_sync_prints_the_criterion_line(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    monkeypatch.setattr(
+        "movie_brain.cli.sync",
+        lambda repo, api_key, today, **kw: SyncResult(
+            0, 10, 2, False, False, criterion_walked=True, criterion_arrived=3, criterion_departed=2,
+            criterion_reviews=1,
+        ),
+    )
+    r = runner.invoke(app, ["sync"])
+    assert r.exit_code == 0, r.output
+    assert "criterion — arrived 3 · left 2 · to review 1" in r.output
+    assert "full walk" not in r.output and "not asked" not in r.output
+
+
+def test_sync_says_when_the_criterion_walk_failed(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    monkeypatch.setattr(
+        "movie_brain.cli.sync",
+        lambda repo, api_key, today, **kw: SyncResult(1, 10, 2, False, False, criterion_failed=True),
+    )
+    r = runner.invoke(app, ["sync"])
+    assert r.exit_code == 1
+    assert "nothing written for Criterion" in r.output
 
 
 def test_import_legacy_and_status(config_dir, tmp_path):
@@ -405,6 +431,34 @@ def test_review_list_shows_candidate_lines(config_dir):
     r = runner.invoke(app, ["review", "list"])
     assert r.exit_code == 0
     assert "A tt0083658" in r.output
+
+
+def test_review_list_shows_what_criterion_showed_for_a_criterion_row(config_dir, monkeypatch):
+    from datetime import date
+
+    from movie_brain.application.criterion_walk import criterion_detail
+    from movie_brain.domain.models import ReviewEntry
+    from movie_brain.infrastructure.criterion_site import CatalogItem, JwMedia
+    from movie_brain.infrastructure.database import Repository
+
+    monkeypatch.setenv("COLUMNS", "250")
+    repo = Repository(config_dir / "movie-brain.db")
+    item = CatalogItem("AbCd1234", "K-ON! The Movie", 2011, 6600)
+    media = JwMedia("AbCd1234", "K-ON! The Movie", None, "2011-12-03", ("Naoko Yamada",), None, None, None, "movie")
+    repo.append_reviews(
+        "criterion",
+        [ReviewEntry("no-match", None, "AbCd1234", criterion_detail(item, media, reason="no-match"))],
+        date(2026, 10, 2),
+    )
+    nodir = CatalogItem("ZzZz9999", "Nameless", None, 100)
+    repo.append_reviews(
+        "criterion", [ReviewEntry("no-match", None, "ZzZz9999", criterion_detail(nodir, None, reason="no-match"))],
+        date(2026, 10, 2),
+    )
+    r = runner.invoke(app, ["review", "list", "--authority", "criterion"])
+    assert r.exit_code == 0, r.output
+    assert "K-ON! The Movie (2011)" in r.output and "Naoko Yamada" in r.output
+    assert "None" not in r.output and "Nameless" in r.output
 
 
 def test_review_list_marks_a_series_film(config_dir):
@@ -1246,6 +1300,43 @@ def test_enrich_trailers_is_dry_run_by_default_and_prints_the_report(config_dir,
     assert "dry run" not in r.output
 
 
+def test_enrich_criterion_directors_is_dry_run_by_default_and_prints_the_report(config_dir, monkeypatch):
+    from movie_brain.application.criterion_directors import DirectorsReport
+    from movie_brain.infrastructure.criterion_site import HttpCriterionSite
+
+    calls = {}
+
+    def fake(repo, site, **kw):
+        calls.update(kw, site=site)
+        return DirectorsReport(scanned=3, filled=1, no_director=0, gone=1, failed=1)
+
+    monkeypatch.setattr("movie_brain.cli.fill_criterion_directors", fake)
+    r = runner.invoke(app, ["enrich", "criterion-directors"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is False and isinstance(calls["site"], HttpCriterionSite)
+    assert "scanned: 3 · filled: 1 · no director: 0 · not on JW: 1 · failed: 1" in r.output and "dry run" in r.output
+
+    r = runner.invoke(app, ["enrich", "criterion-directors", "--apply"])
+    assert r.exit_code == 0, r.output
+    assert calls["apply"] is True and "dry run" not in r.output
+
+
+def test_the_catch_up_chain_hands_the_directors_step_a_jw_site(repo, monkeypatch):
+    import movie_brain.cli as cli
+    from movie_brain.application.catch_up import CatchUpReport
+    from movie_brain.infrastructure.criterion_site import HttpCriterionSite
+
+    seen = {}
+
+    def fake_catch_up(repo, today, **kw):
+        seen.update(kw)
+        return CatchUpReport()
+
+    monkeypatch.setattr(cli, "catch_up", fake_catch_up)
+    cli._catch_up_chain()(repo, None)
+    assert isinstance(seen["criterion"], HttpCriterionSite)
+
+
 # ---- a film gets its full enrichment when it is added (owner ruling 2026-09-20) ----
 
 
@@ -1255,7 +1346,7 @@ def _capture_sync(monkeypatch, calls):
 
     def fake_sync(repo, api_key, today, **kw):
         calls.append(kw)
-        return SyncResult(0, False, 10, 2, False, False, catch_up=CatchUpReport(credits=EnrichReport(2, 2)))
+        return SyncResult(0, 10, 2, False, False, catch_up=CatchUpReport(credits=EnrichReport(2, 2)))
 
     monkeypatch.setattr("movie_brain.cli.sync", fake_sync)
 
@@ -1326,6 +1417,7 @@ def test_review_resolve_create_enriches_the_film_it_made_and_other_actions_do_no
     r = runner.invoke(app, ["review", "resolve", "7", "--create"])
     assert r.exit_code == 0, r.output
     assert len(calls) == 1 and calls[0]["skip_catalog"] is True and "enriching the 1 new film…" in r.output
+    monkeypatch.setattr("movie_brain.cli.resolve_review", lambda repo, rid, **kw: "dismissed")
     r = runner.invoke(app, ["review", "resolve", "7", "--dismiss"])
     assert r.exit_code == 0 and len(calls) == 1
 
@@ -1456,3 +1548,86 @@ def test_viewings_add_no_note_writes_a_dated_viewing_and_no_artefact(repo):
     assert r.exit_code == 0, r.output
     assert r.output.startswith(f"LOGGED    #{fid} 'Seven Chances' (1925) · 2026-09-27")
     assert repo.viewings_for(fid)[0]["artefacts"] == []
+
+
+def test_criterion_bridge_wires_the_use_case(config_dir, monkeypatch):
+    from movie_brain.application.criterion_bridge import BridgeReport, DriftLine
+
+    seen = {}
+
+    def fake_catalog(session, **kw):
+        return []
+
+    def fake_run(repo, cfg_dir, catalog, ask, now, apply, retry, progress=None):
+        seen.update(apply=apply, retry=retry, cfg_dir=cfg_dir)
+        return BridgeReport({"film": 1}, [DriftLine(56, "Test Pattern", 2019, "Test Pattern", 2021, "year")], 0, apply, 0)
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", fake_catalog)
+    monkeypatch.setattr("movie_brain.application.criterion_bridge.run_bridge", fake_run)
+    r = runner.invoke(app, ["criterion", "bridge"])
+    assert r.exit_code == 0, r.output
+    assert seen == {"apply": False, "retry": False, "cfg_dir": config_dir}
+    assert "DRY RUN" in r.output and "#56" in r.output and "2019" in r.output and "2021" in r.output
+
+
+def test_criterion_bridge_says_what_retry_and_two_ids_mean(config_dir, monkeypatch):
+    from movie_brain.application.criterion_bridge import BridgeReport
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", lambda session, **kw: [])
+    monkeypatch.setattr(
+        "movie_brain.application.criterion_bridge.run_bridge",
+        lambda *a, **kw: BridgeReport({"film": 2, "retry": 3}, [], 0, False, 0, 1),
+    )
+    r = runner.invoke(app, ["criterion", "bridge"])
+    assert r.exit_code == 0, r.output
+    assert "two ids 1" in r.output
+    assert "3 links got no usable answer — rerun with --retry to ask them again" in r.output
+    monkeypatch.setattr(
+        "movie_brain.application.criterion_bridge.run_bridge",
+        lambda *a, **kw: BridgeReport({"film": 2}, [], 0, False, 0),
+    )
+    r = runner.invoke(app, ["criterion", "bridge"])
+    assert "two ids" not in r.output and "no usable answer" not in r.output
+
+
+def test_criterion_bridge_names_each_two_id_film(config_dir, monkeypatch):
+    from movie_brain.application.criterion_bridge import BridgeReport, TwoIdLine
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", lambda session, **kw: [])
+    lines = [TwoIdLine(1285, "DR. DOLITTLE: LION'S DEN: English Version", ["YM0kT8PG", "BgC4kIqZ"])]
+    monkeypatch.setattr(
+        "movie_brain.application.criterion_bridge.run_bridge",
+        lambda *a, **kw: BridgeReport({"film": 2}, [], 0, kw["apply"], 0, 1, lines),
+    )
+    for args in (["criterion", "bridge"], ["criterion", "bridge", "--apply"]):
+        r = runner.invoke(app, args)
+        assert r.exit_code == 0, r.output
+        assert "  two ids: #1285 DR. DOLITTLE: LION'S DEN: English Version — YM0kT8PG, BgC4kIqZ" in r.output
+
+
+def test_criterion_bridge_catalog_failure_exits_1(config_dir, monkeypatch):
+    from movie_brain.infrastructure.criterion_site import CriterionError
+
+    def boom(session, **kw):
+        raise CriterionError("catalog: empty page")
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", boom)
+    r = runner.invoke(app, ["criterion", "bridge", "--apply"])
+    assert r.exit_code == 1
+    assert "empty page" in r.output
+
+
+def test_review_resolve_tt_that_creates_a_criterion_film_enriches_it(config_dir, monkeypatch):
+    (config_dir / "omdb-api-key.txt").write_text("k")
+    calls: list[dict] = []
+    _capture_sync(monkeypatch, calls)
+    monkeypatch.setattr(
+        "movie_brain.cli.resolve_review",
+        lambda repo, rid, **kw: "created film 12 'The Hole' (1960) from LeTrou60, keyed",
+    )
+    r = runner.invoke(app, ["review", "resolve", "7", "--tt", "tt9000501"])
+    assert r.exit_code == 0, r.output
+    assert len(calls) == 1 and calls[0]["skip_catalog"] is True
+    monkeypatch.setattr("movie_brain.cli.resolve_review", lambda repo, rid, **kw: "keyed imdb tt1 tmdb 2")
+    r = runner.invoke(app, ["review", "resolve", "7", "--tt", "tt0000001"])
+    assert r.exit_code == 0 and len(calls) == 1  # keying an existing film is not an add
