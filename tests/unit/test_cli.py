@@ -1456,3 +1456,35 @@ def test_viewings_add_no_note_writes_a_dated_viewing_and_no_artefact(repo):
     assert r.exit_code == 0, r.output
     assert r.output.startswith(f"LOGGED    #{fid} 'Seven Chances' (1925) · 2026-09-27")
     assert repo.viewings_for(fid)[0]["artefacts"] == []
+
+
+def test_criterion_bridge_wires_the_use_case(config_dir, monkeypatch):
+    from movie_brain.application.criterion_bridge import BridgeReport, DriftLine
+
+    seen = {}
+
+    def fake_catalog(session, **kw):
+        return []
+
+    def fake_run(repo, cfg_dir, catalog, ask, now, apply, retry):
+        seen.update(apply=apply, retry=retry, cfg_dir=cfg_dir)
+        return BridgeReport({"film": 1}, [DriftLine(56, "Test Pattern", 2019, "Test Pattern", 2021, "year")], 0, apply, 0)
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", fake_catalog)
+    monkeypatch.setattr("movie_brain.application.criterion_bridge.run_bridge", fake_run)
+    r = runner.invoke(app, ["criterion", "bridge"])
+    assert r.exit_code == 0, r.output
+    assert seen == {"apply": False, "retry": False, "cfg_dir": config_dir}
+    assert "DRY RUN" in r.output and "#56" in r.output and "2019" in r.output and "2021" in r.output
+
+
+def test_criterion_bridge_catalog_failure_exits_1(config_dir, monkeypatch):
+    from movie_brain.infrastructure.criterion_site import CriterionError
+
+    def boom(session, **kw):
+        raise CriterionError("catalog: empty page")
+
+    monkeypatch.setattr("movie_brain.infrastructure.criterion_site.fetch_catalog", boom)
+    r = runner.invoke(app, ["criterion", "bridge", "--apply"])
+    assert r.exit_code == 1
+    assert "empty page" in r.output

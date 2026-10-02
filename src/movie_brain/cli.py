@@ -108,6 +108,8 @@ audit_app = typer.Typer(help="Data audit: read-only consistency checks; the huma
 app.add_typer(audit_app, name="audit")
 services_app = typer.Typer(help="The service registry: quality, Apple TV app, subscription.")
 app.add_typer(services_app, name="services")
+criterion_app = typer.Typer(help="Criterion Channel after the 2026-10 relaunch: bridge stored films to their new ids.")
+app.add_typer(criterion_app, name="criterion")
 console = Console()
 err = Console(stderr=True)
 
@@ -640,6 +642,64 @@ def films_add_cmd(
     if apply:
         _enrich_after_add(repo, int(outcome.kind == "created"))
     raise typer.Exit(outcome.exit_code)
+
+
+@criterion_app.command("bridge")
+def criterion_bridge_cmd(
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Write the ids (default: dry run, answers kept on disk).")
+    ] = False,
+    retry: Annotated[
+        bool, typer.Option("--retry", help="Ask again the links whose last answer failed.")
+    ] = False,
+) -> None:
+    """Give every stored Criterion film its new id, by asking each old link where it forwards.
+
+    One catalog walk (for the drift table), then one quick check per old link, 0.4 s apart —
+    about 25–30 minutes. Answers are kept in <config_dir>/criterion-bridge.jsonl, so an
+    interrupted run resumes and an --apply within a day replays them without asking again."""
+    from datetime import UTC, datetime
+
+    import requests
+
+    from movie_brain.application import criterion_bridge
+    from movie_brain.infrastructure import criterion_site
+    from movie_brain.infrastructure.cheapcharts import Pacer
+
+    cfg = load_config()
+    repo = _repo()
+    session = requests.Session()
+    try:
+        catalog = criterion_site.fetch_catalog(session)
+    except criterion_site.CriterionError as exc:
+        console.print(f"FAILED    catalog walk: {exc} — nothing asked, nothing written", markup=False, highlight=False)
+        raise typer.Exit(1) from exc
+    pacer = Pacer(criterion_site.BRIDGE_DELAY_S)
+    report = criterion_bridge.run_bridge(
+        repo, cfg.config_dir, catalog,
+        lambda url: criterion_site.head_old_url(session, url, pacer),
+        datetime.now(UTC), apply=apply, retry=retry,
+    )
+    c = report.counts
+    head = (f"APPLIED — ids written, {report.reviews} clash reviews queued" if apply
+            else "DRY RUN — nothing written (add --apply)")
+    console.print(head, markup=False, highlight=False)
+    console.print(
+        f"links: {sum(c.values())} · film {c.get('film', 0)} · same film {c.get('same-film', 0)} · "
+        f"clash {c.get('held', 0)} · extra {c.get('supplement', 0)} · gone {c.get('gone', 0)} · "
+        f"retry {c.get('retry', 0)} · reopened {report.reopened}",
+        markup=False, highlight=False,
+    )
+    kinds = {k: sum(1 for d in report.drift if d.kind == k) for k in ("year", "title", "both")}
+    console.print(
+        f"drift: {len(report.drift)} films ({kinds['year']} year · {kinds['title']} title · {kinds['both']} both)",
+        markup=False, highlight=False,
+    )
+    for d in report.drift:
+        console.print(
+            f"  #{d.film_id:<6} {d.title} ({d.year})  →  {d.cat_title} ({d.cat_year})  {d.kind}",
+            markup=False, highlight=False, soft_wrap=True,
+        )
 
 
 def _parse_day(raw: str | None, flag: str) -> date | None:
