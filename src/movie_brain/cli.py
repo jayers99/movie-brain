@@ -199,7 +199,7 @@ def _catch_up_chain() -> Callable[[Repository, TmdbClient | None], CatchUpReport
 def _enrich_after_add(repo: Repository, created: int | None) -> None:
     """A film gets its FULL enrichment when it is added (owner ruling 2026-09-20): everything a
     sync does to a new film — keying, OMDb, the provider first-check, then credits, vectors, store
-    ids and trailers — without walking Criterion or starting the weekly provider refresh. Every
+    ids, trailers and Criterion directors — without walking Criterion or starting the weekly provider refresh. Every
     step is a worklist, so this also picks up whatever an earlier interrupted run left behind.
     Never changes the calling verb's exit code. `created=None` is `enrich all`, run by hand."""
     if created == 0:
@@ -1714,7 +1714,7 @@ def enrich_credits_cmd(
 @enrich_app.command("all")
 def enrich_all_cmd() -> None:
     """Everything a new film needs, for every film still missing any of it: keying, OMDb, the
-    provider first-check, then credits, search vectors, store ids and trailers.
+    provider first-check, then credits, search vectors, store ids, trailers and Criterion directors.
 
     This is what runs by itself at the tail of every sync and after every verb that creates films
     (owned import, lists create, oldratings create, review resolve --create); the verb exists for
