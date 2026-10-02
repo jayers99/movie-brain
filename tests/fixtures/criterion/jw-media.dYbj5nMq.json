@@ -1,0 +1,101 @@
+{
+ "title": "The IX Olympiad in Amsterdam",
+ "description": "",
+ "kind": "Single Item",
+ "siteid": "TXXJgKqJ",
+ "playlist": [
+  {
+   "title": "The IX Olympiad in Amsterdam",
+   "mediaid": "dYbj5nMq",
+   "link": "https://cdn.jwplayer.com/previews/dYbj5nMq",
+   "image": "https://cdn.jwplayer.com/v2/media/dYbj5nMq/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dYbj5nMq/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dYbj5nMq/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dYbj5nMq/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dYbj5nMq/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dYbj5nMq/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/dYbj5nMq/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "siteid": "TXXJgKqJ",
+   "duration": 15060,
+   "content_source_type": "renditions",
+   "pubdate": 1554696000,
+   "updated": 1790254342,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/dYbj5nMq/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/dYbj5nMq/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/dYbj5nMq/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"NL\"]",
+   "criterion_id": "29244",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Various\"]",
+   "drm": "true",
+   "genre": "Documentary",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"it\"]",
+   "license_end_date_time": "",
+   "license_start_date_time": "2019-04-08T04:00:00Z",
+   "nexspec_id": "c4941432-e75d-49d0-9a70-3cc7ac29f5d9",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "NiwpGQ56",
+   "playlist_collections_appears_in": "P3THQ1bP",
+   "playlist_related": "Uxj5f0iB",
+   "playlist_supplements": "JkTUPri5",
+   "rating": "",
+   "release_date": "1928-01-01",
+   "starring": "[]",
+   "title_original": "La IX Olimpiade ad Amsterdam",
+   "title_short": "",
+   "title_sort": "9 olympiad at amsterdam",
+   "trailer": "",
+   "vimeo_id": "464959"
+  }
+ ],
+ "feed_instance_id": "dede0737-23dc-43c6-b632-b138408a59ca"
+}

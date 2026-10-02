@@ -21,6 +21,13 @@ Feature: Criterion's directors fill the blanks no one else fills
     When I fill Criterion directors with apply
     Then the director of "The Horse in Focus" is "Various"
 
+  Scenario: The IX Olympiad in Amsterdam takes "Various" as printed (#1777)
+    Given the film "The IX Olympiad in Amsterdam" (1928) holds Criterion id "dYbj5nMq"
+    And OMDb's record for "The IX Olympiad in Amsterdam" is the captured "the-horse-in-focus.json"
+    And JW answers for "dYbj5nMq" as captured on 2026-10-02
+    When I fill Criterion directors with apply
+    Then the director of "The IX Olympiad in Amsterdam" is "Various"
+
   Scenario: A director OMDb shows is never replaced, and JW is not asked (story 9's 103)
     Given the film "Mistress Dispeller" (2025) holds Criterion id "vuGxAj8b"
     And OMDb's record for "Mistress Dispeller" is the captured "mistress-dispeller.json"
