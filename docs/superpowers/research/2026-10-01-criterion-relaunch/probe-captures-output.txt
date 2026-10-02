@@ -1,0 +1,11 @@
+# Console output of probe_captures.py, run 2026-10-01 (copied verbatim from the run)
+catalog pages 16 items 3042 total 3042 last paging {'page_limit': 200}
+home 200 leaving links ['/discover/leaving-october-31']
+/discover/leaving-october-31 200 playlist ids ['0WbeKrrA']
+  playlist 0WbeKrrA 200 28
+link https://www.criterionchannel.com/films/gpRRkq27/ 308 /films/gpRRkq27
+link https://www.criterionchannel.com/films/gpRRkq27 308 /films/gpRRkq27/test-pattern
+link https://www.criterionchannel.com/films/gpRRkq27/test-pattern 200
+link https://www.criterionchannel.com/search?q=Test%20Pattern 200
+jw unknown media 404 {"message":"['ZZZZZZZZ']: id not found in index."}
+# Note: the "leaving links" regex matched dated pages only; the home page ALSO links the undated /discover/leaving-soon (editorial, ignored by D7).

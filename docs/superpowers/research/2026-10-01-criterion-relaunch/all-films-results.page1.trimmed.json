@@ -1,0 +1,44 @@
+{
+ "items": [
+  {
+   "contentType": "film",
+   "duration": 5245,
+   "mediaid": "L5Z3RaiC",
+   "release_date": "1967-01-01",
+   "title": "2 or 3 Things I Know About Her"
+  },
+  {
+   "contentType": "film",
+   "duration": 660,
+   "mediaid": "rst2RGdS",
+   "release_date": "2015-01-01",
+   "title": "Les 3 boutons"
+  },
+  {
+   "contentType": "film",
+   "duration": 5040,
+   "mediaid": "t5P2wYOP",
+   "release_date": "2011-01-01",
+   "title": "4:44 Last Day on Earth"
+  },
+  {
+   "contentType": "film",
+   "duration": 6780,
+   "mediaid": "2V6NOwTh",
+   "release_date": "2007-01-01",
+   "title": "4 Months, 3 Weeks and 2 Days"
+  },
+  {
+   "contentType": "film",
+   "duration": 6240,
+   "mediaid": "50fPtU4y",
+   "release_date": "1952-01-01",
+   "title": "The VI Olympic Winter Games, Oslo 1952"
+  }
+ ],
+ "paging": {
+  "next_pagination_key": "2",
+  "page_limit": 200
+ },
+ "total": 3042
+}

@@ -1,0 +1,200 @@
+{
+ "title": "October Newly Added Films Playlist : primary : PYHsgowM",
+ "description": "",
+ "kind": "MANUAL",
+ "feedid": "vhkO1Ma8",
+ "siteid": "TXXJgKqJ",
+ "links": {
+  "first": "https://cdn.jwplayer.com/v2/playlists/vhkO1Ma8?page_limit=500&format=json&internal=false&page_offset=1",
+  "last": "https://cdn.jwplayer.com/v2/playlists/vhkO1Ma8?page_limit=500&format=json&internal=false&page_offset=1"
+ },
+ "playlist": [
+  {
+   "title": "Barry Lyndon",
+   "mediaid": "aAUEybAm",
+   "link": "https://cdn.jwplayer.com/previews/aAUEybAm",
+   "image": "https://cdn.jwplayer.com/v2/media/aAUEybAm/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/aAUEybAm/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/aAUEybAm/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/aAUEybAm/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/aAUEybAm/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/aAUEybAm/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/aAUEybAm/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "vhkO1Ma8",
+   "siteid": "TXXJgKqJ",
+   "duration": 11118,
+   "content_source_type": "renditions",
+   "pubdate": 1790827200,
+   "updated": 1790871991,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/aAUEybAm/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/aAUEybAm/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/aAUEybAm/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\",\"GB\"]",
+   "criterion_id": "29008",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Stanley Kubrick\"]",
+   "drm": "true",
+   "genre": "Historical",
+   "genre_2": "Drama",
+   "introduction_primary": "",
+   "language": "[\"en-US\",\"de\",\"fr\"]",
+   "license_end_date_time": "2027-01-01T04:59:59Z",
+   "license_start_date_time": "2026-10-01T04:00:00Z",
+   "nexspec_id": "ea6b3bda-dfd8-47c3-ae6e-24b21046e192",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "z28Cp3hX",
+   "playlist_collections_appears_in": "woJKttWM",
+   "playlist_related": "XyZLbyc6",
+   "playlist_supplements": "acfhJ0BN",
+   "rating": "",
+   "release_date": "1975-01-01",
+   "starring": "[\"Ryan O’Neal\",\"Marisa Berenson\",\"Patrick Magee\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Barry Lyndon",
+   "trailer": "sVbomlFG",
+   "vimeo_id": ""
+  },
+  {
+   "title": "The Hitcher",
+   "mediaid": "qvwT6mJ4",
+   "link": "https://cdn.jwplayer.com/previews/qvwT6mJ4",
+   "image": "https://cdn.jwplayer.com/v2/media/qvwT6mJ4/poster.jpg?width=720",
+   "images": [
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qvwT6mJ4/poster.jpg?width=320",
+     "width": 320,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qvwT6mJ4/poster.jpg?width=480",
+     "width": 480,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qvwT6mJ4/poster.jpg?width=640",
+     "width": 640,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qvwT6mJ4/poster.jpg?width=720",
+     "width": 720,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qvwT6mJ4/poster.jpg?width=1280",
+     "width": 1280,
+     "type": "image/jpeg"
+    },
+    {
+     "src": "https://cdn.jwplayer.com/v2/media/qvwT6mJ4/poster.jpg?width=1920",
+     "width": 1920,
+     "type": "image/jpeg"
+    }
+   ],
+   "feedid": "vhkO1Ma8",
+   "siteid": "TXXJgKqJ",
+   "duration": 5851,
+   "content_source_type": "renditions",
+   "pubdate": 1790827200,
+   "updated": 1790615177,
+   "description": "",
+   "sources": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/qvwT6mJ4/manifest.m3u8",
+     "type": "application/vnd.apple.mpegurl"
+    },
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/qvwT6mJ4/manifest.mpd",
+     "type": "application/dash+xml"
+    }
+   ],
+   "tracks": [
+    {
+     "file": "https://cdn.jwplayer.com/v2/sites/TXXJgKqJ/media/qvwT6mJ4/thumbstrip.vtt",
+     "kind": "thumbnails"
+    }
+   ],
+   "variations": {},
+   "commentary_tracks": "[]",
+   "contentType": "film",
+   "content_warnings": "",
+   "country": "[\"US\"]",
+   "criterion_id": "36117",
+   "description_long": "",
+   "description_medium": "",
+   "description_pull_quote": "",
+   "description_staff": "",
+   "director": "[\"Robert Harmon\"]",
+   "drm": "true",
+   "genre": "Horror",
+   "genre_2": "",
+   "introduction_primary": "",
+   "language": "[\"en-US\",\"fr\"]",
+   "license_end_date_time": "2026-12-01T04:59:59Z",
+   "license_start_date_time": "2026-10-01T04:00:00Z",
+   "nexspec_id": "6ebabb21-4861-43c8-939f-0944ae708985",
+   "paywall": "subscriber",
+   "playlist_categories_appears_in": "ntJ9KKoT",
+   "playlist_collections_appears_in": "nJqcdxe4",
+   "playlist_related": "Kz2rFCxL",
+   "playlist_supplements": "yBAjtZRL",
+   "rating": "",
+   "release_date": "1986-01-01",
+   "starring": "[\"Rutger Hauer\",\"C. Thomas Howell\",\"Jennifer Jason Leigh\"]",
+   "title_original": "",
+   "title_short": "",
+   "title_sort": "Hitcher, The",
+   "trailer": "",
+   "vimeo_id": ""
+  }
+ ],
+ "feed_instance_id": "52a611ce-3efe-477e-b50f-9db6c9a7baea"
+}
