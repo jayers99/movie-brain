@@ -1004,7 +1004,8 @@ def test_search_note_click_replace_survives_a_dollar_sign_in_the_value(dash: Pag
 
 
 def _open(dash: Page, title: str):
-    dash.locator("tbody tr", has_text=title).first.click()
+    # The info button always opens; a click on the marked row lets go of the mark (backlog 46 ruling 7).
+    dash.locator("tbody tr", has_text=title).first.locator("button.info").click()
     body = dash.locator("#drawer-body")
     expect(body).to_contain_text(title)  # populated — a negative assertion on an empty drawer passes vacuously
     return body

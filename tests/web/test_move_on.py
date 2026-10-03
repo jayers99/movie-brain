@@ -135,7 +135,8 @@ def drawer_title(page: Page):
 
 
 def open_film(page: Page, title: str) -> None:
-    row(page, title).locator(".c-year").click()
+    # The info button always opens; a click on the marked row lets go of the mark (backlog 46 ruling 7).
+    row(page, title).locator("button.info").click()
     expect(drawer_title(page)).to_contain_text(title)
 
 

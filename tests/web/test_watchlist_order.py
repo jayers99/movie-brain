@@ -360,3 +360,23 @@ def test_story_20_typing_a_rating_rating_the_marked_film(dash: Page):
     i = titles(dash).index("Out of the Past")
     dash.keyboard.press("ArrowUp")
     assert titles(dash).index("Out of the Past") == i - 1
+
+
+def test_story_11_click_click_click_open_close_let_go(dash: Page):
+    cell = row(dash, "Out of the Past").locator(".c-year")
+    cell.click()
+    expect(dash.locator("#drawer")).to_be_visible()
+    cell.click(force=True)  # its own row, through the grey: closes
+    expect(dash.locator("#drawer")).to_be_hidden()
+    expect(row(dash, "Out of the Past")).to_have_class("marked")
+    cell.click()  # third click: let go
+    expect(dash.locator("#films tbody tr.marked")).to_have_count(0)
+    expect(dash.locator("#drawer")).to_be_hidden()
+    before = titles(dash)
+    dash.keyboard.press("ArrowDown")
+    assert titles(dash) == before
+    cell.click()  # fourth: opens again
+    expect(dash.locator("#drawer")).to_be_visible()
+    dash.locator("#drawer-close").click()
+    row(dash, "Out of the Past").locator("button.info").click()  # the info button on the marked row opens
+    expect(dash.locator("#drawer")).to_be_visible()

@@ -1104,8 +1104,12 @@
     if (e.target.closest('a, input')) return;
     if (!drawer.hidden) return; // a keyboard Enter on a still-focused ⓘ would push a second history entry
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
-    revealRow(state.filtered.findIndex((f) => f.id === +tr.dataset.id)); // a half-hidden row is shown whole first
-    openDrawer(+tr.dataset.id);
+    const id = +tr.dataset.id;
+    // Backlog 46 ruling 7: a click on the marked row lets go of the mark (open → close → let go);
+    // the ⓘ button always opens, marked or not.
+    if (id === state.mark && !e.target.closest('button.info')) { state.mark = null; renderRows(); return; }
+    revealRow(state.filtered.findIndex((f) => f.id === id)); // a half-hidden row is shown whole first
+    openDrawer(id);
   });
   $('#drawer-close').addEventListener('click', () => closeDrawer());
   // One click on another film's row switches the drawer to it (owner request 2026-09-20: it used
