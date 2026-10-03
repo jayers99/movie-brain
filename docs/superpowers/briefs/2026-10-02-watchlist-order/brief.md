@@ -11,6 +11,7 @@
 3. The films already starred start in today's critics' order, so nothing moves on day one.
 4. With another chip or a search narrowing the watchlist, the arrows still work and swap with the film you can see.
 5. Row arrows only: no drawer buttons, no Alt+arrow keys.
+8. *Variant A chosen on the mock-up* ("option a"): each press moves the row at once; variant B stays below only as the record of what you compared.
 7. *(added on second sight)* A row click is three-state: open the drawer → close it, mark kept → clear the mark. A fourth click opens again.
 6. *(added on first sight of the mock-up)* With the drawer closed and a film marked, plain ↑ ↓ move that film, and the mark stays on it — "I could hit up three times and that movie would move up three". With the drawer open, ↑ ↓ keep stepping the drawer, as today.
 
@@ -44,7 +45,7 @@
 
 ### Before you say yes
 
-- **Which variant** (A or B) is the open choice.
+- **Variant: A (chosen 2026-10-02).**
 - **Story 5 is my call, not yours.** Today On a list puts list score first and Watched puts last-watched first, ahead of every other rule. I recommend your order wins whenever Watchlist is on, so a chip never hides the arrows. The alternative: those two chips keep their order and the arrows hide while they are on.
 - **Stories 7 and 14 are my calls too:** Undo, or a star put back in the same drawer, returns a film to its place; only a fresh star goes to the top.
 - **Story 4 changed after the gap check:** a move used to be a swap, which let the OTHER film jump over hidden ones. Now only the film you press changes places.

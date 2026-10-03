@@ -31,3 +31,5 @@ Agent minutes: 5 · Findings: 9 · Fixed: 5 · Stories added: 4 · Declined: 0 �
 | N5 | Leftover "swap" wording; story 2's "nothing else moves" (story-untrue) | fixed | also the MC "—" for a missing score |
 
 Agent minutes: 3 · Re-check findings: 5 new · Fixed: 4 · Fixed by an owner ruling: 1. Per the checks README, no second re-check; anything left goes to the owner or the diagnostic checkpoint.
+
+2026-10-02: owner chose variant A ("option a").
