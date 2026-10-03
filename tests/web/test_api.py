@@ -240,9 +240,9 @@ def test_stale_service_listing_is_not_current(repo):
 def test_watchlist_toggle_round_trip(client):
     films = client.get("/api/films").get_json()
     fid = films[0]["id"]
-    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": True}
+    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": True, "order": [fid]}
     assert client.get(f"/api/films/{fid}").get_json()["watchlisted"] is True
-    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": False, "below": None}
+    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": False, "below": None, "order": []}
 
 
 def test_films_carry_the_watchlist_position(client):
@@ -295,9 +295,10 @@ def test_a_put_back_returns_above_its_neighbour(client, repo):
     a, b, c = (f["id"] for f in client.get("/api/films").get_json()[:3])
     for fid in (c, b, a):
         client.post(f"/api/films/{fid}/watchlist")
-    below = client.post(f"/api/films/{b}/watchlist").get_json()["below"]
-    assert below == c
-    assert client.post(f"/api/films/{b}/watchlist", json={"restore": True, "before": below}).get_json() == {"watchlisted": True}
+    off = client.post(f"/api/films/{b}/watchlist").get_json()
+    assert off == {"watchlisted": False, "below": c, "order": [a, c]}
+    below = off["below"]
+    assert client.post(f"/api/films/{b}/watchlist", json={"restore": True, "before": below}).get_json() == {"watchlisted": True, "order": [a, b, c]}
     assert client.get("/api/watchlist/order").get_json() == {"order": [a, b, c]}
 
 

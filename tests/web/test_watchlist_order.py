@@ -139,6 +139,19 @@ def saved(order_server) -> list[str]:
     return [names[i] for i in repo.watchlist_order()]
 
 
+def wait_saved(page: Page, order_server, predicate, timeout: float = 2.0) -> list[str]:
+    """Poll the saved order until `predicate` holds, so no move is still in flight when a test ends.
+    It waits through the PAGE (never time.sleep) so Playwright keeps dispatching routed requests."""
+    deadline = time.monotonic() + timeout
+    while True:
+        names = saved(order_server)
+        if predicate(names):
+            return names
+        if time.monotonic() > deadline:
+            raise AssertionError(f"saved order never matched: {names}")
+        page.wait_for_timeout(50)
+
+
 def test_story_1_my_watchlist_in_my_order(dash: Page):
     expect(dash.locator("#films tbody tr[data-id]")).to_have_count(8)
     assert titles(dash) == WATCHLIST
@@ -152,8 +165,7 @@ def test_story_2_out_of_the_past_goes_first(dash: Page, order_server):
     expect(dash.locator("#films tbody tr[data-id]").first).to_contain_text("Out of the Past")
     assert titles(dash)[:3] == ["Out of the Past", "Intolerance", "Moonlight"]
     expect(row(dash, "Out of the Past")).to_have_class("marked")
-    dash.wait_for_timeout(300)
-    assert saved(order_server)[0] == "Out of the Past"
+    wait_saved(dash, order_server, lambda s: s[0] == "Out of the Past")
 
 
 def test_story_3_one_too_far(dash: Page, order_server):
@@ -170,8 +182,7 @@ def test_story_4_with_a_chip_on_it_steps_past_what_i_can_see(dash: Page, order_s
     dash.locator(RATED_CHIP).click()
     dash.locator(RATED_CHIP).click()   # off
     assert titles(dash)[-4:] == ["The Wonderful Story of Henry Sugar", "Young Frankenstein", "Lord of the Flies", "Out of the Past"]
-    dash.wait_for_timeout(300)
-    assert saved(order_server)[-5:] == ["The Wonderful Story of Henry Sugar", "Young Frankenstein", "Some Came Running", "Lord of the Flies", "Out of the Past"]
+    wait_saved(dash, order_server, lambda s: s[-5:] == ["The Wonderful Story of Henry Sugar", "Young Frankenstein", "Some Came Running", "Lord of the Flies", "Out of the Past"])
 
 
 def test_story_5_on_a_list_keeps_my_order(dash: Page):
@@ -193,7 +204,6 @@ def test_story_6_a_column_sort_hides_the_arrows(dash: Page):
 def test_story_8_a_new_star_goes_to_the_top(dash: Page):
     dash.locator(WATCHLIST_CHIP).click()             # off
     dash.locator("#f-title").fill("ugetsu")
-    dash.locator("#f-title").press("Tab")            # commit the filter now: a blur on the click would re-render under it
     row(dash, "Ugetsu").locator(".c-year").click()
     dash.locator("#drawer .watch-toggle").click()
     expect(dash.locator("#drawer .watch-toggle")).to_have_text("★")
@@ -262,8 +272,7 @@ def test_story_21_the_starred_film_i_cannot_see(dash: Page, order_server):
     expect(dash.locator("#films tbody tr[data-id]")).to_have_count(0)
     dash.locator("#f-title").fill("")
     press(dash, "Lord of the Flies", "up")
-    dash.wait_for_timeout(300)
-    assert saved(order_server)[-3:] == ["Lord of the Flies", "Young Frankenstein", "Some Came Running"]
+    wait_saved(dash, order_server, lambda s: s[-3:] == ["Lord of the Flies", "Young Frankenstein", "Some Came Running"])
 
 
 def test_fast_presses_reach_the_server_in_order(dash: Page, order_server):
@@ -336,14 +345,13 @@ def test_three_fast_presses_land_three_places(dash: Page, order_server):
     dash.locator("#drawer-close").click()
     for _ in range(3):
         dash.keyboard.press("ArrowUp")
-    dash.wait_for_timeout(1500)
+    wait_saved(dash, order_server, lambda s: s[2] == "Out of the Past")
     assert titles(dash)[2] == "Out of the Past"
-    assert saved(order_server)[2] == "Out of the Past"
 
 
 def test_story_19_the_next_morning(dash: Page, order_server):
     press(dash, "Out of the Past", "up", 5)
-    dash.wait_for_timeout(300)
+    wait_saved(dash, order_server, lambda s: s[0] == "Out of the Past")
     dash.reload()
     dash.wait_for_selector("#films tbody[data-count]")
     assert titles(dash)[0] == "Out of the Past"
@@ -352,7 +360,7 @@ def test_story_19_the_next_morning(dash: Page, order_server):
     assert titles(dash)[0] == "Out of the Past"
 
 
-def test_story_20_typing_a_rating_rating_the_marked_film(dash: Page):
+def test_story_20_typing_a_rating_rating_the_marked_film(dash: Page, order_server):
     dash.locator(RATED_CHIP).click()                      # Unrated by me
     press(dash, "Out of the Past", "up")                  # marks it (story 10's rule) and moves it
     before = titles(dash)
@@ -370,7 +378,10 @@ def test_story_20_typing_a_rating_rating_the_marked_film(dash: Page):
     dash.locator("body").click(position={"x": 5, "y": 5})
     i = titles(dash).index("Out of the Past")
     dash.keyboard.press("ArrowUp")
-    assert titles(dash).index("Out of the Past") == i - 1
+    shown = titles(dash)
+    assert shown.index("Out of the Past") == i - 1
+    # End only once that move has saved, so no request is still in flight at teardown.
+    wait_saved(dash, order_server, lambda s: [n for n in s if n in shown] == shown)
 
 
 def test_story_11_click_click_click_open_close_let_go(dash: Page):
@@ -399,52 +410,51 @@ def test_story_7_take_one_off_change_my_mind(dash: Page, order_server):
     expect(dash.locator("#drawer h2")).to_contain_text("The Wonderful Story of Henry Sugar")
     expect(dash.locator("#drawer .moved-on")).to_contain_text("Took Capturing the Friedmans off your watchlist")
     dash.locator("#drawer .moved-on button.undo").click()
-    dash.wait_for_timeout(300)
+    wait_saved(dash, order_server, lambda s: s[3] == "Capturing the Friedmans")
     dash.locator("#drawer-close").click()
     assert titles(dash)[3] == "Capturing the Friedmans"
-    assert saved(order_server)[3] == "Capturing the Friedmans"
     # The Undo re-read the order: the film's row has working arrows (no NaN position).
     press(dash, "Capturing the Friedmans", "up")
     assert titles(dash)[2] == "Capturing the Friedmans"
 
 
 def test_story_14_stars_off_and_on_in_one_drawer_visit(dash: Page, order_server):
+    """Amendment 1.2: Watchlist OFF, no filter; in the full default order Intolerance and Moonlight
+    are neighbours. Both off, both put back in one visit: the order is exactly as it was."""
     dash.locator(WATCHLIST_CHIP).click()             # off
-    dash.locator("#f-title").fill("fr")
-    dash.locator("#f-title").blur()  # a focused filter box re-renders the rows on blur and would eat the next click
-    row(dash, "Capturing the Friedmans").locator(".c-year").click()
+    shown = titles(dash)
+    assert shown[shown.index("Intolerance") + 1] == "Moonlight"
+    row(dash, "Intolerance").locator("button.info").click()
     toggle = dash.locator("#drawer .watch-toggle")
+    expect(dash.locator("#drawer h2")).to_contain_text("Intolerance")
     toggle.click()
     expect(toggle).to_have_text("☆")
     dash.keyboard.press("ArrowDown")
-    expect(dash.locator("#drawer h2")).to_contain_text("Young Frankenstein")
+    expect(dash.locator("#drawer h2")).to_contain_text("Moonlight")
     toggle.click()
     expect(toggle).to_have_text("☆")
     dash.keyboard.press("ArrowUp")
-    expect(dash.locator("#drawer h2")).to_contain_text("Capturing the Friedmans")
+    expect(dash.locator("#drawer h2")).to_contain_text("Intolerance")
     toggle.click()
     expect(toggle).to_have_text("★")
     dash.keyboard.press("ArrowDown")
+    expect(dash.locator("#drawer h2")).to_contain_text("Moonlight")
     toggle.click()
     expect(toggle).to_have_text("★")
     dash.locator("#drawer-close").click()
-    dash.locator("#f-title").fill("")
-    dash.locator("#f-title").blur()
     dash.locator(WATCHLIST_CHIP).click()
-    assert titles(dash)[3] == "Capturing the Friedmans" and titles(dash)[6] == "Young Frankenstein"
+    assert titles(dash) == WATCHLIST                 # Intolerance 1st, Moonlight 2nd, the rest as before
     # After the drawer closed, a star is fresh: off and on again in a NEW visit goes to the top.
     row(dash, "Moonlight").locator("button.info").click()
     toggle.click()                                   # the drawer moves on (move-on); this visit remembers Moonlight
     dash.locator("#drawer-close").click()            # closing ends the visit and forgets it
     dash.locator(WATCHLIST_CHIP).click()             # off, to find Moonlight again
     dash.locator("#f-title").fill("moonlight")
-    dash.locator("#f-title").blur()
     row(dash, "Moonlight").locator("button.info").click()
     toggle.click()
     expect(toggle).to_have_text("★")
     dash.locator("#drawer-close").click()
     dash.locator("#f-title").fill("")
-    dash.locator("#f-title").blur()
     dash.locator(WATCHLIST_CHIP).click()
     assert titles(dash)[0] == "Moonlight"
 
@@ -467,9 +477,7 @@ def test_story_14_put_back_above_a_neighbour_that_was_also_taken_off(dash: Page,
     expect(dash.locator("#drawer h2")).to_contain_text("The Wonderful Story of Henry Sugar")
     toggle.click()
     expect(toggle).to_have_text("★")
-    dash.wait_for_timeout(300)
-    names = saved(order_server)
-    assert names[3] == "Capturing the Friedmans" and names[4] == "The Wonderful Story of Henry Sugar"
+    wait_saved(dash, order_server, lambda s: s[3:5] == ["Capturing the Friedmans", "The Wonderful Story of Henry Sugar"])
 
 
 def test_story_15_a_move_and_the_re_read_both_fail_the_row_goes_back(dash: Page):
@@ -479,3 +487,42 @@ def test_story_15_a_move_and_the_re_read_both_fail_the_row_goes_back(dash: Page)
     expect(dash.locator("#toast")).to_contain_text("Could not save the order")
     dash.wait_for_timeout(300)
     assert titles(dash) == WATCHLIST
+
+
+def test_the_first_click_after_typing_a_filter_opens_the_row(dash: Page):
+    dash.locator(WATCHLIST_CHIP).click()             # off
+    dash.locator("#f-title").fill("ugetsu")
+    row(dash, "Ugetsu").locator(".c-year").click()   # ONE click: leaving the box must not re-render under it
+    expect(dash.locator("#drawer h2")).to_contain_text("Ugetsu")
+
+
+def test_a_click_after_a_press_opens_the_drawer(dash: Page, order_server):
+    press(dash, "Out of the Past", "up")             # the press marks the film
+    expect(row(dash, "Out of the Past")).to_have_class("marked")
+    row(dash, "Out of the Past").locator(".c-year").click()
+    expect(dash.locator("#drawer")).to_be_visible()
+    expect(dash.locator("#drawer h2")).to_contain_text("Out of the Past")
+
+
+def test_a_star_whose_order_read_fails_still_goes_first(dash: Page):
+    dash.route("**/api/watchlist/order", lambda r: r.fulfill(status=500, body="{}"))
+    dash.locator(WATCHLIST_CHIP).click()             # off
+    dash.locator("#f-title").fill("ugetsu")
+    row(dash, "Ugetsu").locator(".c-year").click()
+    dash.locator("#drawer .watch-toggle").click()
+    expect(dash.locator("#drawer .watch-toggle")).to_have_text("★")
+    dash.locator("#drawer-close").click()
+    dash.locator("#f-title").fill("")
+    dash.locator(WATCHLIST_CHIP).click()
+    assert titles(dash)[0] == "Ugetsu"
+
+
+def test_a_re_read_after_a_failed_move_drops_a_film_taken_off_elsewhere(dash: Page, order_server):
+    url, ids, _repo = order_server
+    press(dash, "Out of the Past", "up")             # marks it; wait for that move to save
+    wait_saved(dash, order_server, lambda s: s.index("Out of the Past") == 4)
+    r = dash.request.post(f"{url}/api/films/{ids['Out of the Past']}/watchlist")
+    assert r.json()["watchlisted"] is False          # un-starred behind the page's back
+    dash.keyboard.press("ArrowUp")                   # the marked film's move is refused (409)
+    expect(dash.locator("#toast")).to_contain_text("Could not save the order")
+    expect(row(dash, "Out of the Past")).to_have_count(0)

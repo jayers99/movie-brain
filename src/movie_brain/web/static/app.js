@@ -14,6 +14,7 @@
     sort: null,            // {col, dir} or null = default
     filtered: [], openFilm: null,
     mark: null,            // find-my-row: the last film opened — a bookmark in memory, never in the URL
+    markBy: null,          // backlog 46: 'drawer' (left by a close: a click lets it go) or 'press' (a ▲ ▼: a click opens)
   };
   const $ = (s) => document.querySelector(s);
   const table = $('#films'), tbody = $('#films tbody'), wrap = $('#table-wrap'), thead = $('#films thead');
@@ -145,9 +146,11 @@
   // never land out of order; a failure re-reads the order and says so.
   let moveSeq = 0, moveEpoch = 0, moveChain = Promise.resolve();
   let prev = new Map();  // this epoch: film id -> its position before its first optimistic step
+  // The server's order is the watchlist's whole truth: membership as well as position, so a film
+  // taken off elsewhere (another tab, the CLI) leaves the list on the next re-read (Codex F4).
   function applyOrder(order) {
     const pos = new Map(order.map((id, k) => [id, k + 1]));
-    for (const f of state.films) f.watchlist_position = pos.get(f.id) ?? null;
+    for (const f of state.films) { f.watchlisted = pos.has(f.id); f.watchlist_position = pos.get(f.id) ?? null; }
   }
   async function moveFilm(id, dir) {
     const i = state.filtered.findIndex((f) => f.id === id), j = i + dir;
@@ -181,7 +184,7 @@
   tbody.addEventListener('click', (e) => {
     const b = e.target.closest('td.c-move button'); if (!b) return;
     e.stopPropagation();
-    if (!b.disabled && drawer.hidden) moveFilm(+b.dataset.id, b.classList.contains('up') ? -1 : 1);
+    if (!b.disabled && drawer.hidden) { state.markBy = 'press'; moveFilm(+b.dataset.id, b.classList.contains('up') ? -1 : 1); }
   }, true);
   function applyFilters() {
     state.filtered = state.films.filter(rowMatches).sort(compare);
@@ -377,9 +380,15 @@
     k.imdbMin = num('#f-imdb-min'); k.imdbMax = num('#f-imdb-max');
     applyFilters();
   }
-  document.querySelectorAll('thead tr.filters input:not(#f-lang-input), thead tr.filters select').forEach((el) => {
-    el.addEventListener('input', readControls);
-    el.addEventListener('change', readControls);
+  // Leaving a typed box fires `change` with the value `input` already applied; re-applying it would
+  // re-render the rows under the click that caused the blur and swallow it (Codex F5). So `change`
+  // only applies a value the last `input` did not.
+  const filterEls = [...document.querySelectorAll('thead tr.filters input:not(#f-lang-input), thead tr.filters select')];
+  const filterValues = () => filterEls.map((el) => el.value).join('\u0001');
+  let inputApplied = null;
+  filterEls.forEach((el) => {
+    el.addEventListener('input', () => { inputApplied = filterValues(); readControls(); });
+    el.addEventListener('change', () => { if (filterValues() === inputApplied) return; inputApplied = null; readControls(); });
   });
   function langLabel() {
     const sel = state.cols.languages;
@@ -971,7 +980,7 @@
     if (!r.ok) {
       toast('Film not found');
       // A step moved the white row ahead of its fetch: put it back on the film still on screen.
-      if (mode === 'step') { state.openFilm = drawnFilm; state.mark = drawnFilm; renderRows(); }
+      if (mode === 'step') { state.openFilm = drawnFilm; state.mark = drawnFilm; state.markBy = 'drawer'; renderRows(); }
       return;
     }
     const d = await r.json();
@@ -996,7 +1005,7 @@
     if (movedOn && movedOn.at === id) body.querySelector('h2').insertAdjacentHTML('afterend', movedOnHtml(movedOn));
     else movedOn = null;
     drawer.hidden = false; backdrop.hidden = false; drawer.scrollTop = 0;
-    state.openFilm = id; state.mark = id; drawnFilm = id;
+    state.openFilm = id; state.mark = id; state.markBy = 'drawer'; drawnFilm = id;
     startHeartbeat(id);
     const at = state.filtered.findIndex((f) => f.id === id);
     openIndex = at >= 0 ? at : null;
@@ -1017,7 +1026,7 @@
   function moveDrawerTo(i) {
     const next = state.filtered[i];
     if (!next || next.id === state.openFilm) return;
-    state.openFilm = next.id; state.mark = next.id; openIndex = i;
+    state.openFilm = next.id; state.mark = next.id; state.markBy = 'drawer'; openIndex = i;
     revealRow(i);
     renderRows();
     openDrawer(next.id, 'step');
@@ -1121,8 +1130,9 @@
     const tr = e.target.closest('tr[data-id]'); if (!tr) return;
     const id = +tr.dataset.id;
     // Backlog 46 ruling 7: a click on the marked row lets go of the mark (open → close → let go);
-    // the ⓘ button always opens, marked or not.
-    if (id === state.mark && !e.target.closest('button.info')) { state.mark = null; renderRows(); return; }
+    // the ⓘ button always opens, marked or not. Only a mark the drawer left can be let go: a ▲ ▼
+    // press marks its film too (markBy 'press'), and the next click on that row opens it.
+    if (id === state.mark && state.markBy === 'drawer' && !e.target.closest('button.info')) { state.mark = null; renderRows(); return; }
     revealRow(state.filtered.findIndex((f) => f.id === id)); // a half-hidden row is shown whole first
     openDrawer(id);
   });
@@ -1161,8 +1171,7 @@
     const res = await r.json();
     if (res.watchlisted) starMemory.delete(id); else starMemory.set(id, res.below ?? null);
     b.textContent = res.watchlisted ? '★' : '☆';
-    const o = await fetch('/api/watchlist/order').catch(() => null);
-    if (o && o.ok) applyOrder((await o.json()).order);
+    if (res.order) applyOrder(res.order);  // the toggle answers the whole order: no second read to fail
     const film = state.films.find((f) => f.id === id);
     if (film) {
       film.watchlisted = res.watchlisted; applyFilters();
@@ -1176,8 +1185,7 @@
           if (!r2 || !r2.ok) { toast('Could not update watchlist'); return false; }
           const j = await r2.json(), f = state.films.find((x) => x.id === film.id);
           if (j.watchlisted) starMemory.delete(film.id);
-          const o2 = await fetch('/api/watchlist/order').catch(() => null);
-          if (o2 && o2.ok) applyOrder((await o2.json()).order);
+          if (j.order) applyOrder(j.order);
           if (f) { f.watchlisted = j.watchlisted; applyFilters(); }
           return true;
         } });
