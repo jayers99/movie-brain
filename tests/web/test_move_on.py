@@ -53,7 +53,7 @@ NOIR = ["The Big Sleep", "Out of the Past", "Pursued"]
 
 def seed_move_on(repo: Repository, account: FakeAccount) -> dict[str, int]:
     ids: dict[str, int] = {}
-    for title, year, imdb, rt, mc, rating, store, watch in NAMED:
+    for title, year, imdb, rt, mc, rating, store, _watch in NAMED:
         fid = repo.create_film(Film(title, year, "Dir", ""))
         assert fid is not None
         ids[title] = fid

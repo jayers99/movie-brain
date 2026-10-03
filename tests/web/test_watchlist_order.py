@@ -167,7 +167,8 @@ def test_story_4_with_a_chip_on_it_steps_past_what_i_can_see(dash: Page, order_s
     dash.locator(RATED_CHIP).click()                 # Unrated by me
     expect(dash.locator("#films tbody tr[data-id]")).to_have_count(6)
     press(dash, "Out of the Past", "down")
-    dash.locator(RATED_CHIP).click(); dash.locator(RATED_CHIP).click()   # off
+    dash.locator(RATED_CHIP).click()
+    dash.locator(RATED_CHIP).click()   # off
     assert titles(dash)[-4:] == ["The Wonderful Story of Henry Sugar", "Young Frankenstein", "Lord of the Flies", "Out of the Past"]
     dash.wait_for_timeout(300)
     assert saved(order_server)[-5:] == ["The Wonderful Story of Henry Sugar", "Young Frankenstein", "Some Came Running", "Lord of the Flies", "Out of the Past"]
@@ -183,7 +184,8 @@ def test_story_6_a_column_sort_hides_the_arrows(dash: Page):
     mc = dash.locator('th.sortable[data-col="metacritic"]')
     mc.click()
     expect(dash.locator("td.c-move:visible")).to_have_count(0)
-    mc.click(); mc.click()
+    mc.click()
+    mc.click()
     expect(dash.locator("td.c-move:visible")).to_have_count(8)
     assert titles(dash) == WATCHLIST
 
@@ -211,11 +213,14 @@ def test_story_12_a_picked_list_hides_the_arrows(dash: Page):
 
 def test_story_13_a_word_search_hides_them_director_does_not(dash: Page):
     bar = dash.locator("#search")
-    bar.fill("out of the past"); bar.press("Enter")
+    bar.fill("out of the past")
+    bar.press("Enter")
     expect(dash.locator("td.c-move:visible")).to_have_count(0)
-    bar.fill(""); bar.press("Enter")
+    bar.fill("")
+    bar.press("Enter")
     expect(dash.locator("td.c-move:visible")).to_have_count(8)
-    bar.fill("director:tourneur"); bar.press("Enter")
+    bar.fill("director:tourneur")
+    bar.press("Enter")
     expect(dash.locator("#films tbody tr[data-id]")).to_have_count(1)
     expect(row(dash, "Out of the Past").locator("button.up")).to_be_disabled()
     expect(row(dash, "Out of the Past").locator("button.down")).to_be_disabled()
@@ -232,7 +237,8 @@ def test_story_15_a_move_that_does_not_save(dash: Page):
 def test_story_16_watched_and_watchlist_together(dash: Page):
     dash.locator(WATCHED_CHIP).click()
     expect(dash.locator("#films tbody tr.empty-state")).to_be_visible()
-    dash.locator(WATCHED_CHIP).click(); dash.locator(WATCHED_CHIP).click()
+    dash.locator(WATCHED_CHIP).click()
+    dash.locator(WATCHED_CHIP).click()
     assert titles(dash) == WATCHLIST
 
 
@@ -338,7 +344,8 @@ def test_three_fast_presses_land_three_places(dash: Page, order_server):
 def test_story_19_the_next_morning(dash: Page, order_server):
     press(dash, "Out of the Past", "up", 5)
     dash.wait_for_timeout(300)
-    dash.reload(); dash.wait_for_selector("#films tbody[data-count]")
+    dash.reload()
+    dash.wait_for_selector("#films tbody[data-count]")
     assert titles(dash)[0] == "Out of the Past"
     expect(dash.locator("#films tbody tr.marked")).to_have_count(0)
     dash.keyboard.press("ArrowDown")
@@ -350,11 +357,15 @@ def test_story_20_typing_a_rating_rating_the_marked_film(dash: Page):
     press(dash, "Out of the Past", "up")                  # marks it (story 10's rule) and moves it
     before = titles(dash)
     box = row(dash, "Out of the Past").locator("input.rating")
-    box.click(); dash.keyboard.press("ArrowUp"); dash.keyboard.press("ArrowDown")
+    box.click()
+    dash.keyboard.press("ArrowUp")
+    dash.keyboard.press("ArrowDown")
     assert titles(dash) == before
-    box.fill("8"); box.press("Enter")
+    box.fill("8")
+    box.press("Enter")
     expect(row(dash, "Out of the Past")).to_have_count(0)
-    dash.locator(RATED_CHIP).click(); dash.locator(RATED_CHIP).click()
+    dash.locator(RATED_CHIP).click()
+    dash.locator(RATED_CHIP).click()
     expect(row(dash, "Out of the Past")).to_have_class("marked")
     dash.locator("body").click(position={"x": 5, "y": 5})
     i = titles(dash).index("Out of the Past")
@@ -403,15 +414,22 @@ def test_story_14_stars_off_and_on_in_one_drawer_visit(dash: Page, order_server)
     dash.locator("#f-title").blur()  # a focused filter box re-renders the rows on blur and would eat the next click
     row(dash, "Capturing the Friedmans").locator(".c-year").click()
     toggle = dash.locator("#drawer .watch-toggle")
-    toggle.click(); expect(toggle).to_have_text("☆")
-    dash.keyboard.press("ArrowDown"); expect(dash.locator("#drawer h2")).to_contain_text("Young Frankenstein")
-    toggle.click(); expect(toggle).to_have_text("☆")
-    dash.keyboard.press("ArrowUp"); expect(dash.locator("#drawer h2")).to_contain_text("Capturing the Friedmans")
-    toggle.click(); expect(toggle).to_have_text("★")
+    toggle.click()
+    expect(toggle).to_have_text("☆")
     dash.keyboard.press("ArrowDown")
-    toggle.click(); expect(toggle).to_have_text("★")
+    expect(dash.locator("#drawer h2")).to_contain_text("Young Frankenstein")
+    toggle.click()
+    expect(toggle).to_have_text("☆")
+    dash.keyboard.press("ArrowUp")
+    expect(dash.locator("#drawer h2")).to_contain_text("Capturing the Friedmans")
+    toggle.click()
+    expect(toggle).to_have_text("★")
+    dash.keyboard.press("ArrowDown")
+    toggle.click()
+    expect(toggle).to_have_text("★")
     dash.locator("#drawer-close").click()
-    dash.locator("#f-title").fill(""); dash.locator("#f-title").blur()
+    dash.locator("#f-title").fill("")
+    dash.locator("#f-title").blur()
     dash.locator(WATCHLIST_CHIP).click()
     assert titles(dash)[3] == "Capturing the Friedmans" and titles(dash)[6] == "Young Frankenstein"
     # After the drawer closed, a star is fresh: off and on again in a NEW visit goes to the top.
@@ -419,10 +437,13 @@ def test_story_14_stars_off_and_on_in_one_drawer_visit(dash: Page, order_server)
     toggle.click()                                   # the drawer moves on (move-on); this visit remembers Moonlight
     dash.locator("#drawer-close").click()            # closing ends the visit and forgets it
     dash.locator(WATCHLIST_CHIP).click()             # off, to find Moonlight again
-    dash.locator("#f-title").fill("moonlight"); dash.locator("#f-title").blur()
+    dash.locator("#f-title").fill("moonlight")
+    dash.locator("#f-title").blur()
     row(dash, "Moonlight").locator("button.info").click()
-    toggle.click(); expect(toggle).to_have_text("★")
+    toggle.click()
+    expect(toggle).to_have_text("★")
     dash.locator("#drawer-close").click()
-    dash.locator("#f-title").fill(""); dash.locator("#f-title").blur()
+    dash.locator("#f-title").fill("")
+    dash.locator("#f-title").blur()
     dash.locator(WATCHLIST_CHIP).click()
     assert titles(dash)[0] == "Moonlight"

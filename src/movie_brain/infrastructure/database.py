@@ -2747,12 +2747,11 @@ class Repository:
                 return None
             order = self._wl_order(c)
             if film_id not in order:
-                if put_back:
-                    at = order.index(before) if before in order else len(order)
-                else:
-                    at = 0
+                at = (order.index(before) if before in order else len(order)) if put_back else 0
                 order.insert(at, film_id)
-                c.execute("INSERT INTO watchlist (film_id, added_on, position) VALUES (?, ?, 0)", (film_id, today.isoformat()))
+                c.execute(
+                    "INSERT INTO watchlist (film_id, added_on, position) VALUES (?, ?, 0)", (film_id, today.isoformat())
+                )
                 self._wl_write(c, order)
                 return WatchlistToggle(True)
             i = order.index(film_id)
