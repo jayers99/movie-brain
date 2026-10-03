@@ -107,10 +107,10 @@ def create_app(
 
     @app.post("/api/films/<int:film_id>/watchlist")
     def toggle_watchlist(film_id: int) -> tuple[Response, int]:
-        watchlisted = repo.toggle_watchlist(film_id, today())
-        if watchlisted is None:
+        result = repo.toggle_watchlist(film_id, today())
+        if result is None:
             return jsonify({"error": "not found"}), 404
-        return jsonify({"watchlisted": watchlisted}), 200
+        return jsonify({"watchlisted": result.watchlisted}), 200
 
     @app.post("/api/films/<int:film_id>/wishlist")
     def post_wishlist(film_id: int) -> tuple[Response, int]:
