@@ -821,7 +821,7 @@
     stopHeartbeat(); reportDrawer(null);
     closeTrailer();  // Back while a trailer is up must not leave it orphaned over the list
     drawer.hidden = true; backdrop.hidden = true; body.innerHTML = '';
-    state.openFilm = null; drawnFilm = null; drawnDetail = null; openIndex = null; movedOn = null;
+    state.openFilm = null; drawnFilm = null; drawnDetail = null; openIndex = null; movedOn = null; starMemory.clear();
     renderRows();
   }
   // ---- The trailer window (brief 2026-09-20-trailer-link) ----
@@ -1032,6 +1032,9 @@
   // applyFilters — so a chip, the search, the list picker, a column filter or Back still leave
   // the gap (find-my-row story 6). A film that was never in the list (openIndex null) stays put;
   // an empty list moves nothing. `edit` is what the moved-to drawer's undo line remembers.
+  // Backlog 46: films un-starred during THIS drawer visit → the film each sat above. A star put
+  // back before the drawer closes (however it stepped) returns there; closing forgets.
+  const starMemory = new Map();
   let movedOn = null;  // { at, film, label, slow, undo } — the last edit that moved the drawer on
   function moveOnIfLeft(edit) {
     if (edit.film !== state.openFilm) return false;
@@ -1137,22 +1140,31 @@
   });
   body.addEventListener('click', async (e) => {
     const b = e.target.closest('.watch-toggle'); if (!b) return;
-    const r = await fetch(`/api/films/${b.dataset.id}/watchlist`, { method: 'POST' });
-    if (!r.ok) { toast('Could not update watchlist'); return; }
-    const { watchlisted } = await r.json();
-    b.textContent = watchlisted ? '★' : '☆';
-    const film = state.films.find((f) => f.id === +b.dataset.id);
+    const id = +b.dataset.id;
+    const toggle = (putBack) => fetch(`/api/films/${id}/watchlist`, { method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(putBack ? { restore: true, before: starMemory.get(id) ?? null } : {}) }).catch(() => null);
+    const r = await toggle(starMemory.has(id));
+    if (!r || !r.ok) { toast('Could not update watchlist'); return; }
+    const res = await r.json();
+    if (res.watchlisted) starMemory.delete(id); else starMemory.set(id, res.below ?? null);
+    b.textContent = res.watchlisted ? '★' : '☆';
+    const o = await fetch('/api/watchlist/order').catch(() => null);
+    if (o && o.ok) applyOrder((await o.json()).order);
+    const film = state.films.find((f) => f.id === id);
     if (film) {
-      film.watchlisted = watchlisted;
-      const o = await fetch('/api/watchlist/order').catch(() => null);
-      if (o && o.ok) applyOrder((await o.json()).order);
-      applyFilters();
+      film.watchlisted = res.watchlisted; applyFilters();
+      const below = res.below ?? null;
       moveOnIfLeft({ film: film.id, slow: false,
-        label: watchlisted ? `Starred ${film.title}` : `Took ${film.title} off your watchlist`,
+        label: res.watchlisted ? `Starred ${film.title}` : `Took ${film.title} off your watchlist`,
         undo: async () => {
-          const r2 = await fetch(`/api/films/${film.id}/watchlist`, { method: 'POST' }).catch(() => null);
+          const r2 = await fetch(`/api/films/${film.id}/watchlist`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(res.watchlisted ? {} : { restore: true, before: below }) }).catch(() => null);
           if (!r2 || !r2.ok) { toast('Could not update watchlist'); return false; }
           const j = await r2.json(), f = state.films.find((x) => x.id === film.id);
+          if (j.watchlisted) starMemory.delete(film.id);
+          const o2 = await fetch('/api/watchlist/order').catch(() => null);
+          if (o2 && o2.ok) applyOrder((await o2.json()).order);
           if (f) { f.watchlisted = j.watchlisted; applyFilters(); }
           return true;
         } });

@@ -380,3 +380,49 @@ def test_story_11_click_click_click_open_close_let_go(dash: Page):
     dash.locator("#drawer-close").click()
     row(dash, "Out of the Past").locator("button.info").click()  # the info button on the marked row opens
     expect(dash.locator("#drawer")).to_be_visible()
+
+
+def test_story_7_take_one_off_change_my_mind(dash: Page, order_server):
+    row(dash, "Capturing the Friedmans").locator(".c-year").click()
+    dash.locator("#drawer .watch-toggle").click()
+    expect(dash.locator("#drawer h2")).to_contain_text("The Wonderful Story of Henry Sugar")
+    expect(dash.locator("#drawer .moved-on")).to_contain_text("Took Capturing the Friedmans off your watchlist")
+    dash.locator("#drawer .moved-on button.undo").click()
+    dash.wait_for_timeout(300)
+    dash.locator("#drawer-close").click()
+    assert titles(dash)[3] == "Capturing the Friedmans"
+    assert saved(order_server)[3] == "Capturing the Friedmans"
+    # The Undo re-read the order: the film's row has working arrows (no NaN position).
+    press(dash, "Capturing the Friedmans", "up")
+    assert titles(dash)[2] == "Capturing the Friedmans"
+
+
+def test_story_14_stars_off_and_on_in_one_drawer_visit(dash: Page, order_server):
+    dash.locator(WATCHLIST_CHIP).click()             # off
+    dash.locator("#f-title").fill("fr")
+    dash.locator("#f-title").blur()  # a focused filter box re-renders the rows on blur and would eat the next click
+    row(dash, "Capturing the Friedmans").locator(".c-year").click()
+    toggle = dash.locator("#drawer .watch-toggle")
+    toggle.click(); expect(toggle).to_have_text("☆")
+    dash.keyboard.press("ArrowDown"); expect(dash.locator("#drawer h2")).to_contain_text("Young Frankenstein")
+    toggle.click(); expect(toggle).to_have_text("☆")
+    dash.keyboard.press("ArrowUp"); expect(dash.locator("#drawer h2")).to_contain_text("Capturing the Friedmans")
+    toggle.click(); expect(toggle).to_have_text("★")
+    dash.keyboard.press("ArrowDown")
+    toggle.click(); expect(toggle).to_have_text("★")
+    dash.locator("#drawer-close").click()
+    dash.locator("#f-title").fill(""); dash.locator("#f-title").blur()
+    dash.locator(WATCHLIST_CHIP).click()
+    assert titles(dash)[3] == "Capturing the Friedmans" and titles(dash)[6] == "Young Frankenstein"
+    # After the drawer closed, a star is fresh: off and on again in a NEW visit goes to the top.
+    row(dash, "Moonlight").locator("button.info").click()
+    toggle.click()                                   # the drawer moves on (move-on); this visit remembers Moonlight
+    dash.locator("#drawer-close").click()            # closing ends the visit and forgets it
+    dash.locator(WATCHLIST_CHIP).click()             # off, to find Moonlight again
+    dash.locator("#f-title").fill("moonlight"); dash.locator("#f-title").blur()
+    row(dash, "Moonlight").locator("button.info").click()
+    toggle.click(); expect(toggle).to_have_text("★")
+    dash.locator("#drawer-close").click()
+    dash.locator("#f-title").fill(""); dash.locator("#f-title").blur()
+    dash.locator(WATCHLIST_CHIP).click()
+    assert titles(dash)[0] == "Moonlight"
