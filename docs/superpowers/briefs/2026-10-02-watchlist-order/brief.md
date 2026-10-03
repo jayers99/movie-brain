@@ -1,6 +1,6 @@
 # Task brief — Watchlist order (backlog 46)
 
-**Version 0.91 — draft 2026-10-02, after gap check A's fix wave, before your review.** Your five rulings from the grill this morning, made into stories on your real catalogue (a copy taken at 10 AM today: 5204 films showing, 8 watchlist films showing, 9 in the table). The mock-up [mockup-1.html](mockup-1.html) has two variants that differ in ONE thing — what happens under your pointer when you press an arrow several times (story 2). *Where the mock-up and this brief disagree, the brief wins.*
+**Version 1.0 — frozen 2026-10-02.** You chose variant A on the mock-up [mockup-1.html](mockup-1.html) ("option a") and kept both of my calls ("1"): your order wins over On a list and Watched (story 5), and Undo or a star put back before the drawer closes returns a film to its place (stories 7, 14). Gap check A ran twice (9 findings, then 5 from the fixes); every answer is in [trial-log.md](trial-log.md). From here the brief changes only by amendment. *Where the mock-up and this brief disagree, the brief wins.*
 
 ## Your page
 
@@ -43,11 +43,11 @@
 
 **What wins when things trade off.** One press, one place. The film I move steps past one film I can see; every other film keeps its order relative to the rest (story 4).
 
-### Before you say yes
+### What you decided (2026-10-02)
 
 - **Variant: A (chosen 2026-10-02).**
-- **Story 5 is my call, not yours.** Today On a list puts list score first and Watched puts last-watched first, ahead of every other rule. I recommend your order wins whenever Watchlist is on, so a chip never hides the arrows. The alternative: those two chips keep their order and the arrows hide while they are on.
-- **Stories 7 and 14 are my calls too:** Undo, or a star put back in the same drawer, returns a film to its place; only a fresh star goes to the top.
+- **Story 5 — kept ("1").** Today On a list puts list score first and Watched puts last-watched first, ahead of every other rule. I recommend your order wins whenever Watchlist is on, so a chip never hides the arrows. The alternative: those two chips keep their order and the arrows hide while they are on.
+- **Stories 7 and 14 — kept ("1"):** Undo, or a star put back in the same drawer, returns a film to its place; only a fresh star goes to the top.
 - **Story 4 changed after the gap check:** a move used to be a swap, which let the OTHER film jump over hidden ones. Now only the film you press changes places.
 - **Variant B and other clicks:** presses still waiting land first, before a chip, a sort or a row click changes the list; a reload with presses waiting loses them.
 - **Where the arrows hide** (stories 6, 12, 13): a column sort, a list picked from the list menu, and a word search in the bar that ranks its answers. In each the list is not in your order. A Title column filter or a `director:` search only narrows, so the arrows stay.
