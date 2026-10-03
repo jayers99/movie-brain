@@ -258,3 +258,37 @@ def test_story_21_the_starred_film_i_cannot_see(dash: Page, order_server):
     press(dash, "Lord of the Flies", "up")
     dash.wait_for_timeout(300)
     assert saved(order_server)[-3:] == ["Lord of the Flies", "Young Frankenstein", "Some Came Running"]
+
+
+def test_fast_presses_reach_the_server_in_order(dash: Page, order_server):
+    """Two quick ▲ presses with the FIRST request held back: the second must wait its turn, so the
+    saved order has the film two places up (unqueued, the second would be handled first)."""
+    held, seen = [], []
+
+    def handler(route):
+        seen.append(route.request.post_data)
+        if not held:
+            held.append(route)       # hold the first request until released below
+        else:
+            route.continue_()
+
+    dash.route("**/api/watchlist/move", handler)
+    press(dash, "Capturing the Friedmans", "up", 2)
+    dash.wait_for_timeout(500)
+    assert len(seen) == 1            # the second press is queued behind the first
+    held[0].continue_()
+    dash.wait_for_timeout(1500)
+    assert len(seen) == 2
+    assert titles(dash)[:3] == ["Intolerance", "Capturing the Friedmans", "Moonlight"]
+    assert saved(order_server)[:3] == ["Intolerance", "Capturing the Friedmans", "Moonlight"]
+
+
+def test_story_16_hand_order_beats_last_watched(order_server, dash: Page):
+    _url, ids, repo = order_server
+    repo.add_viewing(ids["Moonlight"], date(2026, 9, 1), None, None, None, TODAY)
+    repo.add_viewing(ids["Lord of the Flies"], date(2026, 9, 20), None, None, None, TODAY)
+    dash.reload()
+    dash.wait_for_selector("#films tbody[data-count]")
+    dash.locator(WATCHED_CHIP).click()               # Watched: last-watched-first would put Lord of the Flies on top
+    expect(dash.locator("#films tbody tr[data-id]")).to_have_count(2)
+    assert titles(dash) == ["Moonlight", "Lord of the Flies"]

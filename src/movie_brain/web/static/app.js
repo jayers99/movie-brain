@@ -143,7 +143,7 @@
   // Optimistic: the row moves at once (a fractional position sorts it past its neighbour), then the
   // server's whole order replaces every position. Only the newest answer counts, so fast presses
   // never land out of order; a failure re-reads the order and says so.
-  let moveSeq = 0;
+  let moveSeq = 0, moveEpoch = 0, moveChain = Promise.resolve();
   function applyOrder(order) {
     const pos = new Map(order.map((id, k) => [id, k + 1]));
     for (const f of state.films) f.watchlist_position = pos.get(f.id) ?? null;
@@ -156,17 +156,22 @@
     state.mark = id;
     applyFilters();
     revealRow(state.filtered.findIndex((f) => f.id === id));
-    const seq = ++moveSeq;
-    const r = await fetch('/api/watchlist/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ film_id: id, past: past.id, dir: dir < 0 ? 'up' : 'down' }) }).catch(() => null);
-    if (r && r.ok) {
-      const { order } = await r.json();
-      if (seq === moveSeq) { applyOrder(order); applyFilters(); }
-      return;
-    }
-    toast('Could not save the order');
-    const back = await fetch('/api/watchlist/order').catch(() => null);
-    if (back && back.ok && seq === moveSeq) { applyOrder((await back.json()).order); applyFilters(); }
+    const seq = ++moveSeq, epoch = moveEpoch, body = JSON.stringify({ film_id: id, past: past.id, dir: dir < 0 ? 'up' : 'down' });
+    // One request at a time, in press order: the server places a film against an absolute
+    // neighbour, so two in flight could be handled in reverse and land the film a place short.
+    moveChain = moveChain.then(async () => {
+      if (epoch !== moveEpoch) return;  // an earlier press failed: its queue was dropped
+      let order = null;
+      try {
+        const r = await fetch('/api/watchlist/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+        if (r.ok) order = (await r.json()).order;
+      } catch { /* falls through to the failure path */ }
+      if (order) { if (seq === moveSeq) { applyOrder(order); applyFilters(); } return; }
+      moveEpoch++;  // drop the rest of the queue, toast once, and show what the server holds
+      toast('Could not save the order');
+      const back = await fetch('/api/watchlist/order').catch(() => null);
+      if (back && back.ok) { applyOrder((await back.json()).order); applyFilters(); }
+    });
   }
   tbody.addEventListener('click', (e) => {
     const b = e.target.closest('td.c-move button'); if (!b) return;
