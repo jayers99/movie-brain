@@ -51,7 +51,9 @@ tbody tr.lit { pointer-events:none; }
 tbody tr.lit td { position:relative; z-index:5; background:var(--bg); }
 tbody tr.marked td { background:var(--chip); }
 tbody tr.marked:hover td { background:#ececec; }
-tbody tr.edge td:first-child, tbody tr.marked td:first-child { box-shadow:inset 4px 0 0 var(--chip-on); }
+/* The bar sits on the first column you can see: the move column in my order, the title otherwise. */
+#films.hand-order tbody tr.edge td:first-child, #films.hand-order tbody tr.marked td:first-child,
+#films:not(.hand-order) tbody tr.edge td.c-title, #films:not(.hand-order) tbody tr.marked td.c-title { box-shadow:inset 4px 0 0 var(--chip-on); }
 tbody tr.spacer td { padding:0; border:0; }
 tbody tr.empty-state { height:auto; cursor:default; }
 tbody tr.empty-state:hover { background:none; }
@@ -171,8 +173,12 @@ col.col-watched { width:104px; }
 
 /* Backlog 46: the hand-order column — present only while the list is in my order. */
 col.col-move { width:64px; }
-#films:not(.hand-order) col.col-move { display:none; }
-#films:not(.hand-order) .c-move { display:none; }
+/* Outside my order the column stays in the grid at zero width — never display:none: a hidden
+   column leaves the virtual scroller's colspan-11 spacer row spanning a phantom slot, and the
+   columns stop short of the right edge (owner, 2026-10-02). */
+#films:not(.hand-order) col.col-move { width:0; }
+#films:not(.hand-order) .c-move { padding:0; border-left:0; border-right:0; overflow:hidden; }
+#films:not(.hand-order) .c-move button { display:none; }
 #films.drawer-up .c-move button { visibility:hidden; }   /* the drawer covers the list: no arrows, nothing shifts */
 td.c-move { padding:0 4px; text-align:center; }
 td.c-move button { border:1px solid var(--line); background:var(--bg); border-radius:4px; width:22px; height:22px; padding:0; font-size:11px; line-height:20px; cursor:pointer; color:var(--fg); }

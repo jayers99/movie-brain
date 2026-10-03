@@ -526,3 +526,32 @@ def test_a_re_read_after_a_failed_move_drops_a_film_taken_off_elsewhere(dash: Pa
     dash.keyboard.press("ArrowUp")                   # the marked film's move is refused (409)
     expect(dash.locator("#toast")).to_contain_text("Could not save the order")
     expect(row(dash, "Out of the Past")).to_have_count(0)
+
+
+# ---- layout regression (owner, 2026-10-02: "the table stops short from the right edge") ----
+
+
+def _widths(page: Page) -> dict:
+    return page.evaluate("""() => { const t = document.querySelector('#films');
+      const ths = [...t.querySelectorAll('thead tr.labels th')].map((th) => th.getBoundingClientRect().width);
+      const tds = [...t.querySelector('tbody tr[data-id]').children].map((td) => td.getBoundingClientRect().width);
+      return { table: t.getBoundingClientRect().width, ths: ths.reduce((a, b) => a + b, 0), tds: tds.reduce((a, b) => a + b, 0) }; }""")
+
+
+def test_the_columns_fill_the_table_with_and_without_my_order(page: Page, order_server):
+    # A short window, so the virtual scroller writes its spacer row (colspan 11): with the move
+    # column display:none the spacer spanned a phantom 11th slot and the columns stopped short.
+    page.set_viewport_size({"width": 1440, "height": 320})
+    for query in ("/", "/?chips=watchlist"):
+        page.goto(order_server[0] + query)
+        page.wait_for_selector("#films tbody[data-count]")
+        w = _widths(page)
+        assert abs(w["ths"] - w["table"]) < 2 and abs(w["tds"] - w["table"]) < 2, (query, w)
+
+
+def test_the_mark_bar_shows_without_my_order(dash: Page):
+    dash.locator(WATCHLIST_CHIP).click()                  # off: no move column
+    row(dash, "Out of the Past").locator("button.info").click()
+    dash.locator("#drawer-close").click()
+    shadow = row(dash, "Out of the Past").locator("td.c-title").evaluate("td => getComputedStyle(td).boxShadow")
+    assert "inset" in shadow

@@ -604,14 +604,14 @@ def test_criterion_new_chip_filters_to_the_channels_arrivals(dash):
     clear_lang(dash)  # Delta has no language on file
     cycle(dash, "criterion", 3)  # Criterion new
     dash.wait_for_selector('#films tbody[data-count="1"]')
-    assert dash.locator("#films tbody tr").first.inner_text().startswith("Delta")
+    assert dash.locator("#films tbody tr").first.inner_text().lstrip().startswith("Delta")
 
 
 def test_watchlist_chip_filters_to_bravo(dash):
     clear_lang(dash)  # Bravo is French; the default English filter would hide its row
     dash.click('button[data-chip="watchlist"]')
     dash.wait_for_selector('#films tbody[data-count="1"]')
-    assert dash.locator("#films tbody tr td.c-title").first.inner_text().startswith("Bravo")
+    assert dash.locator("#films tbody tr td.c-title").first.inner_text().lstrip().startswith("Bravo")
 
 
 def test_drawer_shows_new_on_line(dash):
