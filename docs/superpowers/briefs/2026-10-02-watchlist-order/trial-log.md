@@ -76,3 +76,7 @@ Claude (opus, 3 findings) and Codex (gpt-6-astra, high, 1086 s, 6 findings) on t
 | The mock-up's Watched chip is two-state; the real one cycles Watched → To study → off (Codex F6) | codex-only | fixed | mock-up chip and card 16's coach line |
 
 Claude 3 · Codex 6 · both 1 · claude-only 2 · codex-only 5 · false-positive 0 · declined 1. Brief → amendment 1.2.
+
+## Hands-on (point C copy, port 5557)
+
+2026-10-02: owner walked the migrated copy — "looks good comit merge push". Story 22's call (a pressed mark opens on click) stands.
