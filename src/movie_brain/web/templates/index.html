@@ -41,11 +41,12 @@
   <div class="table-wrap" id="table-wrap">
     <table id="films">
       <colgroup>
-        <col class="col-title"><col class="col-year"><col class="col-director"><col class="col-language">
+        <col class="col-move"><col class="col-title"><col class="col-year"><col class="col-director"><col class="col-language">
         <col class="col-mc"><col class="col-rt"><col class="col-imdb"><col class="col-rating"><col class="col-watched"><col class="col-info">
       </colgroup>
       <thead>
         <tr class="labels">
+          <th class="c-move" aria-label="My order"></th>
           <th class="sortable" data-col="title">Title</th>
           <th class="sortable" data-col="year">Year</th>
           <th class="sortable" data-col="director">Director</th>
@@ -58,6 +59,7 @@
           <th></th>
         </tr>
         <tr class="filters">
+          <th class="c-move"></th>
           <th><input id="f-title" type="search" placeholder="filter…"></th>
           <th><input id="f-year-min" type="number" placeholder="min" class="half"><input id="f-year-max" type="number" placeholder="max" class="half"></th>
           <th><input id="f-director" type="search" placeholder="filter…"></th>

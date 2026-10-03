@@ -63,8 +63,10 @@ def seed_move_on(repo: Repository, account: FakeAccount) -> dict[str, int]:
         if store is not None:
             repo.set_external_id(fid, "itunes", str(910000000 + fid) if store == "store" else store, TODAY)
             repo.record_listing(fid, "apple-tv-store", "https://tmdb/w", TODAY)
-        if watch:
-            repo.toggle_watchlist(fid, TODAY)
+    # The Watchlist chip now shows my hand order (backlog 46), and a fresh star lands at the top:
+    # star bottom-first so the seeded hand order is the Metacritic order these stories were cast on.
+    for title in reversed(WATCHLIST):
+        repo.toggle_watchlist(ids[title], TODAY)
     for n in range(1, FILLERS + 1):
         fid = repo.create_film(Film(f"Shadow {n:02d}", 1930 + n, "Dir", ""))
         assert fid is not None

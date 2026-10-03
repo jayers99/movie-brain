@@ -16,7 +16,7 @@
     mark: null,            // find-my-row: the last film opened — a bookmark in memory, never in the URL
   };
   const $ = (s) => document.querySelector(s);
-  const tbody = $('#films tbody'), wrap = $('#table-wrap'), thead = $('#films thead');
+  const table = $('#films'), tbody = $('#films tbody'), wrap = $('#table-wrap'), thead = $('#films thead');
 
   // ---- canned predicates (mirror domain/filters.py; thresholds come from /api/config) ----
   const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
@@ -37,6 +37,10 @@
     const e = (f.lists || []).find((l) => l.slug === state.list);
     return e && e.ordered ? printedRank(e) : null;
   };
+  // Backlog 46: the watchlist's hand order is what's shown when the Watchlist chip is on and
+  // nothing else owns the order — no column sort, no picked list, no ranked word search.
+  const handOrderOn = () => state.chips.has('watchlist') && !state.sort && !state.list
+    && !(state.search && state.search.rank);
   // reachable = somewhere to watch it today: a current Criterion listing, ANY current listing on
   // a streaming service (subscribed or not) or the Apple store, the film is owned (it IS
   // watchable, and ownership on Apple is proof of a store presence TMDB's US data missed), or it
@@ -101,6 +105,10 @@
         const ra = listRank(a), rb = listRank(b);
         if (ra != null && rb != null && ra !== rb) return ra - rb;
       }
+      if (handOrderOn()) {  // my order leads ahead of On a list and Watched (brief stories 5, 16)
+        const pa = a.watchlist_position ?? Infinity, pb = b.watchlist_position ?? Infinity;
+        if (pa !== pb) return pa - pb;
+      }
       if (state.chips.has('multi_list')) {  // "On a list" active: canon score desc leads, so Citizen Kane outranks a one-list entry
         const c = canonScore(b) - canonScore(a);
         if (c !== 0) return c;
@@ -131,6 +139,40 @@
     if (i >= 0) openIndex = i;
     else if (openIndex != null) openIndex = Math.min(openIndex, state.filtered.length);
   }
+  // ---- Backlog 46: moving a film in my order ----
+  // Optimistic: the row moves at once (a fractional position sorts it past its neighbour), then the
+  // server's whole order replaces every position. Only the newest answer counts, so fast presses
+  // never land out of order; a failure re-reads the order and says so.
+  let moveSeq = 0;
+  function applyOrder(order) {
+    const pos = new Map(order.map((id, k) => [id, k + 1]));
+    for (const f of state.films) f.watchlist_position = pos.get(f.id) ?? null;
+  }
+  async function moveFilm(id, dir) {
+    const i = state.filtered.findIndex((f) => f.id === id), j = i + dir;
+    if (i < 0 || j < 0 || j >= state.filtered.length) return;
+    const film = state.filtered[i], past = state.filtered[j];
+    film.watchlist_position = past.watchlist_position + (dir < 0 ? -0.5 : 0.5);
+    state.mark = id;
+    applyFilters();
+    revealRow(state.filtered.findIndex((f) => f.id === id));
+    const seq = ++moveSeq;
+    const r = await fetch('/api/watchlist/move', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ film_id: id, past: past.id, dir: dir < 0 ? 'up' : 'down' }) }).catch(() => null);
+    if (r && r.ok) {
+      const { order } = await r.json();
+      if (seq === moveSeq) { applyOrder(order); applyFilters(); }
+      return;
+    }
+    toast('Could not save the order');
+    const back = await fetch('/api/watchlist/order').catch(() => null);
+    if (back && back.ok && seq === moveSeq) { applyOrder((await back.json()).order); applyFilters(); }
+  }
+  tbody.addEventListener('click', (e) => {
+    const b = e.target.closest('td.c-move button'); if (!b) return;
+    e.stopPropagation();
+    if (!b.disabled && drawer.hidden) moveFilm(+b.dataset.id, b.classList.contains('up') ? -1 : 1);
+  }, true);
   function applyFilters() {
     state.filtered = state.films.filter(rowMatches).sort(compare);
     trackOpenIndex();
@@ -191,8 +233,10 @@
       + oldBadge(f) + watchBadge
       // On my CheapCharts wishlist — always the last mark on the row, and never a price.
       + (f.wishlisted ? ' <span class="icon-wish" title="On your CheapCharts wishlist">♥</span>' : '');
+    const n = state.filtered.length;
+    const move = `<td class="c-move"><button class="up" data-id="${f.id}" title="Move up one" aria-label="Move up one"${i <= 0 ? ' disabled' : ''}>▲</button> <button class="down" data-id="${f.id}" title="Move down one" aria-label="Move down one"${i >= n - 1 ? ' disabled' : ''}>▼</button></td>`;
     return `<tr data-id="${f.id}"${rowClass(f, i)}>
-      <td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
+      ${move}<td class="c-title">${title}</td><td class="c-year">${fmt(f.year)}</td><td class="c-director">${esc(f.director) || '—'}</td>
       <td class="c-language">${esc(f.language) || '—'}</td><td class="c-metacritic num">${fmt(f.metacritic)}</td>
       <td class="c-rt num">${fmt(f.rt, '%')}</td><td class="c-imdb num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td>
       <td class="c-rating num"><input class="rating" maxlength="2" data-id="${f.id}" value="${f.my_rating ?? ''}" aria-label="My rating"></td>
@@ -201,21 +245,23 @@
   }
   function renderRows() {
     if (state.films.length === 0) {
-      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="11">No films yet — run <code>movie-brain import-legacy</code> or <code>movie-brain sync</code>.</td></tr>`;
       return;
     }
     if (state.filtered.length === 0) {
-      tbody.innerHTML = `<tr class="empty-state"><td colspan="10">${state.chips.has('study') && !state.films.some((f) => f.study) ? 'Nothing marked for study yet.' : state.chips.has('watched') && !state.films.some((f) => f.viewing_count > 0) ? 'No viewing logged yet.' : 'No film matches.'}</td></tr>`;
+      tbody.innerHTML = `<tr class="empty-state"><td colspan="11">${state.chips.has('study') && !state.films.some((f) => f.study) ? 'Nothing marked for study yet.' : state.chips.has('watched') && !state.films.some((f) => f.viewing_count > 0) ? 'No viewing logged yet.' : 'No film matches.'}</td></tr>`;
       return;
     }
+    table.classList.toggle('hand-order', handOrderOn());
+    table.classList.toggle('drawer-up', !drawer.hidden);
     const total = state.filtered.length;
     const start = Math.max(0, Math.floor(wrap.scrollTop / ROW_H) - OVERSCAN);
     const end = Math.min(total, Math.ceil((wrap.scrollTop + wrap.clientHeight) / ROW_H) + OVERSCAN);
     const top = start * ROW_H, bottom = (total - end) * ROW_H;
     tbody.innerHTML =
-      (top ? `<tr class="spacer"><td colspan="10" style="height:${top}px"></td></tr>` : '') +
+      (top ? `<tr class="spacer"><td colspan="11" style="height:${top}px"></td></tr>` : '') +
       state.filtered.slice(start, end).map((f, k) => rowHtml(f, start + k)).join('') +
-      (bottom ? `<tr class="spacer"><td colspan="10" style="height:${bottom}px"></td></tr>` : '');
+      (bottom ? `<tr class="spacer"><td colspan="11" style="height:${bottom}px"></td></tr>` : '');
   }
   wrap.addEventListener('scroll', () => requestAnimationFrame(renderRows));
 
@@ -1088,7 +1134,10 @@
     b.textContent = watchlisted ? '★' : '☆';
     const film = state.films.find((f) => f.id === +b.dataset.id);
     if (film) {
-      film.watchlisted = watchlisted; applyFilters();
+      film.watchlisted = watchlisted;
+      const o = await fetch('/api/watchlist/order').catch(() => null);
+      if (o && o.ok) applyOrder((await o.json()).order);
+      applyFilters();
       moveOnIfLeft({ film: film.id, slow: false,
         label: watchlisted ? `Starred ${film.title}` : `Took ${film.title} off your watchlist`,
         undo: async () => {

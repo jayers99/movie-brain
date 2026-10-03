@@ -168,3 +168,13 @@ col.col-watched { width:104px; }
 #trailer-sources button.on { color:#111; background:#e8e8e8; border-color:#e8e8e8; }
 #trailer-close { position:absolute; top:-38px; right:-4px; border:0; background:none; color:#fff; font-size:24px; cursor:pointer; }
 #trailer .trailer-hint { color:#9a9a9a; font-size:13px; margin-top:10px; }
+
+/* Backlog 46: the hand-order column — present only while the list is in my order. */
+col.col-move { width:64px; }
+#films:not(.hand-order) col.col-move { display:none; }
+#films:not(.hand-order) .c-move { display:none; }
+#films.drawer-up .c-move button { visibility:hidden; }   /* the drawer covers the list: no arrows, nothing shifts */
+td.c-move { padding:0 4px; text-align:center; }
+td.c-move button { border:1px solid var(--line); background:var(--bg); border-radius:4px; width:22px; height:22px; padding:0; font-size:11px; line-height:20px; cursor:pointer; color:var(--fg); }
+td.c-move button:hover { background:var(--chip); }
+td.c-move button[disabled] { color:#cfcfcf; cursor:default; border-color:#f0f0f0; background:var(--bg); }
