@@ -1291,14 +1291,18 @@
     closeDrawer();
   });
   // While the drawer is open the plain arrow keys belong to stepping (so they no longer scroll the
-  // drawer's own content; the wheel, Space and Page Down still do). Typing and modified arrows are
-  // left alone.
+  // drawer's own content; the wheel, Space and Page Down still do). With the drawer closed and the
+  // list in my order (backlog 46), they move the marked film one place, the mark riding with it.
+  // Typing and modified arrows are left alone everywhere.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    if (drawer.hidden || e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return;
+    if (e.metaKey || e.altKey || e.ctrlKey || e.shiftKey) return;
     if (e.target.matches('input, textarea, select')) return;
+    const dir = e.key === 'ArrowDown' ? 1 : -1;
+    if (!drawer.hidden) { e.preventDefault(); stepDrawer(dir); return; }
+    if (!handOrderOn() || state.mark == null || !state.filtered.some((f) => f.id === state.mark)) return;
     e.preventDefault();
-    stepDrawer(e.key === 'ArrowDown' ? 1 : -1);
+    moveFilm(state.mark, dir);
   });
   window.addEventListener('popstate', () => {
     readUrl(); writeControlsFromState();

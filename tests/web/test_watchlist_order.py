@@ -292,3 +292,71 @@ def test_story_16_hand_order_beats_last_watched(order_server, dash: Page):
     dash.locator(WATCHED_CHIP).click()               # Watched: last-watched-first would put Lord of the Flies on top
     expect(dash.locator("#films tbody tr[data-id]")).to_have_count(2)
     assert titles(dash) == ["Moonlight", "Lord of the Flies"]
+
+
+def close_drawer_on_grey(page: Page) -> None:
+    box = page.locator("#table-wrap").bounding_box()
+    page.mouse.click(box["x"] + 30, box["y"] + box["height"] - 10)   # below the last row: no row there
+    expect(page.locator("#drawer")).to_be_hidden()
+
+
+def test_story_9_the_drawer_is_open_keys_step_they_do_not_move(dash: Page):
+    row(dash, "Intolerance").locator(".c-year").click()
+    expect(dash.locator("#drawer h2")).to_contain_text("Intolerance")   # open (it fills async) before the key
+    dash.keyboard.press("ArrowDown")
+    expect(dash.locator("#drawer h2")).to_contain_text("Moonlight")
+    row(dash, "The Shop Around the Corner").locator(".c-year").click(force=True)
+    expect(dash.locator("#drawer h2")).to_contain_text("The Shop Around the Corner")
+    close_drawer_on_grey(dash)
+    expect(row(dash, "The Shop Around the Corner")).to_have_class("marked")
+    assert titles(dash) == WATCHLIST
+
+
+def test_story_10_keys_move_the_marked_film(dash: Page):
+    row(dash, "Out of the Past").locator(".c-year").click()
+    dash.locator("#drawer-close").click()
+    for _ in range(3):
+        dash.keyboard.press("ArrowUp")
+    assert titles(dash)[2] == "Out of the Past"
+    expect(row(dash, "Out of the Past")).to_have_class("marked")
+    press(dash, "Moonlight", "down")
+    dash.keyboard.press("ArrowDown")
+    assert titles(dash).index("Moonlight") == 3
+
+
+def test_three_fast_presses_land_three_places(dash: Page, order_server):
+    dash.route("**/api/watchlist/move", lambda r: (time.sleep(0.3), r.continue_()))
+    row(dash, "Out of the Past").locator(".c-year").click()
+    dash.locator("#drawer-close").click()
+    for _ in range(3):
+        dash.keyboard.press("ArrowUp")
+    dash.wait_for_timeout(1500)
+    assert titles(dash)[2] == "Out of the Past"
+    assert saved(order_server)[2] == "Out of the Past"
+
+
+def test_story_19_the_next_morning(dash: Page, order_server):
+    press(dash, "Out of the Past", "up", 5)
+    dash.wait_for_timeout(300)
+    dash.reload(); dash.wait_for_selector("#films tbody[data-count]")
+    assert titles(dash)[0] == "Out of the Past"
+    expect(dash.locator("#films tbody tr.marked")).to_have_count(0)
+    dash.keyboard.press("ArrowDown")
+    assert titles(dash)[0] == "Out of the Past"
+
+
+def test_story_20_typing_a_rating_rating_the_marked_film(dash: Page):
+    dash.locator(RATED_CHIP).click()                      # Unrated by me
+    press(dash, "Out of the Past", "up")                  # marks it (story 10's rule) and moves it
+    before = titles(dash)
+    box = row(dash, "Out of the Past").locator("input.rating")
+    box.click(); dash.keyboard.press("ArrowUp"); dash.keyboard.press("ArrowDown")
+    assert titles(dash) == before
+    box.fill("8"); box.press("Enter")
+    expect(row(dash, "Out of the Past")).to_have_count(0)
+    dash.locator(RATED_CHIP).click(); dash.locator(RATED_CHIP).click()
+    expect(row(dash, "Out of the Past")).to_have_class("marked")
+    dash.locator("body").click(position={"x": 5, "y": 5})
+    i = titles(dash).index("Out of the Past")
+    dash.keyboard.press("ArrowUp")
+    assert titles(dash).index("Out of the Past") == i - 1
