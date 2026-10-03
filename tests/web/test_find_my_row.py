@@ -206,7 +206,7 @@ def test_story_5_the_list_scrolls_to_keep_the_white_row_in_view(noir: Page):
     box, wrap = lit.bounding_box(), noir.locator("#table-wrap").bounding_box()
     assert box is not None and wrap is not None
     assert box["y"] + box["height"] <= wrap["y"] + wrap["height"] + 1  # wholly inside the window
-    head = noir.locator("#films thead tr.filters th").first.bounding_box()  # the th is what sticks, not the thead
+    head = noir.locator("#films thead tr.filters th:visible").first.bounding_box()  # the th is what sticks, not the thead
     assert head is not None and box["y"] >= head["y"] + head["height"] - 1  # and below the sticky header
 
 
@@ -395,7 +395,7 @@ def test_one_back_closes_the_drawer_however_many_films_were_clicked_through(noir
 
 def test_a_click_on_the_dim_away_from_any_row_still_closes_the_drawer(noir: Page):
     open_film(noir, "Out of the Past")
-    head = noir.locator("#films thead tr.filters th").first.bounding_box()  # the th is what sticks, not the thead
+    head = noir.locator("#films thead tr.filters th:visible").first.bounding_box()  # the th is what sticks, not the thead
     assert head is not None
     noir.mouse.click(head["x"] + 30, head["y"] + 10)  # the sticky header, with rows scrolled beneath it
     expect(noir.locator("#drawer")).to_be_hidden()

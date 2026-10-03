@@ -107,10 +107,36 @@ def create_app(
 
     @app.post("/api/films/<int:film_id>/watchlist")
     def toggle_watchlist(film_id: int) -> tuple[Response, int]:
-        watchlisted = repo.toggle_watchlist(film_id, today())
-        if watchlisted is None:
+        body = request.get_json(silent=True) or {}
+        restore = body.get("restore") is True
+        before = body.get("before")
+        if before is not None and not _is_int(before):
+            return jsonify({"error": "before must be a film id or null"}), 400
+        res = repo.toggle_watchlist(film_id, today(), put_back=restore, before=before)
+        if res is None:
             return jsonify({"error": "not found"}), 404
-        return jsonify({"watchlisted": watchlisted}), 200
+        # The whole order rides with the answer, so the page never needs a second read that could fail.
+        order = repo.watchlist_order()
+        if res.watchlisted:
+            return jsonify({"watchlisted": True, "order": order}), 200
+        return jsonify({"watchlisted": False, "below": res.below, "order": order}), 200
+
+    # Backlog 46: the hand order. A move re-inserts the film just past ONE neighbour the client can
+    # see; the answer is the whole order, so the client never has to infer hidden films' places.
+    @app.post("/api/watchlist/move")
+    def move_watchlist() -> tuple[Response, int]:
+        body = request.get_json(silent=True) or {}
+        film_id, past, direction = body.get("film_id"), body.get("past"), body.get("dir")
+        if not _is_int(film_id) or not _is_int(past) or direction not in ("up", "down"):
+            return jsonify({"error": "film_id, past and dir (up|down) are required"}), 400
+        order = repo.move_watchlist(film_id, past, direction)
+        if order is None:
+            return jsonify({"error": "not on the watchlist"}), 409
+        return jsonify({"order": order}), 200
+
+    @app.get("/api/watchlist/order")
+    def watchlist_order() -> tuple[Response, int]:
+        return jsonify({"order": repo.watchlist_order()}), 200
 
     @app.post("/api/films/<int:film_id>/wishlist")
     def post_wishlist(film_id: int) -> tuple[Response, int]:

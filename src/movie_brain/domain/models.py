@@ -427,6 +427,7 @@ class FilmView:
     # client-side and never denormalized onto films.
     lists: list[dict[str, object]] = field(default_factory=list)
     watchlisted: bool = False
+    watchlist_position: int | None = None  # the owner's hand order, 1 = top (backlog 46); None when not starred
     new_on: list[dict[str, object]] = field(default_factory=list)  # [{source, name, appeared_on}], arrivals window only
     criterion: bool = True  # has a Criterion listing (current or departed); False = discovery-only
     owned: bool = False  # in my Apple TV library (owned table); import is the only writer

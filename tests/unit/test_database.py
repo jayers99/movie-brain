@@ -562,9 +562,9 @@ class TestTmdbPrimitives:
 def test_toggle_watchlist_round_trip(repo, today):
     fid = repo.upsert_film(Film("Tokyo Story", 1953, "Ozu", "https://c/tokyo-story"))
     assert repo.watchlist_film_ids() == set()
-    assert repo.toggle_watchlist(fid, today) is True
+    assert repo.toggle_watchlist(fid, today).watchlisted is True
     assert repo.watchlist_film_ids() == {fid}
-    assert repo.toggle_watchlist(fid, today) is False
+    assert repo.toggle_watchlist(fid, today).watchlisted is False
     assert repo.watchlist_film_ids() == set()
 
 

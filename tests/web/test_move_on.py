@@ -53,7 +53,7 @@ NOIR = ["The Big Sleep", "Out of the Past", "Pursued"]
 
 def seed_move_on(repo: Repository, account: FakeAccount) -> dict[str, int]:
     ids: dict[str, int] = {}
-    for title, year, imdb, rt, mc, rating, store, watch in NAMED:
+    for title, year, imdb, rt, mc, rating, store, _watch in NAMED:
         fid = repo.create_film(Film(title, year, "Dir", ""))
         assert fid is not None
         ids[title] = fid
@@ -63,8 +63,10 @@ def seed_move_on(repo: Repository, account: FakeAccount) -> dict[str, int]:
         if store is not None:
             repo.set_external_id(fid, "itunes", str(910000000 + fid) if store == "store" else store, TODAY)
             repo.record_listing(fid, "apple-tv-store", "https://tmdb/w", TODAY)
-        if watch:
-            repo.toggle_watchlist(fid, TODAY)
+    # The Watchlist chip now shows my hand order (backlog 46), and a fresh star lands at the top:
+    # star bottom-first so the seeded hand order is the Metacritic order these stories were cast on.
+    for title in reversed(WATCHLIST):
+        repo.toggle_watchlist(ids[title], TODAY)
     for n in range(1, FILLERS + 1):
         fid = repo.create_film(Film(f"Shadow {n:02d}", 1930 + n, "Dir", ""))
         assert fid is not None
@@ -133,7 +135,8 @@ def drawer_title(page: Page):
 
 
 def open_film(page: Page, title: str) -> None:
-    row(page, title).locator(".c-year").click()
+    # The info button always opens; a click on the marked row lets go of the mark (backlog 46 ruling 7).
+    row(page, title).locator("button.info").click()
     expect(drawer_title(page)).to_contain_text(title)
 
 
@@ -219,8 +222,6 @@ def test_story_7_a_film_that_was_never_in_the_list_stays_put(dash: Page, move_on
 def test_story_8_the_list_runs_out(dash: Page):
     dash.click(WATCHLIST_CHIP)
     dash.fill("#f-title", "sherlock")
-    dash.keyboard.press("Tab")  # commits the filter's `change` re-render before the row click, or the
-    # mousedown-triggered re-render swaps the row out from under the click (pre-existing, not this feature's)
     expect(dash.locator("#count-showing")).to_have_text("Showing 1 of 80")
     open_film(dash, "Sherlock Jr.")
     star(dash)

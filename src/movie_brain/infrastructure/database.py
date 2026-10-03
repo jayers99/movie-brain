@@ -111,6 +111,12 @@ class TmdbMatchTarget(NamedTuple):
     director: str | None = None  # the resolver's strongest search key (thumbprint T5)
 
 
+@dataclass(frozen=True)
+class WatchlistToggle:
+    watchlisted: bool
+    below: int | None = None  # on an un-star: the film that sat right below it (None = it was last)
+
+
 class MergeReport(NamedTuple):
     moved: dict[str, int]
     dropped: dict[str, int]
@@ -548,8 +554,12 @@ def _new_on_by_film(c: sqlite3.Connection, cutoff_iso: str) -> dict[int, list[di
     return out
 
 
+def _watchlist_positions(c: sqlite3.Connection) -> dict[int, int]:
+    return {int(r["film_id"]): int(r["position"]) for r in c.execute("SELECT film_id, position FROM watchlist")}
+
+
 def _watchlist_ids(c: sqlite3.Connection) -> set[int]:
-    return {int(r["film_id"]) for r in c.execute("SELECT film_id FROM watchlist")}
+    return set(_watchlist_positions(c))
 
 
 def _owned_ids(c: sqlite3.Connection) -> set[int]:
@@ -609,6 +619,7 @@ def _row_to_view(
     *,
     lists: list[dict[str, object]] | None = None,
     watchlisted: bool = False,
+    watchlist_position: int | None = None,
     new_on: list[dict[str, object]] | None = None,
     owned: bool = False,
     unseen: bool = False,
@@ -643,6 +654,7 @@ def _row_to_view(
         services=services or [],
         lists=lists or [],
         watchlisted=watchlisted,
+        watchlist_position=watchlist_position,
         new_on=new_on or [],
         criterion=bool(row["criterion"]),
         owned=owned,
@@ -2719,15 +2731,54 @@ class Repository:
             return {str(r["key"]): int(r["score"]) for r in rows}
 
     # watchlist --------------------------------------------------------
-    def toggle_watchlist(self, film_id: int, today: date) -> bool | None:
+    # The hand order (backlog 46): `position` is dense 1…n and every write below keeps it so.
+    def _wl_order(self, c: sqlite3.Connection) -> list[int]:
+        return [int(r["film_id"]) for r in c.execute("SELECT film_id FROM watchlist ORDER BY position, film_id")]
+
+    def _wl_write(self, c: sqlite3.Connection, order: list[int]) -> None:
+        for pos, fid in enumerate(order, start=1):
+            c.execute("UPDATE watchlist SET position = ? WHERE film_id = ?", (pos, fid))
+
+    def toggle_watchlist(
+        self, film_id: int, today: date, *, put_back: bool = False, before: int | None = None
+    ) -> WatchlistToggle | None:
         with self._conn() as c:
             if c.execute("SELECT 1 FROM films WHERE id = ?", (film_id,)).fetchone() is None:
                 return None
-            if c.execute("SELECT 1 FROM watchlist WHERE film_id = ?", (film_id,)).fetchone() is None:
-                c.execute("INSERT INTO watchlist (film_id, added_on) VALUES (?, ?)", (film_id, today.isoformat()))
-                return True
+            order = self._wl_order(c)
+            if film_id not in order:
+                at = (order.index(before) if before in order else len(order)) if put_back else 0
+                order.insert(at, film_id)
+                c.execute(
+                    "INSERT INTO watchlist (film_id, added_on, position) VALUES (?, ?, 0)", (film_id, today.isoformat())
+                )
+                self._wl_write(c, order)
+                return WatchlistToggle(True)
+            i = order.index(film_id)
+            below = order[i + 1] if i + 1 < len(order) else None
+            del order[i]
             c.execute("DELETE FROM watchlist WHERE film_id = ?", (film_id,))
-            return False
+            self._wl_write(c, order)
+            return WatchlistToggle(False, below)
+
+    def move_watchlist(self, film_id: int, past: int, direction: str) -> list[int] | None:
+        """Re-insert `film_id` just past `past` — above it for "up", below it for "down". Every
+        other film keeps its relative order (story 4); films the client cannot see are stepped over."""
+        if film_id == past or direction not in ("up", "down"):
+            return None
+        with self._conn() as c:
+            order = self._wl_order(c)
+            if film_id not in order or past not in order:
+                return None
+            order.remove(film_id)
+            at = order.index(past)
+            order.insert(at if direction == "up" else at + 1, film_id)
+            self._wl_write(c, order)
+            return order
+
+    def watchlist_order(self) -> list[int]:
+        with self._conn() as c:
+            return self._wl_order(c)
 
     def watchlist_film_ids(self) -> set[int]:
         with self._conn() as c:
@@ -3810,6 +3861,9 @@ class Repository:
                         kept[table] = {"film_id": loser_id}
                     elif table == "store_lookup":
                         kept[table] = {"asked_on": loser_row["asked_on"]}
+            # Backlog 46: a moved row keeps the loser's position, a dropped one leaves a hole —
+            # renumber so the hand order stays dense 1…n.
+            self._wl_write(c, self._wl_order(c))
             for row in c.execute("SELECT * FROM listings WHERE film_id = ?", (loser_id,)).fetchall():
                 twin = c.execute(
                     "SELECT first_seen, last_seen, leaving_date FROM listings WHERE film_id = ? AND source = ?",
@@ -4254,7 +4308,7 @@ class Repository:
             services = _services_by_film(c)
             lists = _lists_by_film(c)
             new_on = _new_on_by_film(c, cutoff)
-            wl = _watchlist_ids(c)
+            wl = _watchlist_positions(c)
             ow = _owned_ids(c)
             un = _unseen_ids(c)
             rm = _rank_mark_ids(c)
@@ -4271,6 +4325,7 @@ class Repository:
                     services.get(r["id"]),
                     lists=lists.get(r["id"]),
                     watchlisted=r["id"] in wl,
+                    watchlist_position=wl.get(r["id"]),
                     new_on=new_on.get(r["id"]),
                     owned=r["id"] in ow,
                     unseen=r["id"] in un,
@@ -4298,7 +4353,8 @@ class Repository:
                 row,
                 _services_by_film(c).get(row["id"]),
                 lists=_lists_by_film(c).get(row["id"]),
-                watchlisted=row["id"] in _watchlist_ids(c),
+                watchlisted=row["id"] in (wl := _watchlist_positions(c)),
+                watchlist_position=wl.get(row["id"]),
                 new_on=_new_on_by_film(c, cutoff).get(row["id"]),
                 owned=row["id"] in _owned_ids(c),
                 unseen=row["id"] in _unseen_ids(c),

@@ -611,7 +611,7 @@ def test_watchlist_chip_filters_to_bravo(dash):
     clear_lang(dash)  # Bravo is French; the default English filter would hide its row
     dash.click('button[data-chip="watchlist"]')
     dash.wait_for_selector('#films tbody[data-count="1"]')
-    assert dash.locator("#films tbody tr").first.inner_text().startswith("Bravo")
+    assert dash.locator("#films tbody tr td.c-title").first.inner_text().startswith("Bravo")
 
 
 def test_drawer_shows_new_on_line(dash):
@@ -1004,7 +1004,8 @@ def test_search_note_click_replace_survives_a_dollar_sign_in_the_value(dash: Pag
 
 
 def _open(dash: Page, title: str):
-    dash.locator("tbody tr", has_text=title).first.click()
+    # The info button always opens; a click on the marked row lets go of the mark (backlog 46 ruling 7).
+    dash.locator("tbody tr", has_text=title).first.locator("button.info").click()
     body = dash.locator("#drawer-body")
     expect(body).to_contain_text(title)  # populated — a negative assertion on an empty drawer passes vacuously
     return body
