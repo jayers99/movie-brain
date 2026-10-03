@@ -242,7 +242,63 @@ def test_watchlist_toggle_round_trip(client):
     fid = films[0]["id"]
     assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": True}
     assert client.get(f"/api/films/{fid}").get_json()["watchlisted"] is True
-    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": False}
+    assert client.post(f"/api/films/{fid}/watchlist").get_json() == {"watchlisted": False, "below": None}
+
+
+def test_films_carry_the_watchlist_position(client):
+    a, b = (f["id"] for f in client.get("/api/films").get_json()[:2])
+    client.post(f"/api/films/{a}/watchlist")
+    client.post(f"/api/films/{b}/watchlist")
+    pos = {f["id"]: f["watchlist_position"] for f in client.get("/api/films").get_json()}
+    assert (pos[b], pos[a]) == (1, 2)
+
+
+def test_move_answers_the_whole_order(client, repo):
+    films = client.get("/api/films").get_json()
+    if len(films) < 3:
+        # Seed the extra film
+        from movie_brain.domain.models import Film
+        c = repo.create_film(Film("Third", 1960, "Dir", ""))
+        repo.record_listing(c, "criterion", "https://c/third", date(2026, 8, 19))
+    a, b, c = (f["id"] for f in client.get("/api/films").get_json()[:3])
+    for fid in (c, b, a):
+        client.post(f"/api/films/{fid}/watchlist")
+    r = client.post("/api/watchlist/move", json={"film_id": a, "past": c, "dir": "down"})
+    assert r.status_code == 200 and r.get_json() == {"order": [b, c, a]}
+    assert client.get("/api/watchlist/order").get_json() == {"order": [b, c, a]}
+
+
+def test_move_past_a_film_not_on_the_watchlist_is_409(client, repo):
+    films = client.get("/api/films").get_json()
+    if len(films) < 2:
+        from movie_brain.domain.models import Film
+        b = repo.create_film(Film("Extra", 1960, "Dir", ""))
+        repo.record_listing(b, "criterion", "https://c/extra", date(2026, 8, 19))
+    a, b = (f["id"] for f in client.get("/api/films").get_json()[:2])
+    client.post(f"/api/films/{a}/watchlist")
+    r = client.post("/api/watchlist/move", json={"film_id": a, "past": b, "dir": "up"})
+    assert r.status_code == 409
+
+
+def test_move_with_a_bad_body_is_400(client):
+    assert client.post("/api/watchlist/move", json={"film_id": "x"}).status_code == 400
+    assert client.post("/api/watchlist/move", json={"film_id": 1, "past": 2, "dir": "sideways"}).status_code == 400
+
+
+def test_a_put_back_returns_above_its_neighbour(client, repo):
+    films = client.get("/api/films").get_json()
+    if len(films) < 3:
+        from movie_brain.domain.models import Film
+        for i in range(3 - len(films)):
+            fid = repo.create_film(Film(f"Film{i}", 1960 + i, "Dir", ""))
+            repo.record_listing(fid, "criterion", f"https://c/film{i}", date(2026, 8, 19))
+    a, b, c = (f["id"] for f in client.get("/api/films").get_json()[:3])
+    for fid in (c, b, a):
+        client.post(f"/api/films/{fid}/watchlist")
+    below = client.post(f"/api/films/{b}/watchlist").get_json()["below"]
+    assert below == c
+    assert client.post(f"/api/films/{b}/watchlist", json={"restore": True, "before": below}).get_json() == {"watchlisted": True}
+    assert client.get("/api/watchlist/order").get_json() == {"order": [a, b, c]}
 
 
 def test_watchlist_toggle_unknown_film_404s(client):
