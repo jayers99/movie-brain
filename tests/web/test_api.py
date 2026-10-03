@@ -301,6 +301,12 @@ def test_a_put_back_returns_above_its_neighbour(client, repo):
     assert client.get("/api/watchlist/order").get_json() == {"order": [a, b, c]}
 
 
+def test_watchlist_put_back_before_must_be_a_real_int_not_true(client):
+    fid = client.get("/api/films").get_json()[0]["id"]
+    r = client.post(f"/api/films/{fid}/watchlist", json={"restore": True, "before": True})
+    assert r.status_code == 400
+
+
 def test_watchlist_toggle_unknown_film_404s(client):
     r = client.post("/api/films/999999/watchlist")
     assert r.status_code == 404

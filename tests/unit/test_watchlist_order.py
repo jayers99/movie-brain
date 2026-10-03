@@ -47,7 +47,9 @@ def test_a_put_back_returns_above_its_neighbour_even_after_other_stars(repo):
     assert repo.watchlist_order() == [d, a, b, c]
 
 
-def test_put_back_above_a_vanished_neighbour_goes_last(repo):
+def test_put_back_with_an_exhausted_anchor_chain_goes_last(repo):
+    # The fallback only: the client resolves its anchor through the un-star memory first, so this
+    # is reached when every film in the chain has left the list.
     a, b, c = (_film(repo, t) for t in "ABC")
     _star_all(repo, a, b, c)
     below = repo.toggle_watchlist(b, TODAY).below            # c

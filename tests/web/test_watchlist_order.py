@@ -447,3 +447,35 @@ def test_story_14_stars_off_and_on_in_one_drawer_visit(dash: Page, order_server)
     dash.locator("#f-title").blur()
     dash.locator(WATCHLIST_CHIP).click()
     assert titles(dash)[0] == "Moonlight"
+
+
+def test_story_14_put_back_above_a_neighbour_that_was_also_taken_off(dash: Page, order_server):
+    dash.locator(WATCHLIST_CHIP).click()             # off: un-starred films stay in view and the drawer steps by hand
+    row(dash, "Capturing the Friedmans").locator("button.info").click()
+    toggle = dash.locator("#drawer .watch-toggle")
+    toggle.click()                                   # Friedmans off: it sat above Henry Sugar
+    expect(toggle).to_have_text("☆")
+    dash.keyboard.press("ArrowDown")
+    expect(dash.locator("#drawer h2")).to_contain_text("The Wonderful Story of Henry Sugar")
+    toggle.click()                                   # Henry Sugar off: it sat above Out of the Past
+    expect(toggle).to_have_text("☆")
+    dash.keyboard.press("ArrowUp")
+    expect(dash.locator("#drawer h2")).to_contain_text("Capturing the Friedmans")
+    toggle.click()
+    expect(toggle).to_have_text("★")
+    dash.keyboard.press("ArrowDown")
+    expect(dash.locator("#drawer h2")).to_contain_text("The Wonderful Story of Henry Sugar")
+    toggle.click()
+    expect(toggle).to_have_text("★")
+    dash.wait_for_timeout(300)
+    names = saved(order_server)
+    assert names[3] == "Capturing the Friedmans" and names[4] == "The Wonderful Story of Henry Sugar"
+
+
+def test_story_15_a_move_and_the_re_read_both_fail_the_row_goes_back(dash: Page):
+    dash.route("**/api/watchlist/move", lambda r: r.fulfill(status=500, body="{}"))
+    dash.route("**/api/watchlist/order", lambda r: r.fulfill(status=500, body="{}"))
+    press(dash, "Out of the Past", "up")
+    expect(dash.locator("#toast")).to_contain_text("Could not save the order")
+    dash.wait_for_timeout(300)
+    assert titles(dash) == WATCHLIST

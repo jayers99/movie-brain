@@ -110,7 +110,7 @@ def create_app(
         body = request.get_json(silent=True) or {}
         restore = body.get("restore") is True
         before = body.get("before")
-        if before is not None and not isinstance(before, int):
+        if before is not None and not _is_int(before):
             return jsonify({"error": "before must be a film id or null"}), 400
         res = repo.toggle_watchlist(film_id, today(), put_back=restore, before=before)
         if res is None:

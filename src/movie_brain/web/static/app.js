@@ -144,6 +144,7 @@
   // server's whole order replaces every position. Only the newest answer counts, so fast presses
   // never land out of order; a failure re-reads the order and says so.
   let moveSeq = 0, moveEpoch = 0, moveChain = Promise.resolve();
+  let prev = new Map();  // this epoch: film id -> its position before its first optimistic step
   function applyOrder(order) {
     const pos = new Map(order.map((id, k) => [id, k + 1]));
     for (const f of state.films) f.watchlist_position = pos.get(f.id) ?? null;
@@ -152,6 +153,7 @@
     const i = state.filtered.findIndex((f) => f.id === id), j = i + dir;
     if (i < 0 || j < 0 || j >= state.filtered.length) return;
     const film = state.filtered[i], past = state.filtered[j];
+    if (!prev.has(id)) prev.set(id, film.watchlist_position);
     film.watchlist_position = past.watchlist_position + (dir < 0 ? -0.5 : 0.5);
     state.mark = id;
     applyFilters();
@@ -166,11 +168,14 @@
         const r = await fetch('/api/watchlist/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
         if (r.ok) order = (await r.json()).order;
       } catch { /* falls through to the failure path */ }
-      if (order) { if (seq === moveSeq) { applyOrder(order); applyFilters(); } return; }
+      if (order) { if (seq === moveSeq) { applyOrder(order); applyFilters(); prev = new Map(); } return; }
       moveEpoch++;  // drop the rest of the queue, toast once, and show what the server holds
       toast('Could not save the order');
       const back = await fetch('/api/watchlist/order').catch(() => null);
-      if (back && back.ok) { applyOrder((await back.json()).order); applyFilters(); }
+      if (back && back.ok) applyOrder((await back.json()).order);
+      else for (const [fid, pos] of prev) { const f = state.films.find((x) => x.id === fid); if (f) f.watchlist_position = pos; }
+      prev = new Map();
+      applyFilters();
     });
   }
   tbody.addEventListener('click', (e) => {
@@ -1035,6 +1040,13 @@
   // Backlog 46: films un-starred during THIS drawer visit → the film each sat above. A star put
   // back before the drawer closes (however it stepped) returns there; closing forgets.
   const starMemory = new Map();
+  // The film to put `id` back above: its remembered neighbour, or — when that neighbour was itself
+  // un-starred in this visit — the one IT sat above, and so on. null = nothing left (server: last).
+  function anchorFor(id) {
+    let b = starMemory.get(id);
+    while (b != null && starMemory.has(b)) b = starMemory.get(b);
+    return b ?? null;
+  }
   let movedOn = null;  // { at, film, label, slow, undo } — the last edit that moved the drawer on
   function moveOnIfLeft(edit) {
     if (edit.film !== state.openFilm) return false;
@@ -1143,7 +1155,7 @@
     const id = +b.dataset.id;
     const toggle = (putBack) => fetch(`/api/films/${id}/watchlist`, { method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(putBack ? { restore: true, before: starMemory.get(id) ?? null } : {}) }).catch(() => null);
+      body: JSON.stringify(putBack ? { restore: true, before: anchorFor(id) } : {}) }).catch(() => null);
     const r = await toggle(starMemory.has(id));
     if (!r || !r.ok) { toast('Could not update watchlist'); return; }
     const res = await r.json();
@@ -1158,8 +1170,9 @@
       moveOnIfLeft({ film: film.id, slow: false,
         label: res.watchlisted ? `Starred ${film.title}` : `Took ${film.title} off your watchlist`,
         undo: async () => {
+          const undoBefore = res.watchlisted ? null : anchorFor(film.id);
           const r2 = await fetch(`/api/films/${film.id}/watchlist`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(res.watchlisted ? {} : { restore: true, before: below }) }).catch(() => null);
+            body: JSON.stringify(res.watchlisted ? {} : { restore: true, before: undoBefore }) }).catch(() => null);
           if (!r2 || !r2.ok) { toast('Could not update watchlist'); return false; }
           const j = await r2.json(), f = state.films.find((x) => x.id === film.id);
           if (j.watchlisted) starMemory.delete(film.id);
