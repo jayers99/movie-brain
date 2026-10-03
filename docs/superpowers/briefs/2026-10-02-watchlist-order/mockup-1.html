@@ -84,9 +84,9 @@
 
 <div class="intro">
   <h1>Watchlist order — stories and mock-up (backlog 46)</h1>
-  <p>Your five answers from this morning, made walkable: <b>watchlist only</b>; a newly starred film goes to the <b>top</b>; the films already starred start in <b>today's critics' order</b>; with another chip on, the arrows <b>still work and swap with the film you can see</b>; <b>row arrows only</b>. Everything below runs on your real watchlist as it was at 10 AM today, 2026-10-02 — <b>8 films showing</b> (the database holds 9: Some Came Running is starred but hidden by the catalogue's own rule, departed and unrated).</p>
+  <p>Your five answers from this morning, made walkable: <b>watchlist only</b>; a newly starred film goes to the <b>top</b>; the films already starred start in <b>today's critics' order</b>; with another chip on, the arrows <b>still work and step past the film you can see</b>; <b>row arrows only</b>. Everything below runs on your real watchlist as it was at 10 AM today, 2026-10-02 — <b>8 films showing</b> (the database holds 9: Some Came Running is starred but hidden by the catalogue's own rule, departed and unrated).</p>
   <p>One correction to this morning: I said 17 films. That number was wrong or stale — the watchlist holds 9 today.</p>
-  <p><b>New since your first look:</b> your keyboard ruling (with the drawer closed, ↑ ↓ move the marked film and the mark stays on it — story 10), and the fixes from the gap check (stories 9, 11–14 are new or reworded; story 4's ending changed).</p>
+  <p><b>New since your second look:</b> your three-state click (story 11) — click a row to open, click again to close and keep the mark, click once more to let go of the mark. <b>New since your first look:</b> your keyboard ruling (with the drawer closed, ↑ ↓ move the marked film and the mark stays on it — story 10), and the fixes from the gap check (stories 9, 11–14 are new or reworded; story 4's ending changed).</p>
   <p>The two variants differ in <b>one thing</b>: what happens under your pointer when you press an arrow several times. Pick one; the stories are the same in both.</p>
 </div>
 
@@ -107,7 +107,6 @@
     <h1>movie-brain</h1>
     <input class="search" id="q" placeholder="Search titles, people, keywords…">
     <div id="chips">
-      <select class="chip picker" id="picker"><option value="">All films</option><option value="mine">My Ranking</option><option value="" disabled>(other lists left out)</option></select>
       <span class="chip inert">Reachable</span>
       <button class="chip live" data-chip="rated">Rated</button>
       <span class="chip inert">Criterion</span>
@@ -116,6 +115,7 @@
       <button class="chip live" data-chip="onlist">On a list</button>
       <span class="chip inert">Shop</span>
       <span class="chip inert">Watched</span>
+      <select class="chip picker" id="picker"><option value="">— all films —</option><option value="mine">My Ranking (763)</option><option value="" disabled>(the other 23 lists left out)</option></select>
       <button class="chip live" data-chip="clear">Clear</button>
       <label style="margin-left:auto;font-size:13px;color:var(--muted)"><input type="checkbox" id="down"> pretend the server is down</label>
     </div>
@@ -137,11 +137,11 @@
   <ul>
     <li><b>Which variant</b> (A or B) is the one open choice on this page.</li>
     <li><b>I made one call you did not:</b> when Watchlist is on together with <b>On a list</b> or <b>Watched</b>, today those two chips put their own order first (list score, last watched). I recommend <b>your order wins</b> whenever Watchlist is on, so the arrows never disappear because of a chip (story 5). The alternative is that those two chips keep their order and the arrows hide. Say "flip 5" if you want the alternative.</li>
-    <li><b>Where the arrows do hide:</b> a column sort (story 6), a picked list from the list menu (story 11), and a word search in the bar that ranks its answers (story 12) — in each of those the list is not in your order, so an arrow could not mean "one place up". A <i>Title</i> column filter or a <code>director:</code> search only narrows, so the arrows stay.</li>
-    <li><b>Undo puts a film back in its place</b>, not at the top (story 7), and so does a star taken off and put back in the same drawer (story 13). Only a fresh star goes to the top.</li>
+    <li><b>Where the arrows do hide:</b> a column sort (story 6), a picked list from the list menu (story 12), and a word search in the bar that ranks its answers (story 13) — in each of those the list is not in your order, so an arrow could not mean "one place up". A <i>Title</i> column filter or a <code>director:</code> search only narrows, so the arrows stay.</li>
+    <li><b>Undo puts a film back in its place</b>, not at the top (story 7), and so does a star taken off and put back in the same drawer (story 14). Only a fresh star goes to the top.</li>
     <li><b>A move steps past ONE film you can see; every other film keeps its order</b> (story 4). I changed this from a swap after the gap check: with a swap, the other film could jump over hidden ones without you touching it.</li>
-    <li><b>Your order is saved at every move</b> and survives a reload. A move that fails to save puts the row back and says so (story 14). In variant B, presses still waiting when you click elsewhere land first; a reload with presses waiting loses them.</li>
-    <li><b>The hidden ninth film</b> (Some Came Running) keeps a place in the order you cannot see; a swap skips it, exactly like a film a chip hides (story 4).</li>
+    <li><b>Your order is saved at every move</b> and survives a reload. A move that fails to save puts the row back and says so (story 15). In variant B, presses still waiting when you click elsewhere land first; a reload with presses waiting loses them.</li>
+    <li><b>The hidden ninth film</b> (Some Came Running) keeps a place in the order you cannot see; a move steps over it and it keeps its place, exactly like a film a chip hides (story 4).</li>
     <li><b>Not in this build:</b> My Ranking arrows, move buttons or keys inside the drawer, drag-and-drop, a "to top" button.</li>
   </ul>
 </div>
@@ -160,6 +160,7 @@ const SEED = FILMS.filter(f => f.watchlisted).sort((a, b) => a.pos - b.pos).map(
 
 let S;
 function reset() {
+  saved = null;
   const q = document.getElementById('q'); if (q) { q.value = ''; document.getElementById('picker').value = ''; document.getElementById('down').checked = false; }
   FILMS.forEach(f => { f.watchlisted = SEED.includes(f.id); });
   S = { order:[...SEED], chips:new Set(['watchlist']), rated:0, sort:null, title:'', q:'', list:'', open:null, movedOn:null, marked:null, pend:null, unstarred:null };
@@ -207,11 +208,13 @@ function step(id, dir) {
   return true;
 }
 function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => { t.hidden = true; }, 2500); }
-function trySave(id, dir, n = 1) {   // the move is shown at once; a failed save puts the row back
-  const before = [...S.order];
+var saved = null;   // the order the server last confirmed
+function trySave(id, dir, n = 1) {   // the move is shown at once; a failed save puts the list back to the last SAVED order
+  if (!saved) saved = [...S.order];
   for (let k = 0; k < n; k++) step(id, dir);
   render();
-  if (document.getElementById('down').checked) setTimeout(() => { S.order = before; render(); toast('Could not save the order'); }, 400);
+  if (document.getElementById('down').checked) setTimeout(() => { S.order = [...saved]; render(); toast('Could not save the order'); }, 400);
+  else saved = [...S.order];
 }
 function press(id, dir) {
   S.marked = id;
@@ -249,7 +252,7 @@ function render() {
     }
     const [own, wish, best] = BADGE[f.id];
     const badges = (f.lists ? ` <span class="badge-lists">${f.lists} list${f.lists > 1 ? 's' : ''}</span>` : '') + (own ? ' <span class="badge-owned">owned</span>' : '') + (best ? ` <span class="badge-watch">${esc(best)}</span>` : '') + (wish ? ' <span class="icon-wish">♥</span>' : '');
-    return `<tr data-id="${f.id}" class="${S.marked === f.id ? 'marked' : ''}">${move}<td>${esc(f.title)}${badges}</td><td>${f.year}</td><td>${esc(f.director)}</td><td>${esc(f.language)}</td><td class="num">${f.metacritic ?? ''}</td><td class="num">${f.rt == null ? '—' : f.rt + '%'}</td><td class="num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td><td class="num">${f.my_rating ?? ''}</td><td>${f.last_watched ?? ''}</td></tr>`;
+    return `<tr data-id="${f.id}" class="${S.marked === f.id ? 'marked' : ''}">${move}<td>${esc(f.title)}${badges}</td><td>${f.year}</td><td>${esc(f.director)}</td><td>${esc(f.language)}</td><td class="num">${f.metacritic ?? '—'}</td><td class="num">${f.rt == null ? '—' : f.rt + '%'}</td><td class="num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td><td class="num">${f.my_rating ?? ''}</td><td>${f.last_watched ?? ''}</td></tr>`;
   }).join('');
   if (!(S.chips.has('watchlist') || S.title || S.chips.has('onlist') || S.rated || S.list || S.q)) html += `<tr class="more"><td colspan="${cols.length}">… and 5,180 more films (not in this mock-up — type ugetsu in the Title filter to find Ugetsu)</td></tr>`;
   document.getElementById('rows').innerHTML = html;
@@ -298,6 +301,7 @@ win.addEventListener('click', e => {
   if (e.target.closest('.watch-toggle')) { toggleStar(); return; }
   if (e.target.closest('.moved-on .undo')) { undo(); return; }
   const tr = e.target.closest('tbody tr[data-id]');
+  if (tr && S.open == null && Number(tr.dataset.id) === S.marked) { S.marked = null; render(); return; }   // third click: the marked row lets go of its mark
   if (tr) { settle(); S.open = Number(tr.dataset.id); S.marked = S.open; S.movedOn = null; S.unstarred = null; render(); }
 });
 function closeDrawer() { S.open = null; S.movedOn = null; S.unstarred = null; render(); }
@@ -311,7 +315,7 @@ document.addEventListener('keydown', e => {
   const dir = e.key === 'ArrowUp' ? -1 : 1;
   if (S.open != null) {
     const vis = shown(), i = vis.findIndex(f => f.id === S.open), j = i + dir;
-    if (i >= 0 && j >= 0 && j < vis.length) { e.preventDefault(); S.open = vis[j].id; S.marked = S.open; S.movedOn = null; S.unstarred = null; render(); }
+    if (i >= 0 && j >= 0 && j < vis.length) { e.preventDefault(); S.open = vis[j].id; S.marked = S.open; S.movedOn = null; render(); }
     return;
   }
   if (!handOrder() || S.marked == null || !shown().some(f => f.id === S.marked)) return;
@@ -360,8 +364,8 @@ document.querySelectorAll('.variant').forEach(b => b.addEventListener('click', (
 // ---- stories ----
 const STORIES = [
   { t:'My watchlist, in my order', p:'I press Watchlist. The 8 films show in the order I saw yesterday — Intolerance first, Lord of the Flies last — because that is where my order starts. A narrow column of ▲ ▼ sits at the left of each row. Intolerance\'s ▲ and Lord of the Flies\' ▼ are greyed: there is nowhere to go.', does:'Same in A and B', coach:'Watchlist is on. Look down the left edge: ▲ ▼ on every row, greyed at the two ends.', set:() => {} },
-  { t:'Out of the Past goes first', p:'I want Out of the Past next. I press its ▲ five times; each press moves it one place, past one film. After five it is at the top, with a grey mark, and Intolerance has slid to second. Nothing else on the page moves.', does:'Differs: A moves at every press, B adds up and moves when I leave the row', coach:'Press ▲ on Out of the Past (6th row) five times. In A, chase the row as it climbs. In B, press five times on the spot, then move your pointer away.', set:() => {} },
-  { t:'One too far', p:'I pressed ▲ once too often: Out of the Past went past Intolerance, and I wanted Intolerance first. I press Out of the Past\'s ▼ once. That is the whole undo — no Undo line, no prompt.', does:'Same in A and B', coach:'Out of the Past is at the top, one place too high. Press its ▼ once (or ▲ on Intolerance — the same swap).', set:() => { S.order = [3831,3096,3095,3125,3396,3905,4852,1940]; S.marked = 3831; } },
+  { t:'Out of the Past goes first', p:'I want Out of the Past next. I press its ▲ five times; each press moves it one place, past one film. After five it is at the top with the grey mark; the five films it passed each slid down one place, still in their own order.', does:'Differs: A moves at every press, B adds up and moves when I leave the row', coach:'Press ▲ on Out of the Past (6th row) five times. In A, chase the row as it climbs. In B, press five times on the spot, then move your pointer away.', set:() => {} },
+  { t:'One too far', p:'I pressed ▲ once too often: Out of the Past went past Intolerance, and I wanted Intolerance first. I press Out of the Past\'s ▼ once. That is the whole undo — no Undo line, no prompt.', does:'Same in A and B', coach:'Out of the Past is at the top, one place too high. Press its ▼ once (or ▲ on Intolerance — the same result).', set:() => { S.order = [3831,3096,3095,3125,3396,3905,4852,1940]; S.marked = 3831; } },
   { t:'With a chip on, it steps past what I can see', p:'Watchlist plus Rated → Unrated by me: 6 films; Intolerance (I gave it a 2) and Young Frankenstein (a 9) drop out. I press ▼ on Out of the Past: it steps past Lord of the Flies, the next film I can see. I turn Rated off: only Out of the Past has moved — the order ends Henry Sugar, Young Frankenstein, Lord of the Flies, Out of the Past, and every other film kept its order.', does:'Same in A and B · reworded after the gap check', coach:'Watchlist + Unrated by me. Press ▼ on Out of the Past, then press the Rated chip twice to turn it off and look at the bottom four.', set:() => { S.rated = 1; } },
   { t:'Another chip that narrows: On a list', p:'Watchlist plus On a list: 5 films (Intolerance, Moonlight, Capturing the Friedmans, Out of the Past, Young Frankenstein). They stay in MY order — not the list score On a list sorts by today — and the arrows stay. (My recommendation; see the panel below the window.)', does:'Same in A and B · a call I made, flip it if you disagree', coach:'Watchlist + On a list. My order, arrows on. Today the same view would put Out of the Past first by list score.', set:() => { S.chips.add('onlist'); } },
   { t:'A column sort hides the arrows', p:'I click the MC header: the list sorts by Metacritic and the ▲ ▼ column disappears — an arrow cannot mean "one place up" in an order that is not mine. I click MC twice more (ascending, descending, off): my order is back, and so are the arrows.', does:'Same in A and B', coach:'Click the MC header three times and watch the left column go and come back.', set:() => {} },
@@ -369,9 +373,10 @@ const STORIES = [
   { t:'A new star goes to the top', p:'Watchlist off. I type ugetsu in the Title filter, open Ugetsu and press ☆. I close the drawer, clear the filter and press Watchlist: 9 films, Ugetsu first, Intolerance second.', does:'Same in A and B', coach:'Watchlist is off. Type ugetsu in the Title filter, open Ugetsu, press ☆, close, clear the filter, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
   { t:'The drawer is open: ↑ ↓ step, they do not move', p:'With the drawer open on Intolerance the grey covers the list and the ▲ ▼ column is gone. I press ↓ hoping to move it: the drawer steps to Moonlight, as it does today, and my order is unchanged. I close the drawer: the grey mark is on Moonlight.', does:'Same in A and B · reworded after the gap check', coach:'The drawer is open on Intolerance. Press ↓ on the keyboard (the drawer steps to Moonlight), then close it with ✕.', set:() => { S.open = 3096; S.marked = 3096; } },
   { t:'Keys move the marked film', p:'The drawer is closed and Out of the Past carries the grey mark. I press ↑ three times: it moves up three places and the mark stays on it, so each press moves the same film. ↓ moves it back down. With nothing marked, or with a sort or a picked list on, ↑ ↓ scroll the page as they do today.', does:'Same in A and B · your ruling, 2026-10-02', coach:'Out of the Past is marked (as after closing its drawer). Press ↑ on the keyboard three times. Do not click a row first — a click opens the drawer.', set:() => { S.marked = 3831; } },
-  { t:'A picked list hides the arrows', p:'Watchlist on, I pick My Ranking in the list menu: Out of the Past and Young Frankenstein show in My Ranking\'s order (123rd and 142nd) and the ▲ ▼ column is gone. I set the menu back to All films: my order and the arrows return.', does:'Same in A and B · added after the gap check', coach:'Pick My Ranking in the list menu (left of the chips), then set it back to All films.', set:() => {} },
+  { t:'Click, click, click: open, close, let go', p:'I click Out of the Past: its drawer opens. I click the grey (the same spot): the drawer closes and the row keeps its grey mark, so ↑ ↓ would move it. I click the row once more: the mark goes, and now ↑ ↓ scroll the page and move nothing. A fourth click opens the drawer again.', does:'Same in A and B · your ruling, 2026-10-02 · changes every list, not just the watchlist', coach:'Click the Out of the Past row three times, slowly, and watch the drawer, then the mark. Then press ↓: nothing moves.', set:() => {} },
+  { t:'A picked list hides the arrows', p:'Watchlist on, I pick My Ranking in the list menu: Out of the Past and Young Frankenstein show in My Ranking\'s order (123rd and 142nd) and the ▲ ▼ column is gone. I set the menu back to — all films —: my order and the arrows return.', does:'Same in A and B · added after the gap check', coach:'Pick My Ranking in the list menu (right end of the chips, before Clear), then set it back to — all films —.', set:() => {} },
   { t:'A word search hides them; director: does not', p:'Watchlist on, I type out of the past in the search bar: the bar ranks its answers, so the arrows go. I clear the bar: they are back. I type director:tourneur: the bar only narrows, so Out of the Past shows alone, with its arrows (both greyed — nowhere to go).', does:'Same in A and B · added after the gap check', coach:'Type out of the past in the search bar, clear it, then type director:tourneur.', set:() => {} },
-  { t:'A star off and on in the same drawer', p:'Watchlist off. I type friedmans in the Title filter and open Capturing the Friedmans. I press ★ by mistake, then ☆ straight back. I close the drawer, clear the filter, press Watchlist: it is still 4th, not at the top — a star put back in the same drawer returns the film to its place.', does:'Same in A and B · added after the gap check', coach:'Type friedmans in the Title filter, open the row, press the star twice, close, clear the filter, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
+  { t:'A star off and on in the same drawer', p:'Watchlist off. I type friedmans in the Title filter and open Capturing the Friedmans. I press ★ by mistake, then ☆ straight back. I close the drawer, clear the filter, press Watchlist: it is still 4th, not at the top — a star put back before the drawer closes (even after stepping away and back) returns the film to its place.', does:'Same in A and B · added after the gap check', coach:'Type friedmans in the Title filter, open the row, press the star twice, close, clear the filter, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
   { t:'A move that does not save', p:'The server is down (the switch above the list pretends so). I press ▲ on Out of the Past: it moves, then goes back to its place with "Could not save the order" at the foot of the window — the same kind of message a failed star gives today. When things work, my order is saved at every move and is still there after a reload.', does:'Same in A and B · added after the gap check', coach:'The "pretend the server is down" box is ticked. Press ▲ on Out of the Past and watch it come back.', set:() => { document.getElementById('down').checked = true; } },
 ];
 document.getElementById('stories').innerHTML = STORIES.map((s, i) => `<div class="story" data-i="${i}"><h3><span class="n">${i + 1}</span>${esc(s.t)}</h3><p>${esc(s.p)}</p><div class="foot"><span class="does">${esc(s.does)}</span><button class="walk" data-i="${i}">Walk it</button></div></div>`).join('');
