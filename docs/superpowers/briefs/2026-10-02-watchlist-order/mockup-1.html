@@ -99,7 +99,7 @@
   <p>The two variants differ in <b>one thing</b>: what happens under your pointer when you press an arrow several times. Pick one; the stories are the same in both.</p>
 </div>
 
-<h2 class="sec">The stories <label style="font-size:15px;font-weight:400;margin-left:12px"><input type="checkbox" id="only-changed" checked> show only what changed in 1.1 (11 cards)</label></h2>
+<h2 class="sec">The stories <label style="font-size:15px;font-weight:400;margin-left:12px"><input type="checkbox" id="only-changed" checked> show only what changed in 1.1 and 1.2 (12 cards)</label></h2>
 <div class="stories" id="stories"></div>
 
 <h2 class="sec">The mock-up</h2>
@@ -181,7 +181,7 @@ reset();
 const RATED_LABELS = ['Rated', 'Unrated by me', 'Rated by me'];
 function matches(f) {
   if (f.hidden) return false;   // Some Came Running: starred, departed and unrated — the catalogue's own rule hides it everywhere
-  if (S.chips.has('watched') && !f.last_watched) return false;
+  if (S.watched && !f.last_watched) return false;   // To study: no starred film is marked for study either
   if (S.chips.has('watchlist') && !f.watchlisted) return false;
   if (S.chips.has('onlist') && !f.lists) return false;
   if (S.rated === 1 && f.my_rating != null) return false;
@@ -231,7 +231,7 @@ function trySave(id, dir, n = 1) {   // the move is shown at once; a failed save
   else saved = [...S.order];
 }
 function press(id, dir) {
-  S.marked = id;
+  S.marked = id; S.markBy = 'press';
   if (variant === 'A') { trySave(id, dir); return; }
   if (!S.pend || S.pend.id !== id) S.pend = { id, n:0 };
   const vis = shown(), i = vis.findIndex(f => f.id === id), target = i + S.pend.n + dir;
@@ -277,6 +277,7 @@ function render() {
   document.querySelectorAll('.chip.live').forEach(b => {
     const k = b.dataset.chip;
     if (k === 'rated') { b.textContent = RATED_LABELS[S.rated]; b.classList.toggle('active', S.rated > 0); }
+    else if (k === 'watched') { b.textContent = ['Watched', 'Watched', 'To study'][S.watched || 0]; b.classList.toggle('active', !!S.watched); }
     else if (k !== 'clear') b.classList.toggle('active', S.chips.has(k));
   });
   const q = S.q.trim().toLowerCase();
@@ -305,8 +306,9 @@ win.addEventListener('click', e => {
   const chip = e.target.closest('.chip.live');
   if (chip) {
     const k = chip.dataset.chip;
-    if (k === 'clear') { S.chips.clear(); S.rated = 0; S.sort = null; S.title = ''; S.q = ''; S.list = ''; document.getElementById('q').value = ''; document.getElementById('picker').value = ''; }
+    if (k === 'clear') { S.chips.clear(); S.rated = 0; S.watched = 0; S.sort = null; S.title = ''; S.q = ''; S.list = ''; document.getElementById('q').value = ''; document.getElementById('picker').value = ''; }
     else if (k === 'rated') S.rated = (S.rated + 1) % 3;
+    else if (k === 'watched') S.watched = ((S.watched || 0) + 1) % 3;   // Watched → To study → off, as the real chip
     else S.chips.has(k) ? S.chips.delete(k) : S.chips.add(k);
     settle(); render(); return;
   }
@@ -317,20 +319,20 @@ win.addEventListener('click', e => {
   if (e.target.id === 'backdrop') {
     const cell = document.elementsFromPoint(e.clientX, e.clientY).find(el => el.closest && el.closest('#rows tr[data-id]'));
     const under = cell && cell.closest('#rows tr[data-id]');
-    if (under && Number(under.dataset.id) !== S.open) { S.open = Number(under.dataset.id); S.marked = S.open; S.movedOn = null; render(); return; }   // steps, as today; the drawer visit goes on
+    if (under && Number(under.dataset.id) !== S.open) { S.open = Number(under.dataset.id); S.marked = S.open; S.markBy = 'drawer'; S.movedOn = null; render(); return; }   // steps, as today; the drawer visit goes on
     closeDrawer(); return;
   }
   if (e.target.id === 'drawer-close') { closeDrawer(); return; }
   const info = e.target.closest('button.info');
-  if (info) { settle(); S.open = Number(info.dataset.id); S.marked = S.open; S.movedOn = null; render(); return; }   // ⓘ always opens, marked or not
+  if (info) { settle(); S.open = Number(info.dataset.id); S.marked = S.open; S.markBy = 'drawer'; S.movedOn = null; render(); return; }   // ⓘ always opens, marked or not
   if (e.target.closest('input.rating')) return;
   if (e.target.id === 'note-undo') { e.preventDefault(); return; }
   if (e.target.id === 'reload') { S.open = null; S.movedOn = null; S.unstarred = {}; S.marked = null; S.pend = null; render(); toast('Reloaded: your order is as you left it; nothing is marked'); return; }
   if (e.target.closest('.watch-toggle')) { toggleStar(); return; }
   if (e.target.closest('.moved-on .undo')) { undo(); return; }
   const tr = e.target.closest('tbody tr[data-id]');
-  if (tr && S.open == null && Number(tr.dataset.id) === S.marked) { S.marked = null; render(); return; }   // third click: the marked row lets go of its mark
-  if (tr) { settle(); S.open = Number(tr.dataset.id); S.marked = S.open; S.movedOn = null; render(); }
+  if (tr && S.open == null && Number(tr.dataset.id) === S.marked && S.markBy !== 'press') { S.marked = null; render(); return; }   // only a mark left by closing the drawer is let go   // third click: the marked row lets go of its mark
+  if (tr) { settle(); S.open = Number(tr.dataset.id); S.marked = S.open; S.markBy = 'drawer'; S.movedOn = null; render(); }
 });
 function closeDrawer() { S.open = null; S.movedOn = null; S.unstarred = {}; render(); }   // closing ends the drawer visit: put-back memory is forgotten
 // The rating box, as today: Enter or leaving the box saves; a film that no longer matches leaves the list.
@@ -351,7 +353,7 @@ document.addEventListener('keydown', e => {
   const dir = e.key === 'ArrowUp' ? -1 : 1;
   if (S.open != null) {
     const vis = shown(), i = vis.findIndex(f => f.id === S.open), j = i + dir;
-    if (i >= 0 && j >= 0 && j < vis.length) { e.preventDefault(); S.open = vis[j].id; S.marked = S.open; S.movedOn = null; render(); }
+    if (i >= 0 && j >= 0 && j < vis.length) { e.preventDefault(); S.open = vis[j].id; S.marked = S.open; S.markBy = 'drawer'; S.movedOn = null; render(); }
     return;
   }
   if (!handOrder() || S.marked == null || !shown().some(f => f.id === S.marked)) return;
@@ -382,7 +384,9 @@ function toggleStar() {
   } else {
     f.watchlisted = true;
     if (f.id in S.unstarred) {
-      const after = S.unstarred[f.id], at = after == null ? -1 : S.order.indexOf(after);
+      let after = S.unstarred[f.id];
+      while (after != null && after in S.unstarred) after = S.unstarred[after];   // the neighbour was taken off too: follow the chain (as the build does)
+      const at = after == null ? -1 : S.order.indexOf(after);
       S.order.splice(at < 0 ? S.order.length : at, 0, f.id); delete S.unstarred[f.id];
     } else S.order.unshift(f.id);   // a fresh star goes to the TOP (your ruling 2)
   }
@@ -417,16 +421,17 @@ const STORIES = [
   { tag:'changed', t:'Click, click, click: open, close, let go', p:'I click Out of the Past: its drawer opens. I click the same spot (its own row, through the grey): the drawer closes and the row keeps its grey mark. I click the row once more: the mark goes, and ↑ ↓ scroll and move nothing. A fourth click opens the drawer again. The ⓘ at the end of a row always opens its drawer, marked or not — only a click on the row itself lets go.', does:'Same in A and B · your ruling · 1.1: ⓘ always opens', coach:'Click the Out of the Past title three times, slowly. Then press ⓘ at the end of its row: the drawer opens.', set:() => {} },
   { t:'A picked list hides the arrows', p:'Watchlist on, I pick My Ranking in the list menu: Out of the Past and Young Frankenstein show in My Ranking\'s order (123rd and 142nd) and the ▲ ▼ column is gone. I set the menu back to — all films —: my order and the arrows return.', does:'Same in A and B · added after the gap check', coach:'Pick My Ranking in the list menu (right end of the chips, before Clear), then set it back to — all films —.', set:() => {} },
   { tag:'changed', t:'A word search hides them; director: does not', p:'Watchlist on, I type out of the past in the search bar: the bar ranks its answers, so the arrows go. I clear it: they are back. I type director:tourneur: the bar only narrows, so Out of the Past shows alone, with its arrows (both greyed). A grey line under the bar says "Showing results for Jacques Tourneur (you typed “tourneur”) undo" — that undo is about the NAME the bar guessed, never about a move.', does:'Same in A and B · 1.1: the real correction line', coach:'Type out of the past in the bar, clear it, then type director:tourneur and read the line under the bar.', set:() => {} },
-  { tag:'changed', t:'Stars off and on in one drawer visit', p:'Watchlist off. I type fr in the Title filter: Capturing the Friedmans and Young Frankenstein. I open Capturing the Friedmans and press ★ by mistake; I press ↓ to Young Frankenstein and press its ★ too; I press ↑ back and put Capturing the Friedmans\' star back, then ↓ and put Young Frankenstein\'s back. I close, clear the filter, press Watchlist: both are where they were (4th and 7th) — put back before the drawer closes, however I stepped, a film keeps its place. After the drawer closes, a star is a fresh one and goes to the top.', does:'Same in A and B · 1.1: any number of films, any kind of step', coach:'Type fr in the Title filter. Open Capturing the Friedmans: ★, ↓, ★, ↑, ☆, ↓, ☆. Close, clear the filter, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
+  { tag:'changed', t:'Stars off and on in one drawer visit', p:'Watchlist off, no filter: in the full list Intolerance sits right above Moonlight. I open Intolerance and press ★ by mistake; I press ↓ to Moonlight and press its ★ too; I press ↑ back and put Intolerance\'s star back, then ↓ and put Moonlight\'s back. I close and press Watchlist: they are 1st and 2nd, where they were — put back before the drawer closes, however I stepped, a film keeps its place. After the drawer closes, a star is a fresh one and goes to the top.', does:'1.2: rewritten on your real neighbours (the old fr filter holds 133 films)', coach:'Watchlist is off. Open Intolerance (in the list below the top films): ★, ↓, ★, ↑, ☆, ↓, ☆. Close, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
   { t:'A move that does not save', p:'The server is down (the switch above the list pretends so). I press ▲ on Out of the Past: it moves, then goes back to its place with "Could not save the order" at the foot of the window — the same kind of message a failed star gives today. When things work, my order is saved at every move and is still there after a reload.', does:'Same in A and B · added after the gap check', coach:'The "pretend the server is down" box is ticked. Press ▲ on Out of the Past and watch it come back.', set:() => { document.getElementById('down').checked = true; } },
-  { tag:'new', t:'Watched and Watchlist together', p:'Watchlist on, I press Watched: Showing 0 — none of my watchlist films has a logged viewing yet, so nothing shows and there is nothing to move. I press Watched round to off: my 8 films and their arrows are back. The day I log a viewing of a starred film, it shows here in MY order, not most-recent-first.', does:'1.1 · pictures your story-5 call for Watched', coach:'Press Watched (0 films), then press it twice more to turn it off.', set:() => {} },
+  { tag:'new', t:'Watched and Watchlist together', p:'Watchlist on, I press Watched: Showing 0 — none of my watchlist films has a logged viewing yet, so nothing shows and there is nothing to move. I press it again — To study, still 0 — and once more to turn it off: my 8 films and their arrows are back. The day I log a viewing of a starred film, it shows here in MY order, not most-recent-first.', does:'1.1 · pictures your story-5 call for Watched', coach:'Press Watched (0 films), press it again (To study, still 0), then once more to turn it off.', set:() => {} },
   { tag:'new', t:'I try to drag a row', p:'I grab Out of the Past and pull it towards the top: the text highlights and nothing moves. Dragging is not how this works — I press its ▲, or mark it and press ↑.', does:'1.1 · an exclusion you can bump into', coach:'Try dragging the Out of the Past row upwards. Nothing moves.', set:() => {} },
   { tag:'new', t:'Straight to the top', p:'Lord of the Flies is last and I want it next. There is no "to top" button: I press its ▲ seven times (or press ▲ once, so it is marked, and then ↑ six times).', does:'1.1 · an exclusion you can bump into', coach:'Lord of the Flies is 8th. Get it to the top: ▲ once, then ↑ six times.', set:() => {} },
   { tag:'new', t:'The next morning', p:'I put Out of the Past first and close up. Next morning I open the dashboard on Watchlist: Out of the Past is still first — every move was saved the moment I made it. Nothing is marked, so ↑ ↓ scroll until I mark a film again.', does:'1.1 · the reload button stands in for a real reload', coach:'Press ▲ on Out of the Past five times, then press ↻ Reload (next morning) above the list. Press ↓: nothing moves.', set:() => {} },
   { tag:'new', t:'Typing a rating, rating the marked film', p:'Watchlist plus Unrated by me. Out of the Past is marked. I click into its rating box and press ↑ ↓: nothing moves — in a box the keys belong to the box. I type 8 and press Enter: it is rated, so it leaves the list, and no row on screen is marked; ↑ ↓ scroll. I turn Rated off: Out of the Past is back, still marked, and ↑ moves it again.', does:'1.1 · keys and the rating box', coach:'Click into Out of the Past\'s rating box, press ↑ ↓, type 8, press Enter. Then press the Rated chip twice and press ↑ (click the page first, outside the box).', set:() => { S.rated = 1; S.marked = 3831; } },
   { tag:'new', t:'The starred film I cannot see', p:'I remember starring Some Came Running. With Watchlist on I type some in the Title filter: no row. It left the Criterion Channel and I never rated it, so the catalogue hides it everywhere, as today. It keeps its place in my order (between Young Frankenstein and Lord of the Flies), and every move steps over it.', does:'1.1 · the hidden ninth film', coach:'Type some in the Title filter: nothing. Clear it.', set:() => {} },
+  { tag:'new', t:'Press, then click to look', p:'I press ▲ on Out of the Past, then click its row to look at it: the drawer opens. A mark left by an arrow press is not let go by a click — only a mark left by closing the drawer is (story 11). I close the drawer: now the mark is the close\'s, and one more click lets it go.', does:'1.2 · a call I made after the gap check, flip it if you disagree', coach:'Press ▲ on Out of the Past, then click its title: the drawer opens. Close it, click the row once: the mark goes.', set:() => {} },
 ];
-document.getElementById('stories').innerHTML = STORIES.map((s, i) => `<div class="story${s.tag ? ' is-changed' : ''}" data-i="${i}"><h3><span class="n">${i + 1}</span>${esc(s.t)}${s.tag ? `<span class="tag ${s.tag}">${s.tag === 'new' ? 'new in 1.1' : 'changed in 1.1'}</span>` : ''}</h3><p>${esc(s.p)}</p><div class="foot"><span class="does">${esc(s.does)}</span><button class="walk" data-i="${i}">Walk it</button></div></div>`).join('');
+document.getElementById('stories').innerHTML = STORIES.map((s, i) => `<div class="story${s.tag ? ' is-changed' : ''}" data-i="${i}"><h3><span class="n">${i + 1}</span>${esc(s.t)}${s.tag ? `<span class="tag ${s.tag}">${s.tag === 'new' ? 'new' : 'changed'}</span>` : ''}</h3><p>${esc(s.p)}</p><div class="foot"><span class="does">${esc(s.does)}</span><button class="walk" data-i="${i}">Walk it</button></div></div>`).join('');
 document.getElementById('stories').addEventListener('click', e => {
   const b = e.target.closest('button.walk'); if (!b) return;
   const i = Number(b.dataset.i), s = STORIES[i];

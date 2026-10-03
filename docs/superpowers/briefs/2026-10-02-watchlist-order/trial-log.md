@@ -59,3 +59,20 @@ Codex (gpt-6-astra, high, 714 s, 11 findings) and Fable (7 findings) on the same
 Codex 11 · Fable 7 · both 4 · codex-only 7 · fable-only 3 (+1 from its Not-checked) · false-positive 0 · declined 0. Fixed 9 · stories added 6. Brief → amendment 1.1.
 
 2026-10-02: owner approved amendment 1.1 and kept the four calls (cards 10, 11, 14, 20) — "1". Brief frozen at 1.1.
+
+## Gap check (point C) — two lineages
+
+Claude (opus, 3 findings) and Codex (gpt-6-astra, high, 1086 s, 6 findings) on the same snapshot of the branch head and a fresh copy of the live database migrated to schema 33; neither saw the other.
+
+| Finding | Label | Answer | Note |
+|---|---|---|---|
+| Story 14 untrue on the real catalogue: Title filter `fr` holds 133 films; ↓ from Capturing the Friedmans reaches Silent Friend (Claude 1, Codex F1) | both | fixed | story 14 rewritten on the real neighbours Intolerance and Moonlight (full list, no filter); test rewritten |
+| An arrow press marks the film, so the next click on that row lets go instead of opening (Claude 2) | claude-only | fixed | ruling: only a mark left by closing the drawer is let go; a pressed mark opens on click — new story 22, flagged to the owner |
+| Story 20's test leaves a move in flight at teardown, flaked once (Claude 3) | claude-only | fixed | the test waits for the saved order; fixed waits replaced by polling |
+| Moves still queued are lost by a reload in that instant (Codex F2) | codex-only | declined | the local server answers each move in milliseconds; a reload has to beat it, and only a held request (as the checker staged) makes that reachable — story 19 stays |
+| A star whose follow-up order read fails sorts the film last (Codex F3) | codex-only | fixed | the star answer now carries the whole order; no second request |
+| A film un-starred elsewhere stays listed and marked after a failed move (Codex F4) | codex-only | fixed | the server's order is now the watchlist's membership truth on the page |
+| The first click after typing a column filter does nothing (Codex F5) | codex-only | fixed | pre-existing on the dashboard (noted 2026-09-24); the filter's change event no longer re-renders when nothing changed |
+| The mock-up's Watched chip is two-state; the real one cycles Watched → To study → off (Codex F6) | codex-only | fixed | mock-up chip and card 16's coach line |
+
+Claude 3 · Codex 6 · both 1 · claude-only 2 · codex-only 5 · false-positive 0 · declined 1. Brief → amendment 1.2.
