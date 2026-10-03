@@ -57,3 +57,5 @@ Codex (gpt-6-astra, high, 714 s, 11 findings) and Fable (7 findings) on the same
 | Undo after a fresh star in between, index stale by one (fable "not checked") | fable-only | fixed | Undo anchors to the neighbour it sat above |
 
 Codex 11 · Fable 7 · both 4 · codex-only 7 · fable-only 3 (+1 from its Not-checked) · false-positive 0 · declined 0. Fixed 9 · stories added 6. Brief → amendment 1.1.
+
+2026-10-02: owner approved amendment 1.1 and kept the four calls (cards 10, 11, 14, 20) — "1". Brief frozen at 1.1.
