@@ -42,7 +42,15 @@
   .table-wrap { flex:1; min-height:0; overflow:auto; }
   table.films { border-collapse:collapse; width:100%; table-layout:fixed; }
   col.col-move { width:86px; } col.col-year { width:60px; } col.col-director { width:15%; } col.col-language { width:13%; }
-  col.col-mc, col.col-rt, col.col-imdb { width:64px; } col.col-rating { width:92px; } col.col-watched { width:100px; }
+  col.col-mc, col.col-rt, col.col-imdb { width:64px; } col.col-rating { width:92px; } col.col-watched { width:100px; } col.col-info { width:40px; }
+  input.rating { width:3em; text-align:center; font:inherit; padding:2px; border:1px solid var(--line); border-radius:4px; }
+  button.info { border:0; background:none; cursor:pointer; font-size:16px; }
+  #search-note { margin:6px 0 0; color:var(--muted); font-size:13px; }
+  #search-note a { color:#1a56db; }
+  .story .tag { display:inline-block; font-size:12px; font-weight:600; border-radius:999px; padding:1px 8px; margin-left:6px; vertical-align:2px; }
+  .story .tag.new { background:#e6f4ea; color:#1e7e34; } .story .tag.changed { background:#fff1d6; color:#8a5a00; }
+  .stories.only-changed .story:not(.is-changed) { display:none; }
+  .reload { font:inherit; font-size:13px; border:1px solid var(--line); background:#fff; border-radius:6px; padding:2px 8px; cursor:pointer; margin-left:8px; }
   table.films thead th { position:sticky; top:0; background:var(--bg); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); font-weight:600; white-space:nowrap; z-index:1; }
   table.films thead th.sortable { cursor:pointer; }
   table.films thead tr.filters th { top:31px; padding:3px 8px; font-weight:400; }
@@ -86,11 +94,12 @@
   <h1>Watchlist order — stories and mock-up (backlog 46)</h1>
   <p>Your five answers from this morning, made walkable: <b>watchlist only</b>; a newly starred film goes to the <b>top</b>; the films already starred start in <b>today's critics' order</b>; with another chip on, the arrows <b>still work and step past the film you can see</b>; <b>row arrows only</b>. Everything below runs on your real watchlist as it was at 10 AM today, 2026-10-02 — <b>8 films showing</b> (the database holds 9: Some Came Running is starred but hidden by the catalogue's own rule, departed and unrated).</p>
   <p>One correction to this morning: I said 17 films. That number was wrong or stale — the watchlist holds 9 today.</p>
+  <p><b>Brief 1.1 (after Codex and Fable checked 1.0):</b> 11 cards changed or new — the box above the cards shows only those; untick it to see all 21. Four calls I made, each on a card: a ▲ ▼ press marks that film (story 10); ⓘ always opens (story 11); stars put back in one drawer visit keep their places however you step (story 14); in a rating box the keys never move a film (story 20).</p>
   <p><b>New since your second look:</b> your three-state click (story 11) — click a row to open, click again to close and keep the mark, click once more to let go of the mark. <b>New since your first look:</b> your keyboard ruling (with the drawer closed, ↑ ↓ move the marked film and the mark stays on it — story 10), and the fixes from the gap check (stories 9, 11–14 are new or reworded; story 4's ending changed).</p>
   <p>The two variants differ in <b>one thing</b>: what happens under your pointer when you press an arrow several times. Pick one; the stories are the same in both.</p>
 </div>
 
-<h2 class="sec">The stories</h2>
+<h2 class="sec">The stories <label style="font-size:15px;font-weight:400;margin-left:12px"><input type="checkbox" id="only-changed" checked> show only what changed in 1.1 (11 cards)</label></h2>
 <div class="stories" id="stories"></div>
 
 <h2 class="sec">The mock-up</h2>
@@ -106,6 +115,7 @@
     <span class="showing" id="showing"></span>
     <h1>movie-brain</h1>
     <input class="search" id="q" placeholder="Search titles, people, keywords…">
+    <div id="search-note" hidden>Showing results for Jacques Tourneur (you typed “tourneur”) <a href="#" id="note-undo" title="Undoes the NAME correction (search for exactly what you typed) — never a move">undo</a></div>
     <div id="chips">
       <span class="chip inert">Reachable</span>
       <button class="chip live" data-chip="rated">Rated</button>
@@ -114,10 +124,10 @@
       <span class="chip inert">Owned</span>
       <button class="chip live" data-chip="onlist">On a list</button>
       <span class="chip inert">Shop</span>
-      <span class="chip inert">Watched</span>
+      <button class="chip live" data-chip="watched">Watched</button>
       <select class="chip picker" id="picker"><option value="">— all films —</option><option value="mine">My Ranking (763)</option><option value="" disabled>(the other 23 lists left out)</option></select>
       <button class="chip live" data-chip="clear">Clear</button>
-      <label style="margin-left:auto;font-size:13px;color:var(--muted)"><input type="checkbox" id="down"> pretend the server is down</label>
+      <label style="margin-left:auto;font-size:13px;color:var(--muted)"><input type="checkbox" id="down"> pretend the server is down</label><button class="reload" id="reload" title="Reload the page as you would next morning">↻ Reload (next morning)</button>
     </div>
   </div>
   <div class="table-wrap">
@@ -149,12 +159,12 @@
 </div>
 <script>
 // [id, title, year, director, language, mc, rt, imdb, my_rating, last_watched, watchlisted, lists, critics_pos] — read from a copy of the live database, 2026-10-02.
-const RAW = [[3091,"Fanny and Alexander",1982,"Ingmar Bergman","Swedish, German, Yiddish, English, French",100,100,8.1,null,null,false,2,0],[2366,"Three Colors: Red",1994,"Krzysztof Kieslowski","French",100,100,8.1,null,null,false,1,1],[1850,"Tokyo Story",1953,"Yasujiro Ozu","Japanese, English",100,100,8.1,8,null,false,6,2],[3085,"The Leopard",1963,"Luchino Visconti","Italian, Latin, French",100,100,7.9,null,null,false,3,3],[2053,"Dragon Inn",1967,"King Hu","Mandarin",100,100,7.4,9,null,false,1,4],[3088,"Casablanca",1943,"Michael Curtiz","English, French, German, Italian, Russian",100,99,8.5,10,null,false,5,5],[3081,"Rear Window",1954,"Alfred Hitchcock","English",100,99,8.5,9,null,false,3,6],[3087,"Citizen Kane",1941,"Orson Welles","English, Italian",100,99,8.2,10,null,false,8,7],[3943,"Sweet Smell of Success",1957,"Alexander Mackendrick","English, Italian, Spanish",100,98,8.0,9,null,false,3,8],[3084,"The Conformist",1971,"Bernardo Bertolucci","Italian, French, Latin, Chinese",100,98,7.9,10,null,false,4,9],[3083,"The Godfather",1972,"Francis Ford Coppola","English, Italian, Latin",100,97,9.2,10,null,false,7,10],[1379,"Boyhood",2014,"Richard Linklater","English, Spanish, Ukrainian, Arabic",100,97,7.9,8,null,false,1,11],[3089,"Notorious",1946,"Alfred Hitchcock","English, Portuguese, French",100,96,7.9,8,null,false,3,12],[2546,"Journey to Italy",1954,"Roberto Rossellini","English, Italian",100,96,7.3,6,null,false,3,13],[3096,"Intolerance",1916,"D.W. Griffith","English",99,98,7.7,2,null,true,3,22],[3095,"Moonlight",2016,"Barry Jenkins","English",99,98,7.4,null,null,true,1,23],[2883,"Sansho the Bailiff",1954,"Kenji Mizoguchi","Japanese",96,100,8.4,9,"2026-10-02",false,2,62],[3125,"The Shop Around the Corner",1940,"Ernst Lubitsch","English",96,99,8.0,null,null,true,0,69],[3396,"Capturing the Friedmans",2003,"Andrew Jarecki","English",90,97,7.6,null,null,true,1,354],[3905,"The Wonderful Story of Henry Sugar",2023,"Wes Anderson","English",85,95,7.4,null,null,true,0,941],[3831,"Out of the Past",1947,"Jacques Tourneur","English, American Sign",85,87,8.0,null,null,true,6,999],[4852,"Young Frankenstein",1974,"Mel Brooks","English, German",83,95,8.0,9,null,true,3,1101],[1940,"Lord of the Flies",1963,"Peter Brook","English, Latin",67,92,6.9,null,null,true,0,1928],[2998,"Ugetsu",1953,"Kenji Mizoguchi","Japanese",null,100,8.1,null,null,false,2,2444]];
+const RAW = [[3091,"Fanny and Alexander",1982,"Ingmar Bergman","Swedish, German, Yiddish, English, French",100,100,8.1,null,null,false,2,0],[2366,"Three Colors: Red",1994,"Krzysztof Kieslowski","French",100,100,8.1,null,null,false,1,1],[1850,"Tokyo Story",1953,"Yasujiro Ozu","Japanese, English",100,100,8.1,8,null,false,6,2],[3085,"The Leopard",1963,"Luchino Visconti","Italian, Latin, French",100,100,7.9,null,null,false,3,3],[2053,"Dragon Inn",1967,"King Hu","Mandarin",100,100,7.4,9,null,false,1,4],[3088,"Casablanca",1943,"Michael Curtiz","English, French, German, Italian, Russian",100,99,8.5,10,null,false,5,5],[3081,"Rear Window",1954,"Alfred Hitchcock","English",100,99,8.5,9,null,false,3,6],[3087,"Citizen Kane",1941,"Orson Welles","English, Italian",100,99,8.2,10,null,false,8,7],[3943,"Sweet Smell of Success",1957,"Alexander Mackendrick","English, Italian, Spanish",100,98,8.0,9,null,false,3,8],[3084,"The Conformist",1971,"Bernardo Bertolucci","Italian, French, Latin, Chinese",100,98,7.9,10,null,false,4,9],[3083,"The Godfather",1972,"Francis Ford Coppola","English, Italian, Latin",100,97,9.2,10,null,false,7,10],[1379,"Boyhood",2014,"Richard Linklater","English, Spanish, Ukrainian, Arabic",100,97,7.9,8,null,false,1,11],[3089,"Notorious",1946,"Alfred Hitchcock","English, Portuguese, French",100,96,7.9,8,null,false,3,12],[2546,"Journey to Italy",1954,"Roberto Rossellini","English, Italian",100,96,7.3,6,null,false,3,13],[3096,"Intolerance",1916,"D.W. Griffith","English",99,98,7.7,2,null,true,3,22],[3095,"Moonlight",2016,"Barry Jenkins","English",99,98,7.4,null,null,true,1,23],[2883,"Sansho the Bailiff",1954,"Kenji Mizoguchi","Japanese",96,100,8.4,9,"2026-10-02",false,2,62],[3125,"The Shop Around the Corner",1940,"Ernst Lubitsch","English",96,99,8.0,null,null,true,0,69],[3396,"Capturing the Friedmans",2003,"Andrew Jarecki","English",90,97,7.6,null,null,true,1,354],[3905,"The Wonderful Story of Henry Sugar",2023,"Wes Anderson","English",85,95,7.4,null,null,true,0,941],[3831,"Out of the Past",1947,"Jacques Tourneur","English, American Sign",85,87,8.0,null,null,true,6,999],[4852,"Young Frankenstein",1974,"Mel Brooks","English, German",83,95,8.0,9,null,true,3,1101],[1940,"Lord of the Flies",1963,"Peter Brook","English, Latin",67,92,6.9,null,null,true,0,1928],[33,"Some Came Running",1958,"Vincente Minnelli","English",68,78,7.2,null,null,true,0,1500],[2998,"Ugetsu",1953,"Kenji Mizoguchi","Japanese",null,100,8.1,null,null,false,2,2444]];
 const TOTAL = 5204;
 // The row's real badges (app.js rowHtml): owned, best subscribed source (none when owned), wishlist ♥ last.
 const BADGE = {3091:[0,0,'Criterion Channel'],2366:[0,0,'Criterion Channel'],1850:[0,0,'Criterion Channel'],3085:[0,1,''],2053:[0,0,'Criterion Channel'],3088:[1,0,''],3081:[1,0,''],3087:[1,0,''],3943:[1,0,''],3084:[0,1,'Kino Film Collection'],3083:[1,0,''],1379:[0,0,'Criterion Channel'],3089:[0,0,'Plex'],2546:[0,0,'Criterion Channel'],3096:[0,0,'Kanopy'],3095:[0,0,'YouTube Free'],2883:[0,0,'Criterion Channel'],3125:[0,1,''],3396:[0,0,'HBO Max'],3905:[0,0,''],3831:[1,0,''],4852:[0,0,''],1940:[0,0,'Criterion Channel'],2998:[0,0,'Criterion Channel']};
 const MY_RANKING = {3831:123, 4852:142};   // the only two starred films on My Ranking
-const FILMS = RAW.map(r => ({ id:r[0], title:r[1], year:r[2], director:r[3], language:r[4], metacritic:r[5], rt:r[6], imdb:r[7], my_rating:r[8], last_watched:r[9], watchlisted:r[10], lists:r[11], pos:r[12] }));
+const FILMS = RAW.map(r => ({ hidden:r[0] === 33, id:r[0], title:r[1], year:r[2], director:r[3], language:r[4], metacritic:r[5], rt:r[6], imdb:r[7], my_rating:r[8], last_watched:r[9], watchlisted:r[10], lists:r[11], pos:r[12], rating0:r[8] }));
 const byId = id => FILMS.find(f => f.id === id);
 const SEED = FILMS.filter(f => f.watchlisted).sort((a, b) => a.pos - b.pos).map(f => f.id);
 
@@ -162,14 +172,16 @@ let S;
 function reset() {
   saved = null;
   const q = document.getElementById('q'); if (q) { q.value = ''; document.getElementById('picker').value = ''; document.getElementById('down').checked = false; }
-  FILMS.forEach(f => { f.watchlisted = SEED.includes(f.id); });
-  S = { order:[...SEED], chips:new Set(['watchlist']), rated:0, sort:null, title:'', q:'', list:'', open:null, movedOn:null, marked:null, pend:null, unstarred:null };
+  FILMS.forEach(f => { f.watchlisted = SEED.includes(f.id); f.my_rating = f.rating0; });
+  S = { order:[...SEED], chips:new Set(['watchlist']), rated:0, sort:null, title:'', q:'', list:'', open:null, movedOn:null, marked:null, pend:null, unstarred:{} };
 }
 let variant = 'A';
 reset();
 
 const RATED_LABELS = ['Rated', 'Unrated by me', 'Rated by me'];
 function matches(f) {
+  if (f.hidden) return false;   // Some Came Running: starred, departed and unrated — the catalogue's own rule hides it everywhere
+  if (S.chips.has('watched') && !f.last_watched) return false;
   if (S.chips.has('watchlist') && !f.watchlisted) return false;
   if (S.chips.has('onlist') && !f.lists) return false;
   if (S.rated === 1 && f.my_rating != null) return false;
@@ -188,8 +200,10 @@ function shown() {
   if (S.sort) {
     const { col, dir } = S.sort;
     list.sort((a, b) => { const va = a[col], vb = b[col];
-      if (va == null || vb == null) return va == null && vb == null ? 0 : va == null ? 1 : -1;
-      const c = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+      const byTitle = a.title.localeCompare(b.title, undefined, { sensitivity:'base' });
+      if (va == null || vb == null) return va == null && vb == null ? byTitle : va == null ? 1 : -1;
+      let c = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb), undefined, { sensitivity:'base' });
+      if (c === 0) c = byTitle;
       return dir === 'asc' ? c : -c; });
   } else if (S.list === 'mine') list.sort((a, b) => MY_RANKING[a.id] - MY_RANKING[b.id]);
   else if (ranked()) list.sort((a, b) => a.title.localeCompare(b.title));
@@ -230,7 +244,7 @@ function settle() {
   trySave(id, Math.sign(n), Math.abs(n));
 }
 
-const COLS = [['move','',''],['title','Title',''],['year','Year','col-year'],['director','Director','col-director'],['language','Language','col-language'],['metacritic','MC','col-mc'],['rt','RT','col-rt'],['imdb','IMDb','col-imdb'],['my_rating','My Rating','col-rating'],['last_watched','Watched','col-watched']];
+const COLS = [['move','',''],['title','Title',''],['year','Year','col-year'],['director','Director','col-director'],['language','Language','col-language'],['metacritic','MC','col-mc'],['rt','RT','col-rt'],['imdb','IMDb','col-imdb'],['my_rating','My Rating','col-rating'],['last_watched','Watched','col-watched'],['info','','col-info']];
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function render() {
   const arrows = handOrder() && S.open == null;
@@ -238,6 +252,7 @@ function render() {
   document.getElementById('cols').innerHTML = cols.map(c => `<col class="${c[0] === 'move' ? 'col-move' : c[2]}">`).join('');
   document.getElementById('heads').innerHTML = cols.map(c => {
     if (c[0] === 'move') return '<th title="My order"></th>';
+    if (c[0] === 'info') return '<th></th>';
     const s = S.sort && S.sort.col === c[0] ? (S.sort.dir === 'asc' ? ' ▲' : ' ▼') : '';
     return `<th class="sortable${['metacritic','rt','imdb','my_rating'].includes(c[0]) ? ' num' : ''}" data-col="${c[0]}">${c[1]}${s}</th>`; }).join('');
   document.getElementById('filters').innerHTML = cols.map(c => c[0] === 'title'
@@ -252,7 +267,7 @@ function render() {
     }
     const [own, wish, best] = BADGE[f.id];
     const badges = (f.lists ? ` <span class="badge-lists">${f.lists} list${f.lists > 1 ? 's' : ''}</span>` : '') + (own ? ' <span class="badge-owned">owned</span>' : '') + (best ? ` <span class="badge-watch">${esc(best)}</span>` : '') + (wish ? ' <span class="icon-wish">♥</span>' : '');
-    return `<tr data-id="${f.id}" class="${S.marked === f.id ? 'marked' : ''}">${move}<td>${esc(f.title)}${badges}</td><td>${f.year}</td><td>${esc(f.director)}</td><td>${esc(f.language)}</td><td class="num">${f.metacritic ?? '—'}</td><td class="num">${f.rt == null ? '—' : f.rt + '%'}</td><td class="num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td><td class="num">${f.my_rating ?? ''}</td><td>${f.last_watched ?? ''}</td></tr>`;
+    return `<tr data-id="${f.id}" class="${S.marked === f.id ? 'marked' : ''}">${move}<td>${esc(f.title)}${badges}</td><td>${f.year}</td><td>${esc(f.director)}</td><td>${esc(f.language)}</td><td class="num">${f.metacritic ?? '—'}</td><td class="num">${f.rt == null ? '—' : f.rt + '%'}</td><td class="num">${f.imdb == null ? '—' : f.imdb.toFixed(1)}</td><td class="num"><input class="rating" maxlength="2" data-id="${f.id}" value="${f.my_rating ?? ''}" aria-label="My rating"></td><td>${f.last_watched ?? ''}</td><td><button class="info" data-id="${f.id}" aria-label="Details">ⓘ</button></td></tr>`;
   }).join('');
   if (!(S.chips.has('watchlist') || S.title || S.chips.has('onlist') || S.rated || S.list || S.q)) html += `<tr class="more"><td colspan="${cols.length}">… and 5,180 more films (not in this mock-up — type ugetsu in the Title filter to find Ugetsu)</td></tr>`;
   document.getElementById('rows').innerHTML = html;
@@ -264,6 +279,8 @@ function render() {
     if (k === 'rated') { b.textContent = RATED_LABELS[S.rated]; b.classList.toggle('active', S.rated > 0); }
     else if (k !== 'clear') b.classList.toggle('active', S.chips.has(k));
   });
+  const q = S.q.trim().toLowerCase();
+  document.getElementById('search-note').hidden = !(q.startsWith('director:') && q.slice(9).trim() && 'jacques tourneur' !== q.slice(9).trim() && 'jacques tourneur'.includes(q.slice(9).trim()));
   renderDrawer();
 }
 function renderDrawer() {
@@ -297,14 +314,33 @@ win.addEventListener('click', e => {
   if (th) { const col = th.dataset.col;
     if (!S.sort || S.sort.col !== col) S.sort = { col, dir:'asc' }; else if (S.sort.dir === 'asc') S.sort = { col, dir:'desc' }; else S.sort = null;
     settle(); render(); return; }
-  if (e.target.id === 'backdrop' || e.target.id === 'drawer-close') { closeDrawer(); return; }
+  if (e.target.id === 'backdrop') {
+    const cell = document.elementsFromPoint(e.clientX, e.clientY).find(el => el.closest && el.closest('#rows tr[data-id]'));
+    const under = cell && cell.closest('#rows tr[data-id]');
+    if (under && Number(under.dataset.id) !== S.open) { S.open = Number(under.dataset.id); S.marked = S.open; S.movedOn = null; render(); return; }   // steps, as today; the drawer visit goes on
+    closeDrawer(); return;
+  }
+  if (e.target.id === 'drawer-close') { closeDrawer(); return; }
+  const info = e.target.closest('button.info');
+  if (info) { settle(); S.open = Number(info.dataset.id); S.marked = S.open; S.movedOn = null; render(); return; }   // ⓘ always opens, marked or not
+  if (e.target.closest('input.rating')) return;
+  if (e.target.id === 'note-undo') { e.preventDefault(); return; }
+  if (e.target.id === 'reload') { S.open = null; S.movedOn = null; S.unstarred = {}; S.marked = null; S.pend = null; render(); toast('Reloaded: your order is as you left it; nothing is marked'); return; }
   if (e.target.closest('.watch-toggle')) { toggleStar(); return; }
   if (e.target.closest('.moved-on .undo')) { undo(); return; }
   const tr = e.target.closest('tbody tr[data-id]');
   if (tr && S.open == null && Number(tr.dataset.id) === S.marked) { S.marked = null; render(); return; }   // third click: the marked row lets go of its mark
-  if (tr) { settle(); S.open = Number(tr.dataset.id); S.marked = S.open; S.movedOn = null; S.unstarred = null; render(); }
+  if (tr) { settle(); S.open = Number(tr.dataset.id); S.marked = S.open; S.movedOn = null; render(); }
 });
-function closeDrawer() { S.open = null; S.movedOn = null; S.unstarred = null; render(); }
+function closeDrawer() { S.open = null; S.movedOn = null; S.unstarred = {}; render(); }   // closing ends the drawer visit: put-back memory is forgotten
+// The rating box, as today: Enter or leaving the box saves; a film that no longer matches leaves the list.
+win.addEventListener('change', e => {
+  const r = e.target.closest('input.rating'); if (!r) return;
+  const v = r.value.trim(), f = byId(Number(r.dataset.id));
+  f.my_rating = v === '' ? null : Math.max(0, Math.min(10, Number(v)));
+  render();
+});
+win.addEventListener('keydown', e => { if (e.target.matches('input.rating') && e.key === 'Enter') e.target.blur(); });
 document.getElementById('q').addEventListener('input', e => { settle(); S.q = e.target.value; render(); });
 document.getElementById('picker').addEventListener('change', e => { settle(); S.list = e.target.value; render(); });
 // Keys. Drawer OPEN: ↑ ↓ step the drawer to the next film, as today. Drawer CLOSED, list in my order, a film marked:
@@ -339,20 +375,25 @@ function toggleStar() {
     const after = shown();
     if (i >= 0 && !after.some(x => x.id === f.id) && after.length) {   // move-on (backlog 44), as shipped
       const next = after[Math.min(i, after.length - 1)];
-      S.movedOn = { at:next.id, film:f.id, was, label:`Took ${f.title} off your watchlist` };
+      S.movedOn = { at:next.id, film:f.id, below:S.order[was] ?? null, label:`Took ${f.title} off your watchlist` };
       S.open = next.id; S.marked = next.id;
     }
-    else S.unstarred = { id:f.id, was };   // the drawer stayed: a star put back here returns the film to its place
+    else S.unstarred[f.id] = S.order[was] ?? null;   // remember the film it sat above: a star put back in this drawer visit returns it there
   } else {
     f.watchlisted = true;
-    if (S.unstarred && S.unstarred.id === f.id) { S.order.splice(S.unstarred.was, 0, f.id); S.unstarred = null; }
-    else S.order.unshift(f.id);   // a fresh star goes to the TOP (your ruling 2)
+    if (f.id in S.unstarred) {
+      const after = S.unstarred[f.id], at = after == null ? -1 : S.order.indexOf(after);
+      S.order.splice(at < 0 ? S.order.length : at, 0, f.id); delete S.unstarred[f.id];
+    } else S.order.unshift(f.id);   // a fresh star goes to the TOP (your ruling 2)
   }
+  saved = [...S.order];   // the server confirmed the star
   render();
 }
 function undo() {
   const m = S.movedOn, f = byId(m.film);
-  f.watchlisted = true; S.order.splice(m.was, 0, f.id);   // Undo puts it back in ITS place, not at the top
+  const at = m.below == null ? -1 : S.order.indexOf(m.below);
+  f.watchlisted = true; S.order.splice(at < 0 ? S.order.length : at, 0, f.id);   // Undo puts it back in ITS place (above the film it sat above), not at the top
+  saved = [...S.order];
   S.movedOn = null; S.open = f.id; S.marked = f.id; render();
 }
 
@@ -365,21 +406,27 @@ document.querySelectorAll('.variant').forEach(b => b.addEventListener('click', (
 const STORIES = [
   { t:'My watchlist, in my order', p:'I press Watchlist. The 8 films show in the order I saw yesterday — Intolerance first, Lord of the Flies last — because that is where my order starts. A narrow column of ▲ ▼ sits at the left of each row. Intolerance\'s ▲ and Lord of the Flies\' ▼ are greyed: there is nowhere to go.', does:'Same in A and B', coach:'Watchlist is on. Look down the left edge: ▲ ▼ on every row, greyed at the two ends.', set:() => {} },
   { t:'Out of the Past goes first', p:'I want Out of the Past next. I press its ▲ five times; each press moves it one place, past one film. After five it is at the top with the grey mark; the five films it passed each slid down one place, still in their own order.', does:'Differs: A moves at every press, B adds up and moves when I leave the row', coach:'Press ▲ on Out of the Past (6th row) five times. In A, chase the row as it climbs. In B, press five times on the spot, then move your pointer away.', set:() => {} },
-  { t:'One too far', p:'I pressed ▲ once too often: Out of the Past went past Intolerance, and I wanted Intolerance first. I press Out of the Past\'s ▼ once. That is the whole undo — no Undo line, no prompt.', does:'Same in A and B', coach:'Out of the Past is at the top, one place too high. Press its ▼ once (or ▲ on Intolerance — the same result).', set:() => { S.order = [3831,3096,3095,3125,3396,3905,4852,1940]; S.marked = 3831; } },
+  { t:'One too far', p:'I pressed ▲ once too often: Out of the Past went past Intolerance, and I wanted Intolerance first. I press Out of the Past\'s ▼ once. That is the whole undo — no Undo line, no prompt.', does:'Same in A and B', coach:'Out of the Past is at the top, one place too high. Press its ▼ once (or ▲ on Intolerance — the same result).', set:() => { S.order = [3831,3096,3095,3125,3396,3905,4852,33,1940]; S.marked = 3831; } },
   { t:'With a chip on, it steps past what I can see', p:'Watchlist plus Rated → Unrated by me: 6 films; Intolerance (I gave it a 2) and Young Frankenstein (a 9) drop out. I press ▼ on Out of the Past: it steps past Lord of the Flies, the next film I can see. I turn Rated off: only Out of the Past has moved — the order ends Henry Sugar, Young Frankenstein, Lord of the Flies, Out of the Past, and every other film kept its order.', does:'Same in A and B · reworded after the gap check', coach:'Watchlist + Unrated by me. Press ▼ on Out of the Past, then press the Rated chip twice to turn it off and look at the bottom four.', set:() => { S.rated = 1; } },
   { t:'Another chip that narrows: On a list', p:'Watchlist plus On a list: 5 films (Intolerance, Moonlight, Capturing the Friedmans, Out of the Past, Young Frankenstein). They stay in MY order — not the list score On a list sorts by today — and the arrows stay. (My recommendation; see the panel below the window.)', does:'Same in A and B · a call I made, flip it if you disagree', coach:'Watchlist + On a list. My order, arrows on. Today the same view would put Out of the Past first by list score.', set:() => { S.chips.add('onlist'); } },
   { t:'A column sort hides the arrows', p:'I click the MC header: the list sorts by Metacritic and the ▲ ▼ column disappears — an arrow cannot mean "one place up" in an order that is not mine. I click MC twice more (ascending, descending, off): my order is back, and so are the arrows.', does:'Same in A and B', coach:'Click the MC header three times and watch the left column go and come back.', set:() => {} },
   { t:'Take one off, change my mind', p:'I open Capturing the Friedmans (4th) and press its ★. It leaves the watchlist; the drawer moves on to Henry Sugar with "Took Capturing the Friedmans off your watchlist · Undo" (move-on, as shipped). I press Undo: it is back in 4th place, not at the top — an Undo puts a film back where it was.', does:'Same in A and B · a call I made', coach:'Click the Capturing the Friedmans row, press its ★, then press Undo in the next drawer. Close the drawer and check: 4th.', set:() => {} },
   { t:'A new star goes to the top', p:'Watchlist off. I type ugetsu in the Title filter, open Ugetsu and press ☆. I close the drawer, clear the filter and press Watchlist: 9 films, Ugetsu first, Intolerance second.', does:'Same in A and B', coach:'Watchlist is off. Type ugetsu in the Title filter, open Ugetsu, press ☆, close, clear the filter, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
-  { t:'The drawer is open: ↑ ↓ step, they do not move', p:'With the drawer open on Intolerance the grey covers the list and the ▲ ▼ column is gone. I press ↓ hoping to move it: the drawer steps to Moonlight, as it does today, and my order is unchanged. I close the drawer: the grey mark is on Moonlight.', does:'Same in A and B · reworded after the gap check', coach:'The drawer is open on Intolerance. Press ↓ on the keyboard (the drawer steps to Moonlight), then close it with ✕.', set:() => { S.open = 3096; S.marked = 3096; } },
-  { t:'Keys move the marked film', p:'The drawer is closed and Out of the Past carries the grey mark. I press ↑ three times: it moves up three places and the mark stays on it, so each press moves the same film. ↓ moves it back down. With nothing marked, or with a sort or a picked list on, ↑ ↓ scroll the page as they do today.', does:'Same in A and B · your ruling, 2026-10-02', coach:'Out of the Past is marked (as after closing its drawer). Press ↑ on the keyboard three times. Do not click a row first — a click opens the drawer.', set:() => { S.marked = 3831; } },
-  { t:'Click, click, click: open, close, let go', p:'I click Out of the Past: its drawer opens. I click the grey (the same spot): the drawer closes and the row keeps its grey mark, so ↑ ↓ would move it. I click the row once more: the mark goes, and now ↑ ↓ scroll the page and move nothing. A fourth click opens the drawer again.', does:'Same in A and B · your ruling, 2026-10-02 · changes every list, not just the watchlist', coach:'Click the Out of the Past row three times, slowly, and watch the drawer, then the mark. Then press ↓: nothing moves.', set:() => {} },
+  { tag:'changed', t:'The drawer is open: ↑ ↓ step, they do not move', p:'With the drawer open on Intolerance the grey covers the list and the ▲ ▼ column is gone. I press ↓ hoping to move it: the drawer steps to Moonlight, as it does today, and my order is unchanged. I click Shop Around the Corner\'s row through the grey: the drawer steps to it, as today. I click the grey below the last row: the drawer closes and the grey mark is on Shop Around the Corner.', does:'Same in A and B · 1.1: a click on another dimmed row steps (as the real dashboard does)', coach:'Drawer open on Intolerance. Press ↓ (steps to Moonlight). Click the Shop Around the Corner row through the grey (steps). Click the grey BELOW the last row (closes).', set:() => { S.open = 3096; S.marked = 3096; } },
+  { tag:'changed', t:'Keys move the marked film', p:'The drawer is closed and Out of the Past carries the grey mark. I press ↑ three times: it moves up three places and the mark stays on it. ↓ moves it back. Pressing a row\'s ▲ or ▼ with the mouse marks that film too, so the keys then carry on with the film I just pressed. With nothing marked, or with a sort or a picked list on, ↑ ↓ scroll the page as they do today.', does:'Same in A and B · your ruling · 1.1: an arrow press marks the film', coach:'Out of the Past is marked. Press ↑ three times. Then press ▼ on Moonlight with the mouse and press ↓ on the keyboard: Moonlight carries on down.', set:() => { S.marked = 3831; } },
+  { tag:'changed', t:'Click, click, click: open, close, let go', p:'I click Out of the Past: its drawer opens. I click the same spot (its own row, through the grey): the drawer closes and the row keeps its grey mark. I click the row once more: the mark goes, and ↑ ↓ scroll and move nothing. A fourth click opens the drawer again. The ⓘ at the end of a row always opens its drawer, marked or not — only a click on the row itself lets go.', does:'Same in A and B · your ruling · 1.1: ⓘ always opens', coach:'Click the Out of the Past title three times, slowly. Then press ⓘ at the end of its row: the drawer opens.', set:() => {} },
   { t:'A picked list hides the arrows', p:'Watchlist on, I pick My Ranking in the list menu: Out of the Past and Young Frankenstein show in My Ranking\'s order (123rd and 142nd) and the ▲ ▼ column is gone. I set the menu back to — all films —: my order and the arrows return.', does:'Same in A and B · added after the gap check', coach:'Pick My Ranking in the list menu (right end of the chips, before Clear), then set it back to — all films —.', set:() => {} },
-  { t:'A word search hides them; director: does not', p:'Watchlist on, I type out of the past in the search bar: the bar ranks its answers, so the arrows go. I clear the bar: they are back. I type director:tourneur: the bar only narrows, so Out of the Past shows alone, with its arrows (both greyed — nowhere to go).', does:'Same in A and B · added after the gap check', coach:'Type out of the past in the search bar, clear it, then type director:tourneur.', set:() => {} },
-  { t:'A star off and on in the same drawer', p:'Watchlist off. I type friedmans in the Title filter and open Capturing the Friedmans. I press ★ by mistake, then ☆ straight back. I close the drawer, clear the filter, press Watchlist: it is still 4th, not at the top — a star put back before the drawer closes (even after stepping away and back) returns the film to its place.', does:'Same in A and B · added after the gap check', coach:'Type friedmans in the Title filter, open the row, press the star twice, close, clear the filter, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
+  { tag:'changed', t:'A word search hides them; director: does not', p:'Watchlist on, I type out of the past in the search bar: the bar ranks its answers, so the arrows go. I clear it: they are back. I type director:tourneur: the bar only narrows, so Out of the Past shows alone, with its arrows (both greyed). A grey line under the bar says "Showing results for Jacques Tourneur (you typed “tourneur”) undo" — that undo is about the NAME the bar guessed, never about a move.', does:'Same in A and B · 1.1: the real correction line', coach:'Type out of the past in the bar, clear it, then type director:tourneur and read the line under the bar.', set:() => {} },
+  { tag:'changed', t:'Stars off and on in one drawer visit', p:'Watchlist off. I type fr in the Title filter: Capturing the Friedmans and Young Frankenstein. I open Capturing the Friedmans and press ★ by mistake; I press ↓ to Young Frankenstein and press its ★ too; I press ↑ back and put Capturing the Friedmans\' star back, then ↓ and put Young Frankenstein\'s back. I close, clear the filter, press Watchlist: both are where they were (4th and 7th) — put back before the drawer closes, however I stepped, a film keeps its place. After the drawer closes, a star is a fresh one and goes to the top.', does:'Same in A and B · 1.1: any number of films, any kind of step', coach:'Type fr in the Title filter. Open Capturing the Friedmans: ★, ↓, ★, ↑, ☆, ↓, ☆. Close, clear the filter, press Watchlist.', set:() => { S.chips.delete('watchlist'); } },
   { t:'A move that does not save', p:'The server is down (the switch above the list pretends so). I press ▲ on Out of the Past: it moves, then goes back to its place with "Could not save the order" at the foot of the window — the same kind of message a failed star gives today. When things work, my order is saved at every move and is still there after a reload.', does:'Same in A and B · added after the gap check', coach:'The "pretend the server is down" box is ticked. Press ▲ on Out of the Past and watch it come back.', set:() => { document.getElementById('down').checked = true; } },
+  { tag:'new', t:'Watched and Watchlist together', p:'Watchlist on, I press Watched: Showing 0 — none of my watchlist films has a logged viewing yet, so nothing shows and there is nothing to move. I press Watched round to off: my 8 films and their arrows are back. The day I log a viewing of a starred film, it shows here in MY order, not most-recent-first.', does:'1.1 · pictures your story-5 call for Watched', coach:'Press Watched (0 films), then press it twice more to turn it off.', set:() => {} },
+  { tag:'new', t:'I try to drag a row', p:'I grab Out of the Past and pull it towards the top: the text highlights and nothing moves. Dragging is not how this works — I press its ▲, or mark it and press ↑.', does:'1.1 · an exclusion you can bump into', coach:'Try dragging the Out of the Past row upwards. Nothing moves.', set:() => {} },
+  { tag:'new', t:'Straight to the top', p:'Lord of the Flies is last and I want it next. There is no "to top" button: I press its ▲ seven times (or press ▲ once, so it is marked, and then ↑ six times).', does:'1.1 · an exclusion you can bump into', coach:'Lord of the Flies is 8th. Get it to the top: ▲ once, then ↑ six times.', set:() => {} },
+  { tag:'new', t:'The next morning', p:'I put Out of the Past first and close up. Next morning I open the dashboard on Watchlist: Out of the Past is still first — every move was saved the moment I made it. Nothing is marked, so ↑ ↓ scroll until I mark a film again.', does:'1.1 · the reload button stands in for a real reload', coach:'Press ▲ on Out of the Past five times, then press ↻ Reload (next morning) above the list. Press ↓: nothing moves.', set:() => {} },
+  { tag:'new', t:'Typing a rating, rating the marked film', p:'Watchlist plus Unrated by me. Out of the Past is marked. I click into its rating box and press ↑ ↓: nothing moves — in a box the keys belong to the box. I type 8 and press Enter: it is rated, so it leaves the list, and no row on screen is marked; ↑ ↓ scroll. I turn Rated off: Out of the Past is back, still marked, and ↑ moves it again.', does:'1.1 · keys and the rating box', coach:'Click into Out of the Past\'s rating box, press ↑ ↓, type 8, press Enter. Then press the Rated chip twice and press ↑ (click the page first, outside the box).', set:() => { S.rated = 1; S.marked = 3831; } },
+  { tag:'new', t:'The starred film I cannot see', p:'I remember starring Some Came Running. With Watchlist on I type some in the Title filter: no row. It left the Criterion Channel and I never rated it, so the catalogue hides it everywhere, as today. It keeps its place in my order (between Young Frankenstein and Lord of the Flies), and every move steps over it.', does:'1.1 · the hidden ninth film', coach:'Type some in the Title filter: nothing. Clear it.', set:() => {} },
 ];
-document.getElementById('stories').innerHTML = STORIES.map((s, i) => `<div class="story" data-i="${i}"><h3><span class="n">${i + 1}</span>${esc(s.t)}</h3><p>${esc(s.p)}</p><div class="foot"><span class="does">${esc(s.does)}</span><button class="walk" data-i="${i}">Walk it</button></div></div>`).join('');
+document.getElementById('stories').innerHTML = STORIES.map((s, i) => `<div class="story${s.tag ? ' is-changed' : ''}" data-i="${i}"><h3><span class="n">${i + 1}</span>${esc(s.t)}${s.tag ? `<span class="tag ${s.tag}">${s.tag === 'new' ? 'new in 1.1' : 'changed in 1.1'}</span>` : ''}</h3><p>${esc(s.p)}</p><div class="foot"><span class="does">${esc(s.does)}</span><button class="walk" data-i="${i}">Walk it</button></div></div>`).join('');
 document.getElementById('stories').addEventListener('click', e => {
   const b = e.target.closest('button.walk'); if (!b) return;
   const i = Number(b.dataset.i), s = STORIES[i];
@@ -388,6 +435,8 @@ document.getElementById('stories').addEventListener('click', e => {
   document.querySelectorAll('.story').forEach(x => x.classList.toggle('current', Number(x.dataset.i) === i));
   document.getElementById('coach').scrollIntoView({ behavior:'smooth', block:'start' });
 });
+document.getElementById('stories').classList.add('only-changed');
+document.getElementById('only-changed').addEventListener('change', e => document.getElementById('stories').classList.toggle('only-changed', e.target.checked));
 render();
 </script>
 </body></html>

@@ -33,3 +33,27 @@ Agent minutes: 5 · Findings: 9 · Fixed: 5 · Stories added: 4 · Declined: 0 �
 Agent minutes: 3 · Re-check findings: 5 new · Fixed: 4 · Fixed by an owner ruling: 1. Per the checks README, no second re-check; anything left goes to the owner or the diagnostic checkpoint.
 
 2026-10-02: owner chose variant A ("option a").
+
+## Two-lineage gap check of brief 1.0 (point A, owner's request)
+
+Codex (gpt-6-astra, high, 714 s, 11 findings) and Fable (7 findings) on the same snapshot of 1.0 (commit on `feature/STORY-46-watchlist-order`) and the 10 AM database copy; neither saw the other or this log.
+
+| Finding | Label | Answer | Note |
+|---|---|---|---|
+| A click on another dimmed row steps the real drawer; the mock-up closed it (codex F6, fable 3) | both | fixed | stories 9, 11, 14 |
+| Watched + Watchlist unpictured; 0 films today (codex F5, fable 6) | both | story added | 16 |
+| Drag-and-drop only a line (codex F10, fable 5) | both | story added | 17 |
+| "To top" only a line (codex F11, fable 7) | both | story added | 18 |
+| Failed save lost a starred film from the saved order; retry jumped Lord of the Flies (F1) | codex-only | fixed | mock-up bug; builder: a failed write re-reads the server's order |
+| Second un-star in one visit forgets the first's place (F2) | codex-only | fixed | per-film memory anchored to a neighbour; story 14 |
+| Saved order / next morning not walkable (F3) | codex-only | story added | 19 + reload button |
+| Keys inside the rating box; rating the marked film (F4) | codex-only | story added | 20; rating box now live in the mock-up |
+| MC sort tie order differs from the real one (F7) | codex-only | fixed | title tie-break, reversed with the direction |
+| Ruling 4 still says "swap" (F8) | codex-only | fixed | annotated with the 1.0 amendment |
+| Hidden ninth film has no card (F9) | codex-only | story added | 21 |
+| An arrow press moves the mark; brief silent (fable 1) | fable-only | fixed | story 10 + builder: a press sets `state.mark` (my call, flagged) |
+| `director:` correction line with "undo" (fable 2) | fable-only | fixed | story 13 + note line in the mock-up |
+| ⓘ on a marked row under the three-state click (fable 4) | fable-only | fixed | ⓘ always opens (my call, flagged); story 11 |
+| Undo after a fresh star in between, index stale by one (fable "not checked") | fable-only | fixed | Undo anchors to the neighbour it sat above |
+
+Codex 11 · Fable 7 · both 4 · codex-only 7 · fable-only 3 (+1 from its Not-checked) · false-positive 0 · declined 0. Fixed 9 · stories added 6. Brief → amendment 1.1.
