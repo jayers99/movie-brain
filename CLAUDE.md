@@ -4,9 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # movie-brain
 
-Personal film brain: Criterion Channel listings + OMDb ratings + my 0–10 ratings in SQLite, served by a local Flask dashboard. Successor to criterion-ratings; more `listings.source` values (Apple Movies, …) may be added later.
+One person's film brain: every film I could watch (Criterion Channel, ~170 streaming services and stores via TMDB, my Apple TV library, curated canon lists), what critics say (OMDb, scraped Metacritic), and what I think (0–10 ratings, tier ranker, hand-ordered watchlist, dated viewing log with notes) in one local SQLite DB, served by a local Flask dashboard. Single user, single machine, no cloud. Successor to criterion-ratings.
 
-**Status 2026-09-07:** power search (spec `docs/superpowers/specs/2026-09-06-power-search-design.md`, exact + fuzzy + semantic) is COMPLETE and applied live; follow-up candidates live in `docs/backlog.md`. **Roadmap:** a phased multi-service expansion is planned — before feature work, read `docs/multiple-movie-services.md` (Implementation phases + Data model decisions: GUID identity, immutable films/no purge, Metacritic top-N dial) and `docs/vision.md`. Discovery spike scripts live in `scripts/discovery/`. Sibling project to converge with: yt-brain (see `docs/cinema-companion.md`).
+## Orientation (read first)
+
+- **Purpose** (`docs/vision.md`): increase the value of my watching — find the best film for my goals, track what I watched, and grow real film-criticism skill. Discovery and tracking are built; the skill/feedback loop (backlog 5, 51; `docs/tutor-cartridge/`) is the novel core still ahead.
+- **What matters most is data correctness.** Film identity (`films.guid`), the thumbprint resolver and its gates, and the never-delete rule are the load-bearing parts; most code exists to key, enrich and review films without ever guessing. A wrong merge or a wrong IMDb id is worse than a missing one — doubt goes to `match_review`.
+- **Where work is tracked:** `docs/backlog.md` (open items table, scored) → specs/briefs/plans/handoffs under `docs/superpowers/` (dated, one folder per feature). `docs/multiple-movie-services.md` holds the data-model decisions (GUID identity, immutable films, Metacritic dial).
+- **How features are built here:** stories + an HTML mock-up the owner walks → spec/plan → TDD (pytest-bdd + Playwright for the dashboard) on a `feature/STORY-N-…` branch → gap check (see Rules) → owner hands-on → merge. The owner rules on stories and mock-ups, not implementation details.
+- **Live-DB discipline:** every writing verb is a dry run until `--apply`; never re-run an applied migration or a "first" enrichment; repairs to live data go one change at a time with the owner's yes.
+- **Path-scoped contracts** in `.claude/rules/*.md` load when you touch their files — they hold the detail this file no longer carries. The `log-viewing` project skill (`.claude/skills/`) turns a dictated "I watched…" into one `viewings add`.
+- Sibling project to converge with: yt-brain (`docs/cinema-companion.md`). Discovery spike scripts: `scripts/discovery/`.
 
 ## Commands
 
@@ -70,7 +78,9 @@ uv run python scripts/thumbprint_benchmark.py --assert  # thumbprint resolver ga
 ## Architecture (hexagonal — dependencies point inward)
 
 - `domain/` — pure, imports nothing else: `Film`, `FilmView`, `film_key`, `merge_yearless`, canned-filter predicates in `filters.py`.
-- `application/` — use cases (`sync`, `ratings`, `export`, `legacy_import`) orchestrating through `Repository`; no SQL or HTTP here.
+- `application/` — use cases (sync, criterion walk, keying, enrich, lists, viewings, rank, review, repair, …) orchestrating through `Repository`; no SQL or HTTP here.
+- `infrastructure/` — the adapters: `database.py` (the `Repository`, all SQL), HTTP clients (`omdb`, `tmdb`, `criterion_site`, `metacritic`, `cheapcharts`, `itunes`), `appletv` (osascript export), `embeddings`, `config`/`credentials`.
+- `cli.py` — every Typer verb in one file (~1,800 lines); it wires adapters into use cases and prints.
 - `web/` — Flask `create_app(repo)`, one template; ALL filter/sort logic is client-side vanilla JS in `static/app.js` (virtual-scrolled table, state encoded in the URL) — with ONE exception: the search bar's query is resolved server-side by `GET /api/search` into a film-id set that `app.js` intersects with its own pipeline (power-search spec D4); the id set is the whole interface, and no chip, scope, list or column logic moved. A second page, `/rank` (`rank.html` + `static/rank.js` + `rank.css`, never `app.js`), is the tier ranker.
 
 ### Sync flow
