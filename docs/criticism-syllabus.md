@@ -8,6 +8,8 @@ Movie-Analysis Rubric"** also lives in that notebook's Studio panel. This doc fe
 curriculum + practice-loop features in [cinema-companion.md](cinema-companion.md) and
 [vision.md](vision.md).
 
+> **Provenance warning (2026-10-04).** Everything here came from NotebookLM *answers*, and NotebookLM answers are synthesis, not Moviewise. A check against all 128 raw transcripts found that **the 8-dimension rubric below, and the Studio artifact "The Moviewise Movie-Analysis Rubric", are NotebookLM's inventions**. Moviewise never scores a film on several dimensions and sums them; the notebook itself now says the 1–5 rubric "was a custom tool synthesized… rather than a literal template Moviewise published". He also never gave the 30/30/15/10/10/5 weights or the 92/100 canon bar that elsewhere get attributed to him. What he does give is six questions, unweighted: *"how profound is the plot, how sharp is the dialogue, how precise is the composition, how creative is the blocking, how fluid is the editing, how do the style and the story fit"* (video "How Politics Are Killing Cinema"). His one number is an overall IMDb 1–10 rating. The framework terms (centre of attention, following vs seeking, z-axis depth, the strong frame, aperture framing, periodic vs loose takes) are genuinely his. Rule: a notebook answer is a lead; quote him only from a transcript (raw transcripts are kept in the private corpus, `moviewise/transcripts/`).
+
 ## Reading list
 
 1. **_Film Art: An Introduction_ — Bordwell & Thompson.** The foundation: the physical
@@ -50,7 +52,7 @@ Each unit sequences Moviewise videos introductory → advanced.
    *Casablanca* → judging the Oscars, fun-vs-good tension → the greatest-films canon and its
    missteps.
 
-## The good-direction framework (his objective criteria)
+## The good-direction framework (his terms, NotebookLM's list)
 
 Priority of the shot (judge what's on screen, not intent) · aesthetic merit as synthesis of
 parts · staging/blocking · **invisible directing** (technique hidden behind story) ·
@@ -59,7 +61,9 @@ coherence** (never losing the viewer spatially) · the strong frame (information
 composition) · **z-axis depth** (layers, not "clothesline" blocking) · visual convenience ·
 aperture framing (frames within frames) · meticulous effort over point-and-shoot.
 
-## The 8-dimension analysis rubric (→ the app's practice loop)
+## The 8-dimension analysis rubric — NotebookLM's, not Moviewise's (superseded)
+
+> **Owner ruling, 2026-10-04: no weighted or summed rubric will ever be used. Not this one, not the 30/30/15/10/10/5 weights, not any variant. Do not propose one.** Kept for the record only. NotebookLM synthesized this rubric (see the provenance warning at the top). It is not his, and the tutor cartridge's case against pre-weighted scorecards applies to it (`tutor-cartridge/wiki/cinema-flavor-wheel.md`). Do not build the drawer's notes on it. Use his six unweighted questions as prompts, and the flavor wheel as vocabulary.
 
 Post-watch rubric, fillable in ~10 minutes, each dimension scored 1–5 (sum = "objective
 craftsmanship score" /40, from *under-directed* to *classical master*):

@@ -139,6 +139,8 @@ a seven-unit syllabus, a reading list, and an 8-dimension analysis rubric — al
 [criticism-syllabus.md](criticism-syllabus.md). The rubric answers the "analysis dimensions"
 question below.
 
+**Correction 2026-10-04:** the 8-dimension rubric turned out to be NotebookLM's invention, not Moviewise's (checked against all 128 transcripts). The owner has ruled that no weighted or summed rubric will ever be used. The "analysis dimensions" answer is now Moviewise's six unweighted questions plus the tutor cartridge's flavor wheel; see the provenance warning in [criticism-syllabus.md](criticism-syllabus.md).
+
 ## Open questions
 
 - [ ] Trailer source of truth: TMDB videos vs. a constructed YouTube search link — how
